@@ -63,7 +63,7 @@ const mockInvoices: UploadedInvoice[] = [
 
 export default function Invoices() {
   const [invoices, setInvoices] = useState<UploadedInvoice[]>(mockInvoices);
-  const [selectedFlowId, setSelectedFlowId] = useState<string>('');
+  const [selectedFlowId, setSelectedFlowId] = useState<string>('none');
   const [dragActive, setDragActive] = useState(false);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -87,7 +87,7 @@ export default function Invoices() {
       const newInvoice: UploadedInvoice = {
         id: Date.now().toString(),
         filename: files[0].name,
-        flow_id: selectedFlowId || null,
+        flow_id: selectedFlowId !== 'none' ? selectedFlowId : null,
         uploaded_at: new Date().toISOString(),
         status: 'analyzing',
         issues: [],
@@ -147,19 +147,19 @@ export default function Invoices() {
         {/* Upload Zone */}
         <div className="bg-card rounded-xl border p-6">
           <div className="flex items-center gap-4 mb-4">
-            <Select value={selectedFlowId} onValueChange={setSelectedFlowId}>
-              <SelectTrigger className="w-[300px]">
-                <SelectValue placeholder="Rattacher à un flux (optionnel)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Aucun flux sélectionné</SelectItem>
-                {mockFlows.map(f => (
-                  <SelectItem key={f.id} value={f.id}>
-                    {f.flow_code} - {f.client_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <Select value={selectedFlowId} onValueChange={setSelectedFlowId}>
+            <SelectTrigger className="w-[300px]">
+              <SelectValue placeholder="Rattacher à un flux (optionnel)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Aucun flux sélectionné</SelectItem>
+              {mockFlows.map(f => (
+                <SelectItem key={f.id} value={f.id}>
+                  {f.flow_code} - {f.client_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           </div>
           
           <div
