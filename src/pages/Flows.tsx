@@ -17,9 +17,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { mockFlows, incotermRules } from '@/data/mockData';
-import type { Flow, Destination, Incoterm, Zone, RiskLevel } from '@/types';
-import { Plus, Search, Filter, FileText, Eye } from 'lucide-react';
+import { incotermRules } from '@/data/mockData';
+import { useFlows } from '@/hooks/useFlows';
+import { AddFlowDialog } from '@/components/flows/AddFlowDialog';
+import type { Flow, Destination, Incoterm } from '@/types';
+import { Plus, Search, FileText, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const destinations: Destination[] = [
@@ -30,13 +32,15 @@ const destinations: Destination[] = [
 const incoterms: Incoterm[] = ['EXW', 'FCA', 'DAP', 'DDP'];
 
 export default function Flows() {
+  const { flows, isLoading } = useFlows();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDestination, setFilterDestination] = useState<string>('all');
   const [filterIncoterm, setFilterIncoterm] = useState<string>('all');
   const [filterRisk, setFilterRisk] = useState<string>('all');
   const [selectedFlow, setSelectedFlow] = useState<Flow | null>(null);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
-  const filteredFlows = mockFlows.filter(flow => {
+  const filteredFlows = flows.filter(flow => {
     const matchesSearch = 
       flow.flow_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       flow.client_name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -60,7 +64,7 @@ export default function Flows() {
             <h1 className="text-2xl font-bold text-foreground">Flux Export</h1>
             <p className="mt-1 text-muted-foreground">Gestion et suivi des flux d'exportation</p>
           </div>
-          <Button className="gap-2">
+          <Button className="gap-2" onClick={() => setIsAddDialogOpen(true)}>
             <Plus className="h-4 w-4" />
             Nouveau flux
           </Button>
@@ -236,9 +240,11 @@ export default function Flows() {
 
         {/* Summary */}
         <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>{filteredFlows.length} flux affichés sur {mockFlows.length}</span>
+          <span>{filteredFlows.length} flux affichés sur {flows.length}</span>
         </div>
       </div>
+
+      <AddFlowDialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} />
     </MainLayout>
   );
 }
