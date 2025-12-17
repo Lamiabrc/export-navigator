@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -11,6 +10,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { mockFlows } from '@/data/mockData';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { toast } from 'sonner';
 import { 
   Upload, 
   FileText, 
@@ -29,42 +30,15 @@ interface UploadedInvoice {
   status: 'pending' | 'analyzing' | 'ok' | 'warning' | 'error';
   compliance_score?: number;
   issues?: string[];
+  fileData?: string; // Base64 encoded file for local storage
+  fileType?: string;
 }
 
-const mockInvoices: UploadedInvoice[] = [
-  {
-    id: '1',
-    filename: 'facture_FX-0001_belgique.pdf',
-    flow_id: '1',
-    uploaded_at: '2024-01-20T10:30:00Z',
-    status: 'ok',
-    compliance_score: 100,
-    issues: [],
-  },
-  {
-    id: '2',
-    filename: 'invoice_reunion_jan2024.pdf',
-    flow_id: '2',
-    uploaded_at: '2024-01-22T14:00:00Z',
-    status: 'warning',
-    compliance_score: 75,
-    issues: ['OM/OMR non détecté sur la facture', 'Vérifier cohérence montant transport'],
-  },
-  {
-    id: '3',
-    filename: 'facture_swiss_precision.pdf',
-    flow_id: '3',
-    uploaded_at: '2024-01-23T09:15:00Z',
-    status: 'error',
-    compliance_score: 40,
-    issues: ['Incoterm manquant', 'Certificat origine requis non mentionné', 'Incohérence destination'],
-  },
-];
-
 export default function Invoices() {
-  const [invoices, setInvoices] = useState<UploadedInvoice[]>(mockInvoices);
+  const [invoices, setInvoices] = useLocalStorage<UploadedInvoice[]>('orliman_invoices', []);
   const [selectedFlowId, setSelectedFlowId] = useState<string>('none');
   const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -76,33 +50,94 @@ export default function Invoices() {
     }
   };
 
+  const processFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const fileData = e.target?.result as string;
+      
+      const newInvoice: UploadedInvoice = {
+        id: crypto.randomUUID(),
+        filename: file.name,
+        flow_id: selectedFlowId !== 'none' ? selectedFlowId : null,
+        uploaded_at: new Date().toISOString(),
+        status: 'analyzing',
+        issues: [],
+        fileData,
+        fileType: file.type,
+      };
+      
+      setInvoices(prev => [newInvoice, ...prev]);
+      toast.info(`Analyse de ${file.name} en cours...`);
+      
+      // Simulate local analysis
+      setTimeout(() => {
+        const score = Math.floor(Math.random() * 60) + 40;
+        const possibleIssues = [
+          'Vérifier date facture',
+          'Incoterm non visible',
+          'Montant TVA à vérifier',
+          'Destinataire à confirmer',
+        ];
+        const issues = score < 80 
+          ? possibleIssues.slice(0, Math.floor(Math.random() * 2) + 1)
+          : [];
+        
+        setInvoices(prev => prev.map(inv => 
+          inv.id === newInvoice.id 
+            ? { 
+                ...inv, 
+                status: score >= 80 ? 'ok' : score >= 50 ? 'warning' : 'error',
+                compliance_score: score,
+                issues
+              }
+            : inv
+        ));
+        toast.success(`Analyse de ${file.name} terminée`);
+      }, 1500);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
     
-    // Simulate upload
     const files = e.dataTransfer.files;
     if (files && files[0]) {
-      const newInvoice: UploadedInvoice = {
-        id: Date.now().toString(),
-        filename: files[0].name,
-        flow_id: selectedFlowId !== 'none' ? selectedFlowId : null,
-        uploaded_at: new Date().toISOString(),
-        status: 'analyzing',
-        issues: [],
-      };
-      setInvoices(prev => [newInvoice, ...prev]);
-      
-      // Simulate analysis
-      setTimeout(() => {
-        setInvoices(prev => prev.map(inv => 
-          inv.id === newInvoice.id 
-            ? { ...inv, status: 'ok' as const, compliance_score: 95, issues: ['Vérifier date facture'] }
-            : inv
-        ));
-      }, 2000);
+      processFile(files[0]);
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files[0]) {
+      processFile(files[0]);
+    }
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleViewInvoice = (invoice: UploadedInvoice) => {
+    if (invoice.fileData) {
+      const newWindow = window.open();
+      if (newWindow) {
+        if (invoice.fileType?.includes('pdf')) {
+          newWindow.document.write(`<iframe src="${invoice.fileData}" width="100%" height="100%" style="border:none;"></iframe>`);
+        } else {
+          newWindow.document.write(`<img src="${invoice.fileData}" style="max-width:100%;height:auto;" />`);
+        }
+      }
+    } else {
+      toast.error('Fichier non disponible');
+    }
+  };
+
+  const handleDeleteInvoice = (id: string) => {
+    setInvoices(prev => prev.filter(inv => inv.id !== id));
+    toast.success('Facture supprimée');
   };
 
   const getStatusIcon = (status: UploadedInvoice['status']) => {
@@ -141,29 +176,39 @@ export default function Invoices() {
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">Contrôle Factures</h1>
-          <p className="mt-1 text-muted-foreground">Upload et vérification de conformité des factures</p>
+          <p className="mt-1 text-muted-foreground">
+            Upload et vérification de conformité des factures (stockage local)
+          </p>
         </div>
 
         {/* Upload Zone */}
         <div className="bg-card rounded-xl border p-6">
           <div className="flex items-center gap-4 mb-4">
-          <Select value={selectedFlowId} onValueChange={setSelectedFlowId}>
-            <SelectTrigger className="w-[300px]">
-              <SelectValue placeholder="Rattacher à un flux (optionnel)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Aucun flux sélectionné</SelectItem>
-              {mockFlows.map(f => (
-                <SelectItem key={f.id} value={f.id}>
-                  {f.flow_code} - {f.client_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select value={selectedFlowId} onValueChange={setSelectedFlowId}>
+              <SelectTrigger className="w-[300px]">
+                <SelectValue placeholder="Rattacher à un flux (optionnel)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Aucun flux sélectionné</SelectItem>
+                {mockFlows.map(f => (
+                  <SelectItem key={f.id} value={f.id}>
+                    {f.flow_code} - {f.client_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          
           <div
-            className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
+            className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
               dragActive 
                 ? 'border-primary bg-primary/5' 
                 : 'border-border hover:border-primary/50'
@@ -172,6 +217,7 @@ export default function Invoices() {
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
           >
             <Upload className={`h-12 w-12 mx-auto mb-4 ${dragActive ? 'text-primary' : 'text-muted-foreground'}`} />
             <p className="text-foreground font-medium mb-1">
@@ -180,7 +226,7 @@ export default function Invoices() {
             <p className="text-sm text-muted-foreground mb-4">
               ou cliquez pour sélectionner (PDF, JPG, PNG)
             </p>
-            <Button variant="outline">
+            <Button variant="outline" type="button">
               Sélectionner un fichier
             </Button>
           </div>
@@ -246,7 +292,7 @@ export default function Invoices() {
         {/* Invoices List */}
         <div className="bg-card rounded-xl border overflow-hidden">
           <div className="p-4 border-b border-border">
-            <h3 className="font-semibold text-foreground">Factures uploadées</h3>
+            <h3 className="font-semibold text-foreground">Factures uploadées (stockées localement)</h3>
           </div>
           <div className="divide-y divide-border">
             {invoices.length === 0 ? (
@@ -324,10 +370,21 @@ export default function Invoices() {
                       </div>
                       
                       <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => handleViewInvoice(invoice)}
+                          title="Voir la facture"
+                        >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="text-destructive">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="text-destructive"
+                          onClick={() => handleDeleteInvoice(invoice.id)}
+                          title="Supprimer"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
