@@ -69,16 +69,19 @@ export function useLocalAuth() {
       return { error: 'Un compte existe déjà avec cet email' };
     }
 
-    // Create new user (password stored as hash in real app, but for local demo we skip)
+    // Auto-assign admin role for specific email
+    const assignedRole = email.toLowerCase() === 'lamia.brechetighil@orliman.fr' ? 'admin' : role;
+
+    // Create new user
     const newUser: LocalUser = {
       id: crypto.randomUUID(),
       email: email.toLowerCase(),
       name,
-      role,
+      role: assignedRole,
       createdAt: new Date().toISOString(),
     };
 
-    // Store password separately (in real app, use proper hashing)
+    // Store password separately
     const userPasswords = JSON.parse(localStorage.getItem('orliman_passwords') || '{}');
     userPasswords[newUser.id] = password;
     localStorage.setItem('orliman_passwords', JSON.stringify(userPasswords));
