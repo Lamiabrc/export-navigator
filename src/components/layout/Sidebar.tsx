@@ -1,5 +1,6 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard,
   FileText,
@@ -25,8 +26,32 @@ const adminNavigation = [
   { name: 'Paramètres', href: '/settings', icon: Settings },
 ];
 
+const roleLabels: Record<string, string> = {
+  direction: 'Direction',
+  adv_export: 'ADV Export',
+  logistique: 'Logistique',
+  finance: 'Finance/Compta',
+  admin: 'Administrateur',
+};
+
 export function Sidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+
+  const handleLogout = () => {
+    signOut();
+    navigate('/auth');
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-sidebar">
@@ -79,16 +104,29 @@ export function Sidebar() {
       <div className="border-t border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-accent text-sidebar-accent-foreground">
-            <span className="text-sm font-medium">JD</span>
+            <span className="text-sm font-medium">
+              {user ? getInitials(user.name) : '??'}
+            </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-sidebar-foreground truncate">Jean Dupont</p>
-            <p className="text-xs text-sidebar-foreground/60">ADV Export</p>
+            <p className="text-sm font-medium text-sidebar-foreground truncate">
+              {user?.name || 'Utilisateur'}
+            </p>
+            <p className="text-xs text-sidebar-foreground/60">
+              {user?.role ? roleLabels[user.role] : ''}
+            </p>
           </div>
-          <button className="p-2 rounded-lg hover:bg-sidebar-accent transition-smooth">
+          <button 
+            onClick={handleLogout}
+            className="p-2 rounded-lg hover:bg-sidebar-accent transition-smooth"
+            title="Déconnexion"
+          >
             <LogOut className="h-4 w-4 text-sidebar-foreground/60" />
           </button>
         </div>
+        <p className="mt-2 text-[10px] text-sidebar-foreground/40 text-center">
+          🔒 Mode local
+        </p>
       </div>
     </aside>
   );
