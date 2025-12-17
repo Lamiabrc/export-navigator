@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { calculateCosts, type ProductType, type CostBreakdown } from '@/utils/costCalculator';
 import { getZoneFromDestination } from '@/data/referenceRates';
+import { useReferenceRates } from '@/hooks/useReferenceRates';
 import type { Destination, Incoterm, TransportMode } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,8 @@ const incoterms: Incoterm[] = ['EXW', 'FCA', 'DAP', 'DDP'];
 const transportModes: TransportMode[] = ['Routier', 'Maritime', 'Aerien', 'Express', 'Ferroviaire'];
 
 export default function Simulator() {
+  const { vatRates, octroiMerRates, transportCosts, serviceCharges } = useReferenceRates();
+  
   const [goodsValue, setGoodsValue] = useState<number>(10000);
   const [destination, setDestination] = useState<Destination>('Martinique');
   const [incoterm, setIncoterm] = useState<Incoterm>('DAP');
@@ -59,8 +62,9 @@ export default function Simulator() {
       transportMode,
       weight,
       margin,
+      customRates: { vatRates, octroiMerRates, transportCosts, serviceCharges },
     });
-  }, [goodsValue, destination, incoterm, productType, transportMode, weight, margin]);
+  }, [goodsValue, destination, incoterm, productType, transportMode, weight, margin, vatRates, octroiMerRates, transportCosts, serviceCharges]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('fr-FR', {
