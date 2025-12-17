@@ -6,6 +6,36 @@
 - npm ou yarn
 - Git
 
+## Configuration initiale (IMPORTANT)
+
+### 1. Ajouter les scripts Electron dans package.json
+
+Ouvrez `package.json` et ajoutez ces scripts dans la section `"scripts"` :
+
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:dev": "vite build --mode development",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:8080 && electron electron/main.js\"",
+    "electron:build": "npm run build && npx electron-builder --win --config electron-builder.config.js"
+  }
+}
+```
+
+### 2. Mettre à jour la version
+
+Dans `package.json`, changez la version de `"0.0.0"` à `"1.0.0"` :
+
+```json
+{
+  "version": "1.0.0"
+}
+```
+
 ## Installation des dépendances
 
 ```bash
@@ -40,18 +70,32 @@ L'installateur sera créé dans le dossier `release/`.
 
 ## Distribution via GitHub
 
-### Créer une release automatique
+### Méthode 1 : Release automatique (recommandée)
 
-1. Créer un tag avec la version :
+1. Mettre à jour la version dans `package.json`
+2. Commiter vos changements :
+```bash
+git add .
+git commit -m "Version 1.0.0"
+```
+
+3. Créer et pousser un tag :
 ```bash
 git tag v1.0.0
+git push origin main
 git push origin v1.0.0
 ```
 
-2. GitHub Actions va automatiquement :
+4. GitHub Actions va automatiquement :
    - Compiler l'application
    - Créer l'installateur .exe
    - Publier une Release sur GitHub
+
+### Méthode 2 : Déclencher manuellement
+
+1. Aller sur GitHub → Actions → "Build and Release Electron App"
+2. Cliquer sur "Run workflow"
+3. Sélectionner la branche et lancer
 
 ### Télécharger l'installateur
 
