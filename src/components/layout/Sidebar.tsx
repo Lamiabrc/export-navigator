@@ -16,10 +16,12 @@ import logoOrliman from '@/assets/logo-orliman.png';
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Flux Export', href: '/flows', icon: FileText },
+  { name: 'Simulateur', href: '/simulator', icon: Calculator },
   { name: 'Logistique', href: '/logistics', icon: Truck },
   { name: 'Charges & Finance', href: '/finance', icon: Calculator },
   { name: 'Guide Destinations', href: '/guide', icon: BookOpen },
   { name: 'Contrôle Factures', href: '/invoices', icon: Upload },
+  { name: 'Dashboard Export', href: '/export-dashboard', icon: LayoutDashboard },
 ];
 
 const adminNavigation = [
