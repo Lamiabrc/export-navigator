@@ -6,6 +6,17 @@ export type CircuitType =
   | 'suisse'
   | 'hors_ue';
 
+export type TransitaireType = 'DHL' | 'LVoverseas' | 'Geodis' | 'TDIS' | 'Autre' | 'Client';
+
+export interface Transitaire {
+  id: TransitaireType;
+  name: string;
+  speciality: string;
+  zones: string[];
+  documentsReceived: string[];
+  contact?: string;
+}
+
 export interface ExportCircuit {
   id: CircuitType;
   name: string;
@@ -19,6 +30,14 @@ export interface ExportCircuit {
   steps: CircuitStep[];
   risks: string[];
   bestPractices: string[];
+  transitaires: TransitaireType[];
+  documentDistribution: DocumentDistribution[];
+}
+
+export interface DocumentDistribution {
+  document: string;
+  recipients: TransitaireType[];
+  notes?: string;
 }
 
 export interface CostItem {

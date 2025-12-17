@@ -8,6 +8,13 @@ export const exportCircuits: ExportCircuit[] = [
     description: 'Le fournisseur livre les marchandises dédouanées export au transporteur désigné par le client, au lieu convenu. Le client assume le transport principal et tous les frais d\'import.',
     zone: 'Multiple',
     incoterm: 'FCA',
+    transitaires: ['Client'],
+    documentDistribution: [
+      { document: 'Facture commerciale', recipients: ['Client'], notes: 'Original pour le transporteur du client' },
+      { document: 'Packing list', recipients: ['Client'], notes: 'Copie pour contrôle' },
+      { document: 'Bon de livraison', recipients: ['Client'], notes: 'Signé à la mise à disposition' },
+      { document: 'Déclaration export (EX1)', recipients: ['Client'], notes: 'Copie pour preuve export' },
+    ],
     declarationsRequired: [
       'Déclaration d\'exportation (EX1)',
       'DEB si destination UE (Déclaration d\'Échanges de Biens)'
@@ -51,6 +58,14 @@ export const exportCircuits: ExportCircuit[] = [
     description: 'Le fournisseur assume l\'intégralité des frais et risques jusqu\'à la livraison chez le client, y compris dédouanement import, droits et taxes.',
     zone: 'Multiple',
     incoterm: 'DDP',
+    transitaires: ['DHL', 'Geodis', 'LVoverseas'],
+    documentDistribution: [
+      { document: 'Facture commerciale', recipients: ['DHL', 'Geodis', 'LVoverseas'], notes: '3 exemplaires originaux' },
+      { document: 'Packing list', recipients: ['DHL', 'Geodis', 'LVoverseas'], notes: 'Détail des colis' },
+      { document: 'Document transport (CMR/AWB/BL)', recipients: ['DHL', 'Geodis', 'LVoverseas'], notes: 'Selon mode de transport' },
+      { document: 'DAU', recipients: ['DHL', 'Geodis', 'LVoverseas'], notes: 'Si hors UE / DROM' },
+      { document: 'Certificat d\'origine', recipients: ['DHL', 'Geodis', 'LVoverseas'], notes: 'Si applicable' },
+    ],
     declarationsRequired: [
       'Déclaration d\'exportation (EX1)',
       'DEB si destination UE',
@@ -77,8 +92,8 @@ export const exportCircuits: ExportCircuit[] = [
       { id: '1', label: 'Commande client', actor: 'Client', description: 'Réception et validation de la commande' },
       { id: '2', label: 'Préparation', actor: 'ORLIMAN', description: 'Préparation et emballage des produits' },
       { id: '3', label: 'Déclaration export', actor: 'ORLIMAN', description: 'Formalités douanières export' },
-      { id: '4', label: 'Transport', actor: 'Transporteur ORLIMAN', description: 'Acheminement vers destination' },
-      { id: '5', label: 'Dédouanement import', actor: 'Transitaire ORLIMAN', description: 'Formalités et paiement taxes' },
+      { id: '4', label: 'Transport', actor: 'DHL/Geodis/LVoverseas', description: 'Acheminement vers destination' },
+      { id: '5', label: 'Dédouanement import', actor: 'Transitaire', description: 'Formalités et paiement taxes' },
       { id: '6', label: 'Livraison finale', actor: 'Transporteur', description: 'Livraison chez le client' }
     ],
     risks: [
@@ -99,6 +114,14 @@ export const exportCircuits: ExportCircuit[] = [
     description: 'Flux vers les DROM via une plateforme logistique sous-traitante dans le territoire de destination (ex: TDIS en Martinique). Le sous-traitant gère le dédouanement et la distribution locale.',
     zone: 'DROM',
     incoterm: 'DAP/DDP',
+    transitaires: ['LVoverseas', 'TDIS'],
+    documentDistribution: [
+      { document: 'Facture commerciale', recipients: ['LVoverseas', 'TDIS'], notes: 'LVoverseas pour export, TDIS pour import' },
+      { document: 'Packing list', recipients: ['LVoverseas', 'TDIS'], notes: 'Détail pour préparation plateforme' },
+      { document: 'Connaissement (BL)', recipients: ['LVoverseas'], notes: 'Original pour le maritime' },
+      { document: 'DAU', recipients: ['TDIS'], notes: 'Pour dédouanement DROM' },
+      { document: 'Fiche TDIS', recipients: ['TDIS'], notes: 'Instructions de distribution locale' },
+    ],
     declarationsRequired: [
       'Déclaration d\'exportation (EX1)',
       'DAU (Document Administratif Unique)',
@@ -125,11 +148,11 @@ export const exportCircuits: ExportCircuit[] = [
     steps: [
       { id: '1', label: 'Commande client', actor: 'Client DROM', description: 'Commande passée' },
       { id: '2', label: 'Préparation export', actor: 'ORLIMAN', description: 'Conditionnement maritime' },
-      { id: '3', label: 'Export France', actor: 'ORLIMAN', description: 'Déclaration export + mise à FOB' },
-      { id: '4', label: 'Transport maritime', actor: 'Armateur', description: 'Traversée vers DROM (15-25 jours)' },
-      { id: '5', label: 'Réception plateforme', actor: 'TDIS/Plateforme', description: 'Déchargement et stockage' },
-      { id: '6', label: 'Dédouanement', actor: 'Plateforme', description: 'Formalités import et taxes' },
-      { id: '7', label: 'Distribution locale', actor: 'Plateforme', description: 'Livraison au client final' }
+      { id: '3', label: 'Export France', actor: 'ORLIMAN + LVoverseas', description: 'Déclaration export + mise à FOB' },
+      { id: '4', label: 'Transport maritime', actor: 'LVoverseas', description: 'Traversée vers DROM (15-25 jours)' },
+      { id: '5', label: 'Réception plateforme', actor: 'TDIS', description: 'Déchargement et stockage' },
+      { id: '6', label: 'Dédouanement', actor: 'TDIS', description: 'Formalités import et taxes' },
+      { id: '7', label: 'Distribution locale', actor: 'TDIS', description: 'Livraison au client final' }
     ],
     risks: [
       'Délais maritimes variables (météo, saturation ports)',
@@ -150,6 +173,14 @@ export const exportCircuits: ExportCircuit[] = [
     description: 'Échanges au sein de l\'Union Européenne. Pas de douane mais obligations déclaratives (DEB/DES). TVA intracommunautaire avec autoliquidation si numéro TVA valide.',
     zone: 'UE',
     incoterm: 'DAP/FCA',
+    transitaires: ['Geodis', 'DHL'],
+    documentDistribution: [
+      { document: 'Facture commerciale HT', recipients: ['Geodis', 'DHL'], notes: 'Mentions TVA intracommunautaire obligatoires' },
+      { document: 'Packing list', recipients: ['Geodis', 'DHL'], notes: 'Détail des colis' },
+      { document: 'CMR / Lettre de voiture', recipients: ['Geodis'], notes: 'Pour transport routier' },
+      { document: 'AWB', recipients: ['DHL'], notes: 'Pour express aérien' },
+      { document: 'Preuve de livraison', recipients: ['Geodis', 'DHL'], notes: 'Signé à réception - CONSERVER 6 ans' },
+    ],
     declarationsRequired: [
       'DEB (Déclaration d\'Échanges de Biens) si > 460 000€/an',
       'DES (Déclaration Européenne de Services) si services',
@@ -173,7 +204,7 @@ export const exportCircuits: ExportCircuit[] = [
       { id: '2', label: 'Vérification TVA', actor: 'ORLIMAN', description: 'Contrôle VIES du numéro TVA' },
       { id: '3', label: 'Facturation HT', actor: 'ORLIMAN', description: 'Facture exonérée TVA' },
       { id: '4', label: 'Préparation', actor: 'ORLIMAN', description: 'Emballage et documents' },
-      { id: '5', label: 'Transport', actor: 'Transporteur', description: 'Livraison UE' },
+      { id: '5', label: 'Transport', actor: 'Geodis/DHL', description: 'Livraison UE' },
       { id: '6', label: 'DEB mensuelle', actor: 'ORLIMAN', description: 'Déclaration si seuil atteint' },
       { id: '7', label: 'Réception', actor: 'Client', description: 'Client autoliquide TVA' }
     ],
@@ -196,6 +227,15 @@ export const exportCircuits: ExportCircuit[] = [
     description: 'Exportation vers la Suisse (hors UE). Dédouanement export France + import Suisse requis. Accords de libre-échange applicables avec EUR.1 pour réduction droits.',
     zone: 'Hors UE',
     incoterm: 'DAP/DDP',
+    transitaires: ['Geodis', 'DHL', 'Autre'],
+    documentDistribution: [
+      { document: 'Facture commerciale (FR/DE)', recipients: ['Geodis', 'DHL'], notes: 'Bilingue français/allemand recommandé' },
+      { document: 'Packing list', recipients: ['Geodis', 'DHL'], notes: 'Détail des colis' },
+      { document: 'EUR.1', recipients: ['Geodis', 'DHL'], notes: 'OBLIGATOIRE pour franchise droits' },
+      { document: 'CMR', recipients: ['Geodis'], notes: 'Transport routier' },
+      { document: 'AWB', recipients: ['DHL'], notes: 'Express aérien' },
+      { document: 'e-dec suisse', recipients: ['Autre'], notes: 'Transitaire suisse pour import' },
+    ],
     declarationsRequired: [
       'Déclaration d\'exportation (EX1)',
       'EUR.1 ou déclaration d\'origine sur facture',
@@ -220,7 +260,7 @@ export const exportCircuits: ExportCircuit[] = [
       { id: '1', label: 'Commande client CH', actor: 'Client', description: 'Commande depuis Suisse' },
       { id: '2', label: 'Préparation', actor: 'ORLIMAN', description: 'Documents FR/DE, EUR.1' },
       { id: '3', label: 'Export France', actor: 'ORLIMAN', description: 'Déclaration EX1 + EUR.1' },
-      { id: '4', label: 'Transport', actor: 'Transporteur', description: 'Passage frontière' },
+      { id: '4', label: 'Transport', actor: 'Geodis/DHL', description: 'Passage frontière' },
       { id: '5', label: 'Dédouanement CH', actor: 'Transitaire CH', description: 'e-dec + paiement TVA' },
       { id: '6', label: 'Livraison', actor: 'Transporteur', description: 'Livraison client final' }
     ],
@@ -243,6 +283,15 @@ export const exportCircuits: ExportCircuit[] = [
     description: 'Exportations vers pays tiers hors UE avec dédouanement complet. Possibilité d\'accords préférentiels (EUR.1, FORM A) selon destination pour réduire les droits.',
     zone: 'Hors UE',
     incoterm: 'FCA/DAP/DDP',
+    transitaires: ['DHL', 'LVoverseas', 'Geodis', 'Autre'],
+    documentDistribution: [
+      { document: 'Facture commerciale (EN)', recipients: ['DHL', 'LVoverseas', 'Geodis', 'Autre'], notes: '3 exemplaires originaux' },
+      { document: 'Packing list', recipients: ['DHL', 'LVoverseas', 'Geodis', 'Autre'], notes: 'Détail des colis' },
+      { document: 'EUR.1 / FORM A / ATR', recipients: ['DHL', 'LVoverseas', 'Geodis', 'Autre'], notes: 'Selon accord préférentiel' },
+      { document: 'Certificat d\'origine', recipients: ['DHL', 'LVoverseas', 'Geodis', 'Autre'], notes: 'CCI ou douanes' },
+      { document: 'Document transport (BL/AWB/CMR)', recipients: ['DHL', 'LVoverseas', 'Geodis'], notes: 'Selon mode de transport' },
+      { document: 'Certificats produits', recipients: ['Autre'], notes: 'Transitaire destination pour conformité locale' },
+    ],
     declarationsRequired: [
       'Déclaration d\'exportation (EX1)',
       'EUR.1 si accord préférentiel',
@@ -271,8 +320,8 @@ export const exportCircuits: ExportCircuit[] = [
       { id: '2', label: 'Vérification', actor: 'ORLIMAN', description: 'Pays, sanctions, certificats requis' },
       { id: '3', label: 'Préparation', actor: 'ORLIMAN', description: 'Documents, emballage international' },
       { id: '4', label: 'Export France', actor: 'ORLIMAN', description: 'EX1, EUR.1/FORM A' },
-      { id: '5', label: 'Transport', actor: 'Transporteur', description: 'Acheminement international' },
-      { id: '6', label: 'Import destination', actor: 'Client/Transitaire', description: 'Dédouanement + taxes' },
+      { id: '5', label: 'Transport', actor: 'DHL/LVoverseas/Geodis', description: 'Acheminement international' },
+      { id: '6', label: 'Import destination', actor: 'Transitaire local', description: 'Dédouanement + taxes' },
       { id: '7', label: 'Livraison', actor: 'Transporteur local', description: 'Distribution finale' }
     ],
     risks: [

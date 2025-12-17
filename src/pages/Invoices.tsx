@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -9,9 +10,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { mockFlows } from '@/data/mockData';
+import { exportCircuits } from '@/data/exportCircuits';
+import { transitaires } from '@/data/transitaires';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
 import { 
   Upload, 
   FileText, 
@@ -20,25 +23,46 @@ import {
   XCircle,
   Eye,
   Trash2,
+  Truck,
+  Info,
 } from 'lucide-react';
 
 interface UploadedInvoice {
   id: string;
   filename: string;
-  flow_id: string | null;
+  circuit_id: string | null;
+  transitaire_id: string | null;
   uploaded_at: string;
   status: 'pending' | 'analyzing' | 'ok' | 'warning' | 'error';
   compliance_score?: number;
   issues?: string[];
-  fileData?: string; // Base64 encoded file for local storage
+  fileData?: string;
   fileType?: string;
 }
 
+const transitaireColors: Record<string, string> = {
+  'DHL': 'bg-yellow-500/10 text-yellow-700 border-yellow-500/30',
+  'LVoverseas': 'bg-blue-500/10 text-blue-700 border-blue-500/30',
+  'Geodis': 'bg-red-500/10 text-red-700 border-red-500/30',
+  'TDIS': 'bg-purple-500/10 text-purple-700 border-purple-500/30',
+  'Client': 'bg-green-500/10 text-green-700 border-green-500/30',
+  'Autre': 'bg-gray-500/10 text-gray-700 border-gray-500/30',
+};
+
 export default function Invoices() {
   const [invoices, setInvoices] = useLocalStorage<UploadedInvoice[]>('orliman_invoices', []);
-  const [selectedFlowId, setSelectedFlowId] = useState<string>('none');
+  const [selectedCircuitId, setSelectedCircuitId] = useState<string>('none');
+  const [selectedTransitaire, setSelectedTransitaire] = useState<string>('none');
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const selectedCircuit = selectedCircuitId !== 'none' 
+    ? exportCircuits.find(c => c.id === selectedCircuitId) 
+    : null;
+
+  const availableTransitaires = selectedCircuit 
+    ? transitaires.filter(t => selectedCircuit.transitaires.includes(t.id))
+    : transitaires;
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -58,7 +82,8 @@ export default function Invoices() {
       const newInvoice: UploadedInvoice = {
         id: crypto.randomUUID(),
         filename: file.name,
-        flow_id: selectedFlowId !== 'none' ? selectedFlowId : null,
+        circuit_id: selectedCircuitId !== 'none' ? selectedCircuitId : null,
+        transitaire_id: selectedTransitaire !== 'none' ? selectedTransitaire : null,
         uploaded_at: new Date().toISOString(),
         status: 'analyzing',
         issues: [],
@@ -69,10 +94,15 @@ export default function Invoices() {
       setInvoices(prev => [newInvoice, ...prev]);
       toast.info(`Analyse de ${file.name} en cours...`);
       
-      // Simulate local analysis
+      // Simulate local analysis with circuit-specific checks
       setTimeout(() => {
         const score = Math.floor(Math.random() * 60) + 40;
-        const possibleIssues = [
+        const possibleIssues = selectedCircuit ? [
+          `Vérifier conformité circuit ${selectedCircuit.shortName}`,
+          'Incoterm à confirmer',
+          'Montant TVA/taxes à vérifier',
+          'Documents requis incomplets',
+        ] : [
           'Vérifier date facture',
           'Incoterm non visible',
           'Montant TVA à vérifier',
@@ -114,7 +144,6 @@ export default function Invoices() {
     if (files && files[0]) {
       processFile(files[0]);
     }
-    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -177,27 +206,100 @@ export default function Invoices() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Contrôle Factures</h1>
           <p className="mt-1 text-muted-foreground">
-            Upload et vérification de conformité des factures (stockage local)
+            Vérification de conformité des factures par circuit et transitaire
           </p>
         </div>
 
+        {/* Process Diagram */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Info className="h-5 w-5" />
+              Processus de contrôle facture
+            </CardTitle>
+            <CardDescription>Étapes de vérification selon le circuit export</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center gap-2 flex-wrap p-4 bg-muted/50 rounded-lg overflow-x-auto">
+              {['📄 Upload', '🔍 Circuit', '📦 Transitaire', '⚙️ Analyse', '✅ Résultat'].map((step, i, arr) => (
+                <div key={step} className="flex items-center">
+                  <div className={`px-3 py-2 rounded-lg border text-sm font-medium ${
+                    i === 0 ? 'bg-primary text-primary-foreground' : 
+                    i === arr.length - 1 ? 'bg-green-500 text-white' : 'bg-background'
+                  }`}>
+                    {step}
+                  </div>
+                  {i < arr.length - 1 && <span className="mx-2">→</span>}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Upload Zone */}
         <div className="bg-card rounded-xl border p-6">
-          <div className="flex items-center gap-4 mb-4">
-            <Select value={selectedFlowId} onValueChange={setSelectedFlowId}>
-              <SelectTrigger className="w-[300px]">
-                <SelectValue placeholder="Rattacher à un flux (optionnel)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Aucun flux sélectionné</SelectItem>
-                {mockFlows.map(f => (
-                  <SelectItem key={f.id} value={f.id}>
-                    {f.flow_code} - {f.client_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Circuit export</label>
+              <Select value={selectedCircuitId} onValueChange={(val) => {
+                setSelectedCircuitId(val);
+                setSelectedTransitaire('none');
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un circuit" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Tous circuits</SelectItem>
+                  {exportCircuits.map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.shortName} - {c.incoterm}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium mb-2 block">Transitaire</label>
+              <Select value={selectedTransitaire} onValueChange={setSelectedTransitaire}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un transitaire" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Tous transitaires</SelectItem>
+                  {availableTransitaires.map(t => (
+                    <SelectItem key={t.id} value={t.id}>
+                      <span className="flex items-center gap-2">
+                        <Truck className="h-4 w-4" />
+                        {t.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
+          {/* Selected circuit info */}
+          {selectedCircuit && (
+            <div className="mb-4 p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="font-medium">{selectedCircuit.name}</h4>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Documents requis : {selectedCircuit.documentsRequired.slice(0, 3).join(', ')}...
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  {selectedCircuit.transitaires.map(t => (
+                    <Badge key={t} variant="outline" className={transitaireColors[t]}>
+                      {t}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
           
           <input
             ref={fileInputRef}
@@ -292,7 +394,7 @@ export default function Invoices() {
         {/* Invoices List */}
         <div className="bg-card rounded-xl border overflow-hidden">
           <div className="p-4 border-b border-border">
-            <h3 className="font-semibold text-foreground">Factures uploadées (stockées localement)</h3>
+            <h3 className="font-semibold text-foreground">Factures contrôlées</h3>
           </div>
           <div className="divide-y divide-border">
             {invoices.length === 0 ? (
@@ -302,8 +404,11 @@ export default function Invoices() {
               </div>
             ) : (
               invoices.map(invoice => {
-                const linkedFlow = invoice.flow_id 
-                  ? mockFlows.find(f => f.id === invoice.flow_id) 
+                const linkedCircuit = invoice.circuit_id 
+                  ? exportCircuits.find(c => c.id === invoice.circuit_id) 
+                  : null;
+                const linkedTransitaire = invoice.transitaire_id
+                  ? transitaires.find(t => t.id === invoice.transitaire_id)
                   : null;
                 
                 return (
@@ -320,20 +425,23 @@ export default function Invoices() {
                           {getStatusBadge(invoice.status)}
                         </div>
                         
-                        <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground flex-wrap">
                           <span>
                             {new Date(invoice.uploaded_at).toLocaleString('fr-FR')}
                           </span>
-                          {linkedFlow && (
-                            <span className="flex items-center gap-1">
-                              <span>→</span>
-                              <span className="text-primary font-medium">
-                                {linkedFlow.flow_code}
-                              </span>
-                              <span className="text-muted-foreground">
-                                ({linkedFlow.destination})
-                              </span>
-                            </span>
+                          {linkedCircuit && (
+                            <Badge variant="outline" className="text-xs">
+                              {linkedCircuit.shortName}
+                            </Badge>
+                          )}
+                          {linkedTransitaire && (
+                            <Badge 
+                              variant="outline" 
+                              className={`text-xs ${transitaireColors[linkedTransitaire.id]}`}
+                            >
+                              <Truck className="h-3 w-3 mr-1" />
+                              {linkedTransitaire.name}
+                            </Badge>
                           )}
                         </div>
 

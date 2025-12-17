@@ -1,6 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { getCircuitById } from '@/data/exportCircuits';
+import { transitaires } from '@/data/transitaires';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,9 @@ import {
   AlertTriangle, 
   CheckCircle2, 
   Euro,
-  ArrowRight
+  ArrowRight,
+  Truck,
+  Send
 } from 'lucide-react';
 
 const zoneColors: Record<string, string> = {
@@ -25,6 +28,15 @@ const payerColors: Record<string, string> = {
   'Fournisseur': 'bg-blue-500/10 text-blue-700',
   'Client': 'bg-green-500/10 text-green-700',
   'Variable': 'bg-orange-500/10 text-orange-700',
+};
+
+const transitaireColors: Record<string, string> = {
+  'DHL': 'bg-yellow-500/10 text-yellow-700 border-yellow-500/30',
+  'LVoverseas': 'bg-blue-500/10 text-blue-700 border-blue-500/30',
+  'Geodis': 'bg-red-500/10 text-red-700 border-red-500/30',
+  'TDIS': 'bg-purple-500/10 text-purple-700 border-purple-500/30',
+  'Client': 'bg-green-500/10 text-green-700 border-green-500/30',
+  'Autre': 'bg-gray-500/10 text-gray-700 border-gray-500/30',
 };
 
 export default function CircuitDetail() {
@@ -43,6 +55,33 @@ export default function CircuitDetail() {
       </MainLayout>
     );
   }
+
+  const circuitTransitaires = circuit.transitaires
+    .map(id => transitaires.find(t => t.id === id))
+    .filter(Boolean);
+
+  // Generate mermaid diagram for the flow
+  const generateMermaidDiagram = () => {
+    const steps = circuit.steps.map((step, i) => {
+      const nodeId = `step${i}`;
+      const label = `${step.label}\\n(${step.actor})`;
+      return { nodeId, label };
+    });
+
+    let diagram = 'graph LR\n';
+    steps.forEach((step, i) => {
+      diagram += `    ${step.nodeId}["${step.label}"]\n`;
+      if (i < steps.length - 1) {
+        diagram += `    ${step.nodeId} --> step${i + 1}\n`;
+      }
+    });
+
+    // Add styling
+    diagram += '\n    style step0 fill:#3b82f6,color:#fff\n';
+    diagram += `    style step${steps.length - 1} fill:#22c55e,color:#fff\n`;
+
+    return diagram;
+  };
 
   return (
     <MainLayout>
@@ -70,6 +109,7 @@ export default function CircuitDetail() {
         <Tabs defaultValue="schema" className="space-y-6">
           <TabsList>
             <TabsTrigger value="schema">Schéma du flux</TabsTrigger>
+            <TabsTrigger value="transitaires">Transitaires</TabsTrigger>
             <TabsTrigger value="costs">Coûts</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
             <TabsTrigger value="risks">Risques & Conseils</TabsTrigger>
@@ -77,10 +117,36 @@ export default function CircuitDetail() {
 
           {/* Schema Tab */}
           <TabsContent value="schema" className="space-y-6">
+            {/* Visual Flow Summary */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Étapes du circuit</CardTitle>
-                <CardDescription>Visualisation du flux logistique</CardDescription>
+                <CardTitle className="text-lg">Flux simplifié</CardTitle>
+                <CardDescription>Visualisation du circuit export</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-center gap-2 flex-wrap p-4 bg-muted/50 rounded-lg overflow-x-auto">
+                  {circuit.steps.map((step, index) => (
+                    <div key={step.id} className="flex items-center">
+                      <div className={`px-3 py-2 rounded-lg border text-sm font-medium text-center min-w-[100px] ${
+                        index === 0 ? 'bg-primary text-primary-foreground' : 
+                        index === circuit.steps.length - 1 ? 'bg-green-500 text-white' : 'bg-background'
+                      }`}>
+                        <div className="text-xs opacity-80 mb-1">{step.actor}</div>
+                        {step.label}
+                      </div>
+                      {index < circuit.steps.length - 1 && (
+                        <ArrowRight className="h-4 w-4 mx-2 text-muted-foreground flex-shrink-0" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Étapes détaillées</CardTitle>
+                <CardDescription>Description de chaque étape du flux</CardDescription>
               </CardHeader>
               <CardContent>
                 {/* Flow Diagram */}
@@ -116,25 +182,103 @@ export default function CircuitDetail() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
 
-            {/* Visual Flow Summary */}
+          {/* Transitaires Tab */}
+          <TabsContent value="transitaires" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Résumé visuel</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Truck className="h-5 w-5" />
+                  Transitaires pour ce circuit
+                </CardTitle>
+                <CardDescription>Partenaires logistiques recommandés selon le type de flux</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-center gap-2 flex-wrap p-4 bg-muted/50 rounded-lg">
-                  {circuit.steps.map((step, index) => (
-                    <div key={step.id} className="flex items-center">
-                      <div className="px-3 py-2 bg-background rounded-lg border text-sm font-medium text-center min-w-[100px]">
-                        <div className="text-xs text-muted-foreground mb-1">{step.actor}</div>
-                        {step.label}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {circuitTransitaires.map((transitaire) => transitaire && (
+                    <div 
+                      key={transitaire.id}
+                      className={`p-4 rounded-lg border-2 ${transitaireColors[transitaire.id]}`}
+                    >
+                      <h4 className="font-semibold text-lg">{transitaire.name}</h4>
+                      <p className="text-sm text-muted-foreground mt-1">{transitaire.speciality}</p>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {transitaire.zones.map(zone => (
+                          <Badge key={zone} variant="secondary" className="text-xs">
+                            {zone}
+                          </Badge>
+                        ))}
                       </div>
-                      {index < circuit.steps.length - 1 && (
-                        <ArrowRight className="h-4 w-4 mx-2 text-muted-foreground flex-shrink-0" />
-                      )}
                     </div>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Document Distribution */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Send className="h-5 w-5" />
+                  Distribution des documents
+                </CardTitle>
+                <CardDescription>Quel document envoyer à quel transitaire</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {circuit.documentDistribution.map((dist, index) => (
+                    <div 
+                      key={index}
+                      className="flex items-start justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex-1">
+                        <div className="font-medium flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-primary" />
+                          {dist.document}
+                        </div>
+                        {dist.notes && (
+                          <p className="text-sm text-muted-foreground mt-1">{dist.notes}</p>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {dist.recipients.map(recipient => (
+                          <Badge 
+                            key={recipient} 
+                            variant="outline"
+                            className={transitaireColors[recipient]}
+                          >
+                            {recipient}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Visual Document Flow */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Flux documentaire</CardTitle>
+                <CardDescription>Visualisation de la distribution des documents</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col items-center gap-4 p-4 bg-muted/50 rounded-lg">
+                  <div className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium">
+                    🏢 ORLIMAN
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {circuit.transitaires.map(t => {
+                      const trans = transitaires.find(tr => tr.id === t);
+                      return (
+                        <div key={t} className={`px-3 py-2 rounded-lg border text-center ${transitaireColors[t]}`}>
+                          📦 {trans?.name || t}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -330,10 +474,10 @@ export default function CircuitDetail() {
               Simuler les coûts
             </Button>
           </Link>
-          <Link to="/guide">
+          <Link to="/invoices">
             <Button variant="outline">
               <FileText className="h-4 w-4 mr-2" />
-              Guide des destinations
+              Contrôle factures
             </Button>
           </Link>
         </div>
