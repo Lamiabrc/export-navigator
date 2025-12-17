@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFlows } from '@/hooks/useFlows';
+import { useReferenceRates } from '@/hooks/useReferenceRates';
 import { calculateCosts, type ProductType } from '@/utils/costCalculator';
 import { getZoneFromDestination } from '@/data/referenceRates';
 import type { Destination, Incoterm, TransportMode, FlowStatus, ChecklistStatus, Zone } from '@/types';
@@ -70,6 +71,7 @@ interface AddFlowDialogProps {
 export function AddFlowDialog({ open, onOpenChange }: AddFlowDialogProps) {
   const { user } = useAuth();
   const { addFlow } = useFlows();
+  const { vatRates, octroiMerRates, transportCosts, serviceCharges } = useReferenceRates();
   const [step, setStep] = useState<'form' | 'preview'>('form');
 
   const form = useForm<FormValues>({
@@ -93,7 +95,7 @@ export function AddFlowDialog({ open, onOpenChange }: AddFlowDialogProps) {
   const watchedValues = form.watch();
   const zone = watchedValues.destination ? getZoneFromDestination(watchedValues.destination as Destination) : 'UE';
 
-  // Calculate costs in real-time
+  // Calculate costs in real-time with custom rates
   const costBreakdown = useMemo(() => {
     if (!watchedValues.destination || !watchedValues.incoterm || !watchedValues.transport_mode || !watchedValues.goods_value) {
       return null;
@@ -107,8 +109,9 @@ export function AddFlowDialog({ open, onOpenChange }: AddFlowDialogProps) {
       transportMode: watchedValues.transport_mode as TransportMode,
       weight: watchedValues.weight || 100,
       margin: watchedValues.margin || 25,
+      customRates: { vatRates, octroiMerRates, transportCosts, serviceCharges },
     });
-  }, [watchedValues.destination, watchedValues.incoterm, watchedValues.transport_mode, watchedValues.goods_value, watchedValues.product_type, watchedValues.weight, watchedValues.margin]);
+  }, [watchedValues.destination, watchedValues.incoterm, watchedValues.transport_mode, watchedValues.goods_value, watchedValues.product_type, watchedValues.weight, watchedValues.margin, vatRates, octroiMerRates, transportCosts, serviceCharges]);
 
   const onSubmit = (data: FormValues) => {
     if (step === 'form') {

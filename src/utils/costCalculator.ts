@@ -1,15 +1,27 @@
 import type { Destination, Incoterm, TransportMode, Zone } from '@/types';
 import {
   getZoneFromDestination,
-  getVatRateForDestination,
-  getOctroiMerRateForDestination,
-  getTransportCostEstimate,
-  getIncotermRule,
-  serviceCharges,
+  vatRates as defaultVatRates,
+  octroiMerRates as defaultOmRates,
+  transportCosts as defaultTransportCosts,
+  serviceCharges as defaultServiceCharges,
   environmentalTaxes,
+  incotermPayerRules,
+  type VatRate,
+  type OctroiMerRate,
+  type TransportCost,
+  type ServiceCharge,
 } from '@/data/referenceRates';
 
 export type ProductType = 'lppr' | 'standard';
+
+// Custom rates interface for overriding defaults
+export interface CustomRates {
+  vatRates?: VatRate[];
+  octroiMerRates?: OctroiMerRate[];
+  transportCosts?: TransportCost[];
+  serviceCharges?: ServiceCharge[];
+}
 
 export interface CostCalculationParams {
   goodsValue: number;           // Valeur marchandise HT (coût d'achat)
@@ -20,6 +32,7 @@ export interface CostCalculationParams {
   weight?: number;              // Poids en kg (optionnel)
   customsCode?: string;         // Code nomenclature douanière
   margin?: number;              // Marge souhaitée en %
+  customRates?: CustomRates;    // Taux personnalisés (optionnel)
 }
 
 export interface CostLine {
@@ -60,13 +73,30 @@ export interface CostBreakdown {
 }
 
 export function calculateCosts(params: CostCalculationParams): CostBreakdown {
-  const { goodsValue, destination, incoterm, productType, transportMode, weight = 100, margin = 25 } = params;
+  const { goodsValue, destination, incoterm, productType, transportMode, weight = 100, margin = 25, customRates } = params;
+  
+  // Use custom rates if provided, otherwise use defaults
+  const vatRates = customRates?.vatRates || defaultVatRates;
+  const omRates = customRates?.octroiMerRates || defaultOmRates;
+  const transportCostsData = customRates?.transportCosts || defaultTransportCosts;
+  const serviceChargesData = customRates?.serviceCharges || defaultServiceCharges;
   
   const zone = getZoneFromDestination(destination);
-  const vatRate = getVatRateForDestination(destination, productType === 'lppr');
-  const omRate = getOctroiMerRateForDestination(destination, productType === 'lppr');
-  const transportCost = getTransportCostEstimate(destination, transportMode);
-  const incotermRule = getIncotermRule(incoterm);
+  
+  // Get VAT rate for destination
+  const vatRate = vatRates.find(v => v.destination === destination);
+  
+  // Get Octroi de Mer rate for destination
+  const omRatesForDest = omRates.filter(r => r.destination === destination);
+  const omRate = productType === 'lppr' 
+    ? omRatesForDest.find(r => r.category === 'Orthopédie') || omRatesForDest.find(r => r.category === 'Standard')
+    : omRatesForDest.find(r => r.category === 'Standard');
+  
+  // Get transport cost estimate
+  const transportCost = transportCostsData.find(t => t.destination === destination && t.transport_mode === transportMode);
+  
+  // Get incoterm rule
+  const incotermRule = incotermPayerRules.find(r => r.incoterm === incoterm);
   
   const lines: CostLine[] = [];
   
@@ -112,7 +142,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
   
   // ============= 3. DÉDOUANEMENT EXPORT =============
   if (zone !== 'UE') {
-    const dedouanementExport = serviceCharges.find(s => 
+    const dedouanementExport = serviceChargesData.find(s => 
       s.type === 'dedouanement_export' && s.zone === zone
     );
     if (dedouanementExport && dedouanementExport.fixed_cost > 0) {
@@ -134,7 +164,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
   
   // ============= 4. DÉDOUANEMENT IMPORT =============
   if (zone !== 'UE') {
-    const dedouanementImport = serviceCharges.find(s => 
+    const dedouanementImport = serviceChargesData.find(s => 
       s.type === 'dedouanement_import' && s.zone === zone
     );
     if (dedouanementImport && dedouanementImport.fixed_cost > 0) {
@@ -156,7 +186,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
   }
   
   // ============= 5. MANUTENTION =============
-  const manutention = serviceCharges.find(s => 
+  const manutention = serviceChargesData.find(s => 
     s.type === 'manutention' && s.zone === zone
   );
   if (manutention && manutention.fixed_cost > 0) {
@@ -175,7 +205,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
   }
   
   // ============= 6. ASSURANCE =============
-  const assurance = serviceCharges.find(s => 
+  const assurance = serviceChargesData.find(s => 
     s.type === 'assurance' && s.zone === zone
   );
   if (assurance && assurance.percentage) {
