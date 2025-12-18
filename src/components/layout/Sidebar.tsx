@@ -11,6 +11,7 @@ import {
   Settings,
   LogOut,
   TrendingUp,
+  Library,
 } from 'lucide-react';
 import logoOrliman from '@/assets/logo-orliman.png';
 
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Charges & Finance', href: '/finance', icon: Calculator },
   { name: 'Guide Destinations', href: '/guide', icon: BookOpen },
   { name: 'Contrôle Factures', href: '/invoices', icon: Upload },
+  { name: 'Base Documentaire', href: '/reference-library', icon: Library },
   { name: 'Dashboard Export', href: '/export-dashboard', icon: LayoutDashboard },
 ];
 
