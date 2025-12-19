@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -106,98 +105,8 @@ export default function Invoices() {
               <p className="text-2xl font-bold text-muted-foreground">{matchCounts.none}</p>
             </CardContent>
           </Card>
-=======
-import { useState, useMemo } from 'react';
-import { MainLayout } from '@/components/layout/MainLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Download, Filter, Plus } from 'lucide-react';
-import { useFlows } from '@/hooks/useFlows';
-import { useInvoices } from '@/hooks/useInvoices';
-import type { Invoice, InvoiceType } from '@/types';
-
-export default function Invoices() {
-  const { flows } = useFlows();
-  const { invoices, addInvoice, deleteInvoice } = useInvoices();
-  const [filter, setFilter] = useState<InvoiceType | 'all'>('all');
-  const [selectedFlow, setSelectedFlow] = useState<string>('all');
-  const [form, setForm] = useState<Omit<Invoice, 'id'>>({
-    flow_id: 'none',
-    type: 'transport',
-    label: '',
-    amount_ht: 0,
-    currency: 'EUR',
-    date: new Date().toISOString().split('T')[0],
-    vendor: '',
-    file_url: '',
-    notes: '',
-  });
-
-  const filteredInvoices = useMemo(
-    () =>
-      invoices.filter((inv) => {
-        const typeOk = filter === 'all' || inv.type === filter;
-        const flowOk = selectedFlow === 'all' || inv.flow_id === selectedFlow;
-        return typeOk && flowOk;
-      }),
-    [filter, invoices, selectedFlow]
-  );
-
-  const totalByType = (type: InvoiceType) =>
-    filteredInvoices
-      .filter((i) => i.type === type)
-      .reduce((sum, i) => sum + i.amount_ht, 0);
-
-  return (
-    <MainLayout>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <p className="text-sm text-muted-foreground">Factures et rapprochements</p>
-          <h1 className="text-2xl font-bold text-foreground">Factures (transport, douane, client)</h1>
->>>>>>> Stashed changes
         </div>
-        <div className="flex items-center gap-3">
-          <Select value={selectedFlow} onValueChange={setSelectedFlow}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filtrer par flux" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous les flux</SelectItem>
-              {flows.map((f) => (
-                <SelectItem key={f.id} value={f.id}>
-                  {f.flow_code} - {f.client_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filter} onValueChange={(v) => setFilter(v as InvoiceType | 'all')}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Type de facture" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tous</SelectItem>
-              <SelectItem value="client">Client (recette)</SelectItem>
-              <SelectItem value="transport">Transport</SelectItem>
-              <SelectItem value="douane">Douane/Taxes</SelectItem>
-              <SelectItem value="autre">Autre</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" className="gap-2">
-            <Filter className="h-4 w-4" />
-            Filtrer
-          </Button>
-          <Button className="gap-2">
-            <Download className="h-4 w-4" />
-            Exporter
-          </Button>
-        </div>
-      </div>
 
-<<<<<<< Updated upstream
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Rapprochements</CardTitle>
@@ -257,9 +166,7 @@ export default function Invoices() {
                               <span className="text-xs text-muted-foreground">n/a</span>
                             )}
                           </TableCell>
-                          <TableCell>
-                            {alertBadge(c.alerts?.length || 0, hasBlocker)}
-                          </TableCell>
+                          <TableCell>{alertBadge(c.alerts?.length || 0, hasBlocker)}</TableCell>
                           <TableCell className="text-right">
                             {flowId ? (
                               <Link to={`/flows/${flowId}`}>
@@ -281,191 +188,10 @@ export default function Invoices() {
                   )}
                 </TableBody>
               </Table>
-=======
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Total recettes (client)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              {totalByType('client').toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-            </p>
-            <p className="text-xs text-muted-foreground">Somme des factures client filtrées</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Frais transport</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              {totalByType('transport').toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-            </p>
-            <p className="text-xs text-muted-foreground">Somme transport filtrée</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Douane/Taxes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              {totalByType('douane').toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
-            </p>
-            <p className="text-xs text-muted-foreground">Droits, OM/OMR, TVA import facturés</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        {filteredInvoices.map((inv) => {
-          const flow = flows.find((f) => f.id === inv.flow_id);
-          return (
-            <Card key={inv.id}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {flow?.flow_code || 'Hors flux'}
-                </CardTitle>
-                <Badge variant="secondary">{inv.type}</Badge>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-2xl font-bold">
-                      {inv.amount_ht.toLocaleString('fr-FR', { style: 'currency', currency: inv.currency })}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {flow?.client_name || inv.vendor || '—'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">{inv.vendor}</p>
-                    <p className="text-xs text-muted-foreground">{inv.date}</p>
-                    <Button size="sm" variant="ghost" onClick={() => deleteInvoice(inv.id)}>
-                      Supprimer
-                    </Button>
-                  </div>
-                </div>
-                {inv.notes && <p className="text-xs text-muted-foreground mt-2">{inv.notes}</p>}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Ajouter une facture</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Flux (optionnel)</Label>
-                <Select value={form.flow_id} onValueChange={(v) => setForm({ ...form, flow_id: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Hors flux" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Hors flux</SelectItem>
-                    {flows.map((f) => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.flow_code} - {f.client_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Type</Label>
-                <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v as InvoiceType })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="client">Client (recette)</SelectItem>
-                    <SelectItem value="transport">Transport</SelectItem>
-                    <SelectItem value="douane">Douane/Taxes</SelectItem>
-                    <SelectItem value="autre">Autres frais</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
->>>>>>> Stashed changes
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Montant HT</Label>
-                <Input
-                  type="number"
-                  value={form.amount_ht}
-                  onChange={(e) => setForm({ ...form, amount_ht: Number(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Devise</Label>
-                <Select value={form.currency} onValueChange={(v) => setForm({ ...form, currency: v as 'EUR' })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="EUR">EUR</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Fournisseur / Client</Label>
-                <Input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Date</Label>
-                <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Intitulé</Label>
-              <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <Input value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-            </div>
-
-            <Button
-              className="w-full"
-              onClick={() => {
-                if (!form.label || !form.amount_ht) {
-                  return;
-                }
-                addInvoice({
-                  ...form,
-                  flow_id: form.flow_id === 'none' ? undefined : form.flow_id,
-                });
-                setForm({
-                  flow_id: 'none',
-                  type: 'transport',
-                  label: '',
-                  amount_ht: 0,
-                  currency: 'EUR',
-                  date: new Date().toISOString().split('T')[0],
-                  vendor: '',
-                  file_url: '',
-                  notes: '',
-                });
-              }}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Ajouter la facture
-            </Button>
           </CardContent>
         </Card>
 
-<<<<<<< Updated upstream
         {aggregates.topLosses.length > 0 && (
           <Card>
             <CardHeader>
@@ -532,19 +258,6 @@ export default function Invoices() {
             </CardContent>
           </Card>
         )}
-=======
-        <Card className="bg-muted/50">
-          <CardHeader>
-            <CardTitle>Conseils de contrôle</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>Comparer transport réel vs estimation (poids/incoterm/mode).</p>
-            <p>En DROM, OM/OMR selon code produit : Orthopédie (9021) exonéré.</p>
-            <p>UE/Belgique : autoliquidation, pas de TVA facturée si n° TVA client.</p>
-            <p>Suisse : EUR.1 pour franchise droits, TVA 8.1% non récupérable fournisseur.</p>
-          </CardContent>
-        </Card>
->>>>>>> Stashed changes
       </div>
     </MainLayout>
   );

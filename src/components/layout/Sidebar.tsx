@@ -10,48 +10,29 @@ import {
   Upload,
   Settings,
   LogOut,
-<<<<<<< Updated upstream
   TrendingUp,
   Library,
   FileInput,
-  Home,
-=======
-  ListChecks,
-  Users,
->>>>>>> Stashed changes
+  Home as HomeIcon,
 } from 'lucide-react';
 import logoOrliman from '@/assets/logo-orliman.png';
 
 const navigation = [
-  { name: 'Accueil', href: '/', icon: Home },
+  { name: 'Accueil', href: '/', icon: HomeIcon },
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Flux Export', href: '/flows', icon: FileText },
-  { name: 'Flux & Marges', href: '/flow-manager', icon: ListChecks },
   { name: 'Simulateur', href: '/simulator', icon: Calculator },
-<<<<<<< Updated upstream
   { name: 'Analyse Marges', href: '/margin-analysis', icon: TrendingUp },
-=======
-  { name: 'Clients', href: '/clients', icon: Users },
->>>>>>> Stashed changes
   { name: 'Logistique', href: '/logistics', icon: Truck },
   { name: 'Charges & Finance', href: '/finance', icon: Calculator },
   { name: 'Guide Destinations', href: '/guide', icon: BookOpen },
   { name: 'Controle Factures', href: '/invoices', icon: Upload },
-<<<<<<< Updated upstream
   { name: 'Imports CSV', href: '/imports', icon: FileInput },
   { name: 'Base Documentaire', href: '/reference-library', icon: Library },
   { name: 'Dashboard Export', href: '/export-dashboard', icon: LayoutDashboard },
 ];
 
-const adminNavigation = [
-  { name: 'Parametres', href: '/settings', icon: Settings },
-];
-=======
-  { name: 'Dashboard Export', href: '/export-dashboard', icon: LayoutDashboard },
-];
-
 const adminNavigation = [{ name: 'Parametres', href: '/settings', icon: Settings }];
->>>>>>> Stashed changes
 
 const roleLabels: Record<string, string> = {
   direction: 'Direction',
