@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 
 const destinations: Destination[] = [
-  'Guadeloupe', 'Martinique', 'Guyane', 'Réunion', 'Mayotte',
+  'Guadeloupe', 'Martinique', 'Guyane', 'Reunion', 'Mayotte',
   'Belgique', 'Espagne', 'Luxembourg', 'Suisse'
 ];
 

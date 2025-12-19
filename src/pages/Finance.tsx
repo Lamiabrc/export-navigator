@@ -85,7 +85,7 @@ export default function Finance() {
   const { costs, supplierCosts, clientCosts } = calculateCosts();
   const totalCosts = supplierCosts + clientCosts;
 
-  const DeductibilityBadge = ({ status }: { status: 'Oui' | 'Non' | 'À valider' | undefined }) => {
+  const DeductibilityBadge = ({ status }: { status: 'Oui' | 'Non' | 'A valider' | undefined }) => {
     if (!status) return <span className="text-muted-foreground">-</span>;
     
     switch (status) {
@@ -103,7 +103,7 @@ export default function Finance() {
             Non déductible
           </span>
         );
-      case 'À valider':
+      case 'A valider':
         return (
           <span className="inline-flex items-center gap-1 text-status-warning text-sm">
             <HelpCircle className="h-4 w-4" />
