@@ -6,45 +6,18 @@ export type Zone = 'UE' | 'Hors UE' | 'DROM';
 export type Incoterm = 'EXW' | 'FCA' | 'DAP' | 'DDP';
 export type TransportMode = 'Routier' | 'Maritime' | 'Aerien' | 'Express' | 'Ferroviaire';
 export type Payer = 'Fournisseur' | 'Client';
-
-export type Destination =
-  | 'Guadeloupe'
-  | 'Martinique'
-  | 'Guyane'
-  | 'Reunion'
-  | 'Mayotte'
-  | 'Belgique'
-  | 'Espagne'
-  | 'Luxembourg'
+export type Destination = 
+  | 'Guadeloupe' 
+  | 'Martinique' 
+  | 'Guyane' 
+  | 'Réunion' 
+  | 'Mayotte' 
+  | 'Belgique' 
+  | 'Espagne' 
+  | 'Luxembourg' 
   | 'Suisse';
 
 export type UserRole = 'direction' | 'adv_export' | 'logistique' | 'finance' | 'admin';
-
-export type InvoiceType = 'client' | 'transport' | 'douane' | 'autre';
-
-export interface Invoice {
-  id: string;
-  flow_id?: string;
-  type: InvoiceType;
-  label: string;
-  amount_ht: number;
-  currency: 'EUR';
-  date: string;
-  vendor?: string; // transporteur/douane/client
-  file_url?: string; // chemin local ou lien
-  notes?: string;
-}
-
-export interface Client {
-  id: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  tva_number?: string;
-  address?: string;
-  notes?: string;
-  default_destination?: Destination;
-}
 
 export interface Flow {
   id: string;
@@ -116,8 +89,8 @@ export interface DestinationProfile {
 export interface DeductibilityRule {
   zone: Zone;
   charge_type: string;
-  deductible_supplier: 'Oui' | 'Non' | 'A valider';
-  deductible_client: 'Oui' | 'Non' | 'A valider';
+  deductible_supplier: 'Oui' | 'Non' | 'À valider';
+  deductible_client: 'Oui' | 'Non' | 'À valider';
 }
 
 export interface Document {
@@ -129,7 +102,7 @@ export interface Document {
   uploaded_by: string;
   extracted_json?: Record<string, unknown>;
   compliance_report?: Record<string, unknown>;
-  compliance_status?: 'OK' | 'A surveiller' | 'Risque';
+  compliance_status?: 'OK' | 'À surveiller' | 'Risque';
 }
 
 export interface User {

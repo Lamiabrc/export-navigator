@@ -4,26 +4,18 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { toast } from 'sonner';
 import logoOrliman from '@/assets/logo-orliman.png';
-import type { LocalUser } from '@/hooks/useLocalAuth';
+
+const FORCED_EMAIL = 'lamia.brechetighil@orliman.fr';
+const DEFAULT_PASSWORD_HINT = 'Orliman2025!';
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
+  const [email] = useState(FORCED_EMAIL);
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [role, setRole] = useState<LocalUser['role']>('adv_export');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,39 +23,16 @@ export default function Auth() {
     setIsSubmitting(true);
 
     try {
-      if (isLogin) {
-        const { error } = await signIn(email, password);
-        if (error) {
-          toast.error(error);
-        } else {
-          toast.success('Connexion réussie');
-          navigate('/');
-        }
+      const { error } = await signIn(email, password);
+      if (error) {
+        toast.error(error);
       } else {
-        if (!name.trim()) {
-          toast.error('Le nom est requis');
-          setIsSubmitting(false);
-          return;
-        }
-        const { error } = await signUp(email, password, name, role);
-        if (error) {
-          toast.error(error);
-        } else {
-          toast.success('Compte créé avec succès');
-          navigate('/');
-        }
+        toast.success('Connexion reussie');
+        navigate('/');
       }
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const roleLabels: Record<LocalUser['role'], string> = {
-    direction: 'Direction',
-    adv_export: 'ADV Export',
-    logistique: 'Logistique',
-    finance: 'Finance/Compta',
-    admin: 'Administrateur',
   };
 
   return (
@@ -80,36 +49,20 @@ export default function Auth() {
           </div>
 
           <h1 className="text-2xl font-bold text-center text-foreground mb-2">
-            {isLogin ? 'Connexion' : 'Créer un compte'}
+            Connexion
           </h1>
           <p className="text-center text-muted-foreground mb-6">
-            Gestion Export Orthopédie - 100% Local
+            Acces reserve - compte administrateur ORLIMAN
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
-              <div className="space-y-2">
-                <Label htmlFor="name">Nom complet</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Jean Dupont"
-                  required={!isLogin}
-                />
-              </div>
-            )}
-
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Email (verrouille)</Label>
               <Input
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="vous@orliman.com"
-                required
+                disabled
               />
             </div>
 
@@ -120,58 +73,27 @@ export default function Auth() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder={DEFAULT_PASSWORD_HINT}
                 required
                 minLength={4}
               />
+              <p className="text-xs text-muted-foreground">
+                Mot de passe par defaut : {DEFAULT_PASSWORD_HINT}
+              </p>
             </div>
-
-            {!isLogin && (
-              <div className="space-y-2">
-                <Label htmlFor="role">Rôle</Label>
-                <Select value={role} onValueChange={(v) => setRole(v as LocalUser['role'])}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(roleLabels).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
 
             <Button 
               type="submit" 
               className="w-full" 
               disabled={isSubmitting}
             >
-              {isSubmitting 
-                ? 'Chargement...' 
-                : isLogin ? 'Se connecter' : 'Créer le compte'
-              }
+              {isSubmitting ? 'Chargement...' : 'Se connecter'}
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-sm text-primary hover:underline"
-            >
-              {isLogin 
-                ? "Pas de compte ? S'inscrire" 
-                : 'Déjà un compte ? Se connecter'
-              }
-            </button>
-          </div>
-
           <div className="mt-4 p-3 bg-muted rounded-lg">
             <p className="text-xs text-muted-foreground text-center">
-              🔒 Toutes les données sont stockées localement sur votre PC
+              Toutes les donnees sont stockees localement sur votre PC
             </p>
           </div>
         </div>

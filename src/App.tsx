@@ -15,8 +15,13 @@ import Invoices from "./pages/Invoices";
 import Settings from "./pages/Settings";
 import Simulator from "./pages/Simulator";
 import ExportDashboard from "./pages/ExportDashboard";
+<<<<<<< Updated upstream
 import MarginAnalysis from "./pages/MarginAnalysis";
 import ReferenceLibrary from "./pages/ReferenceLibrary";
+=======
+import FlowManager from "./pages/FlowManager";
+import Clients from "./pages/Clients";
+>>>>>>> Stashed changes
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Imports from "./pages/Imports";
@@ -43,9 +48,14 @@ const App = () => (
             <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
             <Route path="/simulator" element={<ProtectedRoute><Simulator /></ProtectedRoute>} />
             <Route path="/export-dashboard" element={<ProtectedRoute><ExportDashboard /></ProtectedRoute>} />
+<<<<<<< Updated upstream
             <Route path="/margin-analysis" element={<ProtectedRoute><MarginAnalysis /></ProtectedRoute>} />
             <Route path="/reference-library" element={<ProtectedRoute><ReferenceLibrary /></ProtectedRoute>} />
             <Route path="/imports" element={<ProtectedRoute><Imports /></ProtectedRoute>} />
+=======
+            <Route path="/flow-manager" element={<ProtectedRoute><FlowManager /></ProtectedRoute>} />
+            <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+>>>>>>> Stashed changes
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

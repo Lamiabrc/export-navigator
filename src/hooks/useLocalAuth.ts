@@ -16,6 +16,15 @@ interface AuthState {
 
 const USERS_KEY = 'orliman_users';
 const SESSION_KEY = 'orliman_session';
+const PASSWORD_KEY = 'orliman_passwords';
+const DEFAULT_USER: LocalUser = {
+  id: 'lamia-admin',
+  email: 'lamia.brechetighil@orliman.fr',
+  name: 'Lamia Brechetighil',
+  role: 'admin',
+  createdAt: new Date('2024-01-01').toISOString(),
+};
+const DEFAULT_PASSWORD = 'Orliman2025!';
 
 export function useLocalAuth() {
   const [authState, setAuthState] = useState<AuthState>({
@@ -23,22 +32,6 @@ export function useLocalAuth() {
     isAuthenticated: false,
     isLoading: true,
   });
-
-  // Load session on mount
-  useEffect(() => {
-    const sessionData = localStorage.getItem(SESSION_KEY);
-    if (sessionData) {
-      try {
-        const user = JSON.parse(sessionData) as LocalUser;
-        setAuthState({ user, isAuthenticated: true, isLoading: false });
-      } catch {
-        localStorage.removeItem(SESSION_KEY);
-        setAuthState({ user: null, isAuthenticated: false, isLoading: false });
-      }
-    } else {
-      setAuthState({ user: null, isAuthenticated: false, isLoading: false });
-    }
-  }, []);
 
   const getUsers = useCallback((): LocalUser[] => {
     const usersData = localStorage.getItem(USERS_KEY);
@@ -56,68 +49,82 @@ export function useLocalAuth() {
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
   }, []);
 
-  const signUp = useCallback(async (
-    email: string, 
-    password: string, 
-    name: string,
-    role: LocalUser['role'] = 'adv_export'
-  ): Promise<{ error: string | null }> => {
+  const ensureDefaultUserExists = useCallback((): LocalUser => {
     const users = getUsers();
-    
-    // Check if user already exists
-    if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
-      return { error: 'Un compte existe déjà avec cet email' };
+    const existing = users.find((u) => u.email === DEFAULT_USER.email);
+    let targetUser = existing ?? { ...DEFAULT_USER, createdAt: new Date().toISOString() };
+
+    if (!existing) {
+      saveUsers([...users, targetUser]);
     }
 
-    // Auto-assign admin role for specific email
-    const assignedRole = email.toLowerCase() === 'lamia.brechetighil@orliman.fr' ? 'admin' : role;
+    const passwords = JSON.parse(localStorage.getItem(PASSWORD_KEY) || '{}');
+    if (!passwords[targetUser.id]) {
+      passwords[targetUser.id] = DEFAULT_PASSWORD;
+      localStorage.setItem(PASSWORD_KEY, JSON.stringify(passwords));
+    }
 
-    // Create new user
-    const newUser: LocalUser = {
-      id: crypto.randomUUID(),
-      email: email.toLowerCase(),
-      name,
-      role: assignedRole,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Store password separately
-    const userPasswords = JSON.parse(localStorage.getItem('orliman_passwords') || '{}');
-    userPasswords[newUser.id] = password;
-    localStorage.setItem('orliman_passwords', JSON.stringify(userPasswords));
-
-    users.push(newUser);
-    saveUsers(users);
-
-    // Auto login
-    localStorage.setItem(SESSION_KEY, JSON.stringify(newUser));
-    setAuthState({ user: newUser, isAuthenticated: true, isLoading: false });
-
-    return { error: null };
+    return targetUser;
   }, [getUsers, saveUsers]);
 
-  const signIn = useCallback(async (
-    email: string, 
-    password: string
-  ): Promise<{ error: string | null }> => {
-    const users = getUsers();
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-    if (!user) {
-      return { error: 'Email ou mot de passe incorrect' };
+  // Load session on mount
+  useEffect(() => {
+    ensureDefaultUserExists();
+    const sessionData = localStorage.getItem(SESSION_KEY);
+    if (sessionData) {
+      try {
+        const user = JSON.parse(sessionData) as LocalUser;
+        setAuthState({ user, isAuthenticated: true, isLoading: false });
+        return;
+      } catch {
+        localStorage.removeItem(SESSION_KEY);
+      }
     }
+    setAuthState({ user: null, isAuthenticated: false, isLoading: false });
+  }, [ensureDefaultUserExists]);
 
-    // Verify password
-    const userPasswords = JSON.parse(localStorage.getItem('orliman_passwords') || '{}');
-    if (userPasswords[user.id] !== password) {
-      return { error: 'Email ou mot de passe incorrect' };
-    }
+  const signUp = useCallback(
+    async (
+      email: string,
+      password: string,
+      _name: string,
+      _role: LocalUser['role'] = 'adv_export'
+    ): Promise<{ error: string | null }> => {
+      if (email.toLowerCase() !== DEFAULT_USER.email) {
+        return { error: 'La creation de compte est desactivee. Utilisez le compte administrateur.' };
+      }
 
-    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-    setAuthState({ user, isAuthenticated: true, isLoading: false });
+      const targetUser = ensureDefaultUserExists();
+      const userPasswords = JSON.parse(localStorage.getItem(PASSWORD_KEY) || '{}');
+      userPasswords[targetUser.id] = password;
+      localStorage.setItem(PASSWORD_KEY, JSON.stringify(userPasswords));
+      localStorage.setItem(SESSION_KEY, JSON.stringify(targetUser));
+      setAuthState({ user: targetUser, isAuthenticated: true, isLoading: false });
+      return { error: null };
+    },
+    [ensureDefaultUserExists]
+  );
 
-    return { error: null };
-  }, [getUsers]);
+  const signIn = useCallback(
+    async (email: string, password: string): Promise<{ error: string | null }> => {
+      const normalizedEmail = email.toLowerCase();
+      if (normalizedEmail !== DEFAULT_USER.email) {
+        return { error: 'Acces reserve au compte administrateur ORLIMAN.' };
+      }
+
+      const user = ensureDefaultUserExists();
+      const userPasswords = JSON.parse(localStorage.getItem(PASSWORD_KEY) || '{}');
+      if (userPasswords[user.id] !== password) {
+        return { error: 'Email ou mot de passe incorrect' };
+      }
+
+      localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      setAuthState({ user, isAuthenticated: true, isLoading: false });
+
+      return { error: null };
+    },
+    [ensureDefaultUserExists]
+  );
 
   const signOut = useCallback(() => {
     localStorage.removeItem(SESSION_KEY);
