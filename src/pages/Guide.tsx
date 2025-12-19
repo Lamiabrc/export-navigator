@@ -22,12 +22,12 @@ import {
 } from 'lucide-react';
 
 const destinations: Destination[] = [
-  'Guadeloupe', 'Martinique', 'Guyane', 'Réunion', 'Mayotte',
+  'Guadeloupe', 'Martinique', 'Guyane', 'Reunion', 'Mayotte',
   'Belgique', 'Espagne', 'Luxembourg', 'Suisse'
 ];
 
 export default function Guide() {
-  const [selectedDestination, setSelectedDestination] = useState<Destination>('Réunion');
+  const [selectedDestination, setSelectedDestination] = useState<Destination>('Reunion');
   
   const profile = destinationProfiles.find(p => p.destination === selectedDestination);
 

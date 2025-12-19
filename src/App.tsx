@@ -12,6 +12,7 @@ import Logistics from "./pages/Logistics";
 import Finance from "./pages/Finance";
 import Guide from "./pages/Guide";
 import Invoices from "./pages/Invoices";
+import InvoiceVerification from "./pages/InvoiceVerification";
 import Settings from "./pages/Settings";
 import Simulator from "./pages/Simulator";
 import ExportDashboard from "./pages/ExportDashboard";
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="/finance" element={<ProtectedRoute><Finance /></ProtectedRoute>} />
             <Route path="/guide" element={<ProtectedRoute><Guide /></ProtectedRoute>} />
             <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
+            <Route path="/invoice-verification" element={<ProtectedRoute><InvoiceVerification /></ProtectedRoute>} />
             <Route path="/simulator" element={<ProtectedRoute><Simulator /></ProtectedRoute>} />
             <Route path="/export-dashboard" element={<ProtectedRoute><ExportDashboard /></ProtectedRoute>} />
             <Route path="/margin-analysis" element={<ProtectedRoute><MarginAnalysis /></ProtectedRoute>} />

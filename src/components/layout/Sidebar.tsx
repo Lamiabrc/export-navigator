@@ -27,6 +27,7 @@ const navigation = [
   { name: 'Charges & Finance', href: '/finance', icon: Calculator },
   { name: 'Guide Destinations', href: '/guide', icon: BookOpen },
   { name: 'Controle Factures', href: '/invoices', icon: Upload },
+  { name: 'Verif Facture PDF', href: '/invoice-verification', icon: FileInput },
   { name: 'Imports CSV', href: '/imports', icon: FileInput },
   { name: 'Base Documentaire', href: '/reference-library', icon: Library },
   { name: 'Dashboard Export', href: '/export-dashboard', icon: LayoutDashboard },
