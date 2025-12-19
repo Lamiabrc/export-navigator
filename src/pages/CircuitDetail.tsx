@@ -1,3 +1,4 @@
+﻿import { useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { getCircuitById } from '@/data/exportCircuits';
@@ -6,42 +7,72 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  ArrowLeft, 
-  FileText, 
-  AlertTriangle, 
-  CheckCircle2, 
+import {
+  ArrowLeft,
+  FileText,
+  AlertTriangle,
+  CheckCircle2,
   Euro,
   ArrowRight,
   Truck,
-  Send
+  Send,
 } from 'lucide-react';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
+import type { SageInvoice } from '@/types/sage';
+import type { CostDoc } from '@/types/costs';
+import { COST_DOCS_KEY, SAGE_INVOICES_KEY } from '@/lib/constants/storage';
+import { reconcile } from '@/lib/reco/reconcile';
+import { evaluateCase } from '@/lib/rules/riskEngine';
+import { useReferenceData } from '@/hooks/useReferenceData';
+import { zoneLabel } from '@/types/circuits';
 
 const zoneColors: Record<string, string> = {
-  'UE': 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-  'Hors UE': 'bg-orange-500/10 text-orange-600 border-orange-500/20',
-  'DROM': 'bg-purple-500/10 text-purple-600 border-purple-500/20',
-  'Multiple': 'bg-gray-500/10 text-gray-600 border-gray-500/20',
+  UE: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
+  HORS_UE: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
+  DROM: 'bg-purple-500/10 text-purple-600 border-purple-500/20',
+  MULTI: 'bg-gray-500/10 text-gray-600 border-gray-500/20',
 };
 
 const payerColors: Record<string, string> = {
-  'Fournisseur': 'bg-blue-500/10 text-blue-700',
-  'Client': 'bg-green-500/10 text-green-700',
-  'Variable': 'bg-orange-500/10 text-orange-700',
+  SELLER: 'bg-blue-500/10 text-blue-700',
+  BUYER: 'bg-green-500/10 text-green-700',
+  VARIABLE: 'bg-orange-500/10 text-orange-700',
 };
 
 const transitaireColors: Record<string, string> = {
-  'DHL': 'bg-yellow-500/10 text-yellow-700 border-yellow-500/30',
-  'LVoverseas': 'bg-blue-500/10 text-blue-700 border-blue-500/30',
-  'Geodis': 'bg-red-500/10 text-red-700 border-red-500/30',
-  'TDIS': 'bg-purple-500/10 text-purple-700 border-purple-500/30',
-  'Client': 'bg-green-500/10 text-green-700 border-green-500/30',
-  'Autre': 'bg-gray-500/10 text-gray-700 border-gray-500/30',
+  DHL: 'bg-yellow-500/10 text-yellow-700 border-yellow-500/30',
+  LVoverseas: 'bg-blue-500/10 text-blue-700 border-blue-500/30',
+  Geodis: 'bg-red-500/10 text-red-700 border-red-500/30',
+  TDIS: 'bg-purple-500/10 text-purple-700 border-purple-500/30',
+  Client: 'bg-green-500/10 text-green-700 border-green-500/30',
+  Autre: 'bg-gray-500/10 text-gray-700 border-gray-500/30',
+};
+
+const payerLabel = (payer: 'SELLER' | 'BUYER' | 'VARIABLE') => {
+  if (payer === 'SELLER') return 'Fournisseur';
+  if (payer === 'BUYER') return 'Client';
+  return 'Variable';
 };
 
 export default function CircuitDetail() {
   const { id } = useParams<{ id: string }>();
   const circuit = id ? getCircuitById(id) : undefined;
+  const [sageInvoices] = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
+  const [costDocs] = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
+  const { referenceData } = useReferenceData();
+
+  const relatedCases = useMemo(() => {
+    if (!id) return [];
+    const base = reconcile(sageInvoices, costDocs);
+    return base
+      .filter((c) => c.invoice.flowCode === id || c.costDocs.some((doc) => doc.flowCode === id))
+      .map((c) => {
+        const risk = evaluateCase(c, referenceData);
+        return { ...c, alerts: risk.alerts, riskScore: risk.riskScore };
+      });
+  }, [id, sageInvoices, costDocs, referenceData]);
+
+  const caseAlerts = useMemo(() => relatedCases.flatMap((c) => c.alerts || []), [relatedCases]);
 
   if (!circuit) {
     return (
@@ -57,36 +88,14 @@ export default function CircuitDetail() {
   }
 
   const circuitTransitaires = circuit.transitaires
-    .map(id => transitaires.find(t => t.id === id))
+    .map((transId) => transitaires.find((t) => t.id === transId))
     .filter(Boolean);
 
-  // Generate mermaid diagram for the flow
-  const generateMermaidDiagram = () => {
-    const steps = circuit.steps.map((step, i) => {
-      const nodeId = `step${i}`;
-      const label = `${step.label}\\n(${step.actor})`;
-      return { nodeId, label };
-    });
-
-    let diagram = 'graph LR\n';
-    steps.forEach((step, i) => {
-      diagram += `    ${step.nodeId}["${step.label}"]\n`;
-      if (i < steps.length - 1) {
-        diagram += `    ${step.nodeId} --> step${i + 1}\n`;
-      }
-    });
-
-    // Add styling
-    diagram += '\n    style step0 fill:#3b82f6,color:#fff\n';
-    diagram += `    style step${steps.length - 1} fill:#22c55e,color:#fff\n`;
-
-    return diagram;
-  };
+  const displayIncoterm = circuit.defaultIncoterm ?? circuit.incoterms[0];
 
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-start justify-between">
           <div>
             <Link to="/flows" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-2">
@@ -97,11 +106,11 @@ export default function CircuitDetail() {
             <p className="mt-1 text-muted-foreground max-w-3xl">{circuit.description}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className={zoneColors[circuit.zone]}>
-              {circuit.zone}
+            <Badge variant="outline" className={zoneColors[circuit.zone] ?? 'bg-gray-100 text-gray-600'}>
+              {zoneLabel(circuit.zone)}
             </Badge>
             <Badge variant="secondary" className="font-mono">
-              {circuit.incoterm}
+              {displayIncoterm}
             </Badge>
           </div>
         </div>
@@ -115,9 +124,7 @@ export default function CircuitDetail() {
             <TabsTrigger value="risks">Risques & Conseils</TabsTrigger>
           </TabsList>
 
-          {/* Schema Tab */}
           <TabsContent value="schema" className="space-y-6">
-            {/* Visual Flow Summary */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Flux simplifié</CardTitle>
@@ -127,10 +134,15 @@ export default function CircuitDetail() {
                 <div className="flex items-center justify-center gap-2 flex-wrap p-4 bg-muted/50 rounded-lg overflow-x-auto">
                   {circuit.steps.map((step, index) => (
                     <div key={step.id} className="flex items-center">
-                      <div className={`px-3 py-2 rounded-lg border text-sm font-medium text-center min-w-[100px] ${
-                        index === 0 ? 'bg-primary text-primary-foreground' : 
-                        index === circuit.steps.length - 1 ? 'bg-green-500 text-white' : 'bg-background'
-                      }`}>
+                      <div
+                        className={`px-3 py-2 rounded-lg border text-sm font-medium text-center min-w-[100px] ${
+                          index === 0
+                            ? 'bg-primary text-primary-foreground'
+                            : index === circuit.steps.length - 1
+                            ? 'bg-green-500 text-white'
+                            : 'bg-background'
+                        }`}
+                      >
                         <div className="text-xs opacity-80 mb-1">{step.actor}</div>
                         {step.label}
                       </div>
@@ -149,42 +161,33 @@ export default function CircuitDetail() {
                 <CardDescription>Description de chaque étape du flux</CardDescription>
               </CardHeader>
               <CardContent>
-                {/* Flow Diagram */}
-                <div className="relative">
-                  <div className="flex flex-col gap-4">
-                    {circuit.steps.map((step, index) => (
-                      <div key={step.id} className="flex items-start gap-4">
-                        {/* Step number and connector */}
-                        <div className="flex flex-col items-center">
-                          <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
-                            {index + 1}
-                          </div>
-                          {index < circuit.steps.length - 1 && (
-                            <div className="w-0.5 h-8 bg-border mt-2" />
-                          )}
+                <div className="flex flex-col gap-4">
+                  {circuit.steps.map((step, index) => (
+                    <div key={step.id} className="flex items-start gap-4">
+                      <div className="flex flex-col items-center">
+                        <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
+                          {index + 1}
                         </div>
-                        
-                        {/* Step content */}
-                        <div className="flex-1 pb-4">
-                          <div className="bg-card border rounded-lg p-4 hover:shadow-md transition-shadow">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="font-semibold text-foreground">{step.label}</h4>
-                              <Badge variant="outline" className="text-xs">
-                                {step.actor}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground">{step.description}</p>
+                        {index < circuit.steps.length - 1 && <div className="w-0.5 h-8 bg-border mt-2" />}
+                      </div>
+                      <div className="flex-1 pb-4">
+                        <div className="bg-card border rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-semibold text-foreground">{step.label}</h4>
+                            <Badge variant="outline" className="text-xs">
+                              {step.actor}
+                            </Badge>
                           </div>
+                          <p className="text-sm text-muted-foreground">{step.description}</p>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Transitaires Tab */}
           <TabsContent value="transitaires" className="space-y-6">
             <Card>
               <CardHeader>
@@ -196,27 +199,26 @@ export default function CircuitDetail() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {circuitTransitaires.map((transitaire) => transitaire && (
-                    <div 
-                      key={transitaire.id}
-                      className={`p-4 rounded-lg border-2 ${transitaireColors[transitaire.id]}`}
-                    >
-                      <h4 className="font-semibold text-lg">{transitaire.name}</h4>
-                      <p className="text-sm text-muted-foreground mt-1">{transitaire.speciality}</p>
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {transitaire.zones.map(zone => (
-                          <Badge key={zone} variant="secondary" className="text-xs">
-                            {zone}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                  {circuitTransitaires.map(
+                    (transitaire) =>
+                      transitaire && (
+                        <div key={transitaire.id} className={`p-4 rounded-lg border-2 ${transitaireColors[transitaire.id]}`}>
+                          <h4 className="font-semibold text-lg">{transitaire.name}</h4>
+                          <p className="text-sm text-muted-foreground mt-1">{transitaire.speciality}</p>
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {transitaire.zones.map((zone) => (
+                              <Badge key={zone} variant="secondary" className="text-xs">
+                                {zone}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                  )}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Document Distribution */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -228,26 +230,17 @@ export default function CircuitDetail() {
               <CardContent>
                 <div className="space-y-3">
                   {circuit.documentDistribution.map((dist, index) => (
-                    <div 
-                      key={index}
-                      className="flex items-start justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
-                    >
+                    <div key={index} className="flex items-start justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors">
                       <div className="flex-1">
                         <div className="font-medium flex items-center gap-2">
                           <FileText className="h-4 w-4 text-primary" />
                           {dist.document}
                         </div>
-                        {dist.notes && (
-                          <p className="text-sm text-muted-foreground mt-1">{dist.notes}</p>
-                        )}
+                        {dist.notes && <p className="text-sm text-muted-foreground mt-1">{dist.notes}</p>}
                       </div>
                       <div className="flex flex-wrap gap-1 justify-end">
-                        {dist.recipients.map(recipient => (
-                          <Badge 
-                            key={recipient} 
-                            variant="outline"
-                            className={transitaireColors[recipient]}
-                          >
+                        {dist.recipients.map((recipient) => (
+                          <Badge key={recipient} variant="outline" className={transitaireColors[recipient]}>
                             {recipient}
                           </Badge>
                         ))}
@@ -257,34 +250,8 @@ export default function CircuitDetail() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Visual Document Flow */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Flux documentaire</CardTitle>
-                <CardDescription>Visualisation de la distribution des documents</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col items-center gap-4 p-4 bg-muted/50 rounded-lg">
-                  <div className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium">
-                    🏢 ORLIMAN
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {circuit.transitaires.map(t => {
-                      const trans = transitaires.find(tr => tr.id === t);
-                      return (
-                        <div key={t} className={`px-3 py-2 rounded-lg border text-center ${transitaireColors[t]}`}>
-                          📦 {trans?.name || t}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </TabsContent>
 
-          {/* Costs Tab */}
           <TabsContent value="costs" className="space-y-6">
             <Card>
               <CardHeader>
@@ -297,89 +264,26 @@ export default function CircuitDetail() {
               <CardContent>
                 <div className="space-y-3">
                   {circuit.costItems.map((cost) => (
-                    <div 
-                      key={cost.id} 
-                      className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors"
-                    >
+                    <div key={cost.id} className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors">
                       <div className="flex-1">
                         <div className="font-medium">{cost.label}</div>
                         <div className="text-sm text-muted-foreground">{cost.description}</div>
                       </div>
                       <div className="flex items-center gap-3">
-                        {cost.typical_percentage && (
+                        {cost.typicalPct && (
                           <span className="text-sm text-muted-foreground font-mono">
-                            {cost.typical_percentage}
+                            {cost.typicalPct.min}-{cost.typicalPct.max}%/{cost.typicalPct.basis === 'value' ? 'valeur' : 'fret'}
                           </span>
                         )}
-                        <Badge className={payerColors[cost.payer]}>
-                          {cost.payer}
-                        </Badge>
+                        <Badge className={payerColors[cost.payer]}>{payerLabel(cost.payer)}</Badge>
                       </div>
                     </div>
                   ))}
                 </div>
               </CardContent>
             </Card>
-
-            {/* Cost Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="bg-blue-500/5 border-blue-500/20">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-blue-700">À charge Fournisseur</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="text-sm space-y-1">
-                    {circuit.costItems.filter(c => c.payer === 'Fournisseur').map(c => (
-                      <li key={c.id} className="flex items-center gap-2">
-                        <CheckCircle2 className="h-3 w-3 text-blue-600" />
-                        {c.label}
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-green-500/5 border-green-500/20">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-green-700">À charge Client</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="text-sm space-y-1">
-                    {circuit.costItems.filter(c => c.payer === 'Client').map(c => (
-                      <li key={c.id} className="flex items-center gap-2">
-                        <CheckCircle2 className="h-3 w-3 text-green-600" />
-                        {c.label}
-                      </li>
-                    ))}
-                    {circuit.costItems.filter(c => c.payer === 'Client').length === 0 && (
-                      <li className="text-muted-foreground italic">Aucun coût direct</li>
-                    )}
-                  </ul>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-orange-500/5 border-orange-500/20">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-orange-700">Variable (selon accord)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="text-sm space-y-1">
-                    {circuit.costItems.filter(c => c.payer === 'Variable').map(c => (
-                      <li key={c.id} className="flex items-center gap-2">
-                        <AlertTriangle className="h-3 w-3 text-orange-600" />
-                        {c.label}
-                      </li>
-                    ))}
-                    {circuit.costItems.filter(c => c.payer === 'Variable').length === 0 && (
-                      <li className="text-muted-foreground italic">Tous les coûts sont définis</li>
-                    )}
-                  </ul>
-                </CardContent>
-              </Card>
-            </div>
           </TabsContent>
 
-          {/* Documents Tab */}
           <TabsContent value="documents" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card>
@@ -422,7 +326,6 @@ export default function CircuitDetail() {
             </div>
           </TabsContent>
 
-          {/* Risks Tab */}
           <TabsContent value="risks" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="border-orange-500/30">
@@ -463,10 +366,46 @@ export default function CircuitDetail() {
                 </CardContent>
               </Card>
             </div>
+
+            <Card className="border-primary/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-primary" />
+                  Alertes rapprochées (factures / coûts)
+                </CardTitle>
+                <CardDescription>Issues détectées par le moteur de règles sur ce circuit</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {caseAlerts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucune alerte détectée sur ce circuit.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {caseAlerts.map((alert, idx) => (
+                      <div
+                        key={`${alert.code}-${idx}`}
+                        className={`p-3 rounded-lg border ${
+                          alert.severity === 'blocker'
+                            ? 'border-red-200 bg-red-50'
+                            : alert.severity === 'warning'
+                            ? 'border-amber-200 bg-amber-50'
+                            : 'border-blue-200 bg-blue-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{alert.code}</span>
+                          <Badge variant="outline">{alert.severity}</Badge>
+                        </div>
+                        <p className="text-sm text-foreground mt-1">{alert.message}</p>
+                        {alert.suggestion && <p className="text-xs text-muted-foreground mt-1">Action : {alert.suggestion}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
 
-        {/* Action Buttons */}
         <div className="flex items-center gap-4 pt-4 border-t">
           <Link to="/simulator">
             <Button>

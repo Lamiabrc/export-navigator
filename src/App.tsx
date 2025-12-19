@@ -19,6 +19,8 @@ import MarginAnalysis from "./pages/MarginAnalysis";
 import ReferenceLibrary from "./pages/ReferenceLibrary";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import Imports from "./pages/Imports";
+import Home from "./pages/Home";
 
 const queryClient = new QueryClient();
 
@@ -31,7 +33,8 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<Auth />} />
-            <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/flows" element={<ProtectedRoute><Flows /></ProtectedRoute>} />
             <Route path="/flows/:id" element={<ProtectedRoute><CircuitDetail /></ProtectedRoute>} />
             <Route path="/logistics" element={<ProtectedRoute><Logistics /></ProtectedRoute>} />
@@ -42,6 +45,7 @@ const App = () => (
             <Route path="/export-dashboard" element={<ProtectedRoute><ExportDashboard /></ProtectedRoute>} />
             <Route path="/margin-analysis" element={<ProtectedRoute><MarginAnalysis /></ProtectedRoute>} />
             <Route path="/reference-library" element={<ProtectedRoute><ReferenceLibrary /></ProtectedRoute>} />
+            <Route path="/imports" element={<ProtectedRoute><Imports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

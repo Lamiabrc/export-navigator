@@ -1,0 +1,30 @@
+[
+  {
+    "destination": "Belgique",
+    "zone": "UE",
+    "tvaRegime": "TVA intracommunautaire",
+    "taxesPossibles": [],
+    "flags": ["autoliquidation possible"]
+  },
+  {
+    "destination": "Martinique",
+    "zone": "DROM",
+    "tvaRegime": "TVA 8.5%",
+    "taxesPossibles": ["OM", "OMR"],
+    "flags": ["port saturé en haute saison"]
+  },
+  {
+    "destination": "RΗΈunion",
+    "zone": "DROM",
+    "tvaRegime": "TVA 8.5%",
+    "taxesPossibles": ["OM", "OMR"],
+    "flags": ["transit long maritime"]
+  },
+  {
+    "destination": "Suisse",
+    "zone": "Hors UE",
+    "tvaRegime": "TVA import 7.7%",
+    "taxesPossibles": ["droits", "frais dossier"],
+    "flags": ["certificat origine requis pour préférences"]
+  }
+]
