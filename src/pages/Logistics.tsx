@@ -1,6 +1,6 @@
 import { MainLayout } from '@/components/layout/MainLayout';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { mockFlows } from '@/data/mockData';
+import { useFlows } from '@/hooks/useFlows';
 import { 
   Truck, 
   Ship, 
@@ -22,19 +22,41 @@ const transportIcons: Record<TransportMode, React.ComponentType<{ className?: st
 };
 
 export default function Logistics() {
-  const activeFlows = mockFlows.filter(f => 
+  const { flows, isLoading } = useFlows();
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Chargement...</p>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  const activeFlows = flows.filter(f => 
     f.status_transport === 'en_cours' || f.status_transport === 'non_demarre'
   );
 
-  const flowsWithMissingDocs = mockFlows.filter(f => 
+  const flowsWithMissingDocs = flows.filter(f => 
     f.chk_transport_doc === 'a_faire' || 
     f.chk_packing_list === 'a_faire' ||
     f.chk_certificate_origin === 'bloque'
   );
 
-  const upcomingDepartures = mockFlows
+  const upcomingDepartures = flows
     .filter(f => new Date(f.departure_date) >= new Date())
     .sort((a, b) => new Date(a.departure_date).getTime() - new Date(b.departure_date).getTime());
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Chargement...</p>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -90,7 +112,7 @@ export default function Logistics() {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {mockFlows.filter(f => f.transport_mode === 'Maritime').length}
+                  {flows.filter(f => f.transport_mode === 'Maritime').length}
                 </p>
                 <p className="text-sm text-muted-foreground">Envois maritimes</p>
               </div>

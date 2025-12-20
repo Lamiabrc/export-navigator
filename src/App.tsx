@@ -18,6 +18,7 @@ import Simulator from "./pages/Simulator";
 import ExportDashboard from "./pages/ExportDashboard";
 import MarginAnalysis from "./pages/MarginAnalysis";
 import ReferenceLibrary from "./pages/ReferenceLibrary";
+import ControlTower from "./pages/ControlTower";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Imports from "./pages/Imports";
@@ -36,6 +37,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/control-tower" element={<ProtectedRoute><ControlTower /></ProtectedRoute>} />
             <Route path="/flows" element={<ProtectedRoute><Flows /></ProtectedRoute>} />
             <Route path="/flows/:id" element={<ProtectedRoute><CircuitDetail /></ProtectedRoute>} />
             <Route path="/logistics" element={<ProtectedRoute><Logistics /></ProtectedRoute>} />

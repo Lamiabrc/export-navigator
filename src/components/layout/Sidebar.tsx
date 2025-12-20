@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard,
+  ShieldCheck,
   FileText,
   Truck,
   Calculator,
@@ -20,6 +21,7 @@ import logoOrliman from '@/assets/logo-orliman.png';
 const navigation = [
   { name: 'Accueil', href: '/', icon: HomeIcon },
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Tour de contrôle', href: '/control-tower', icon: ShieldCheck },
   { name: 'Flux Export', href: '/flows', icon: FileText },
   { name: 'Simulateur', href: '/simulator', icon: Calculator },
   { name: 'Analyse Marges', href: '/margin-analysis', icon: TrendingUp },

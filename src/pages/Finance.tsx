@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { mockFlows, incotermRules, deductibilityRules } from '@/data/mockData';
+import { incotermRules, deductibilityRules } from '@/data/mockData';
+import { useFlows } from '@/hooks/useFlows';
 import type { Flow, Payer } from '@/types';
 import { 
   Euro, 
@@ -22,13 +23,37 @@ import {
 } from 'lucide-react';
 
 export default function Finance() {
-  const [selectedFlow, setSelectedFlow] = useState<string>(mockFlows[0].id);
-  
-  const flow = mockFlows.find(f => f.id === selectedFlow);
+  const { flows, isLoading } = useFlows();
+  const [selectedFlow, setSelectedFlow] = useState<string>('');
+
+  useEffect(() => {
+    if (!selectedFlow && flows.length > 0) setSelectedFlow(flows[0].id);
+  }, [flows, selectedFlow]);
+
+  const flow = useMemo(() => flows.find((f) => f.id === selectedFlow), [flows, selectedFlow]);
   const incotermRule = flow ? incotermRules.find(r => r.incoterm === flow.incoterm) : null;
   const zoneRules = flow ? deductibilityRules.filter(r => r.zone === flow.zone) : [];
 
-  if (!flow || !incotermRule) return null;
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Chargement...</p>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (!flow || !incotermRule) {
+    return (
+      <MainLayout>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold text-foreground">Charges & Finance</h1>
+          <p className="text-muted-foreground">Aucun flux disponible. Créez un flux dans "Flux & Marges".</p>
+        </div>
+      </MainLayout>
+    );
+  }
 
   const calculateCosts = () => {
     const costs = [
@@ -85,6 +110,30 @@ export default function Finance() {
   const { costs, supplierCosts, clientCosts } = calculateCosts();
   const totalCosts = supplierCosts + clientCosts;
 
+  const exportCsv = () => {
+    const header = ['FlowCode','Client','Destination','Zone','Incoterm','Charge','Montant','Payeur','Déductible fournisseur','Déductible client'].join(';');
+    const rows = costs.map((c) => [
+      flow.flow_code,
+      flow.client_name,
+      flow.destination,
+      flow.zone,
+      flow.incoterm,
+      c.type,
+      c.amount.toFixed(2),
+      c.payer,
+      c.deductibility?.deductible_supplier ?? '',
+      c.deductibility?.deductible_client ?? '',
+    ].join(';'));
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `charges_${flow.flow_code}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const DeductibilityBadge = ({ status }: { status: 'Oui' | 'Non' | 'A valider' | undefined }) => {
     if (!status) return <span className="text-muted-foreground">-</span>;
     
@@ -128,14 +177,14 @@ export default function Finance() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {mockFlows.map(f => (
+                {flows.map(f => (
                   <SelectItem key={f.id} value={f.id}>
                     {f.flow_code} - {f.client_name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={exportCsv}>
               <Download className="h-4 w-4" />
               Exporter
             </Button>
