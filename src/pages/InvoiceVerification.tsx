@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,24 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
-import type { SageInvoice } from '@/types/sage';
-import type { CostDoc } from '@/types/costs';
-import { reconcile } from '@/lib/reco/reconcile';
-import { 
-  FileText, 
-  Upload, 
-  CheckCircle, 
-  XCircle, 
-  AlertTriangle,
-  TrendingUp,
-  TrendingDown,
-  Euro,
-  Percent,
-  FileSearch,
-  ArrowRight,
-  RotateCcw,
-} from 'lucide-react';
+import { FileText, Upload, CheckCircle, XCircle, AlertTriangle, TrendingUp, TrendingDown, Euro, Percent, FileSearch, RotateCcw } from 'lucide-react';
+import { extractInvoiceFromPdf } from '@/lib/pdf/extractInvoice';
+import { useInvoiceTracker } from '@/hooks/useInvoiceTracker';
 
 interface ExtractedInvoice {
   invoiceNumber?: string;
@@ -33,22 +18,14 @@ interface ExtractedInvoice {
   totalHT?: number;
   totalTVA?: number;
   totalTTC?: number;
-  lines?: Array<{
-    description?: string;
-    quantity?: number;
-    unitPrice?: number;
-    amount?: number;
-  }>;
+  transitFees?: number;
 }
 
 interface VerificationResult {
   invoice: ExtractedInvoice;
-  matchedCostDoc?: CostDoc;
   marginAnalysis?: {
-    expectedCost: number;
-    actualCost: number;
-    difference: number;
-    differencePercent: number;
+    marginAmount: number;
+    marginPercent: number;
     status: 'ok' | 'warning' | 'error';
   };
   alerts: string[];
@@ -56,31 +33,31 @@ interface VerificationResult {
 
 export default function InvoiceVerification() {
   const { toast } = useToast();
-  const [costDocs] = useLocalStorage<CostDoc[]>('costDocs', []);
-  const [sageInvoices] = useLocalStorage<SageInvoice[]>('sageInvoices', []);
-  
+  const { upsert, items } = useInvoiceTracker();
+
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [extractedData, setExtractedData] = useState<ExtractedInvoice | null>(null);
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
-  
+
   // Manual input fields for extracted data
   const [manualInvoiceNumber, setManualInvoiceNumber] = useState('');
   const [manualTotalHT, setManualTotalHT] = useState('');
   const [manualTotalTVA, setManualTotalTVA] = useState('');
+  const [manualTransit, setManualTransit] = useState('');
   const [manualSupplier, setManualSupplier] = useState('');
   const [manualDate, setManualDate] = useState('');
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === 'application/pdf') {
       setCurrentFile(file);
       setExtractedData(null);
       setVerificationResult(null);
-      // Reset manual fields
       setManualInvoiceNumber('');
       setManualTotalHT('');
       setManualTotalTVA('');
+      setManualTransit('');
       setManualSupplier('');
       setManualDate('');
     } else {
@@ -92,106 +69,105 @@ export default function InvoiceVerification() {
     }
   };
 
-  const simulateExtraction = useCallback(() => {
-    // Simulate PDF extraction (in production, this would use a PDF parsing service)
+  const runExtraction = useCallback(async () => {
+    if (!currentFile) return;
     setIsProcessing(true);
-    
-    setTimeout(() => {
-      // Simulated extracted data - in real implementation, this would come from PDF parsing
-      const mockExtracted: ExtractedInvoice = {
-        invoiceNumber: `FAC-${Math.floor(Math.random() * 10000)}`,
-        invoiceDate: new Date().toISOString().split('T')[0],
-        supplierName: 'Transitaire Express',
-        totalHT: Math.floor(Math.random() * 5000) + 500,
-        totalTVA: 0,
-        totalTTC: 0,
+    try {
+      const parsed = await extractInvoiceFromPdf(currentFile);
+      const totalTVA = parsed.totalTTC !== null && parsed.totalHT !== null ? parsed.totalTTC - parsed.totalHT : null;
+      const extracted: ExtractedInvoice = {
+        invoiceNumber: parsed.invoiceNumber || '',
+        invoiceDate: parsed.date || '',
+        supplierName: parsed.supplier || '',
+        totalHT: parsed.totalHT ?? undefined,
+        totalTVA: totalTVA ?? undefined,
+        totalTTC: parsed.totalTTC ?? undefined,
+        transitFees: parsed.transitFees ?? undefined,
       };
-      mockExtracted.totalTVA = Math.round(mockExtracted.totalHT! * 0.2);
-      mockExtracted.totalTTC = mockExtracted.totalHT! + mockExtracted.totalTVA;
-      
-      setExtractedData(mockExtracted);
-      setManualInvoiceNumber(mockExtracted.invoiceNumber || '');
-      setManualTotalHT(mockExtracted.totalHT?.toString() || '');
-      setManualTotalTVA(mockExtracted.totalTVA?.toString() || '');
-      setManualSupplier(mockExtracted.supplierName || '');
-      setManualDate(mockExtracted.invoiceDate || '');
-      
-      setIsProcessing(false);
+      setExtractedData(extracted);
+      setManualInvoiceNumber(extracted.invoiceNumber || '');
+      setManualTotalHT(extracted.totalHT?.toString() || '');
+      setManualTotalTVA(extracted.totalTVA?.toString() || '');
+      setManualTransit(extracted.transitFees?.toString() || '');
+      setManualSupplier(extracted.supplierName || '');
+      setManualDate(extracted.invoiceDate || '');
+      toast({ title: 'Extraction effectuée', description: 'Vérifiez ou corrigez les montants avant calcul.' });
+    } catch (err) {
       toast({
-        title: 'Extraction réussie',
-        description: 'Les données ont été extraites du PDF. Vérifiez et corrigez si nécessaire.',
+        title: 'Extraction impossible',
+        description: err instanceof Error ? err.message : String(err),
+        variant: 'destructive',
       });
-    }, 1500);
-  }, [toast]);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [currentFile, toast]);
 
   const verifyMargin = useCallback(() => {
+    const ht = parseFloat(manualTotalHT) || 0;
+    const tva = parseFloat(manualTotalTVA) || 0;
+    const transit = parseFloat(manualTransit) || 0;
+    const ttc = ht + tva;
+
     const invoiceData: ExtractedInvoice = {
       invoiceNumber: manualInvoiceNumber,
       invoiceDate: manualDate,
       supplierName: manualSupplier,
-      totalHT: parseFloat(manualTotalHT) || 0,
-      totalTVA: parseFloat(manualTotalTVA) || 0,
-      totalTTC: (parseFloat(manualTotalHT) || 0) + (parseFloat(manualTotalTVA) || 0),
+      totalHT: ht,
+      totalTVA: tva,
+      totalTTC: ttc,
+      transitFees: transit,
     };
 
-    // Find matching cost doc
-    const matchedDoc = costDocs.find(doc => 
-      doc.invoiceNumber === invoiceData.invoiceNumber ||
-      doc.supplier?.toLowerCase().includes(invoiceData.supplierName?.toLowerCase() || '')
-    );
-
     const alerts: string[] = [];
-    let marginAnalysis;
-
-    if (matchedDoc) {
-      const expectedCost = matchedDoc.lines.reduce((sum, line) => sum + (line.amount || 0), 0);
-      const actualCost = invoiceData.totalHT || 0;
-      const difference = actualCost - expectedCost;
-      const differencePercent = expectedCost > 0 ? (difference / expectedCost) * 100 : 0;
-
-      let status: 'ok' | 'warning' | 'error' = 'ok';
-      if (Math.abs(differencePercent) > 10) {
-        status = 'error';
-        alerts.push(`Écart significatif de ${differencePercent.toFixed(1)}% par rapport au coût prévu`);
-      } else if (Math.abs(differencePercent) > 5) {
-        status = 'warning';
-        alerts.push(`Écart modéré de ${differencePercent.toFixed(1)}% par rapport au coût prévu`);
-      }
-
-      marginAnalysis = {
-        expectedCost,
-        actualCost,
-        difference,
-        differencePercent,
-        status,
-      };
-    } else {
-      alerts.push('Aucun document de coût correspondant trouvé');
-    }
-
-    // Additional checks
     if (!invoiceData.invoiceNumber) {
-      alerts.push('Numéro de facture manquant');
+      alerts.push('Numéro de facture manquant (clé unique)');
     }
-    if (!invoiceData.totalHT || invoiceData.totalHT <= 0) {
+    if (!invoiceData.totalHT || invoiceData.totalHT <= 0 || Number.isNaN(invoiceData.totalHT)) {
       alerts.push('Montant HT invalide ou manquant');
+    }
+    if (!invoiceData.totalTTC || invoiceData.totalTTC <= 0 || Number.isNaN(invoiceData.totalTTC)) {
+      alerts.push('Montant TTC manquant ou invalide (calculé : HT + TVA)');
+    }
+
+    const marginAmount = invoiceData.totalHT - (invoiceData.transitFees || 0);
+    const marginPercent = invoiceData.totalHT > 0 ? (marginAmount / invoiceData.totalHT) * 100 : 0;
+    let status: 'ok' | 'warning' | 'error' = 'ok';
+    if (marginAmount < 0) {
+      status = 'error';
+      alerts.push('Marge négative après transit');
+    } else if (marginPercent < 5) {
+      status = 'warning';
+      alerts.push('Marge très faible (<5%)');
     }
 
     setVerificationResult({
       invoice: invoiceData,
-      matchedCostDoc: matchedDoc,
-      marginAnalysis,
+      marginAnalysis: { marginAmount, marginPercent, status },
       alerts,
     });
 
+    if (invoiceData.invoiceNumber) {
+      upsert({
+        invoiceNumber: invoiceData.invoiceNumber,
+        supplier: invoiceData.supplierName,
+        date: invoiceData.invoiceDate,
+        totalHT: invoiceData.totalHT,
+        totalTTC: invoiceData.totalTTC,
+        transitFees: invoiceData.transitFees,
+        marginAmount,
+        marginPercent,
+        filename: currentFile?.name,
+        analyzedAt: new Date().toISOString(),
+      });
+    }
+
     toast({
       title: 'Vérification terminée',
-      description: alerts.length > 0 
-        ? `${alerts.length} alerte(s) détectée(s)`
-        : 'Aucune anomalie détectée',
+      description: alerts.length > 0 ? `${alerts.length} alerte(s) détectée(s)` : 'Aucune anomalie détectée',
       variant: alerts.length > 0 ? 'destructive' : 'default',
     });
-  }, [manualInvoiceNumber, manualTotalHT, manualTotalTVA, manualSupplier, manualDate, costDocs, toast]);
+  }, [manualInvoiceNumber, manualTotalHT, manualTotalTVA, manualTransit, manualSupplier, manualDate, upsert, currentFile, toast]);
 
   const resetForm = () => {
     setCurrentFile(null);
@@ -200,16 +176,16 @@ export default function InvoiceVerification() {
     setManualInvoiceNumber('');
     setManualTotalHT('');
     setManualTotalTVA('');
+    setManualTransit('');
     setManualSupplier('');
     setManualDate('');
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('fr-FR', {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('fr-FR', {
       style: 'currency',
       currency: 'EUR',
     }).format(amount);
-  };
 
   return (
     <MainLayout>
@@ -221,7 +197,7 @@ export default function InvoiceVerification() {
             Vérification Facture PDF
           </h1>
           <p className="mt-1 text-muted-foreground">
-            Importez une facture PDF pour vérifier la marge et détecter les anomalies
+            Importez une facture PDF pour extraire HT, TTC, transit et calculer la marge (clé = n° facture)
           </p>
         </div>
 
@@ -235,38 +211,24 @@ export default function InvoiceVerification() {
                   <Upload className="h-5 w-5" />
                   Import Facture PDF
                 </CardTitle>
-                <CardDescription>
-                  Sélectionnez un fichier PDF pour extraire les données
-                </CardDescription>
+                <CardDescription>Sélectionnez un fichier PDF à analyser</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
-                  <Input
-                    type="file"
-                    accept="application/pdf"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    id="pdf-upload"
-                  />
+                  <Input type="file" accept="application/pdf" onChange={handleFileChange} className="hidden" id="pdf-upload" />
                   <label htmlFor="pdf-upload" className="cursor-pointer">
                     <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
                     {currentFile ? (
                       <p className="text-sm font-medium text-foreground">{currentFile.name}</p>
                     ) : (
-                      <p className="text-sm text-muted-foreground">
-                        Cliquez ou glissez un fichier PDF ici
-                      </p>
+                      <p className="text-sm text-muted-foreground">Cliquez ou glissez un fichier PDF ici</p>
                     )}
                   </label>
                 </div>
 
-                {currentFile && !extractedData && (
-                  <Button 
-                    onClick={simulateExtraction} 
-                    disabled={isProcessing}
-                    className="w-full"
-                  >
-                    {isProcessing ? 'Extraction en cours...' : 'Extraire les données'}
+                {currentFile && (
+                  <Button onClick={runExtraction} disabled={isProcessing} className="w-full">
+                    {isProcessing ? 'Extraction en cours...' : 'Analyser le PDF'}
                   </Button>
                 )}
               </CardContent>
@@ -277,10 +239,7 @@ export default function InvoiceVerification() {
               <CardHeader>
                 <CardTitle className="text-lg">Données facture</CardTitle>
                 <CardDescription>
-                  {extractedData 
-                    ? 'Vérifiez et corrigez les données extraites'
-                    : 'Ou saisissez manuellement les informations'
-                  }
+                  Vérifiez et corrigez les montants extraits. Le n° facture est la clé unique du suivi.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -296,12 +255,7 @@ export default function InvoiceVerification() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="invoiceDate">Date</Label>
-                    <Input
-                      id="invoiceDate"
-                      type="date"
-                      value={manualDate}
-                      onChange={(e) => setManualDate(e.target.value)}
-                    />
+                    <Input id="invoiceDate" type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} />
                   </div>
                 </div>
 
@@ -340,6 +294,18 @@ export default function InvoiceVerification() {
                   </div>
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="transit">Frais de transit / transport (€)</Label>
+                  <Input
+                    id="transit"
+                    type="number"
+                    step="0.01"
+                    value={manualTransit}
+                    onChange={(e) => setManualTransit(e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+
                 <Separator />
 
                 <div className="flex gap-2">
@@ -361,73 +327,82 @@ export default function InvoiceVerification() {
               <>
                 {/* Margin Analysis */}
                 {verificationResult.marginAnalysis && (
-                  <Card className={
-                    verificationResult.marginAnalysis.status === 'ok' 
-                      ? 'border-status-ok/50' 
-                      : verificationResult.marginAnalysis.status === 'warning'
+                  <Card
+                    className={
+                      verificationResult.marginAnalysis.status === 'ok'
+                        ? 'border-status-ok/50'
+                        : verificationResult.marginAnalysis.status === 'warning'
                         ? 'border-status-warning/50'
                         : 'border-status-risk/50'
-                  }>
+                    }
+                  >
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center gap-2">
                         <TrendingUp className="h-5 w-5" />
                         Analyse de marge
-                        <Badge 
+                        <Badge
                           variant={verificationResult.marginAnalysis.status === 'ok' ? 'default' : 'destructive'}
                           className={
-                            verificationResult.marginAnalysis.status === 'ok' 
-                              ? 'bg-status-ok text-white' 
+                            verificationResult.marginAnalysis.status === 'ok'
+                              ? 'bg-status-ok text-white'
                               : verificationResult.marginAnalysis.status === 'warning'
-                                ? 'bg-status-warning text-white'
-                                : 'bg-status-risk text-white'
+                              ? 'bg-status-warning text-white'
+                              : 'bg-status-risk text-white'
                           }
                         >
-                          {verificationResult.marginAnalysis.status === 'ok' ? 'OK' : 
-                           verificationResult.marginAnalysis.status === 'warning' ? 'Attention' : 'Alerte'}
+                          {verificationResult.marginAnalysis.status === 'ok'
+                            ? 'OK'
+                            : verificationResult.marginAnalysis.status === 'warning'
+                            ? 'Attention'
+                            : 'Alerte'}
                         </Badge>
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-2 gap-4 mb-4">
                         <div className="p-4 bg-muted rounded-lg">
-                          <p className="text-xs text-muted-foreground mb-1">Coût prévu</p>
-                          <p className="text-xl font-bold">
-                            {formatCurrency(verificationResult.marginAnalysis.expectedCost)}
-                          </p>
+                          <p className="text-xs text-muted-foreground mb-1">HT (recette)</p>
+                          <p className="text-xl font-bold">{formatCurrency(verificationResult.invoice.totalHT || 0)}</p>
                         </div>
                         <div className="p-4 bg-muted rounded-lg">
-                          <p className="text-xs text-muted-foreground mb-1">Coût réel (facture)</p>
+                          <p className="text-xs text-muted-foreground mb-1">Transit / transport</p>
                           <p className="text-xl font-bold">
-                            {formatCurrency(verificationResult.marginAnalysis.actualCost)}
+                            {formatCurrency(verificationResult.invoice.transitFees || 0)}
                           </p>
                         </div>
                       </div>
 
-                      <div className={`p-4 rounded-lg flex items-center justify-between ${
-                        verificationResult.marginAnalysis.difference > 0 
-                          ? 'bg-status-risk/10' 
-                          : 'bg-status-ok/10'
-                      }`}>
+                      <div
+                        className={`p-4 rounded-lg flex items-center justify-between ${
+                          verificationResult.marginAnalysis.marginAmount < 0
+                            ? 'bg-status-risk/10'
+                            : verificationResult.marginAnalysis.marginPercent < 5
+                            ? 'bg-status-warning/10'
+                            : 'bg-status-ok/10'
+                        }`}
+                      >
                         <div className="flex items-center gap-2">
-                          {verificationResult.marginAnalysis.difference > 0 ? (
+                          {verificationResult.marginAnalysis.marginAmount < 0 ? (
                             <TrendingDown className="h-5 w-5 text-status-risk" />
                           ) : (
                             <TrendingUp className="h-5 w-5 text-status-ok" />
                           )}
-                          <span className="font-medium">Écart</span>
+                          <span className="font-medium">Marge (après transit)</span>
                         </div>
                         <div className="text-right">
-                          <p className={`text-lg font-bold ${
-                            verificationResult.marginAnalysis.difference > 0 
-                              ? 'text-status-risk' 
-                              : 'text-status-ok'
-                          }`}>
-                            {verificationResult.marginAnalysis.difference > 0 ? '+' : ''}
-                            {formatCurrency(verificationResult.marginAnalysis.difference)}
+                          <p
+                            className={`text-lg font-bold ${
+                              verificationResult.marginAnalysis.marginAmount < 0
+                                ? 'text-status-risk'
+                                : 'text-status-ok'
+                            }`}
+                          >
+                            {verificationResult.marginAnalysis.marginAmount > 0 ? '+' : ''}
+                            {formatCurrency(verificationResult.marginAnalysis.marginAmount)}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {verificationResult.marginAnalysis.differencePercent > 0 ? '+' : ''}
-                            {verificationResult.marginAnalysis.differencePercent.toFixed(1)}%
+                            {verificationResult.marginAnalysis.marginPercent > 0 ? '+' : ''}
+                            {verificationResult.marginAnalysis.marginPercent.toFixed(1)}%
                           </p>
                         </div>
                       </div>
@@ -453,43 +428,6 @@ export default function InvoiceVerification() {
                           </li>
                         ))}
                       </ul>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Matched Document */}
-                {verificationResult.matchedCostDoc && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
-                        Document de coût associé
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">N° Document</span>
-                          <span className="font-medium">{verificationResult.matchedCostDoc.docNumber}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Fournisseur</span>
-                          <span className="font-medium">{verificationResult.matchedCostDoc.supplier || '-'}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Lignes</span>
-                          <span className="font-medium">{verificationResult.matchedCostDoc.lines.length}</span>
-                        </div>
-                        <Separator className="my-2" />
-                        <div className="flex justify-between font-medium">
-                          <span>Total</span>
-                          <span>
-                            {formatCurrency(
-                              verificationResult.matchedCostDoc.lines.reduce((sum, l) => sum + (l.amount || 0), 0)
-                            )}
-                          </span>
-                        </div>
-                      </div>
                     </CardContent>
                   </Card>
                 )}
@@ -522,6 +460,12 @@ export default function InvoiceVerification() {
                         <span className="text-muted-foreground">TVA</span>
                         <span className="font-medium">{formatCurrency(verificationResult.invoice.totalTVA || 0)}</span>
                       </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Transit</span>
+                        <span className="font-medium">
+                          {formatCurrency(verificationResult.invoice.transitFees || 0)}
+                        </span>
+                      </div>
                       <div className="flex justify-between font-medium text-base">
                         <span>Total TTC</span>
                         <span>{formatCurrency(verificationResult.invoice.totalTTC || 0)}</span>
@@ -551,8 +495,8 @@ export default function InvoiceVerification() {
                 <FileText className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Documents de coûts</p>
-                <p className="text-xl font-bold">{costDocs.length}</p>
+                <p className="text-sm text-muted-foreground">Factures analysées</p>
+                <p className="text-xl font-bold">{items.length}</p>
               </div>
             </CardContent>
           </Card>
@@ -562,8 +506,12 @@ export default function InvoiceVerification() {
                 <Euro className="h-5 w-5 text-accent" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Factures Sage</p>
-                <p className="text-xl font-bold">{sageInvoices.length}</p>
+                <p className="text-sm text-muted-foreground">Marge moyenne</p>
+                <p className="text-xl font-bold">
+                  {items.length
+                    ? `${(items.reduce((s, i) => s + (i.marginPercent || 0), 0) / items.length).toFixed(1)}%`
+                    : '-'}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -573,12 +521,13 @@ export default function InvoiceVerification() {
                 <Percent className="h-5 w-5 text-status-ok" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Taux de rapprochement</p>
+                <p className="text-sm text-muted-foreground">Frais transit moyens</p>
                 <p className="text-xl font-bold">
-                  {sageInvoices.length > 0 
-                    ? `${Math.round((costDocs.length / sageInvoices.length) * 100)}%`
-                    : '-'
-                  }
+                  {items.length
+                    ? `${new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(
+                        items.reduce((s, i) => s + (i.transitFees || 0), 0) / items.length || 0,
+                      )}`
+                    : '-'}
                 </p>
               </div>
             </CardContent>
