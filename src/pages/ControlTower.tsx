@@ -355,21 +355,21 @@ export default function ControlTower() {
             </CardTitle>
             <CardDescription>1 clic pour sortir un point chiffré en réunion</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            <Button variant="secondary" size="sm" onClick={() => applyPreset('DROM_DDP')}>
-              DOM • DDP • docs manquants
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => applyPreset('SUISSE_BLOQUE')}>
-              Suisse • dossiers à risque
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => applyPreset('DOCS')}>
-              Tous • docs à faire
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => applyPreset('UE_AUTOLIQ')}>
-              UE • autoliquidation
-            </Button>
-          </CardContent>
-        </Card>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button variant="secondary" size="sm" onClick={() => applyPreset('DROM_DDP')}>
+                {'DOM > DDP > docs manquants'}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => applyPreset('SUISSE_BLOQUE')}>
+                {'Suisse > dossiers à risque'}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => applyPreset('DOCS')}>
+                {'Tous > docs à faire'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => applyPreset('UE_AUTOLIQ')}>
+                {'UE > autoliquidation'}
+              </Button>
+            </CardContent>
+          </Card>
 
         {/* Filters */}
         <Card>

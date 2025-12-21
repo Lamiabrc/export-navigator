@@ -62,6 +62,27 @@ export const exportCircuits: ExportCircuit[] = [
       transitFeeSkuCodes: [],
       expectedCoveredCostTypes: ['MAIN_TRANSPORT', 'IMPORT_CUSTOMS', 'DUTIES', 'TAXES'],
     },
+    vatRules: {
+      context: 'DDP direct metropole vers client (UE / Hors UE / DROM)',
+      importerOfRecord: 'Transitaire mandaté au nom du vendeur (IOR) ; vérifier qui figure sur le DAU/IM4.',
+      payerImportVat: 'Vendeur (DDP) avance TVA import et taxes locales via transitaire.',
+      payerDuties: 'Vendeur (DDP) paie droits/OM/OMR ; refacturation contractuelle possible.',
+      taxRecovery:
+        'TVA import récupérable si vendeur FR assujetti + DAU à son nom + facture transitaire ; OM/OMR non récupérables.',
+      autoliquidation:
+        "DROM : pas d'autoliquidation, TVA payée à l'import. Hors UE : autoliquidation possible si AI2/1695 II (à valider).",
+      traceability: 'Conserver DAU/IM4 au nom du vendeur, quittances TVA/OM, preuve livraison, rapprochement facture client.',
+      checks: [
+        'Confirmer IOR (nom/adresse) sur DAU/IM4',
+        'Mandat écrit DDP avec transitaire',
+        'Aligner incoterm DDP avec conditions de facturation (TVA incluse ?)',
+        'Exiger copie quittances TVA/OM/OMR et ventilation des frais',
+      ],
+      warnings: [
+        'Risque trésorerie si transitaires facturent tardivement',
+        'DDP peut impliquer obligations fiscales locales : valider avec fiscal/douane',
+      ],
+    },
     documentDistribution: [
       { document: 'Facture commerciale', recipients: ['DHL', 'Geodis', 'LVoverseas'], notes: '3 exemplaires' },
       { document: 'Packing list', recipients: ['DHL', 'Geodis', 'LVoverseas'], notes: 'Détail des colis' },
@@ -110,6 +131,28 @@ export const exportCircuits: ExportCircuit[] = [
       transitFeeKeywords: ['plateforme', 'transit', 'frais dossier'],
       transitFeeSkuCodes: [],
       expectedCoveredCostTypes: ['MAIN_TRANSPORT', 'PLATFORM_FEE', 'IMPORT_CUSTOMS', 'DUTIES', 'TAXES'],
+    },
+    vatRules: {
+      context: 'DROM en DDP via plateforme locale',
+      importerOfRecord:
+        'Plateforme/transitaire local (ex TDIS) désigné comme IOR ; vérifier le mandat et le nom sur le DAU DROM.',
+      payerImportVat: 'Vendeur (DDP) via transitaire/plateforme ; TVA DROM payée à l’import (pas d’autoliquidation).',
+      payerDuties: 'Vendeur prend OM/OMR et droits éventuels ; refacturation possible selon contrat.',
+      taxRecovery:
+        'TVA DROM récupérable par vendeur assujetti si DAU/IM4 à son nom + facture douane ; OM/OMR non récupérables.',
+      autoliquidation: "Non applicable pour DROM : TVA payée à l'import, conserver quittances.",
+      traceability:
+        'Collecter DAU/IM4 au nom du vendeur, quittances TVA/OM/OMR, preuve livraison plateforme, rapprochement factures.',
+      checks: [
+        'Confirmer IOR sur DAU/IM4 (plateforme ou vendeur)',
+        'Mandat écrit plateforme/transitaire pour DDP',
+        'Demander ventilation TVA/OM/OMR + frais plateforme',
+        'S’assurer des justificatifs pour récupérer la TVA DROM',
+      ],
+      warnings: [
+        'Délais et coûts OM/OMR variables selon produit',
+        'Absence de justificatifs = TVA non récupérable',
+      ],
     },
     documentDistribution: [
       { document: 'Facture commerciale', recipients: ['LVoverseas', 'TDIS'], notes: 'Export + plateforme' },

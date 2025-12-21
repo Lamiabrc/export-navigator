@@ -19,9 +19,9 @@ import {
 import logoOrliman from '@/assets/logo-orliman.png';
 
 const navigation = [
-  { name: 'Accueil', href: '/', icon: HomeIcon },
+  { name: 'Tour de contrôle', href: '/control-tower', icon: ShieldCheck, badge: 'NEW', featured: true },
+  { name: 'Accueil', href: '/home', icon: HomeIcon },
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Tour de contrôle', href: '/control-tower', icon: ShieldCheck },
   { name: 'Flux Export', href: '/flows', icon: FileText },
   { name: 'Simulateur', href: '/simulator', icon: Calculator },
   { name: 'Analyse Marges', href: '/margin-analysis', icon: TrendingUp },
@@ -79,9 +79,22 @@ export function Sidebar() {
         {navigation.map((item) => {
           const isActive = location.pathname === item.href;
           return (
-            <Link key={item.name} to={item.href} className={cn('nav-item', isActive && 'nav-item-active')}>
+            <Link
+              key={item.name}
+              to={item.href}
+              className={cn(
+                'nav-item',
+                isActive && 'nav-item-active',
+                item.featured && 'border border-sidebar-primary/40 bg-sidebar-primary/10'
+              )}
+            >
               <item.icon className="h-5 w-5" />
               <span>{item.name}</span>
+              {item.badge && (
+                <span className="ml-auto rounded-full bg-sidebar-primary px-2 py-0.5 text-[10px] font-semibold text-sidebar-primary-foreground">
+                  {item.badge}
+                </span>
+              )}
             </Link>
           );
         })}

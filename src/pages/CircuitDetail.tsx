@@ -92,6 +92,30 @@ export default function CircuitDetail() {
     .filter(Boolean);
 
   const displayIncoterm = circuit.defaultIncoterm ?? circuit.incoterms[0];
+  const incotermIsDDP = displayIncoterm === 'DDP';
+  const showVatCard = circuit.zone === 'DROM' || incotermIsDDP || !!circuit.vatRules;
+
+  const vatInfo = useMemo(
+    () =>
+      circuit.vatRules || {
+        context: 'DDP export',
+        importerOfRecord: 'Transitaire mandaté au nom du vendeur (IOR) ; vérifier qui figure sur le DAU/IM4.',
+        payerImportVat: 'Vendeur (DDP) avance TVA import via transitaire.',
+        payerDuties: 'Vendeur prend droits et taxes import en DDP (refacturation possible si contrat).',
+        taxRecovery:
+          "TVA import récupérable si vendeur assujetti avec DAU à son nom + facture transitaire. OM/OMR non récupérables.",
+        autoliquidation: "DROM : pas d'autoliquidation. Hors UE : autoliquidation possible (AI2) selon schéma local.",
+        traceability: 'Conserver DAU/IM4, quittances TVA/OM/OMR, preuve livraison, rapprochement facture client.',
+        checks: [
+          'Confirmer IOR sur DAU/IM4',
+          'Mandat écrit avec transitaire',
+          'Demander ventilation TVA/OM/OMR + frais',
+          'Aligner incoterm DDP avec conditions de facture',
+        ],
+        warnings: ['Sans justificatifs, TVA non récupérable'],
+      },
+    [circuit.vatRules]
+  );
 
   return (
     <MainLayout>
@@ -114,6 +138,66 @@ export default function CircuitDetail() {
             </Badge>
           </div>
         </div>
+
+        {showVatCard && (
+          <Card className="border-primary/40">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-primary" />
+                TVA / DROM / DDP
+              </CardTitle>
+              <CardDescription>
+                Synthèse des rôles et paiements TVA/droits pour ce montage ({vatInfo.context})
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg border bg-muted/40">
+                  <p className="text-xs uppercase text-muted-foreground">Importateur (IOR)</p>
+                  <p className="font-medium text-foreground">{vatInfo.importerOfRecord}</p>
+                </div>
+                <div className="p-3 rounded-lg border bg-muted/40">
+                  <p className="text-xs uppercase text-muted-foreground">Qui paie douane / taxes</p>
+                  <ul className="text-sm text-foreground space-y-1 list-disc list-inside">
+                    <li>{vatInfo.payerImportVat}</li>
+                    <li>{vatInfo.payerDuties}</li>
+                  </ul>
+                </div>
+                <div className="p-3 rounded-lg border">
+                  <p className="text-xs uppercase text-muted-foreground">Récup TVA</p>
+                  <p className="text-sm text-foreground">{vatInfo.taxRecovery}</p>
+                </div>
+                <div className="p-3 rounded-lg border">
+                  <p className="text-xs uppercase text-muted-foreground">Autoliquidation / traçabilité</p>
+                  <p className="text-sm text-foreground">
+                    {vatInfo.autoliquidation}
+                    {vatInfo.traceability ? ` — ${vatInfo.traceability}` : ''}
+                  </p>
+                </div>
+              </div>
+              {vatInfo.checks && (
+                <div className="p-3 rounded-lg border bg-muted/40">
+                  <p className="text-xs uppercase text-muted-foreground mb-2">À demander au transitaire / douane</p>
+                  <ul className="text-sm text-foreground space-y-1 list-disc list-inside">
+                    {vatInfo.checks.map((c, idx) => (
+                      <li key={idx}>{c}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {vatInfo.warnings && vatInfo.warnings.length > 0 && (
+                <div className="p-3 rounded-lg border border-orange-200 bg-orange-50">
+                  <p className="text-xs uppercase text-orange-700 mb-2">Points d'attention</p>
+                  <ul className="text-sm text-orange-900 space-y-1 list-disc list-inside">
+                    {vatInfo.warnings.map((w, idx) => (
+                      <li key={idx}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Tabs defaultValue="schema" className="space-y-6">
           <TabsList>

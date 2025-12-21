@@ -2,6 +2,15 @@ import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -24,6 +33,33 @@ import {
 const destinations: Destination[] = [
   'Guadeloupe', 'Martinique', 'Guyane', 'Reunion', 'Mayotte',
   'Belgique', 'Espagne', 'Luxembourg', 'Suisse'
+];
+
+const tvaDromRows = [
+  {
+    scenario: 'DDP direct vers DROM',
+    importer: 'Transitaire mandaté vendeur (IOR) ; vérifier nom/adresse sur DAU/IM4.',
+    payers: 'Vendeur paie TVA import + OM/OMR (DDP).',
+    recovery: 'TVA récupérable si DAU au nom du vendeur + facture transitaire ; OM/OMR non récupérables.',
+    autoliquidation: 'Non applicable (TVA payée à l’import).',
+    trace: 'DAU/IM4 + quittances TVA/OM + preuve livraison.',
+  },
+  {
+    scenario: 'DDP via plateforme locale',
+    importer: 'Plateforme/TDIS désignée IOR (mandat écrit) ; nom sur DAU/IM4.',
+    payers: 'Vendeur avance TVA/OM/OMR via plateforme/transitaire.',
+    recovery: 'TVA récupérable si DAU au nom du vendeur et facture douane ; OM/OMR non récupérables.',
+    autoliquidation: 'Non (TVA DROM payée à l’import).',
+    trace: 'DAU/IM4, quittances, ventilation OM/OMR, preuve livraison.',
+  },
+];
+
+const transitaireChecklist = [
+  'Confirmer l’IOR inscrit sur le DAU/IM4',
+  'Exiger mandat écrit pour DDP (plateforme/transitaire)',
+  'Recevoir quittances TVA/OM/OMR et ventilation des frais',
+  'Aligner incoterm DDP avec facture (TVA, frais inclus)',
+  'Tracer livraison + rapprochement facture client',
 ];
 
 export default function Guide() {
@@ -72,6 +108,50 @@ export default function Guide() {
             </div>
           </div>
         </div>
+
+        {/* TVA DROM (DDP) Synthèse */}
+        <Card>
+          <CardHeader>
+            <CardTitle>TVA DROM (DDP) - Synthèse</CardTitle>
+            <CardDescription>Règles générales pour un vendeur métropole livrant en DDP vers les DROM</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Scénario</TableHead>
+                    <TableHead>Importateur (IOR)</TableHead>
+                    <TableHead>Qui paie</TableHead>
+                    <TableHead>Récup TVA</TableHead>
+                    <TableHead>Autoliquidation</TableHead>
+                    <TableHead>Traçabilité</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tvaDromRows.map((row) => (
+                    <TableRow key={row.scenario}>
+                      <TableCell className="font-medium">{row.scenario}</TableCell>
+                      <TableCell>{row.importer}</TableCell>
+                      <TableCell>{row.payers}</TableCell>
+                      <TableCell>{row.recovery}</TableCell>
+                      <TableCell>{row.autoliquidation}</TableCell>
+                      <TableCell>{row.trace}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="p-4 rounded-lg border bg-muted/40">
+              <p className="text-xs uppercase text-muted-foreground mb-2">À demander au transitaire / douane</p>
+              <ul className="list-disc list-inside space-y-1 text-sm text-foreground">
+                {transitaireChecklist.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Grid of Info Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

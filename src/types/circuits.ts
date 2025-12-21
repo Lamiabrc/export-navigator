@@ -78,6 +78,18 @@ export interface BillingRules {
   expectedCoveredCostTypes: CostType[];
 }
 
+export interface VatRule {
+  context: string;
+  importerOfRecord: string;
+  payerImportVat: string;
+  payerDuties: string;
+  taxRecovery: string;
+  autoliquidation?: string;
+  traceability?: string;
+  checks?: string[];
+  warnings?: string[];
+}
+
 export interface ExportCircuit {
   id: CircuitId;
   name: string;
@@ -95,6 +107,7 @@ export interface ExportCircuit {
   risks: string[];
   bestPractices: string[];
   billing: BillingRules;
+  vatRules?: VatRule;
   matching?: {
     expectedRefs: ('INVOICE_NUMBER' | 'SHIPMENT_REF' | 'AWB' | 'BL' | 'ORDER_NUMBER')[];
   };
