@@ -81,42 +81,42 @@
   }
 
   .dark {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
+    --background: 220 24% 12%;
+    --foreground: 210 25% 92%;
 
-    --card: 222 47% 9%;
-    --card-foreground: 210 40% 98%;
+    --card: 220 22% 16%;
+    --card-foreground: 210 25% 94%;
 
-    --popover: 222 47% 9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 220 22% 16%;
+    --popover-foreground: 210 25% 94%;
 
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
+    --primary: 200 100% 64%;
+    --primary-foreground: 222 47% 12%;
 
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 220 18% 22%;
+    --secondary-foreground: 210 25% 92%;
 
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 220 18% 18%;
+    --muted-foreground: 215 16% 72%;
 
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 25 90% 58%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 70% 46%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 212 27% 84%;
+    --border: 220 24% 28%;
+    --input: 220 24% 28%;
+    --ring: 200 100% 64%;
 
-    --sidebar-background: 222 47% 6%;
-    --sidebar-foreground: 240 5% 96%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 4% 16%;
-    --sidebar-accent-foreground: 240 5% 96%;
-    --sidebar-border: 240 4% 16%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-background: 220 20% 14%;
+    --sidebar-foreground: 220 20% 92%;
+    --sidebar-primary: 200 100% 64%;
+    --sidebar-primary-foreground: 0 0% 10%;
+    --sidebar-accent: 220 18% 20%;
+    --sidebar-accent-foreground: 220 20% 92%;
+    --sidebar-border: 220 24% 26%;
+    --sidebar-ring: 200 100% 64%;
   }
 }
 
@@ -174,7 +174,7 @@
 
   /* Glass effect */
   .glass {
-    @apply bg-card/80 backdrop-blur-sm;
+    @apply bg-card/70 backdrop-blur-lg border border-white/10 shadow-xl shadow-black/40;
   }
 }
 
