@@ -1,0 +1,26 @@
+[
+  {
+    "code": "EXW",
+    "description": "Ex Works - client prend en charge dès sortie usine",
+    "payerTransport": "Client",
+    "notes": "Pas de dédouanement export par le vendeur."
+  },
+  {
+    "code": "FCA",
+    "description": "Free Carrier - remise au transporteur désigné",
+    "payerTransport": "Client",
+    "notes": "Dédouanement export par le vendeur."
+  },
+  {
+    "code": "DAP",
+    "description": "Delivered At Place - livraison au lieu convenu",
+    "payerTransport": "Fournisseur",
+    "notes": "Import à charge client."
+  },
+  {
+    "code": "DDP",
+    "description": "Delivered Duty Paid - vendeur supporte tous les coûts",
+    "payerTransport": "Fournisseur",
+    "notes": "Inclut droits/TVA import."
+  }
+]

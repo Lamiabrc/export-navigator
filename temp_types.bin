@@ -1,0 +1,113 @@
+// Flow status types
+export type FlowStatus = 'non_demarre' | 'en_cours' | 'termine' | 'bloque';
+export type ChecklistStatus = 'ok' | 'a_faire' | 'na' | 'bloque';
+export type RiskLevel = 'ok' | 'a_surveiller' | 'risque';
+export type Zone = 'UE' | 'Hors UE' | 'DROM';
+export type Incoterm = 'EXW' | 'FCA' | 'DAP' | 'DDP';
+export type TransportMode = 'Routier' | 'Maritime' | 'Aerien' | 'Express' | 'Ferroviaire';
+export type Payer = 'Fournisseur' | 'Client';
+export type Destination = 
+  | 'Guadeloupe' 
+  | 'Martinique' 
+  | 'Guyane' 
+  | 'Réunion' 
+  | 'Mayotte' 
+  | 'Belgique' 
+  | 'Espagne' 
+  | 'Luxembourg' 
+  | 'Suisse';
+
+export type UserRole = 'direction' | 'adv_export' | 'logistique' | 'finance' | 'admin';
+
+export interface Flow {
+  id: string;
+  flow_code: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+  client_name: string;
+  destination: Destination;
+  zone: Zone;
+  incoterm: Incoterm;
+  incoterm_place: string;
+  transport_mode: TransportMode;
+  weight?: number;
+  product_type?: 'lppr' | 'standard';
+  margin?: number;
+  departure_date: string;
+  delivery_date: string;
+  goods_value: number;
+  cost_transport: number;
+  cost_customs_clearance: number;
+  cost_duties: number;
+  cost_import_vat: number;
+  cost_octroi_mer: number;
+  cost_octroi_mer_regional: number;
+  cost_other: number;
+  prix_revient_estime?: number;
+  prix_vente_conseille?: number;
+  charges_fournisseur_estimees?: number;
+  charges_client_estimees?: number;
+  status_order: FlowStatus;
+  status_incoterm_validated: FlowStatus;
+  status_export: FlowStatus;
+  status_transport: FlowStatus;
+  status_customs: FlowStatus;
+  status_invoicing: FlowStatus;
+  chk_invoice: ChecklistStatus;
+  chk_packing_list: ChecklistStatus;
+  chk_transport_doc: ChecklistStatus;
+  chk_certificate_origin: ChecklistStatus;
+  chk_insurance: ChecklistStatus;
+  comment: string;
+  risk_level?: RiskLevel;
+}
+
+export interface IncotermRule {
+  incoterm: Incoterm;
+  payer_transport: Payer;
+  payer_customs_export: Payer;
+  payer_customs_import: Payer;
+  payer_duties: Payer;
+  payer_import_vat: Payer;
+  payer_octroi_mer: Payer;
+  notes: string;
+}
+
+export interface DestinationProfile {
+  destination: Destination;
+  zone: Zone;
+  tva_applicable: boolean;
+  tva_notes: string;
+  om_applicable: boolean;
+  om_notes: string;
+  documents_required: string[];
+  common_risks: string;
+  best_practices: string;
+}
+
+export interface DeductibilityRule {
+  zone: Zone;
+  charge_type: string;
+  deductible_supplier: 'Oui' | 'Non' | 'À valider';
+  deductible_client: 'Oui' | 'Non' | 'À valider';
+}
+
+export interface Document {
+  id: string;
+  flow_id: string;
+  doc_type: 'Facture' | 'Packing' | 'Transport' | 'Douane' | 'Autre';
+  file_url: string;
+  uploaded_at: string;
+  uploaded_by: string;
+  extracted_json?: Record<string, unknown>;
+  compliance_report?: Record<string, unknown>;
+  compliance_status?: 'OK' | 'À surveiller' | 'Risque';
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+}
