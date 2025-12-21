@@ -28,6 +28,8 @@ import { computeFlowHealth } from '@/lib/flows/flowHealth';
 import type { Flow, Incoterm, RiskLevel, Zone } from '@/types';
 import { AlertTriangle, Download, Filter, ShieldCheck, Sparkles, Target } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useOperationsSync } from '@/hooks/useOperationsSync';
+import { toast } from 'sonner';
 
 type ZoneFilter = 'ALL' | Zone;
 type IncotermFilter = 'ALL' | Incoterm;
@@ -80,6 +82,7 @@ const HealthBadge = ({ bucket, score }: { bucket: 'OK' | 'A_SURVEILLER' | 'RISQU
 export default function ControlTower() {
   const { flows, isLoading } = useFlows();
   const { getChecklist } = useFlowChecklists();
+  const operationsSync = useOperationsSync();
 
   // Filters
   const [q, setQ] = useState('');
@@ -246,6 +249,15 @@ export default function ControlTower() {
     downloadText(csv, `etat_des_lieux_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
   };
 
+  const handleSync = async () => {
+    const result = await operationsSync.sync();
+    if (result && result.length) {
+      toast.success(`Synchronisation OneDrive OK (${result.length} lignes)`);
+    } else if (operationsSync.error) {
+      toast.error(`Sync OneDrive échouée : ${operationsSync.error}`);
+    }
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -274,6 +286,10 @@ export default function ControlTower() {
             <Button variant="outline" className="gap-2" onClick={exportFilteredCsv}>
               <Download className="h-4 w-4" />
               Export état des lieux
+            </Button>
+            <Button variant="secondary" className="gap-2" onClick={handleSync} disabled={operationsSync.isLoading}>
+              <Sparkles className="h-4 w-4" />
+              {operationsSync.isLoading ? 'Sync en cours...' : 'Sync OneDrive'}
             </Button>
           </div>
         </div>
