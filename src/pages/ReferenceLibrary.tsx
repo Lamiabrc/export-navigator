@@ -214,12 +214,13 @@ const downloadJson = (data: unknown, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
-const loadFromStorage = <T,>(key: string, fallback: T): T => {
+const loadFromStorage = <T,>(key: string, fallback: T, validator?: (value: unknown) => value is T): T => {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as T;
-    return parsed || fallback;
+    const parsed = JSON.parse(raw) as unknown;
+    if (validator && !validator(parsed)) return fallback;
+    return (parsed as T) || fallback;
   } catch (error) {
     console.warn(`Failed to parse localStorage key ${key}`, error);
     return fallback;
@@ -230,10 +231,14 @@ const persistToStorage = (key: string, value: unknown) => {
   localStorage.setItem(key, JSON.stringify(value));
 };
 
+const isDestinationArray = (value: unknown): value is DestinationRow[] => Array.isArray(value);
+const isIncotermArray = (value: unknown): value is IncotermRow[] => Array.isArray(value);
+const isHsArray = (value: unknown): value is HsItem[] => Array.isArray(value);
+
 export default function ReferenceLibrary() {
-  const [destinations, setDestinations] = useState<DestinationRow[]>(() => loadFromStorage(DEST_KEY, defaultDestinations));
-  const [incoterms, setIncoterms] = useState<IncotermRow[]>(() => loadFromStorage(INCOTERM_KEY, defaultIncoterms));
-  const [hsCatalog, setHsCatalog] = useState<HsItem[]>(() => loadFromStorage(HS_CATALOG_KEY, defaultHsCatalog));
+  const [destinations, setDestinations] = useState<DestinationRow[]>(() => loadFromStorage(DEST_KEY, defaultDestinations, isDestinationArray));
+  const [incoterms, setIncoterms] = useState<IncotermRow[]>(() => loadFromStorage(INCOTERM_KEY, defaultIncoterms, isIncotermArray));
+  const [hsCatalog, setHsCatalog] = useState<HsItem[]>(() => loadFromStorage(HS_CATALOG_KEY, defaultHsCatalog, isHsArray));
   const [logisticsMode, setLogisticsMode] = useState<(typeof logisticModes)[number]>(() => {
     const stored = loadFromStorage<string | undefined>(LOGISTICS_MODE_KEY, logisticModes[0]);
     return logisticModes.includes(stored as (typeof logisticModes)[number]) ? (stored as (typeof logisticModes)[number]) : logisticModes[0];
@@ -310,9 +315,9 @@ export default function ReferenceLibrary() {
 
   const applyImport = () => {
     if (!importPreview) return;
-    if (importPreview.destinations) setDestinations(importPreview.destinations);
-    if (importPreview.incoterms) setIncoterms(importPreview.incoterms);
-    if (importPreview.hsCatalog) setHsCatalog(importPreview.hsCatalog);
+    if (importPreview.destinations && isDestinationArray(importPreview.destinations)) setDestinations(importPreview.destinations);
+    if (importPreview.incoterms && isIncotermArray(importPreview.incoterms)) setIncoterms(importPreview.incoterms);
+    if (importPreview.hsCatalog && isHsArray(importPreview.hsCatalog)) setHsCatalog(importPreview.hsCatalog);
     if (importPreview.logisticsMode) {
       const importedMode = logisticModes.includes(importPreview.logisticsMode)
         ? importPreview.logisticsMode
