@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { Flow } from '@/types';
 import { mockFlows } from '@/data/mockData';
-
-const FLOWS_KEY = 'orliman_flows';
+import { FLOWS_KEY } from '@/lib/constants/storage';
 
 export function useFlows() {
   const [flows, setFlows] = useState<Flow[]>([]);
@@ -26,6 +25,22 @@ export function useFlows() {
       localStorage.setItem(FLOWS_KEY, JSON.stringify(mockFlows));
     }
     setIsLoading(false);
+  }, []);
+
+  // React to custom flow updates (e.g. Excel sync)
+  useEffect(() => {
+    const handleFlowsUpdated = () => {
+      const stored = localStorage.getItem(FLOWS_KEY);
+      if (stored) {
+        try {
+          setFlows(JSON.parse(stored));
+        } catch {
+          // ignore
+        }
+      }
+    };
+    window.addEventListener('flows-updated', handleFlowsUpdated);
+    return () => window.removeEventListener('flows-updated', handleFlowsUpdated);
   }, []);
 
   const saveFlows = useCallback((newFlows: Flow[]) => {

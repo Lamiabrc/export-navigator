@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Download, RefreshCw, Upload } from 'lucide-react';
 import { useReferenceData, type ReferenceData } from '@/hooks/useReferenceData';
+import { useExcelSync } from '@/hooks/useExcelSync';
 import { toast } from 'sonner';
 
 const downloadJson = (data: ReferenceData, filename: string) => {
@@ -21,6 +23,8 @@ export default function Settings() {
   const { referenceData, saveReferenceData, resetReferenceData } = useReferenceData();
   const [preview, setPreview] = useState(JSON.stringify(referenceData, null, 2));
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const excelPathRef = useRef<HTMLInputElement>(null);
+  const { filePath, setFilePath, status, error, lastUpdate, lastRowsCount, isElectron, syncNow } = useExcelSync();
 
   useEffect(() => {
     setPreview(JSON.stringify(referenceData, null, 2));
@@ -97,6 +101,52 @@ export default function Settings() {
             <div className="flex justify-end">
               <Button onClick={handleSave}>Sauvegarder</Button>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Synchronisation Excel locale (mode Electron)</CardTitle>
+            <CardDescription>
+              Surveille un fichier Excel et met à jour les flux en temps réel via l’application desktop.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Chemin du fichier Excel</label>
+              <div className="flex gap-2">
+                <Input
+                  ref={excelPathRef}
+                  placeholder="Ex : C:\\Users\\vous\\Documents\\exports.xlsx"
+                  value={filePath}
+                  onChange={(e) => setFilePath(e.target.value)}
+                  disabled={!isElectron}
+                />
+                <Button variant="outline" onClick={() => setFilePath(excelPathRef.current?.value || '')} disabled={!isElectron}>
+                  Sauvegarder
+                </Button>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 text-sm">
+              <p className="text-muted-foreground">
+                Statut : {isElectron ? (status === 'watching' ? 'Surveillance active' : status === 'error' ? 'Erreur' : 'En attente') : 'Disponible uniquement en mode desktop (Electron)'}
+              </p>
+              {lastUpdate && (
+                <p className="text-muted-foreground">Dernière mise à jour : {new Date(lastUpdate).toLocaleString()} ({lastRowsCount} lignes)</p>
+              )}
+              {error && <p className="text-sm text-red-500">Erreur : {error}</p>}
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={syncNow} disabled={!isElectron || !filePath}>Forcer une lecture</Button>
+              <Button variant="ghost" onClick={() => { setFilePath(''); toast.success('Surveillance Excel désactivée'); }} disabled={!isElectron}>
+                Arrêter
+              </Button>
+            </div>
+            {!isElectron && (
+              <p className="text-xs text-muted-foreground">
+                Indication : la lecture automatique d’un fichier local n’est autorisée qu’en mode Electron. Sur le web, utilisez l’import CSV classique.
+              </p>
+            )}
           </CardContent>
         </Card>
 
