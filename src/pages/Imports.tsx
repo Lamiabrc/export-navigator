@@ -96,8 +96,8 @@ export default function Imports() {
   const [costResult, setCostResult] = useState<MappingResult<CostDoc> | null>(null);
   const { state: sageState, setState: setSageState, rawRows: sageRows, onFile: onSageFile } = useUpload<SageInvoiceMapping>(null);
   const { state: costState, setState: setCostState, rawRows: costRows, onFile: onCostFile } = useUpload<CostDocMapping>(null);
-  const [remoteSageUrl, setRemoteSageUrl] = useState('');
-  const [remoteCostUrl, setRemoteCostUrl] = useState('');
+  const [remoteSageUrl, setRemoteSageUrl] = useState(() => localStorage.getItem('remote_sage_url') || '');
+  const [remoteCostUrl, setRemoteCostUrl] = useState(() => localStorage.getItem('remote_cost_url') || '');
   const [isRemoteLoading, setIsRemoteLoading] = useState(false);
 
   const [, setStoredInvoices] = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
@@ -210,6 +210,27 @@ export default function Imports() {
     }
   };
 
+  useEffect(() => {
+    if (remoteSageUrl) {
+      localStorage.setItem('remote_sage_url', remoteSageUrl);
+    } else {
+      localStorage.removeItem('remote_sage_url');
+    }
+    if (remoteCostUrl) {
+      localStorage.setItem('remote_cost_url', remoteCostUrl);
+    } else {
+      localStorage.removeItem('remote_cost_url');
+    }
+  }, [remoteSageUrl, remoteCostUrl]);
+
+  const openRemote = (url: string) => {
+    if (!url) {
+      toast.error('Ajoutez un lien OneDrive/SharePoint');
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const sagePreview = useMemo(() => sageResult?.items.slice(0, 5) ?? [], [sageResult]);
   const costPreview = useMemo(() => costResult?.items.slice(0, 5) ?? [], [costResult]);
 
@@ -238,6 +259,9 @@ export default function Imports() {
                     onChange={(e) => setRemoteSageUrl(e.target.value)}
                     placeholder="https://onedrive...factures.csv?download=1"
                   />
+                  <Button size="sm" variant="outline" onClick={() => openRemote(remoteSageUrl)}>
+                    Ouvrir
+                  </Button>
                   <Button size="sm" onClick={() => loadRemoteFile(remoteSageUrl, 'sage')} disabled={isRemoteLoading}>
                     Charger
                   </Button>
@@ -251,6 +275,9 @@ export default function Imports() {
                     onChange={(e) => setRemoteCostUrl(e.target.value)}
                     placeholder="https://onedrive...couts.csv?download=1"
                   />
+                  <Button size="sm" variant="outline" onClick={() => openRemote(remoteCostUrl)}>
+                    Ouvrir
+                  </Button>
                   <Button size="sm" onClick={() => loadRemoteFile(remoteCostUrl, 'costs')} disabled={isRemoteLoading}>
                     Charger
                   </Button>

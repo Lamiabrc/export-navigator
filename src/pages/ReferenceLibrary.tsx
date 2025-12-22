@@ -25,13 +25,21 @@ export default function ReferenceLibrary() {
   const { referenceData, saveReferenceData, resetReferenceData } = useReferenceData();
   const [localData, setLocalData] = useState<ReferenceData>(referenceData);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [oneDriveLink, setOneDriveLink] = useState('');
+  const [oneDriveLink, setOneDriveLink] = useState(() => localStorage.getItem('reference_onedrive_link') || '');
   const [isSyncing, setIsSyncing] = useState(false);
   type ReferenceRow = Record<string, string | number>;
 
   useEffect(() => {
     setLocalData(referenceData);
   }, [referenceData]);
+
+  useEffect(() => {
+    if (oneDriveLink) {
+      localStorage.setItem('reference_onedrive_link', oneDriveLink);
+    } else {
+      localStorage.removeItem('reference_onedrive_link');
+    }
+  }, [oneDriveLink]);
 
   const updateIncoterm = (index: number, value: Partial<IncotermReference>) => {
     const next = [...localData.incoterms];
@@ -173,6 +181,14 @@ export default function ReferenceLibrary() {
     }
   };
 
+  const openRemoteFile = () => {
+    if (!oneDriveLink) {
+      toast.error('Ajoutez un lien OneDrive/SharePoint');
+      return;
+    }
+    window.open(oneDriveLink, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -223,10 +239,15 @@ export default function ReferenceLibrary() {
                 onChange={(e) => setOneDriveLink(e.target.value)}
                 placeholder="https://onedrive.live.com/....?download=1"
               />
-              <Button onClick={syncFromOneDrive} disabled={isSyncing}>
-                <LinkIcon className="h-4 w-4 mr-2" />
-                {isSyncing ? 'Synchronisation...' : 'Synchroniser'}
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={openRemoteFile} variant="outline">
+                  Ouvrir le fichier
+                </Button>
+                <Button onClick={syncFromOneDrive} disabled={isSyncing}>
+                  <LinkIcon className="h-4 w-4 mr-2" />
+                  {isSyncing ? 'Synchronisation...' : 'Importer (copie locale)'}
+                </Button>
+              </div>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Badge variant="outline">Source: {localData.sourceLabel || 'locale'}</Badge>
