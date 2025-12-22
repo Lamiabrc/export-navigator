@@ -71,6 +71,7 @@ export default function Auth() {
               <Input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={DEFAULT_PASSWORD_HINT}

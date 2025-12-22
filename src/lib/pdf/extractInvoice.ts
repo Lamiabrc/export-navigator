@@ -1,10 +1,10 @@
-import * as pdfjsLib from 'pdfjs-dist';
-import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
-
-// Worker configuration for pdfjs in Vite
+import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type TextItem } from 'pdfjs-dist';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url).toString();
+// @ts-ignore Vite will transform to an asset URL
+import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.js?url';
+
+// Ensure the worker is served with the correct MIME type when bundled
+GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
 
 const numberFromText = (text: string): number | null => {
   const normalized = text.replace(/\s/g, '').replace(',', '.').replace(/\u00a0/g, '');
@@ -36,7 +36,7 @@ const findInvoiceNumber = (text: string): string | null => {
 
 const extractTextFromPdf = async (file: File): Promise<string> => {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf: PDFDocumentProxy = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pdf: PDFDocumentProxy = await getDocument({ data: arrayBuffer }).promise;
   const content: string[] = [];
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
     const page = await pdf.getPage(pageNum);
