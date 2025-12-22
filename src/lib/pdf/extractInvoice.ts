@@ -1,7 +1,7 @@
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type TextItem } from 'pdfjs-dist';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore Vite will transform to an asset URL
-import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.js?url';
+import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 // Ensure the worker is served with the correct MIME type when bundled
 GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
