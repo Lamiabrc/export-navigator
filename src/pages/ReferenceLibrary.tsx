@@ -25,6 +25,7 @@ const HS_CATALOG_KEY = 'export_hs_catalog_v1';
 
 const logisticModes = ['Envoi direct depuis métropole', 'Dépositaire / stock local'] as const;
 const zones = ['UE', 'DROM', 'Suisse', 'Hors UE'] as const;
+const allFilter = 'all';
 const incotermCodes = ['EXW', 'FCA', 'FOB', 'CIF', 'CPT', 'CIP', 'DAP', 'DDP'] as const;
 
 type DocFlags = {
@@ -228,8 +229,8 @@ export default function ReferenceLibrary() {
   });
 
   const [destSearch, setDestSearch] = useState('');
-  const [zoneFilter, setZoneFilter] = useState<string>('');
-  const [logisticsFilter, setLogisticsFilter] = useState<string>('');
+  const [zoneFilter, setZoneFilter] = useState<string>(allFilter);
+  const [logisticsFilter, setLogisticsFilter] = useState<string>(allFilter);
   const [importPreview, setImportPreview] = useState<ImportPayload | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -381,8 +382,8 @@ export default function ReferenceLibrary() {
   const filteredDestinations = useMemo(() => {
     return destinations.filter((dest) => {
       const matchesSearch = dest.name.toLowerCase().includes(destSearch.toLowerCase());
-      const matchesZone = zoneFilter ? dest.zone === zoneFilter : true;
-      const matchesLog = logisticsFilter ? dest.logisticMode === logisticsFilter : true;
+      const matchesZone = zoneFilter === allFilter ? true : dest.zone === zoneFilter;
+      const matchesLog = logisticsFilter === allFilter ? true : dest.logisticMode === logisticsFilter;
       return matchesSearch && matchesZone && matchesLog;
     });
   }, [destinations, destSearch, zoneFilter, logisticsFilter]);
@@ -503,7 +504,7 @@ export default function ReferenceLibrary() {
                         <SelectValue placeholder="Zone" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Toutes zones</SelectItem>
+                        <SelectItem value={allFilter}>Toutes zones</SelectItem>
                         {zones.map((z) => (
                           <SelectItem key={z} value={z}>
                             {z}
@@ -516,7 +517,7 @@ export default function ReferenceLibrary() {
                         <SelectValue placeholder="Mode logistique" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Tous modes</SelectItem>
+                        <SelectItem value={allFilter}>Tous modes</SelectItem>
                         {logisticModes.map((mode) => (
                           <SelectItem key={mode} value={mode}>
                             {mode}
