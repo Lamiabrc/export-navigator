@@ -1,7 +1,8 @@
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type TextItem } from 'pdfjs-dist';
+// Utilise la build legacy (UMD) pour un worker statique compatible Vercel/Vite
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore Vite will transform to an asset URL
-import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// @ts-ignore Vite transformera en URL vers l’asset
+import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.js?url';
 
 // Ensure the worker is served with the correct MIME type when bundled
 GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
