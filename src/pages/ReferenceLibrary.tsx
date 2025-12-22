@@ -90,6 +90,10 @@ export default function ReferenceLibrary() {
       toast.error('Ajoutez un lien OneDrive partageable');
       return;
     }
+    if (!oneDriveLink.startsWith('http')) {
+      toast.error('Le lien doit commencer par https:// (lien partageable OneDrive/SharePoint)');
+      return;
+    }
     setIsSyncing(true);
     try {
       const url = oneDriveLink.includes('download=1') ? oneDriveLink : `${oneDriveLink}${oneDriveLink.includes('?') ? '&' : '?'}download=1`;
@@ -156,8 +160,10 @@ export default function ReferenceLibrary() {
       toast.success('Référentiel synchronisé depuis OneDrive');
     } catch (err) {
       const message =
-        err instanceof TypeError || (err instanceof Error && err.message.includes('Failed to fetch'))
-          ? 'Accès au lien bloqué (CORS). Téléchargez le fichier puis importez-le en JSON/CSV.'
+        err instanceof TypeError ||
+        (err instanceof Error &&
+          (err.message.includes('Failed to fetch') || err.message.toLowerCase().includes('cors') || err.message.includes('FUNCTION_INVOCATION_FAILED')))
+          ? 'Accès SharePoint/OneDrive refusé (CORS ou autorisation). Téléchargez le fichier puis importez-le en JSON/CSV.'
           : err instanceof Error
           ? err.message
           : 'Sync OneDrive impossible';
@@ -209,6 +215,7 @@ export default function ReferenceLibrary() {
             <p className="text-sm text-muted-foreground">
               Utilisez un lien partageable (&quot;?download=1&quot;) vers un fichier Excel/CSV avec deux feuilles : <strong>incoterms</strong> et <strong>destinations</strong>.
               Les colonnes attendues : Code, Description, Payeur transport, Notes / Destination, Zone, TVA, Taxes, Flags.
+              Si SharePoint/Teams bloque l’accès (CORS), téléchargez le fichier puis importez-le via le bouton JSON.
             </p>
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
               <Input
