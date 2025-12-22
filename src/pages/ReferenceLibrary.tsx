@@ -6,9 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Download, RefreshCw, Upload } from 'lucide-react';
+import { Download, RefreshCw, Upload, Cloudy, Link as LinkIcon } from 'lucide-react';
 import { useReferenceData, type ReferenceData, type IncotermReference, type DestinationReference } from '@/hooks/useReferenceData';
 import { toast } from 'sonner';
+import { parseCsv } from '@/lib/imports/parseCsv';
 
 const downloadJson = (data: ReferenceData, filename: string) => {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -24,6 +25,9 @@ export default function ReferenceLibrary() {
   const { referenceData, saveReferenceData, resetReferenceData } = useReferenceData();
   const [localData, setLocalData] = useState<ReferenceData>(referenceData);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [oneDriveLink, setOneDriveLink] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  type ReferenceRow = Record<string, string | number>;
 
   useEffect(() => {
     setLocalData(referenceData);
@@ -69,6 +73,94 @@ export default function ReferenceLibrary() {
     toast.success('Référentiel réinitialisé');
   };
 
+  const resolveColumn = (row: ReferenceRow, candidates: string[]) => {
+    const lowerKeys = Object.keys(row).reduce<Record<string, string>>((acc, key) => {
+      acc[key.toLowerCase().trim()] = key;
+      return acc;
+    }, {});
+    for (const cand of candidates) {
+      const key = Object.keys(lowerKeys).find((k) => k.includes(cand.toLowerCase()));
+      if (key) return row[lowerKeys[key]];
+    }
+    return '';
+  };
+
+  const syncFromOneDrive = async () => {
+    if (!oneDriveLink) {
+      toast.error('Ajoutez un lien OneDrive partageable');
+      return;
+    }
+    setIsSyncing(true);
+    try {
+      const url = oneDriveLink.includes('download=1') ? oneDriveLink : `${oneDriveLink}${oneDriveLink.includes('?') ? '&' : '?'}download=1`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Téléchargement impossible (${res.status})`);
+      const rawText = await res.text();
+
+      let incoterms: IncotermReference[] = [];
+      let destinations: DestinationReference[] = [];
+
+      try {
+        const parsed = JSON.parse(rawText) as ReferenceData;
+        incoterms = parsed.incoterms || [];
+        destinations = parsed.destinations || [];
+      } catch {
+        const parsed = parseCsv(rawText);
+        const rows = parsed.rows;
+        const incotermRows = rows.filter((row) =>
+          Object.keys(row).some((k) => k.toLowerCase().includes('incoterm') || k.toLowerCase() === 'code')
+        );
+        const destinationRows = rows.filter((row) =>
+          Object.keys(row).some((k) => k.toLowerCase().includes('destination') || k.toLowerCase().includes('zone'))
+        );
+
+        incoterms = incotermRows
+          .map((row) => ({
+            code: String(resolveColumn(row as ReferenceRow, ['incoterm', 'code'])),
+            description: String(resolveColumn(row as ReferenceRow, ['description', 'libelle', 'libellé'])),
+            payerTransport: (resolveColumn(row as ReferenceRow, ['payeur', 'payer transport']) || 'Client') as string,
+            notes: String(resolveColumn(row as ReferenceRow, ['notes', 'commentaire'])),
+          }))
+          .filter((r) => r.code);
+
+        destinations = destinationRows
+          .map((row) => ({
+            destination: String(resolveColumn(row as ReferenceRow, ['destination', 'pays'])),
+            zone: String(resolveColumn(row as ReferenceRow, ['zone'])),
+            tvaRegime: String(resolveColumn(row as ReferenceRow, ['tva', 'regime'])),
+            taxesPossibles: (resolveColumn(row as ReferenceRow, ['taxes', 'om']) || '')
+              .split(/[,;]+/)
+              .map((v) => v.trim())
+              .filter(Boolean),
+            flags: (resolveColumn(row as ReferenceRow, ['flags', 'notes']) || '')
+              .split(/\n|[,;]+/)
+              .map((v) => v.trim())
+              .filter(Boolean),
+          }))
+          .filter((r) => r.destination);
+      }
+
+      if (!incoterms.length && !destinations.length) {
+        throw new Error('Aucune donnée trouvée (attendu incoterms/destinations en JSON ou CSV).');
+      }
+
+      const synced: ReferenceData = {
+        incoterms,
+        destinations,
+        updatedAt: new Date().toISOString(),
+        sourceUrl: oneDriveLink,
+        sourceLabel: 'OneDrive',
+      };
+      setLocalData(synced);
+      saveReferenceData(synced);
+      toast.success('Référentiel synchronisé depuis OneDrive');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Sync OneDrive impossible');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -100,6 +192,41 @@ export default function ReferenceLibrary() {
           />
         </div>
 
+        <Card className="bg-gradient-to-r from-emerald-50 via-blue-50 to-white border border-emerald-100">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cloudy className="h-5 w-5 text-emerald-600" />
+              Lien OneDrive (Excel ou CSV)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Utilisez un lien partageable (&quot;?download=1&quot;) vers un fichier Excel/CSV avec deux feuilles : <strong>incoterms</strong> et <strong>destinations</strong>.
+              Les colonnes attendues : Code, Description, Payeur transport, Notes / Destination, Zone, TVA, Taxes, Flags.
+            </p>
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <Input
+                value={oneDriveLink}
+                onChange={(e) => setOneDriveLink(e.target.value)}
+                placeholder="https://onedrive.live.com/....?download=1"
+              />
+              <Button onClick={syncFromOneDrive} disabled={isSyncing}>
+                <LinkIcon className="h-4 w-4 mr-2" />
+                {isSyncing ? 'Synchronisation...' : 'Synchroniser'}
+              </Button>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Badge variant="outline">Source: {localData.sourceLabel || 'locale'}</Badge>
+              {localData.updatedAt && <span>Maj : {new Date(localData.updatedAt).toLocaleString('fr-FR')}</span>}
+              {localData.sourceUrl && (
+                <a className="text-primary hover:underline" href={localData.sourceUrl} target="_blank" rel="noreferrer">
+                  Voir le lien
+                </a>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         <Tabs defaultValue="incoterms">
           <TabsList>
             <TabsTrigger value="incoterms">Incoterms</TabsTrigger>
@@ -124,7 +251,9 @@ export default function ReferenceLibrary() {
                       <p className="text-xs text-muted-foreground mb-1">Payeur transport</p>
                       <Input
                         value={incoterm.payerTransport}
-                        onChange={(e) => updateIncoterm(idx, { payerTransport: e.target.value as any })}
+                        onChange={(e) =>
+                          updateIncoterm(idx, { payerTransport: e.target.value as IncotermReference['payerTransport'] })
+                        }
                       />
                     </div>
                     <div>

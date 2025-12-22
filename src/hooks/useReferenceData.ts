@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import incotermsJson from '@/data/reference/incoterms.json';
-import destinationsJson from '@/data/reference/destinations.json';
 import type { Destination, Incoterm, Zone } from '@/types';
 import { REFERENCE_OVERRIDES_KEY } from '@/lib/constants/storage';
 
@@ -22,12 +20,15 @@ export interface DestinationReference {
 export interface ReferenceData {
   incoterms: IncotermReference[];
   destinations: DestinationReference[];
+  sourceUrl?: string;
+  sourceLabel?: string;
   updatedAt?: string;
 }
 
 const defaultReference: ReferenceData = {
-  incoterms: incotermsJson as IncotermReference[],
-  destinations: destinationsJson as DestinationReference[],
+  incoterms: [],
+  destinations: [],
+  sourceLabel: 'Non synchronisé',
   updatedAt: new Date().toISOString(),
 };
 

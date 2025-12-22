@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, ArrowRight, BarChart3, CheckCircle, ExternalLink, FileDown, FileUp, Gauge, Info, Shield, ShieldAlert, TrendingDown, TrendingUp } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { AlertTriangle, ArrowRight, BarChart3, CheckCircle, ExternalLink, FileDown, FileUp, Gauge, Info, Shield, ShieldAlert, TrendingDown, TrendingUp, FileText as FileTextIcon } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { reconcile } from '@/lib/reco/reconcile';
 import { evaluateCase } from '@/lib/rules/riskEngine';
@@ -20,6 +21,8 @@ import { Progress } from '@/components/ui/progress';
 import { exportCircuits } from '@/data/exportCircuits';
 import { getTransitaireById } from '@/data/transitaires';
 import { Bar, BarChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { extractInvoiceFromPdf } from '@/lib/pdf/extractInvoice';
+import { toast } from 'sonner';
 import type { SageInvoice } from '@/types/sage';
 import type { CostDoc } from '@/types/costs';
 import type { ExportCase } from '@/types/case';
@@ -63,13 +66,16 @@ const alertBadge = (alertsCount: number, hasBlocker: boolean) => {
 };
 
 export default function Invoices() {
-  const [sageInvoices] = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
+  const [sageInvoices, setSageInvoices] = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
   const [costDocs] = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
   const { referenceData } = useReferenceData();
   const { benchmarks, saveBenchmarks, resetBenchmarks } = useFeeBenchmarks();
   const [selectedCaseId, setSelectedCaseId] = useState<string>('');
   const [selectedQuestion, setSelectedQuestion] = useState<string>('tva');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+  const [isPdfImporting, setIsPdfImporting] = useState(false);
+  const [pdfFileName, setPdfFileName] = useState<string>('');
 
   const cases = useMemo(() => {
     const base = reconcile(sageInvoices, costDocs);
@@ -302,6 +308,34 @@ export default function Invoices() {
     reader.readAsText(file, 'utf-8');
   };
 
+  const importPdfInvoice = async (file?: File) => {
+    if (!file) return;
+    setIsPdfImporting(true);
+    try {
+      const parsed = await extractInvoiceFromPdf(file);
+      const invoiceNumber = parsed.invoiceNumber || file.name;
+      const invoice: SageInvoice = {
+        invoiceNumber,
+        clientName: parsed.supplier || 'Client non renseigné',
+        invoiceDate: parsed.date || new Date().toISOString().slice(0, 10),
+        currency: 'EUR',
+        totalHT: parsed.totalHT ?? 0,
+        totalTVA: parsed.totalTTC && parsed.totalHT ? parsed.totalTTC - parsed.totalHT : undefined,
+        totalTTC: parsed.totalTTC ?? undefined,
+      };
+      setSageInvoices((prev) => {
+        const filtered = prev.filter((inv) => inv.invoiceNumber !== invoiceNumber);
+        return [...filtered, invoice];
+      });
+      toast.success(`Facture PDF importée : ${invoiceNumber}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Import PDF impossible');
+    } finally {
+      setIsPdfImporting(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = '';
+    }
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -318,6 +352,37 @@ export default function Invoices() {
             </Link>
           </div>
         </div>
+
+        <Card className="border-emerald-100 bg-emerald-50/60">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileTextIcon className="h-5 w-5 text-emerald-700" />
+              Importer vos factures PDF (aucune donnée fictive)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-1 items-center gap-3">
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) setPdfFileName(file.name);
+                  importPdfInvoice(file);
+                }}
+              />
+              <Button variant="secondary" onClick={() => pdfInputRef.current?.click()} disabled={isPdfImporting}>
+                {isPdfImporting ? 'Analyse en cours...' : 'Choisir un PDF'}
+              </Button>
+              {pdfFileName && <span className="text-sm text-muted-foreground">{pdfFileName}</span>}
+            </div>
+            <p className="text-sm text-muted-foreground max-w-xl">
+              Les factures PDF importées alimentent directement le rapprochement (stockées uniquement en local pour préserver vos données).
+            </p>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>

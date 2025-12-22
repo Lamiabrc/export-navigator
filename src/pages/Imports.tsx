@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { AlertTriangle, CheckCircle, FileSpreadsheet, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle, FileSpreadsheet, Upload, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseCsv } from '@/lib/imports/parseCsv';
 import {
@@ -96,6 +96,9 @@ export default function Imports() {
   const [costResult, setCostResult] = useState<MappingResult<CostDoc> | null>(null);
   const { state: sageState, setState: setSageState, rawRows: sageRows, onFile: onSageFile } = useUpload<SageInvoiceMapping>(null);
   const { state: costState, setState: setCostState, rawRows: costRows, onFile: onCostFile } = useUpload<CostDocMapping>(null);
+  const [remoteSageUrl, setRemoteSageUrl] = useState('');
+  const [remoteCostUrl, setRemoteCostUrl] = useState('');
+  const [isRemoteLoading, setIsRemoteLoading] = useState(false);
 
   const [, setStoredInvoices] = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
   const [, setStoredCosts] = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
@@ -175,6 +178,32 @@ export default function Imports() {
     toast.success('Coûts réels enregistrés en local');
   };
 
+  const loadRemoteFile = async (url: string, target: 'sage' | 'costs') => {
+    if (!url) {
+      toast.error('Ajoutez un lien OneDrive/URL de téléchargement');
+      return;
+    }
+    setIsRemoteLoading(true);
+    try {
+      const normalized = url.includes('download=1') ? url : `${url}${url.includes('?') ? '&' : '?'}download=1`;
+      const res = await fetch(normalized);
+      if (!res.ok) throw new Error(`Téléchargement impossible (${res.status})`);
+      const blob = await res.blob();
+      const filename = url.split('/').pop() || `${target}-remote.csv`;
+      const file = new File([blob], filename, { type: blob.type || 'text/csv' });
+      if (target === 'sage') {
+        handleSageFile(file);
+      } else {
+        handleCostFile(file);
+      }
+      toast.success('Fichier chargé depuis OneDrive');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Import distant impossible');
+    } finally {
+      setIsRemoteLoading(false);
+    }
+  };
+
   const sagePreview = useMemo(() => sageResult?.items.slice(0, 5) ?? [], [sageResult]);
   const costPreview = useMemo(() => costResult?.items.slice(0, 5) ?? [], [costResult]);
 
@@ -185,6 +214,48 @@ export default function Imports() {
           <h1 className="text-2xl font-bold text-foreground">Imports CSV</h1>
           <p className="text-muted-foreground">Alimentez l’outil avec les factures Sage et les coûts réels (transit/douane)</p>
         </div>
+
+        <Card className="border-emerald-100 bg-emerald-50/60">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-emerald-700" />
+              Lien OneDrive (CSV/Excel exporté)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Factures (Sage) via OneDrive</p>
+                <div className="flex gap-2">
+                  <Input
+                    value={remoteSageUrl}
+                    onChange={(e) => setRemoteSageUrl(e.target.value)}
+                    placeholder="https://onedrive...factures.csv?download=1"
+                  />
+                  <Button size="sm" onClick={() => loadRemoteFile(remoteSageUrl, 'sage')} disabled={isRemoteLoading}>
+                    Charger
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Coûts réels via OneDrive</p>
+                <div className="flex gap-2">
+                  <Input
+                    value={remoteCostUrl}
+                    onChange={(e) => setRemoteCostUrl(e.target.value)}
+                    placeholder="https://onedrive...couts.csv?download=1"
+                  />
+                  <Button size="sm" onClick={() => loadRemoteFile(remoteCostUrl, 'costs')} disabled={isRemoteLoading}>
+                    Charger
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Utilisez les liens partageables OneDrive (export CSV/Excel) pour éviter toute donnée fictive : seul votre fichier est stocké localement.
+            </p>
+          </CardContent>
+        </Card>
 
         <Tabs defaultValue="sage" className="space-y-4">
           <TabsList>

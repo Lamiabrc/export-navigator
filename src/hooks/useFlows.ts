@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { Flow } from '@/types';
-import { mockFlows } from '@/data/mockData';
 
 const FLOWS_KEY = 'orliman_flows';
 
@@ -16,14 +15,12 @@ export function useFlows() {
         const parsed = JSON.parse(storedFlows);
         setFlows(parsed);
       } catch {
-        // If parsing fails, initialize with mock data
-        setFlows(mockFlows);
-        localStorage.setItem(FLOWS_KEY, JSON.stringify(mockFlows));
+        setFlows([]);
+        localStorage.setItem(FLOWS_KEY, JSON.stringify([]));
       }
     } else {
-      // Initialize with mock data
-      setFlows(mockFlows);
-      localStorage.setItem(FLOWS_KEY, JSON.stringify(mockFlows));
+      setFlows([]);
+      localStorage.setItem(FLOWS_KEY, JSON.stringify([]));
     }
     setIsLoading(false);
   }, []);
