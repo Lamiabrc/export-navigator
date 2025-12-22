@@ -1,4 +1,13 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+type VercelRequest = {
+  body?: unknown;
+  query?: Record<string, unknown>;
+  method?: string;
+};
+
+type VercelResponse = {
+  status: (code: number) => { json: (body: unknown) => void };
+};
+
 import { normalizeSheet, type RawOperationRow } from '../src/lib/parsers/operationsSheet';
 
 type GraphRangeResponse = {
