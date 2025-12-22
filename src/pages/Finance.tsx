@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -20,15 +21,116 @@ import {
   CheckCircle,
   XCircle,
   HelpCircle,
+  FilePlus,
+  FolderOpen,
+  Import,
 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { COST_DOCS_KEY, FLOWS_KEY, SAGE_INVOICES_KEY } from '@/lib/constants/storage';
+import { toast } from 'sonner';
 
 export default function Finance() {
   const { flows, isLoading } = useFlows();
   const [selectedFlow, setSelectedFlow] = useState<string>('');
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [diagnostic, setDiagnostic] = useState({
+    flowCount: 0,
+    invoiceCount: 0,
+    costDocCount: 0,
+  });
 
   useEffect(() => {
-    if (!selectedFlow && flows.length > 0) setSelectedFlow(flows[0].id);
-  }, [flows, selectedFlow]);
+    const paramFlow = searchParams.get('flow');
+    if (flows.length === 0) return;
+    if (paramFlow) {
+      const byId = flows.find((f) => f.id === paramFlow);
+      const byCode = flows.find((f) => f.flow_code === paramFlow);
+      const target = byId || byCode;
+      if (target) {
+        setSelectedFlow(target.id);
+        return;
+      }
+    }
+    if (!selectedFlow) setSelectedFlow(flows[0].id);
+  }, [flows, selectedFlow, searchParams]);
+
+  useEffect(() => {
+    const readCount = (key: string) => {
+      const stored = localStorage.getItem(key);
+      if (!stored) return 0;
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed.length;
+        if (parsed && typeof parsed === 'object') return Object.keys(parsed).length;
+        return 0;
+      } catch {
+        return 0;
+      }
+    };
+
+    setDiagnostic({
+      flowCount: flows.length,
+      invoiceCount: readCount(SAGE_INVOICES_KEY),
+      costDocCount: readCount(COST_DOCS_KEY),
+    });
+  }, [flows]);
+
+  const addDemoFlow = () => {
+    if (flows.some((f) => f.flow_code === 'DEMO-001')) {
+      const existing = flows.find((f) => f.flow_code === 'DEMO-001');
+      if (existing) setSelectedFlow(existing.id);
+      toast.success('Flux démo déjà présent, sélectionné.');
+      return;
+    }
+    const now = new Date();
+    const departure = now.toISOString().slice(0, 10);
+    const delivery = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const demo: Omit<Flow, 'id'> = {
+      flow_code: 'DEMO-001',
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+      created_by: 'demo-user',
+      client_name: 'Démo Pharma',
+      destination: 'Guadeloupe',
+      zone: 'DROM',
+      incoterm: 'DDP',
+      incoterm_place: 'Pointe-à-Pitre',
+      transport_mode: 'Maritime',
+      weight: 120,
+      product_type: 'standard',
+      margin: 0,
+      departure_date: departure,
+      delivery_date: delivery,
+      goods_value: 125000,
+      cost_transport: 3200,
+      cost_customs_clearance: 280,
+      cost_duties: 2500,
+      cost_import_vat: 0,
+      cost_octroi_mer: 6200,
+      cost_octroi_mer_regional: 3000,
+      cost_other: 450,
+      status_order: 'en_cours',
+      status_incoterm_validated: 'en_cours',
+      status_export: 'en_cours',
+      status_transport: 'en_cours',
+      status_customs: 'non_demarre',
+      status_invoicing: 'non_demarre',
+      chk_invoice: 'a_faire',
+      chk_packing_list: 'a_faire',
+      chk_transport_doc: 'a_faire',
+      chk_certificate_origin: 'na',
+      chk_insurance: 'a_faire',
+      comment: 'Flux démo local DDP DROM',
+      risk_level: 'a_surveiller',
+    } as Flow;
+    // reuse useFlows addFlow via localStorage API directly to avoid hook exports
+    const stored = localStorage.getItem(FLOWS_KEY);
+    const arr: Flow[] = stored ? JSON.parse(stored) : [];
+    const withId = { ...demo, id: crypto.randomUUID() } as Flow;
+    localStorage.setItem(FLOWS_KEY, JSON.stringify([...arr, withId]));
+    window.location.href = `/finance?flow=${withId.id}`;
+  };
 
   const flow = useMemo(() => flows.find((f) => f.id === selectedFlow), [flows, selectedFlow]);
   const incotermRule = flow ? incotermRules.find(r => r.incoterm === flow.incoterm) : null;
@@ -47,9 +149,112 @@ export default function Finance() {
   if (!flow || !incotermRule) {
     return (
       <MainLayout>
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-foreground">Charges & Finance</h1>
-          <p className="text-muted-foreground">Aucun flux disponible. Créez un flux dans "Flux & Marges".</p>
+        <div className="space-y-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold text-foreground">Charges & Finance</h1>
+              <p className="text-muted-foreground">
+                Ajoutez un premier flux ou un jeu de données démo pour activer l&apos;analyse financière.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => navigate('/flows')} className="gap-2">
+                <FolderOpen className="h-4 w-4" />
+                Voir les flux
+              </Button>
+              <Button onClick={addDemoFlow} className="gap-2">
+                <FilePlus className="h-4 w-4" />
+                Créer un flux démo
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle>Checklist express</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  3 étapes pour rendre les indicateurs exploitables sans connecter d&apos;autres systèmes.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-start gap-3 rounded-lg border border-dashed p-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <FilePlus className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-medium">Créer ou importer un flux</h3>
+                      <Button size="sm" variant="secondary" onClick={() => navigate('/flows')}>
+                        Ouvrir Flux & Marges
+                      </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Saisissez au moins un flux (DDP/DAP/FOB) pour activer l&apos;analyse des charges.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 rounded-lg border border-dashed p-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-chart-2/10 text-chart-2">
+                    <Import className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-medium">Ajouter vos factures ou coûts</h3>
+                      <Button size="sm" variant="secondary" onClick={() => navigate('/invoices')}>
+                        Aller aux factures
+                      </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Glissez vos CSV SAGE ou complétez les montants manuellement pour chaque flux.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 rounded-lg border border-dashed p-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-chart-3/10 text-chart-3">
+                    <TrendingUp className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-medium">Lancer l&apos;analyse</h3>
+                      <Button size="sm" variant="secondary" onClick={() => navigate('/finance')}>
+                        Actualiser
+                      </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Revenez ici pour visualiser les payeurs par charge, la déductibilité et exporter le CSV.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Diagnostic local</CardTitle>
+                <p className="text-sm text-muted-foreground">Aperçu des données chargées dans ce navigateur.</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-lg border p-3">
+                  <p className="text-sm text-muted-foreground">Flux disponibles</p>
+                  <p className="text-2xl font-bold">{diagnostic.flowCount}</p>
+                  <p className="text-xs text-muted-foreground">Stockés via Flux & Marges ou le flux démo.</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-sm text-muted-foreground">Factures SAGE</p>
+                  <p className="text-2xl font-bold">{diagnostic.invoiceCount}</p>
+                  <p className="text-xs text-muted-foreground">CSV importés ou saisis dans Charges & Finance.</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-sm text-muted-foreground">Justificatifs coûts</p>
+                  <p className="text-2xl font-bold">{diagnostic.costDocCount}</p>
+                  <p className="text-xs text-muted-foreground">Pièces jointes ou preuves d&apos;achats enregistrées.</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </MainLayout>
     );
