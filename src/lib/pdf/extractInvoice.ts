@@ -1,7 +1,9 @@
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type TextItem } from 'pdfjs-dist';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore Vite génère l’URL vers le worker (copié dans /assets)
+import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// Utilise le worker UMD classique résolu comme asset statique par Vite
-GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url).toString();
+GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
 
 const numberFromText = (text: string): number | null => {
   const normalized = text.replace(/\s/g, '').replace(',', '.').replace(/\u00a0/g, '');
