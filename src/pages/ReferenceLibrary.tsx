@@ -155,7 +155,13 @@ export default function ReferenceLibrary() {
       saveReferenceData(synced);
       toast.success('Référentiel synchronisé depuis OneDrive');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Sync OneDrive impossible');
+      const message =
+        err instanceof TypeError || (err instanceof Error && err.message.includes('Failed to fetch'))
+          ? 'Accès au lien bloqué (CORS). Téléchargez le fichier puis importez-le en JSON/CSV.'
+          : err instanceof Error
+          ? err.message
+          : 'Sync OneDrive impossible';
+      toast.error(message);
     } finally {
       setIsSyncing(false);
     }

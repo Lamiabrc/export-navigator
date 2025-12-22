@@ -198,7 +198,13 @@ export default function Imports() {
       }
       toast.success('Fichier chargé depuis OneDrive');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Import distant impossible');
+      const message =
+        err instanceof TypeError || (err instanceof Error && err.message.includes('Failed to fetch'))
+          ? 'Lien OneDrive/SharePoint bloqué (CORS). Téléchargez le fichier et importez-le ci-dessus.'
+          : err instanceof Error
+          ? err.message
+          : 'Import distant impossible';
+      toast.error(message);
     } finally {
       setIsRemoteLoading(false);
     }

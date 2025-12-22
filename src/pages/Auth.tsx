@@ -61,6 +61,7 @@ export default function Auth() {
               <Input
                 id="email"
                 type="email"
+                autoComplete="username"
                 value={email}
                 disabled
               />
