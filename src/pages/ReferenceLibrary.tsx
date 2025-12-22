@@ -97,6 +97,8 @@ const controlCheckboxes: { key: keyof ControlFlags; label: string }[] = [
   { key: 'autoliquidation', label: 'Autoliquidation' },
 ];
 
+const generateId = () => globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 const defaultDestinations: DestinationRow[] = [
   {
     id: 'dest-drom-direct',
@@ -422,7 +424,7 @@ export default function ReferenceLibrary() {
 
   const startNewDestination = () => {
     setEditDestination({
-      id: crypto.randomUUID(),
+      id: generateId(),
       name: '',
       zone: 'UE',
       logisticMode: logisticModes[0],
@@ -434,7 +436,7 @@ export default function ReferenceLibrary() {
 
   const startNewIncoterm = () => {
     setEditIncoterm({
-      id: crypto.randomUUID(),
+      id: generateId(),
       code: 'EXW',
       notes: '',
       payers: { transport: 'Client', dedouanementImport: 'Client', droits: 'Client', tvaImport: 'Client', omOmr: 'Client' },
