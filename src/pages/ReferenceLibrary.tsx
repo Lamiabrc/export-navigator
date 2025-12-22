@@ -97,7 +97,16 @@ const controlCheckboxes: { key: keyof ControlFlags; label: string }[] = [
   { key: 'autoliquidation', label: 'Autoliquidation' },
 ];
 
-const generateId = () => globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const generateId = () => {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // ignore and fallback below
+  }
+  return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
 
 const defaultDestinations: DestinationRow[] = [
   {
