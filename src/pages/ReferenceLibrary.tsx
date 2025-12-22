@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,21 +12,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { CalendarClock, Download, Eye, FileEdit, FileText, Filter, Plus, RefreshCw, Sparkles, Trash2, Upload } from 'lucide-react';
+import { CalendarClock, Download, Eye, FileEdit, Filter, Plus, RefreshCw, Sparkles, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  defaultReferenceData,
-  useReferenceData,
-  type CheatSheet,
-  type ChargeTaxRule,
-  type NomenclatureEntry,
-} from '@/hooks/useReferenceData';
+import { chargesTaxesKnowledge, type ChargeRule } from '@/data/chargesTaxesKnowledge';
+import { defaultHsCatalog, type HsItem } from '@/data/hsCatalog';
+import { buildSwissTaresUrl, buildTaricUrl } from '@/lib/customs/lookupLinks';
 
 const DEST_KEY = 'export_destinations_v1';
 const INCOTERM_KEY = 'export_incoterms_v1';
 const LOGISTICS_MODE_KEY = 'export_logistics_mode_v1';
+const HS_CATALOG_KEY = 'export_hs_catalog_v1';
 
 const logisticModes = ['Envoi direct depuis métropole', 'Dépositaire / stock local'] as const;
 const zones = ['UE', 'DROM', 'Suisse', 'Hors UE'] as const;
@@ -75,13 +72,11 @@ type IncotermRow = {
 
 type ImportPayload = {
   version?: string;
+  exportedAt?: string;
   destinations?: DestinationRow[];
   incoterms?: IncotermRow[];
   logisticsMode?: (typeof logisticModes)[number];
-  chargesTaxes?: ChargeTaxRule[];
-  cheatSheets?: CheatSheet[];
-  nomenclature?: NomenclatureEntry[];
-  updatedAt?: string;
+  hsCatalog?: HsItem[];
 };
 
 const docCheckboxes: { key: keyof Omit<DocFlags, 'autres'>; label: string }[] = [
@@ -103,70 +98,99 @@ const controlCheckboxes: { key: keyof ControlFlags; label: string }[] = [
 
 const defaultDestinations: DestinationRow[] = [
   {
-    id: 'dest-fr',
-    name: 'France (métropole)',
-    zone: 'UE',
-    logisticMode: 'Envoi direct depuis métropole',
-    docs: { facture: true, packing: true, blAwb: false, certifOrigine: false, declarationDouane: false, preuveExport: true, autres: '' },
-    controls: { incotermVsPayeur: true, refacturationTransit: true, justificatifsTVA: true, taxesDOM: false, autoliquidation: true },
-    notes: 'BL/CMR requis pour facturation HT en intra.',
-  },
-  {
-    id: 'dest-drom',
-    name: 'DROM (GUA/MQT/RUN)',
+    id: 'dest-drom-direct',
+    name: 'DROM Direct',
     zone: 'DROM',
-    logisticMode: 'Dépositaire / stock local',
+    logisticMode: 'Envoi direct depuis métropole',
     docs: { facture: true, packing: true, blAwb: true, certifOrigine: false, declarationDouane: true, preuveExport: true, autres: 'Document OM/OMR' },
     controls: { incotermVsPayeur: true, refacturationTransit: true, justificatifsTVA: true, taxesDOM: true, autoliquidation: false },
-    notes: 'Anticiper OM/OMR ; vérifier valeur douane transport inclus.',
+    notes: 'Anticiper OM/OMR ; valeur douane = marchandise + transport.',
   },
   {
-    id: 'dest-ch',
-    name: 'Suisse',
+    id: 'dest-drom-depositaire',
+    name: 'DROM Dépositaire',
+    zone: 'DROM',
+    logisticMode: 'Dépositaire / stock local',
+    docs: { facture: true, packing: true, blAwb: true, certifOrigine: false, declarationDouane: true, preuveExport: true, autres: 'Inventaire stock local' },
+    controls: { incotermVsPayeur: true, refacturationTransit: true, justificatifsTVA: true, taxesDOM: true, autoliquidation: false },
+    notes: 'Vérifier entrée DOM et justificatifs de stock. OM/OMR réglés à l’import.',
+  },
+  {
+    id: 'dest-ue-intra',
+    name: 'UE Intra',
+    zone: 'UE',
+    logisticMode: 'Envoi direct depuis métropole',
+    docs: { facture: true, packing: true, blAwb: false, certifOrigine: false, declarationDouane: false, preuveExport: true, autres: 'Preuve transport (CMR/BL)' },
+    controls: { incotermVsPayeur: true, refacturationTransit: true, justificatifsTVA: true, taxesDOM: false, autoliquidation: true },
+    notes: 'N° TVA client + preuve transport pour autoliquidation.',
+  },
+  {
+    id: 'dest-ch-import',
+    name: 'Suisse Import',
     zone: 'Suisse',
     logisticMode: 'Envoi direct depuis métropole',
     docs: { facture: true, packing: true, blAwb: true, certifOrigine: true, declarationDouane: true, preuveExport: true, autres: '' },
     controls: { incotermVsPayeur: true, refacturationTransit: true, justificatifsTVA: true, taxesDOM: false, autoliquidation: false },
-    notes: 'Préférer DAP ; EUR.1 ou attestation d’origine pour préférences.',
+    notes: 'EUR.1 ou déclaration d’origine si préférences ; TVA import 7.7%.',
   },
 ];
 
 const defaultIncoterms: IncotermRow[] = [
   {
+    id: 'inc-exw',
+    code: 'EXW',
+    notes: 'Client récupère à l’usine ; transit refacturable.',
+    payers: { transport: 'Client', dedouanementImport: 'Client', droits: 'Client', tvaImport: 'Client', omOmr: 'Client' },
+  },
+  {
     id: 'inc-fca',
     code: 'FCA',
-    notes: 'Transport principal payé par client, dédouanement export vendeur.',
+    notes: 'Dédouanement export vendeur, transport principal client.',
     payers: { transport: 'Client', dedouanementImport: 'Client', droits: 'Client', tvaImport: 'Client', omOmr: 'Client' },
   },
   {
     id: 'inc-dap',
     code: 'DAP',
-    notes: 'Transport payé fournisseur, import à la charge du client.',
+    notes: 'Transport payé fournisseur, import à charge client.',
     payers: { transport: 'Fournisseur', dedouanementImport: 'Client', droits: 'Client', tvaImport: 'Client', omOmr: 'Client' },
   },
   {
     id: 'inc-ddp',
     code: 'DDP',
-    notes: 'Vendeur supporte tous les coûts. Attention DROM = risque fort.',
+    notes: 'Vendeur supporte tous les coûts. Risque fort en DROM.',
     payers: { transport: 'Fournisseur', dedouanementImport: 'Fournisseur', droits: 'Fournisseur', tvaImport: 'Fournisseur', omOmr: 'Fournisseur' },
   },
 ];
 
-const logisticImpacts = {
-  'Envoi direct depuis métropole': {
-    documents: ['Facture + packing list', 'BL/AWB', 'Preuve export', 'Certificat origine si demandé'],
-    taxes: ['Transit / frais dossier', 'Droits/TVA import selon HS code', 'OM/OMR pour DROM'],
-    controls: ['Incoterm cohérent avec payeur', 'Transit refacturé', 'Justificatifs TVA ou autoliquidation'],
+const cheatsheets = [
+  {
+    title: 'DROM',
+    resume: 'OM/OMR + TVA locale. Vérifier valeur douane avec transport.',
+    docs: ['Facture détaillée', 'Packing list', 'BL/AWB', 'Document OM/OMR', 'Preuve export'],
+    risques: ['Retards portuaires', 'Mauvais HS ⇒ OM/OMR erroné', 'DDP = risque trésorerie élevé'],
+    controles: ['HS code validé', 'Valeur transport intégrée', 'Preuve import + paiement OM/OMR'],
+    cta: [
+      { label: 'Créer destination DROM Direct', targetId: 'dest-drom-direct' },
+      { label: 'Créer destination DROM Dépositaire', targetId: 'dest-drom-depositaire' },
+    ],
   },
-  'Dépositaire / stock local': {
-    documents: ['Documents import initiaux', 'Inventaire stock local', 'Preuve de sortie locale'],
-    taxes: ['OM/OMR réglés à l’import DROM', 'Frais stockage local'],
-    controls: ['Suivi justification TVA locale', 'Contrôle péremption stock', 'Accords de refacturation'],
+  {
+    title: 'UE',
+    resume: 'Intra-UE : autoliquidation si N° TVA et preuve transport.',
+    docs: ['Facture', 'Preuve transport (CMR/BL)', 'N° TVA client validé'],
+    risques: ['Preuve transport manquante', 'N° TVA invalide'],
+    controles: ['N° TVA vérifié (VIES)', 'Incoterm FCA/DAP conseillé'],
+    cta: [{ label: 'Créer destination UE Intra', targetId: 'dest-ue-intra' }],
   },
-};
-
-const warningDromDepositaire =
-  'Attention : DROM + Dépositaire = vérifier déclaration entrée DOM, OM/OMR et justificatifs (preuve import + stock).';
+  {
+    title: 'Suisse',
+    resume: 'TVA import 7.7% + droits selon HS et origine.',
+    docs: ['Facture', 'Packing list', 'BL/AWB', 'EUR.1 ou déclaration d’origine', 'Décompte TVA import'],
+    risques: ['Origine non maîtrisée', 'Transport non valorisé'],
+    controles: ['HS code confirmé', 'Valeur transport incluse', 'Preuve origine si préférences'],
+    cta: [{ label: 'Créer destination Suisse Import', targetId: 'dest-ch-import' }],
+  },
+];
 
 const downloadJson = (data: unknown, filename: string) => {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -184,8 +208,8 @@ const loadFromStorage = <T,>(key: string, fallback: T): T => {
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as T;
     return parsed || fallback;
-  } catch (e) {
-    console.warn(`Failed to parse localStorage key ${key}`, e);
+  } catch (error) {
+    console.warn(`Failed to parse localStorage key ${key}`, error);
     return fallback;
   }
 };
@@ -195,10 +219,9 @@ const persistToStorage = (key: string, value: unknown) => {
 };
 
 export default function ReferenceLibrary() {
-  const { referenceData, saveReferenceData, resetReferenceData } = useReferenceData();
-
   const [destinations, setDestinations] = useState<DestinationRow[]>(() => loadFromStorage(DEST_KEY, defaultDestinations));
   const [incoterms, setIncoterms] = useState<IncotermRow[]>(() => loadFromStorage(INCOTERM_KEY, defaultIncoterms));
+  const [hsCatalog, setHsCatalog] = useState<HsItem[]>(() => loadFromStorage(HS_CATALOG_KEY, defaultHsCatalog));
   const [logisticsMode, setLogisticsMode] = useState<(typeof logisticModes)[number]>(() => {
     const stored = loadFromStorage<string | undefined>(LOGISTICS_MODE_KEY, logisticModes[0]);
     return logisticModes.includes(stored as (typeof logisticModes)[number]) ? (stored as (typeof logisticModes)[number]) : logisticModes[0];
@@ -226,27 +249,29 @@ export default function ReferenceLibrary() {
   }, [incoterms]);
 
   useEffect(() => {
+    persistToStorage(HS_CATALOG_KEY, hsCatalog);
+  }, [hsCatalog]);
+
+  useEffect(() => {
     persistToStorage(LOGISTICS_MODE_KEY, logisticsMode);
   }, [logisticsMode]);
 
   const handlePrefill = () => {
-    setDestinations(defaultDestinations);
-    setIncoterms(defaultIncoterms);
+    setDestinations((current) => mergeWithoutDuplicateNames(current, defaultDestinations));
+    setIncoterms((current) => mergeIncoterms(current, defaultIncoterms));
+    setHsCatalog(defaultHsCatalog);
     setLogisticsMode(logisticModes[0]);
-    saveReferenceData(defaultReferenceData);
-    toast.success('Référentiel prérempli (Orliman)');
+    toast.success('Préremplissage Orliman appliqué (sans doublons)');
   };
 
   const handleExport = () => {
-    const payload = {
-      version: 'v1',
+    const payload: ImportPayload = {
+      version: 'v2',
+      exportedAt: new Date().toISOString(),
       destinations,
       incoterms,
       logisticsMode,
-      chargesTaxes: referenceData.chargesTaxes,
-      cheatSheets: referenceData.cheatSheets,
-      nomenclature: referenceData.nomenclature,
-      updatedAt: new Date().toISOString(),
+      hsCatalog,
     };
     downloadJson(payload, 'bible_export_navigator.json');
   };
@@ -257,12 +282,15 @@ export default function ReferenceLibrary() {
     reader.onload = (e) => {
       try {
         const parsed = JSON.parse(e.target?.result as string) as ImportPayload;
+        if (!Array.isArray(parsed.destinations) || !Array.isArray(parsed.incoterms)) {
+          throw new Error('Structure JSON inattendue');
+        }
         setImportPreview(parsed);
         setImportError(null);
       } catch (error) {
         console.error(error);
         setImportPreview(null);
-        setImportError('Fichier JSON invalide');
+        setImportError('Fichier JSON invalide ou structure incompatible');
       }
     };
     reader.readAsText(file, 'utf-8');
@@ -270,21 +298,14 @@ export default function ReferenceLibrary() {
 
   const applyImport = () => {
     if (!importPreview) return;
-    if (importPreview.destinations) setDestinations(importPreview.destinations as DestinationRow[]);
-    if (importPreview.incoterms) setIncoterms(importPreview.incoterms as IncotermRow[]);
+    if (importPreview.destinations) setDestinations(importPreview.destinations);
+    if (importPreview.incoterms) setIncoterms(importPreview.incoterms);
+    if (importPreview.hsCatalog) setHsCatalog(importPreview.hsCatalog);
     if (importPreview.logisticsMode) {
-      const importedMode = logisticModes.includes(importPreview.logisticsMode as (typeof logisticModes)[number])
-        ? (importPreview.logisticsMode as (typeof logisticModes)[number])
+      const importedMode = logisticModes.includes(importPreview.logisticsMode)
+        ? importPreview.logisticsMode
         : logisticModes[0];
       setLogisticsMode(importedMode);
-    }
-    if (importPreview.chargesTaxes || importPreview.cheatSheets || importPreview.nomenclature) {
-      saveReferenceData({
-        ...referenceData,
-        chargesTaxes: importPreview.chargesTaxes ?? referenceData.chargesTaxes,
-        cheatSheets: importPreview.cheatSheets ?? referenceData.cheatSheets,
-        nomenclature: importPreview.nomenclature ?? referenceData.nomenclature,
-      });
     }
     toast.success('Import appliqué');
     setIsImportOpen(false);
@@ -295,11 +316,8 @@ export default function ReferenceLibrary() {
   const handleResetRef = () => {
     setDestinations(defaultDestinations);
     setIncoterms(defaultIncoterms);
+    setHsCatalog(defaultHsCatalog);
     setLogisticsMode(logisticModes[0]);
-    persistToStorage(DEST_KEY, defaultDestinations);
-    persistToStorage(INCOTERM_KEY, defaultIncoterms);
-    persistToStorage(LOGISTICS_MODE_KEY, logisticModes[0]);
-    resetReferenceData();
     toast.success('Référentiel remis par défaut');
     setIsResetOpen(false);
   };
@@ -308,8 +326,8 @@ export default function ReferenceLibrary() {
     localStorage.clear();
     setDestinations(defaultDestinations);
     setIncoterms(defaultIncoterms);
+    setHsCatalog(defaultHsCatalog);
     setLogisticsMode(logisticModes[0]);
-    resetReferenceData();
     toast.success('Tous les réglages locaux ont été supprimés');
     setIsResetOpen(false);
   };
@@ -349,6 +367,17 @@ export default function ReferenceLibrary() {
     toast.success('Incoterm sauvegardé');
   };
 
+  const addHsLine = () => {
+    setHsCatalog([
+      ...hsCatalog,
+      { hsCode: '0000', label: 'Nouveau code', notes: 'Notes', risk: 'Modéré' },
+    ]);
+  };
+
+  const updateHsLine = (index: number, value: Partial<HsItem>) => {
+    setHsCatalog((prev) => prev.map((item, idx) => (idx === index ? { ...item, ...value } : item)));
+  };
+
   const filteredDestinations = useMemo(() => {
     return destinations.filter((dest) => {
       const matchesSearch = dest.name.toLowerCase().includes(destSearch.toLowerCase());
@@ -359,7 +388,9 @@ export default function ReferenceLibrary() {
   }, [destinations, destSearch, zoneFilter, logisticsFilter]);
 
   const filteredIncoterms = useMemo(() => {
-    return incoterms.filter((row) => row.code.toLowerCase().includes(destSearch.toLowerCase()) || (row.notes ?? '').toLowerCase().includes(destSearch.toLowerCase()));
+    return incoterms.filter((row) =>
+      row.code.toLowerCase().includes(destSearch.toLowerCase()) || (row.notes ?? '').toLowerCase().includes(destSearch.toLowerCase())
+    );
   }, [incoterms, destSearch]);
 
   const displayDate = useMemo(() => new Date().toLocaleString(), []);
@@ -409,6 +440,13 @@ export default function ReferenceLibrary() {
     });
   };
 
+  const createDestinationFromCheat = (targetId: string) => {
+    const template = defaultDestinations.find((d) => d.id === targetId);
+    if (!template) return;
+    setDestinations((current) => mergeWithoutDuplicateNames(current, [template]));
+    toast.success(`Destination ${template.name} ajoutée`);
+  };
+
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -416,7 +454,7 @@ export default function ReferenceLibrary() {
           <div className="space-y-1">
             <h1 className="text-2xl font-bold text-foreground">Bible Export – Référentiel &amp; règles</h1>
             <p className="text-muted-foreground">
-              Guide opérationnel 100% métier : zero JSON, tout en formulaires. Données locales avec import/export JSON.
+              Guide opérationnel 100% métier : zéro JSON à saisir, tout en formulaires, stockage local-first + export/import.
             </p>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <CalendarClock className="h-4 w-4" />
@@ -450,7 +488,7 @@ export default function ReferenceLibrary() {
             <TabsTrigger value="charges">C) Charges &amp; Taxes</TabsTrigger>
             <TabsTrigger value="cheatsheets">D) Cheatsheets</TabsTrigger>
             <TabsTrigger value="logistics">E) Logistique</TabsTrigger>
-            <TabsTrigger value="nomenclature">F) Nomenclature (HS)</TabsTrigger>
+            <TabsTrigger value="hs">F) Nomenclature (HS)</TabsTrigger>
           </TabsList>
 
           <TabsContent value="destinations" className="space-y-4">
@@ -493,7 +531,7 @@ export default function ReferenceLibrary() {
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Filter className="h-4 w-4" /> Filtre par zone et mode logistique. Actions par ligne : voir (fiche 1 min), modifier, supprimer.
+                  <Filter className="h-4 w-4" /> Filtre par zone et mode logistique. Actions par ligne : voir, modifier, supprimer.
                 </p>
               </CardHeader>
               <CardContent>
@@ -618,70 +656,88 @@ export default function ReferenceLibrary() {
           </TabsContent>
 
           <TabsContent value="charges" className="space-y-4">
-            <div className="grid gap-3">
-              {referenceData.chargesTaxes.map((rule: ChargeTaxRule, idx: number) => (
-                <Card key={`${rule.name}-${idx}`}>
-                  <CardHeader>
-                    <CardTitle className="flex flex-wrap gap-2 items-center">
-                      <Badge variant="outline">{rule.scope}</Badge>
-                      <span>{rule.name}</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="grid md:grid-cols-3 gap-3 text-sm text-muted-foreground">
-                    <div>
-                      <p className="font-semibold text-foreground">Payeur</p>
-                      <p>{rule.payer}</p>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-foreground">Déclencheur</p>
-                      <p>{rule.trigger}</p>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-foreground">Docs obligatoires</p>
-                      <ul className="list-disc ml-4 space-y-1">
-                        {(rule.mandatoryDocs || []).map((doc) => (
-                          <li key={doc}>{doc}</li>
-                        ))}
-                      </ul>
-                    </div>
-                    {rule.comment ? (
-                      <div className="md:col-span-3">
-                        <p className="font-semibold text-foreground">Commentaire</p>
-                        <p>{rule.comment}</p>
+            <Card>
+              <CardHeader>
+                <CardTitle>Charges &amp; Taxes par zone</CardTitle>
+                <p className="text-sm text-muted-foreground">Sources officielles, sans inventer de taux.</p>
+              </CardHeader>
+              <CardContent className="grid md:grid-cols-2 gap-3">
+                {chargesTaxesKnowledge.map((rule: ChargeRule, idx: number) => (
+                  <Card key={`${rule.zone}-${rule.label}-${idx}`}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Badge variant="outline">{rule.zone}</Badge>
+                        <span>{rule.label}</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm text-muted-foreground">
+                      <p>{rule.description}</p>
+                      <div>
+                        <p className="font-semibold text-foreground">Contrôles</p>
+                        <ul className="list-disc ml-4 space-y-1">
+                          {rule.controls.map((control) => (
+                            <li key={control}>{control}</li>
+                          ))}
+                        </ul>
                       </div>
-                    ) : null}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                      <div>
+                        <p className="font-semibold text-foreground">Sources</p>
+                        <div className="flex flex-wrap gap-2">
+                          {rule.sources.map((source) => (
+                            <Button key={source.url} asChild variant="link" className="px-0 text-primary">
+                              <a href={source.url} target="_blank" rel="noreferrer">
+                                {source.label}
+                              </a>
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="cheatsheets" className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              {referenceData.cheatSheets.map((sheet: CheatSheet, idx: number) => (
-                <Card key={`${sheet.title}-${idx}`}>
+            <div className="grid md:grid-cols-3 gap-3">
+              {cheatsheets.map((sheet) => (
+                <Card key={sheet.title}>
                   <CardHeader>
-                    <CardTitle className="flex flex-wrap gap-2 items-center">
-                      <span>{sheet.title}</span>
-                      {sheet.warning ? <Badge variant="secondary">{sheet.warning}</Badge> : null}
-                    </CardTitle>
+                    <CardTitle>{sheet.title}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{sheet.resume}</p>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm text-muted-foreground">
                     <div>
-                      <p className="font-semibold text-foreground">Rappels terrain</p>
+                      <p className="font-semibold text-foreground">Docs (checklist)</p>
                       <ul className="list-disc ml-4 space-y-1">
-                        {sheet.reminders.map((reminder) => (
-                          <li key={reminder}>{reminder}</li>
+                        {sheet.docs.map((doc) => (
+                          <li key={doc}>{doc}</li>
                         ))}
                       </ul>
                     </div>
                     <div>
-                      <p className="font-semibold text-foreground">Documents</p>
+                      <p className="font-semibold text-foreground">Risques</p>
                       <ul className="list-disc ml-4 space-y-1">
-                        {sheet.documents.map((doc) => (
-                          <li key={doc}>{doc}</li>
+                        {sheet.risques.map((risk) => (
+                          <li key={risk}>{risk}</li>
                         ))}
                       </ul>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">Contrôles</p>
+                      <ul className="list-disc ml-4 space-y-1">
+                        {sheet.controles.map((control) => (
+                          <li key={control}>{control}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {sheet.cta.map((cta) => (
+                        <Button key={cta.targetId} onClick={() => createDestinationFromCheat(cta.targetId)}>
+                          {cta.label}
+                        </Button>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
@@ -724,7 +780,10 @@ export default function ReferenceLibrary() {
                         <div>
                           <p className="font-semibold text-foreground">Documents</p>
                           <ul className="list-disc ml-4 space-y-1">
-                            {logisticImpacts[mode].documents.map((doc) => (
+                            {(mode === 'Envoi direct depuis métropole'
+                              ? ['Facture + packing list', 'BL/AWB', 'Preuve export', 'Certificat origine si demandé']
+                              : ['Documents import initiaux', 'Inventaire stock local', 'Preuve de sortie locale']
+                            ).map((doc) => (
                               <li key={doc}>{doc}</li>
                             ))}
                           </ul>
@@ -732,7 +791,10 @@ export default function ReferenceLibrary() {
                         <div>
                           <p className="font-semibold text-foreground">Taxes / charges</p>
                           <ul className="list-disc ml-4 space-y-1">
-                            {logisticImpacts[mode].taxes.map((tax) => (
+                            {(mode === 'Envoi direct depuis métropole'
+                              ? ['Transit / frais dossier', 'Droits/TVA import (dépend HS/NC)', 'OM/OMR si DROM']
+                              : ['OM/OMR réglés à l’import DROM', 'Frais stockage local']
+                            ).map((tax) => (
                               <li key={tax}>{tax}</li>
                             ))}
                           </ul>
@@ -740,7 +802,10 @@ export default function ReferenceLibrary() {
                         <div>
                           <p className="font-semibold text-foreground">Contrôles</p>
                           <ul className="list-disc ml-4 space-y-1">
-                            {logisticImpacts[mode].controls.map((control) => (
+                            {(mode === 'Envoi direct depuis métropole'
+                              ? ['Incoterm cohérent avec payeur', 'Transit refacturé', 'Justificatifs TVA ou autoliquidation']
+                              : ['Suivi justificatifs TVA locale', 'Contrôle péremption stock', 'Accords de refacturation interne']
+                            ).map((control) => (
                               <li key={control}>{control}</li>
                             ))}
                           </ul>
@@ -751,54 +816,84 @@ export default function ReferenceLibrary() {
                 </div>
                 <Alert variant="warning">
                   <AlertTitle>Attention DROM + Dépositaire</AlertTitle>
-                  <AlertDescription>{warningDromDepositaire}</AlertDescription>
+                  <AlertDescription>
+                    Vérifier déclaration d’entrée DOM, OM/OMR, preuves import + stock local avant livraison.
+                  </AlertDescription>
                 </Alert>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="nomenclature" className="space-y-4">
+          <TabsContent value="hs" className="space-y-4">
             <Card>
-              <CardHeader>
-                <CardTitle>Nomenclature HS (orthèses)</CardTitle>
+              <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle>Nomenclature HS (orthèses)</CardTitle>
+                  <p className="text-sm text-muted-foreground">Stockage local : {HS_CATALOG_KEY}. Pas de taux inventés.</p>
+                </div>
+                <Button variant="outline" onClick={addHsLine}>
+                  <Plus className="h-4 w-4 mr-2" /> Ajouter un code HS
+                </Button>
               </CardHeader>
-              <CardContent className="grid md:grid-cols-2 gap-3">
-                {referenceData.nomenclature.map((item: NomenclatureEntry, idx: number) => (
-                  <Card key={`${item.hsCode}-${idx}`}>
-                    <CardHeader>
-                      <CardTitle className="flex flex-wrap gap-2 items-center">
-                        <Badge variant="outline">HS {item.hsCode}</Badge>
-                        <span>{item.label}</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2 text-sm text-muted-foreground">
-                      <div>
-                        <p className="font-semibold text-foreground">Usages</p>
-                        <ul className="list-disc ml-4 space-y-1">
-                          {item.usages.map((u) => (
-                            <li key={u}>{u}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-foreground">Documents</p>
-                        <ul className="list-disc ml-4 space-y-1">
-                          {item.documents.map((d) => (
-                            <li key={d}>{d}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <a className="text-primary underline" href={item.taricUrl} target="_blank" rel="noreferrer">
-                          Ouvrir TARIC
-                        </a>
-                        <a className="text-primary underline" href={item.taresUrl} target="_blank" rel="noreferrer">
-                          Ouvrir TARes
-                        </a>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>HS</TableHead>
+                      <TableHead>Libellé</TableHead>
+                      <TableHead>Notes / risques</TableHead>
+                      <TableHead className="w-[200px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {hsCatalog.map((item, idx) => (
+                      <TableRow key={`${item.hsCode}-${idx}`}>
+                        <TableCell>
+                          <Input value={item.hsCode} onChange={(e) => updateHsLine(idx, { hsCode: e.target.value })} />
+                        </TableCell>
+                        <TableCell>
+                          <Input value={item.label} onChange={(e) => updateHsLine(idx, { label: e.target.value })} />
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <Textarea value={item.notes} onChange={(e) => updateHsLine(idx, { notes: e.target.value })} rows={2} />
+                            <Select value={item.risk} onValueChange={(value) => updateHsLine(idx, { risk: value as HsItem['risk'] })}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Risque" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Faible">Faible</SelectItem>
+                                <SelectItem value="Modéré">Modéré</SelectItem>
+                                <SelectItem value="Fort">Fort</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-2">
+                            <Button asChild variant="outline" size="sm">
+                              <a href={buildTaricUrl(item.hsCode)} target="_blank" rel="noreferrer">
+                                Ouvrir TARIC
+                              </a>
+                            </Button>
+                            <Button asChild variant="outline" size="sm">
+                              <a href={buildSwissTaresUrl(item.hsCode)} target="_blank" rel="noreferrer">
+                                Ouvrir TARes
+                              </a>
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {hsCatalog.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
+                          Aucun code HS enregistré.
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           </TabsContent>
@@ -809,7 +904,7 @@ export default function ReferenceLibrary() {
             <CardTitle>Notes</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-2">
-            <p>Stockage local-first : Destinations ({DEST_KEY}), Incoterms ({INCOTERM_KEY}), mode logistique ({LOGISTICS_MODE_KEY}).</p>
+            <p>Stockage local-first : Destinations ({DEST_KEY}), Incoterms ({INCOTERM_KEY}), mode logistique ({LOGISTICS_MODE_KEY}), HS ({HS_CATALOG_KEY}).</p>
             <p>Export/Import via JSON, aucune saisie technique nécessaire. Toujours valider les cas sensibles avec finance/déclarant.</p>
           </CardContent>
         </Card>
@@ -1101,7 +1196,7 @@ export default function ReferenceLibrary() {
                   <CardContent>
                     Mode log : {importPreview?.logisticsMode || '—'}
                     <br />
-                    Codes HS : {importPreview?.nomenclature?.length ?? referenceData.nomenclature.length}
+                    Codes HS : {importPreview?.hsCatalog?.length ?? hsCatalog.length}
                   </CardContent>
                 </Card>
               </div>
@@ -1127,7 +1222,7 @@ export default function ReferenceLibrary() {
             <DialogDescription>Choisissez le périmètre à remettre à zéro.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2 text-sm text-muted-foreground">
-            <p>Reset référentiel : remet Destinations/Incoterms/Logistique et les sections par défaut.</p>
+            <p>Reset référentiel : remet Destinations/Incoterms/Logistique/HS par défaut.</p>
             <p>Reset tout : vide le localStorage complet.</p>
           </div>
           <DialogFooter className="flex flex-col md:flex-row md:gap-2">
@@ -1142,4 +1237,28 @@ export default function ReferenceLibrary() {
       </Dialog>
     </MainLayout>
   );
+}
+
+function mergeWithoutDuplicateNames(current: DestinationRow[], additions: DestinationRow[]) {
+  const names = new Set(current.map((d) => d.name.toLowerCase()));
+  const merged = [...current];
+  additions.forEach((dest) => {
+    if (!names.has(dest.name.toLowerCase())) {
+      merged.push(dest);
+      names.add(dest.name.toLowerCase());
+    }
+  });
+  return merged;
+}
+
+function mergeIncoterms(current: IncotermRow[], additions: IncotermRow[]) {
+  const existingCodes = new Set(current.map((i) => i.code));
+  const merged = [...current];
+  additions.forEach((inc) => {
+    if (!existingCodes.has(inc.code)) {
+      merged.push(inc);
+      existingCodes.add(inc.code);
+    }
+  });
+  return merged;
 }
