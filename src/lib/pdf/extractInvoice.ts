@@ -1,11 +1,7 @@
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type TextItem } from 'pdfjs-dist';
-// Utilise la build legacy (UMD) pour un worker statique compatible Vercel/Vite
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore Vite transformera en URL vers l’asset
-import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.js?url';
 
-// Ensure the worker is served with the correct MIME type when bundled
-GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
+// Utilise le worker UMD classique résolu comme asset statique par Vite
+GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url).toString();
 
 const numberFromText = (text: string): number | null => {
   const normalized = text.replace(/\s/g, '').replace(',', '.').replace(/\u00a0/g, '');
