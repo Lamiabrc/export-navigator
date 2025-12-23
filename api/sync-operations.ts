@@ -1,4 +1,4 @@
-import { normalizeSheet, type RawOperationRow } from '../src/lib/parsers/operationsSheet';
+import { normalizeSheet, type RawOperationRow } from '../src/lib/parsers/operationsSheet.js';
 
 type GraphRangeResponse = {
   values?: (string | number | null)[][];
