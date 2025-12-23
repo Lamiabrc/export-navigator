@@ -1,18 +1,54 @@
+import { useMemo } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { KPICard } from '@/components/dashboard/KPICard';
 import { FlowsChart } from '@/components/dashboard/FlowsChart';
 import { CostsBarChart } from '@/components/dashboard/CostsBarChart';
 import { RecentFlowsTable } from '@/components/dashboard/RecentFlowsTable';
 import { useFlows } from '@/hooks/useFlows';
-import { 
-  Package, 
-  TrendingUp, 
+import { useReferenceData } from '@/hooks/useReferenceData';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { reconcile } from '@/lib/reco/reconcile';
+import { evaluateCase } from '@/lib/rules/riskEngine';
+import { aggregateCases, margin } from '@/lib/kpi/exportKpis';
+import type { SageInvoice } from '@/types/sage';
+import type { CostDoc } from '@/types/costs';
+import {
+  Package,
+  TrendingUp,
   AlertTriangle,
   Euro,
+  FileCheck,
+  ShieldAlert,
 } from 'lucide-react';
+import { COST_DOCS_KEY, SAGE_INVOICES_KEY } from '@/lib/constants/storage';
 
 export default function Dashboard() {
   const { flows, isLoading } = useFlows();
+  const { referenceData } = useReferenceData();
+  const [sageInvoices] = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
+  const [costDocs] = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
+
+  // Rapprochement factures/coûts importés
+  const cases = useMemo(() => {
+    const base = reconcile(sageInvoices, costDocs);
+    return base.map((c) => {
+      const risk = evaluateCase(c, referenceData);
+      return { ...c, alerts: risk.alerts, riskScore: risk.riskScore };
+    });
+  }, [sageInvoices, costDocs, referenceData]);
+
+  const aggregates = useMemo(() => aggregateCases(cases), [cases]);
+  const matchCounts = useMemo(
+    () =>
+      cases.reduce(
+        (acc, c) => {
+          acc[c.matchStatus] += 1;
+          return acc;
+        },
+        { match: 0, partial: 0, none: 0 } as Record<'match' | 'partial' | 'none', number>
+      ),
+    [cases]
+  );
 
   // Calculate KPIs from local flows
   const totalFlows = flows.length;
@@ -85,6 +121,20 @@ export default function Dashboard() {
             icon={AlertTriangle}
             className={riskyFlows > 0 ? 'border-status-risk/30' : ''}
           />
+          <KPICard
+            title="Factures rapprochées"
+            value={matchCounts.match}
+            subtitle={`${cases.length} importées`}
+            icon={FileCheck}
+            trend={{ value: matchCounts.partial, isPositive: false }}
+          />
+          <KPICard
+            title="Alertes factures"
+            value={cases.flatMap((c) => c.alerts || []).length}
+            subtitle={`${aggregates.topLosses.length} dossiers sensibles`}
+            icon={ShieldAlert}
+            className={cases.length ? '' : 'opacity-50'}
+          />
         </div>
 
         {/* Charts */}
@@ -101,6 +151,65 @@ export default function Dashboard() {
 
         {/* Recent Flows Table */}
         <RecentFlowsTable flows={flows.slice(0, 5)} />
+
+        {/* Synthèse factures importées */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="border rounded-xl p-4">
+            <h3 className="text-lg font-semibold mb-2">Top dossiers en perte</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Calcul basé sur les factures importées et les coûts rapprochés (transit/douane).
+            </p>
+            {aggregates.topLosses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Importez des factures et coûts pour activer cette section.</p>
+            ) : (
+              <div className="space-y-3">
+                {aggregates.topLosses.slice(0, 5).map((c) => {
+                  const m = margin(c);
+                  return (
+                    <div key={c.id} className="p-3 rounded-lg border flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold">{c.invoice.invoiceNumber}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {c.invoice.clientName} • {c.invoice.destination || 'Destination inconnue'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-destructive font-semibold">
+                          {m.amount.toLocaleString('fr-FR')} ({m.rate.toFixed(1)}%)
+                        </p>
+                        <p className="text-xs text-muted-foreground">Incoterm {c.invoice.incoterm || 'NC'}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="border rounded-xl p-4">
+            <h3 className="text-lg font-semibold mb-2">Couverture transit</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Vue rapide sur la cohérence transit/douane vs facturation.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-lg bg-muted/60">
+                <p className="text-xs text-muted-foreground">Couverture moyenne</p>
+                <p className="text-xl font-bold">
+                  {cases.length ? `${Math.round(aggregates.coverageAverage * 100)}%` : 'n/a'}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-muted/60">
+                <p className="text-xs text-muted-foreground">Montant non couvert</p>
+                <p className="text-xl font-bold">
+                  {cases.length ? `${Math.round(aggregates.uncoveredTotal).toLocaleString('fr-FR')} €` : 'n/a'}
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Source: données importées (onglet Imports CSV). Ajoutez un champ facture/transit pour améliorer le match.
+            </p>
+          </div>
+        </div>
       </div>
     </MainLayout>
   );
