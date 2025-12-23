@@ -25,8 +25,8 @@ import { COST_DOCS_KEY, SAGE_INVOICES_KEY } from '@/lib/constants/storage';
 export default function Dashboard() {
   const { flows, isLoading } = useFlows();
   const { referenceData } = useReferenceData();
-  const [sageInvoices] = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
-  const [costDocs] = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
+  const { value: sageInvoices } = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
+  const { value: costDocs } = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
 
   // Rapprochement factures/coûts importés
   const cases = useMemo(() => {
