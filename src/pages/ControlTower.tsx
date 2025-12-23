@@ -46,7 +46,7 @@ const toCsv = (rows: Record<string, string | number | boolean>[]) => {
     const s = String(v ?? '');
     // CSV Excel friendly (semicolon)
     const needsQuotes = s.includes(';') || s.includes('\n') || s.includes('"');
-    const escaped = s.replaceAll('"', '""');
+    const escaped = s.replace(/"/g, '""');
     return needsQuotes ? `"${escaped}"` : escaped;
   };
   const lines = [headers.join(';'), ...rows.map((r) => headers.map((h) => escape(r[h])).join(';'))];
