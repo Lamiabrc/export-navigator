@@ -1,10 +1,9 @@
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
-// Vite-friendly worker import
-// pdfjs-dist 5.x expose a bundler-ready worker via the ESM build
+// Vite-friendly worker import (legacy bundle)
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import pdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 
 // Configure worker source (resolved at build time)
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
