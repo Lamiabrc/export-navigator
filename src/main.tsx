@@ -6,7 +6,7 @@ const THEME_STORAGE_KEY = "theme";
 
 const applyTheme = () => {
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
-  const theme = stored === "light" ? "light" : "dark";
+  const theme = stored === "dark" ? "dark" : "light";
   document.documentElement.classList.toggle("dark", theme === "dark");
   if (stored !== theme) {
     localStorage.setItem(THEME_STORAGE_KEY, theme);

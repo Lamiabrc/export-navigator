@@ -1,5 +1,6 @@
-const { app, BrowserWindow, Menu } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain } = require('electron');
 const path = require('path');
+const { excelWatcher, setWatchedFile, clearWatcher } = require('./excelWatcher');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling
 if (require('electron-squirrel-startup')) {
@@ -46,11 +47,40 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
+    clearWatcher();
     mainWindow = null;
   });
 }
 
+function registerExcelWatcherIpc() {
+  ipcMain.handle('excel-watch:set-file', (_event, filePath) => {
+    setWatchedFile(filePath);
+    return { watched: !!excelWatcher.filePath, filePath: excelWatcher.filePath };
+  });
+
+  ipcMain.handle('excel-watch:clear', () => {
+    clearWatcher();
+    return { watched: false, filePath: null };
+  });
+
+  excelWatcher.emitter.on('change', (payload) => {
+    if (mainWindow?.webContents) {
+      mainWindow.webContents.send('excel-watch:changed', payload);
+    }
+  });
+
+  excelWatcher.emitter.on('error', (payload) => {
+    if (mainWindow?.webContents) {
+      mainWindow.webContents.send('excel-watch:error', {
+        filePath: payload.filePath,
+        message: payload.error?.message || String(payload.error),
+      });
+    }
+  });
+}
+
 app.whenReady().then(createWindow);
+app.whenReady().then(registerExcelWatcherIpc);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
