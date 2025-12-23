@@ -1,10 +1,15 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
-
-// Worker configuration for pdfjs in Vite
+// Vite-friendly worker import
+// pdfjs-dist 5.x expose a bundler-ready worker via the ESM build
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url).toString();
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+// Configure worker source (resolved at build time)
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 const numberFromText = (text: string): number | null => {
   const normalized = text.replace(/\s/g, '').replace(',', '.').replace(/\u00a0/g, '');
