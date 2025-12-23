@@ -44,26 +44,35 @@ const renderMappingSelect = (
   onChange: (val: string) => void,
   headers: string[],
   required?: boolean
-) => (
-  <div className="space-y-1">
-    <p className="text-sm font-medium">
-      {label} {required && <span className="text-destructive">*</span>}
-    </p>
-    <Select value={value || ''} onValueChange={(val) => onChange(val)}>
-      <SelectTrigger>
-        <SelectValue placeholder="Sélectionner une colonne" />
-      </SelectTrigger>
-      <SelectContent>
-        {!required && <SelectItem value="">Aucune</SelectItem>}
-        {headers.map((h) => (
-          <SelectItem key={h} value={h}>
-            {h}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  </div>
-);
+) => {
+  const cleanHeaders = headers.filter((h) => (h ?? '').trim().length > 0);
+  const sentinelNone = '__none__';
+  const currentValue = value && value.trim().length > 0 ? value : required ? cleanHeaders[0] ?? '' : sentinelNone;
+
+  return (
+    <div className="space-y-1">
+      <p className="text-sm font-medium">
+        {label} {required && <span className="text-destructive">*</span>}
+      </p>
+      <Select
+        value={currentValue}
+        onValueChange={(val) => onChange(val === sentinelNone ? '' : val)}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Sélectionner une colonne" />
+        </SelectTrigger>
+        <SelectContent>
+          {!required && <SelectItem value={sentinelNone}>Aucune</SelectItem>}
+          {cleanHeaders.map((h) => (
+            <SelectItem key={h} value={h}>
+              {h}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+};
 
 const useUpload = <TMapping,>(initial: TMapping | null) => {
   const [state, setState] = useState<FileState<TMapping>>({
