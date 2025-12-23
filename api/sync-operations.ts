@@ -1,4 +1,3 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { normalizeSheet, type RawOperationRow } from '../src/lib/parsers/operationsSheet';
 
 type GraphRangeResponse = {
@@ -61,3 +60,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Unexpected error', detail: `${err}` });
   }
 }
+import type { VercelRequest, VercelResponse } from '@vercel/node';
