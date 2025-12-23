@@ -5,9 +5,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Download, TrendingDown, TrendingUp } from "lucide-react";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
-import type { SageInvoice } from "@/types/sage";
+import { useImportedInvoices } from "@/hooks/useImportedInvoices";
 import type { CostDoc } from "@/types/costs";
-import { COST_DOCS_KEY, SAGE_INVOICES_KEY } from "@/lib/constants/storage";
+import { COST_DOCS_KEY } from "@/lib/constants/storage";
 import { reconcile } from "@/lib/reco/reconcile";
 import { aggregateCases, margin, transitCoverage } from "@/lib/kpi/exportKpis";
 
@@ -43,10 +43,10 @@ function downloadCsv(filename: string, rows: string[][]) {
 }
 
 export default function MarginAnalysis() {
-  const [sageInvoices] = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
-  const [costDocs] = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
+  const { value: importedInvoices } = useImportedInvoices();
+  const { value: costDocs } = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
 
-  const cases = useMemo(() => reconcile(sageInvoices, costDocs), [sageInvoices, costDocs]);
+  const cases = useMemo(() => reconcile(importedInvoices, costDocs), [importedInvoices, costDocs]);
   const aggregates = useMemo(() => aggregateCases(cases), [cases]);
 
   // Seuils “marge insuffisante”

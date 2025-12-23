@@ -1,5 +1,5 @@
 ﻿import type { ExportCircuit } from '@/types/circuits';
-import type { SageInvoice } from '@/types/sage';
+import type { ImportedInvoice } from '@/types/sage';
 import type { CostDoc } from '@/types/costs';
 import type { ReferenceData } from '@/hooks/useReferenceData';
 import { reconcile } from '@/lib/reco/reconcile';
@@ -19,7 +19,7 @@ export interface CircuitSummary {
  */
 export const computeCircuitSummary = (
   circuits: ExportCircuit[],
-  invoices: SageInvoice[],
+  invoices: ImportedInvoice[],
   costDocs: CostDoc[],
   referenceData?: ReferenceData
 ): Record<string, CircuitSummary> => {

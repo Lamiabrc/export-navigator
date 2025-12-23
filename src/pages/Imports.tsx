@@ -13,14 +13,15 @@ import { parseCsv } from '@/lib/imports/parseCsv';
 import {
   CostDocMapping,
   mapCostDocs,
-  mapSageInvoices,
+  mapInvoices,
   MappingResult,
-  SageInvoiceMapping,
+  InvoiceImportMapping,
 } from '@/lib/imports/mapping';
-import type { SageInvoice } from '@/types/sage';
+import type { ImportedInvoice } from '@/types/sage';
 import type { CostDoc } from '@/types/costs';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { COST_DOCS_KEY, SAGE_INVOICES_KEY } from '@/lib/constants/storage';
+import { COST_DOCS_KEY } from '@/lib/constants/storage';
+import { useImportedInvoices } from '@/hooks/useImportedInvoices';
 
 interface FileState<TMapping> {
   filename: string;
@@ -92,17 +93,19 @@ const useUpload = <TMapping,>(initial: TMapping | null) => {
 };
 
 export default function Imports() {
-  const [sageResult, setSageResult] = useState<MappingResult<SageInvoice> | null>(null);
+  const [invoiceResult, setInvoiceResult] = useState<MappingResult<ImportedInvoice> | null>(null);
   const [costResult, setCostResult] = useState<MappingResult<CostDoc> | null>(null);
-  const { state: sageState, setState: setSageState, rawRows: sageRows, onFile: onSageFile } = useUpload<SageInvoiceMapping>(null);
-  const { state: costState, setState: setCostState, rawRows: costRows, onFile: onCostFile } = useUpload<CostDocMapping>(null);
+  const { state: invoiceState, setState: setInvoiceState, rawRows: invoiceRows, onFile: onInvoiceFile } =
+    useUpload<InvoiceImportMapping>(null);
+  const { state: costState, setState: setCostState, rawRows: costRows, onFile: onCostFile } =
+    useUpload<CostDocMapping>(null);
 
-  const [, setStoredInvoices] = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
-  const [, setStoredCosts] = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
+  const { setValue: setStoredInvoices } = useImportedInvoices();
+  const { setValue: setStoredCosts } = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
 
-  const handleSageFile = (file?: File) => {
+  const handleInvoiceFile = (file?: File) => {
     if (!file) return;
-    onSageFile(file, (headers) => ({
+    onInvoiceFile(file, (headers) => ({
       invoiceNumber: autoPick(headers, ['facture', 'invoice']),
       clientName: autoPick(headers, ['client', 'customer']),
       invoiceDate: autoPick(headers, ['date']),
@@ -137,19 +140,19 @@ export default function Imports() {
     }));
   };
 
-  const applySageMapping = () => {
-    if (!sageState.mapping) {
-      toast.error('Importez un CSV Sage d’abord');
+  const applyInvoiceMapping = () => {
+    if (!invoiceState.mapping) {
+      toast.error("Importez un CSV de factures d'abord");
       return;
     }
-    const result = mapSageInvoices(sageRows, sageState.mapping);
-    setSageResult(result);
+    const result = mapInvoices(invoiceRows, invoiceState.mapping);
+    setInvoiceResult(result);
     toast.success(`Mapping appliqué : ${result.items.length} factures, ${result.invalid.length} lignes invalides`);
   };
 
   const applyCostMapping = () => {
     if (!costState.mapping) {
-      toast.error('Importez un CSV Coûts réels d’abord');
+      toast.error("Importez un CSV Coûts réels d'abord");
       return;
     }
     const result = mapCostDocs(costRows, costState.mapping);
@@ -157,13 +160,13 @@ export default function Imports() {
     toast.success(`Mapping appliqué : ${result.items.length} documents, ${result.invalid.length} lignes invalides`);
   };
 
-  const saveSageInvoices = () => {
-    if (!sageResult) {
+  const saveInvoices = () => {
+    if (!invoiceResult) {
       toast.error('Appliquez le mapping avant de sauvegarder');
       return;
     }
-    setStoredInvoices(sageResult.items);
-    toast.success('Factures Sage enregistrées en local');
+    setStoredInvoices(invoiceResult.items);
+    toast.success('Factures enregistrées en local');
   };
 
   const saveCostDocs = () => {
@@ -175,7 +178,7 @@ export default function Imports() {
     toast.success('Coûts réels enregistrés en local');
   };
 
-  const sagePreview = useMemo(() => sageResult?.items.slice(0, 5) ?? [], [sageResult]);
+  const invoicePreview = useMemo(() => invoiceResult?.items.slice(0, 5) ?? [], [invoiceResult]);
   const costPreview = useMemo(() => costResult?.items.slice(0, 5) ?? [], [costResult]);
 
   return (
@@ -183,21 +186,21 @@ export default function Imports() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Imports CSV</h1>
-          <p className="text-muted-foreground">Alimentez l’outil avec les factures Sage et les coûts réels (transit/douane)</p>
+          <p className="text-muted-foreground">Alimentez l'outil avec vos factures et les coûts réels (transit/douane)</p>
         </div>
 
-        <Tabs defaultValue="sage" className="space-y-4">
+        <Tabs defaultValue="invoices" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="sage">Factures Sage</TabsTrigger>
+            <TabsTrigger value="invoices">Factures</TabsTrigger>
             <TabsTrigger value="costs">Coûts réels</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="sage">
+          <TabsContent value="invoices">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileSpreadsheet className="h-5 w-5" />
-                  Import Factures Sage (CSV)
+                  Import Factures (CSV)
                 </CardTitle>
                 <CardDescription>Mapping colonnes → champs facture, validation et aperçu</CardDescription>
               </CardHeader>
@@ -206,43 +209,138 @@ export default function Imports() {
                   <Input
                     type="file"
                     accept=".csv,text/csv"
-                    onChange={(e) => handleSageFile(e.target.files?.[0])}
+                    onChange={(e) => handleInvoiceFile(e.target.files?.[0])}
                   />
-                  {sageState.filename && <Badge variant="outline">{sageState.filename}</Badge>}
+                  {invoiceState.filename && <Badge variant="outline">{invoiceState.filename}</Badge>}
                 </div>
 
-                {sageState.headers.length > 0 && sageState.mapping && (
+                {invoiceState.headers.length > 0 && invoiceState.mapping && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {renderMappingSelect('Numéro facture', sageState.mapping.invoiceNumber, (val) => setSageState((prev) => ({ ...prev, mapping: { ...(prev.mapping as SageInvoiceMapping), invoiceNumber: val } })), sageState.headers, true)}
-                    {renderMappingSelect('Client', sageState.mapping.clientName, (val) => setSageState((prev) => ({ ...prev, mapping: { ...(prev.mapping as SageInvoiceMapping), clientName: val } })), sageState.headers, true)}
-                    {renderMappingSelect('Date facture', sageState.mapping.invoiceDate, (val) => setSageState((prev) => ({ ...prev, mapping: { ...(prev.mapping as SageInvoiceMapping), invoiceDate: val } })), sageState.headers, true)}
-                    {renderMappingSelect('Devise', sageState.mapping.currency, (val) => setSageState((prev) => ({ ...prev, mapping: { ...(prev.mapping as SageInvoiceMapping), currency: val } })), sageState.headers, true)}
-                    {renderMappingSelect('Total HT', sageState.mapping.totalHT, (val) => setSageState((prev) => ({ ...prev, mapping: { ...(prev.mapping as SageInvoiceMapping), totalHT: val } })), sageState.headers, true)}
-                    {renderMappingSelect('TVA', sageState.mapping.totalTVA || '', (val) => setSageState((prev) => ({ ...prev, mapping: { ...(prev.mapping as SageInvoiceMapping), totalTVA: val } })), sageState.headers)}
-                    {renderMappingSelect('TTC', sageState.mapping.totalTTC || '', (val) => setSageState((prev) => ({ ...prev, mapping: { ...(prev.mapping as SageInvoiceMapping), totalTTC: val } })), sageState.headers)}
-                    {renderMappingSelect('Réf. expédition/BL', sageState.mapping.shipmentRef || '', (val) => setSageState((prev) => ({ ...prev, mapping: { ...(prev.mapping as SageInvoiceMapping), shipmentRef: val } })), sageState.headers)}
-                    {renderMappingSelect('AWB', sageState.mapping.awb || '', (val) => setSageState((prev) => ({ ...prev, mapping: { ...(prev.mapping as SageInvoiceMapping), awb: val } })), sageState.headers)}
-                    {renderMappingSelect('BL', sageState.mapping.bl || '', (val) => setSageState((prev) => ({ ...prev, mapping: { ...(prev.mapping as SageInvoiceMapping), bl: val } })), sageState.headers)}
+                    {renderMappingSelect(
+                      'Numéro facture',
+                      invoiceState.mapping.invoiceNumber,
+                      (val) =>
+                        setInvoiceState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as InvoiceImportMapping), invoiceNumber: val },
+                        })),
+                      invoiceState.headers,
+                      true
+                    )}
+                    {renderMappingSelect(
+                      'Client',
+                      invoiceState.mapping.clientName,
+                      (val) =>
+                        setInvoiceState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as InvoiceImportMapping), clientName: val },
+                        })),
+                      invoiceState.headers,
+                      true
+                    )}
+                    {renderMappingSelect(
+                      'Date facture',
+                      invoiceState.mapping.invoiceDate,
+                      (val) =>
+                        setInvoiceState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as InvoiceImportMapping), invoiceDate: val },
+                        })),
+                      invoiceState.headers,
+                      true
+                    )}
+                    {renderMappingSelect(
+                      'Devise',
+                      invoiceState.mapping.currency,
+                      (val) =>
+                        setInvoiceState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as InvoiceImportMapping), currency: val },
+                        })),
+                      invoiceState.headers,
+                      true
+                    )}
+                    {renderMappingSelect(
+                      'Total HT',
+                      invoiceState.mapping.totalHT,
+                      (val) =>
+                        setInvoiceState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as InvoiceImportMapping), totalHT: val },
+                        })),
+                      invoiceState.headers,
+                      true
+                    )}
+                    {renderMappingSelect(
+                      'TVA',
+                      invoiceState.mapping.totalTVA || '',
+                      (val) =>
+                        setInvoiceState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as InvoiceImportMapping), totalTVA: val },
+                        })),
+                      invoiceState.headers
+                    )}
+                    {renderMappingSelect(
+                      'TTC',
+                      invoiceState.mapping.totalTTC || '',
+                      (val) =>
+                        setInvoiceState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as InvoiceImportMapping), totalTTC: val },
+                        })),
+                      invoiceState.headers
+                    )}
+                    {renderMappingSelect(
+                      'Réf. expédition/BL',
+                      invoiceState.mapping.shipmentRef || '',
+                      (val) =>
+                        setInvoiceState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as InvoiceImportMapping), shipmentRef: val },
+                        })),
+                      invoiceState.headers
+                    )}
+                    {renderMappingSelect(
+                      'AWB',
+                      invoiceState.mapping.awb || '',
+                      (val) =>
+                        setInvoiceState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as InvoiceImportMapping), awb: val },
+                        })),
+                      invoiceState.headers
+                    )}
+                    {renderMappingSelect(
+                      'BL',
+                      invoiceState.mapping.bl || '',
+                      (val) =>
+                        setInvoiceState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as InvoiceImportMapping), bl: val },
+                        })),
+                      invoiceState.headers
+                    )}
                   </div>
                 )}
 
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={applySageMapping}>
+                  <Button variant="outline" onClick={applyInvoiceMapping}>
                     <Upload className="h-4 w-4 mr-2" />
                     Appliquer le mapping
                   </Button>
-                  <Button onClick={saveSageInvoices} disabled={!sageResult}>
+                  <Button onClick={saveInvoices} disabled={!invoiceResult}>
                     <CheckCircle className="h-4 w-4 mr-2" />
                     Sauvegarder
                   </Button>
-                  {sageResult && (
-                    <Badge variant={sageResult.invalid.length ? 'destructive' : 'secondary'}>
-                      {sageResult.invalid.length} lignes invalides
+                  {invoiceResult && (
+                    <Badge variant={invoiceResult.invalid.length ? 'destructive' : 'secondary'}>
+                      {invoiceResult.invalid.length} lignes invalides
                     </Badge>
                   )}
                 </div>
 
-                {sagePreview.length > 0 && (
+                {invoicePreview.length > 0 && (
                   <div className="border rounded-lg overflow-hidden">
                     <div className="px-4 py-2 border-b text-sm font-semibold">Aperçu (5 premières lignes)</div>
                     <Table>
@@ -256,7 +354,7 @@ export default function Imports() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sagePreview.map((row) => (
+                        {invoicePreview.map((row) => (
                           <TableRow key={row.invoiceNumber}>
                             <TableCell className="font-medium">{row.invoiceNumber}</TableCell>
                             <TableCell>{row.clientName}</TableCell>
@@ -270,10 +368,10 @@ export default function Imports() {
                   </div>
                 )}
 
-                {sageResult?.invalid.length ? (
+                {invoiceResult?.invalid.length ? (
                   <div className="flex items-center gap-2 text-sm text-destructive">
                     <AlertTriangle className="h-4 w-4" />
-                    {sageResult.invalid.length} lignes écartées (voir console)
+                    {invoiceResult.invalid.length} lignes écartées (voir console)
                   </div>
                 ) : null}
               </CardContent>
@@ -291,25 +389,107 @@ export default function Imports() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <Input
-                    type="file"
-                    accept=".csv,text/csv"
-                    onChange={(e) => handleCostFile(e.target.files?.[0])}
-                  />
+                  <Input type="file" accept=".csv,text/csv" onChange={(e) => handleCostFile(e.target.files?.[0])} />
                   {costState.filename && <Badge variant="outline">{costState.filename}</Badge>}
                 </div>
 
                 {costState.headers.length > 0 && costState.mapping && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {renderMappingSelect('N° document', costState.mapping.docNumber, (val) => setCostState((prev) => ({ ...prev, mapping: { ...(prev.mapping as CostDocMapping), docNumber: val } })), costState.headers, true)}
-                    {renderMappingSelect('Date document', costState.mapping.docDate, (val) => setCostState((prev) => ({ ...prev, mapping: { ...(prev.mapping as CostDocMapping), docDate: val } })), costState.headers, true)}
-                    {renderMappingSelect('Montant', costState.mapping.amount, (val) => setCostState((prev) => ({ ...prev, mapping: { ...(prev.mapping as CostDocMapping), amount: val } })), costState.headers, true)}
-                    {renderMappingSelect('Devise', costState.mapping.currency, (val) => setCostState((prev) => ({ ...prev, mapping: { ...(prev.mapping as CostDocMapping), currency: val } })), costState.headers, true)}
-                    {renderMappingSelect('Type de coût', costState.mapping.costType, (val) => setCostState((prev) => ({ ...prev, mapping: { ...(prev.mapping as CostDocMapping), costType: val } })), costState.headers, true)}
-                    {renderMappingSelect('Libellé', costState.mapping.label || '', (val) => setCostState((prev) => ({ ...prev, mapping: { ...(prev.mapping as CostDocMapping), label: val } })), costState.headers)}
-                    {renderMappingSelect('Facture liée', costState.mapping.invoiceNumber || '', (val) => setCostState((prev) => ({ ...prev, mapping: { ...(prev.mapping as CostDocMapping), invoiceNumber: val } })), costState.headers)}
-                    {renderMappingSelect('Réf. expédition/BL', costState.mapping.shipmentRef || '', (val) => setCostState((prev) => ({ ...prev, mapping: { ...(prev.mapping as CostDocMapping), shipmentRef: val } })), costState.headers)}
-                    {renderMappingSelect('Fournisseur/Transitaire', costState.mapping.supplier || '', (val) => setCostState((prev) => ({ ...prev, mapping: { ...(prev.mapping as CostDocMapping), supplier: val } })), costState.headers)}
+                    {renderMappingSelect(
+                      'N° document',
+                      costState.mapping.docNumber,
+                      (val) =>
+                        setCostState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as CostDocMapping), docNumber: val },
+                        })),
+                      costState.headers,
+                      true
+                    )}
+                    {renderMappingSelect(
+                      'Date document',
+                      costState.mapping.docDate,
+                      (val) =>
+                        setCostState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as CostDocMapping), docDate: val },
+                        })),
+                      costState.headers,
+                      true
+                    )}
+                    {renderMappingSelect(
+                      'Montant',
+                      costState.mapping.amount,
+                      (val) =>
+                        setCostState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as CostDocMapping), amount: val },
+                        })),
+                      costState.headers,
+                      true
+                    )}
+                    {renderMappingSelect(
+                      'Devise',
+                      costState.mapping.currency,
+                      (val) =>
+                        setCostState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as CostDocMapping), currency: val },
+                        })),
+                      costState.headers,
+                      true
+                    )}
+                    {renderMappingSelect(
+                      'Type de coût',
+                      costState.mapping.costType,
+                      (val) =>
+                        setCostState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as CostDocMapping), costType: val },
+                        })),
+                      costState.headers,
+                      true
+                    )}
+                    {renderMappingSelect(
+                      'Libellé',
+                      costState.mapping.label || '',
+                      (val) =>
+                        setCostState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as CostDocMapping), label: val },
+                        })),
+                      costState.headers
+                    )}
+                    {renderMappingSelect(
+                      'Facture liée',
+                      costState.mapping.invoiceNumber || '',
+                      (val) =>
+                        setCostState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as CostDocMapping), invoiceNumber: val },
+                        })),
+                      costState.headers
+                    )}
+                    {renderMappingSelect(
+                      'Réf. expédition/BL',
+                      costState.mapping.shipmentRef || '',
+                      (val) =>
+                        setCostState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as CostDocMapping), shipmentRef: val },
+                        })),
+                      costState.headers
+                    )}
+                    {renderMappingSelect(
+                      'Fournisseur/Transitaire',
+                      costState.mapping.supplier || '',
+                      (val) =>
+                        setCostState((prev) => ({
+                          ...prev,
+                          mapping: { ...(prev.mapping as CostDocMapping), supplier: val },
+                        })),
+                      costState.headers
+                    )}
                   </div>
                 )}
 

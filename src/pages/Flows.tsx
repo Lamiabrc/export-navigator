@@ -11,9 +11,9 @@ import { ExportMindMap } from '@/components/flows/ExportMindMap';
 import { computeCircuitSummary } from '@/lib/stats/computeCircuitSummary';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useReferenceData } from '@/hooks/useReferenceData';
-import type { SageInvoice } from '@/types/sage';
+import { useImportedInvoices } from '@/hooks/useImportedInvoices';
 import type { CostDoc } from '@/types/costs';
-import { COST_DOCS_KEY, SAGE_INVOICES_KEY } from '@/lib/constants/storage';
+import { COST_DOCS_KEY } from '@/lib/constants/storage';
 import { zoneLabel } from '@/types/circuits';
 
 const zoneColors: Record<string, string> = {
@@ -33,13 +33,13 @@ const circuitIcons: Record<string, ReactNode> = {
 };
 
 export default function Flows() {
-  const [sageInvoices] = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
-  const [costDocs] = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
+  const { value: importedInvoices } = useImportedInvoices();
+  const { value: costDocs } = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
   const { referenceData } = useReferenceData();
 
   const summaries = useMemo(
-    () => computeCircuitSummary(exportCircuits, sageInvoices, costDocs, referenceData),
-    [sageInvoices, costDocs, referenceData]
+    () => computeCircuitSummary(exportCircuits, importedInvoices, costDocs, referenceData),
+    [importedInvoices, costDocs, referenceData]
   );
 
   return (

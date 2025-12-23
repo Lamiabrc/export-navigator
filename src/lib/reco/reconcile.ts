@@ -1,6 +1,6 @@
 import type { ExportCase, MatchStatus, MatchMethod } from '@/types/case';
 import type { CostDoc } from '@/types/costs';
-import type { SageInvoice } from '@/types/sage';
+import type { ImportedInvoice } from '@/types/sage';
 
 const sumCostDoc = (doc: CostDoc): number =>
   doc.lines.reduce((sum, line) => sum + (line.amount || 0), 0);
@@ -18,7 +18,7 @@ const computeStatus = (score: number): MatchStatus => {
   return 'none';
 };
 
-const buildMissing = (invoice: SageInvoice): string[] => {
+const buildMissing = (invoice: ImportedInvoice): string[] => {
   const missing: string[] = [];
   if (!invoice.invoiceNumber) missing.push('invoiceNumber');
   if (!invoice.totalHT && invoice.totalHT !== 0) missing.push('totalHT');
@@ -28,10 +28,10 @@ const buildMissing = (invoice: SageInvoice): string[] => {
   return missing;
 };
 
-const matchByInvoiceNumber = (invoice: SageInvoice, costDocs: CostDoc[]) =>
+const matchByInvoiceNumber = (invoice: ImportedInvoice, costDocs: CostDoc[]) =>
   costDocs.filter((doc) => doc.invoiceNumber && doc.invoiceNumber === invoice.invoiceNumber);
 
-const matchByShipment = (invoice: SageInvoice, costDocs: CostDoc[]) =>
+const matchByShipment = (invoice: ImportedInvoice, costDocs: CostDoc[]) =>
   costDocs.filter(
     (doc) =>
       (invoice.shipmentRef && doc.shipmentRef && doc.shipmentRef === invoice.shipmentRef) ||
@@ -39,7 +39,7 @@ const matchByShipment = (invoice: SageInvoice, costDocs: CostDoc[]) =>
       (invoice.bl && doc.bl && doc.bl === invoice.bl)
   );
 
-const matchByDateAmount = (invoice: SageInvoice, costDocs: CostDoc[]) => {
+const matchByDateAmount = (invoice: ImportedInvoice, costDocs: CostDoc[]) => {
   const total = invoice.totalHT || 0;
   return costDocs.filter((doc) => {
     const docTotal = sumCostDoc(doc);
@@ -50,7 +50,7 @@ const matchByDateAmount = (invoice: SageInvoice, costDocs: CostDoc[]) => {
   });
 };
 
-const computeScore = (method: MatchMethod, invoice: SageInvoice, docs: CostDoc[]): number => {
+const computeScore = (method: MatchMethod, invoice: ImportedInvoice, docs: CostDoc[]): number => {
   if (!docs.length) return 0;
   if (method === 'invoiceNumber') return 95;
   if (method === 'shipmentRef') return 75;
@@ -65,7 +65,7 @@ const computeScore = (method: MatchMethod, invoice: SageInvoice, docs: CostDoc[]
   return 0;
 };
 
-export const reconcile = (invoices: SageInvoice[], costDocs: CostDoc[]): ExportCase[] => {
+export const reconcile = (invoices: ImportedInvoice[], costDocs: CostDoc[]): ExportCase[] => {
   return invoices.map((invoice, index) => {
     let matched: CostDoc[] = [];
     let method: MatchMethod = 'none';

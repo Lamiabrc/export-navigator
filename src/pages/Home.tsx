@@ -22,7 +22,7 @@ export default function Home() {
               Contrôle des flux export <span className="text-cyan-300">par couches</span>, rapprochement, alertes
             </h1>
             <p className="text-slate-200/80 max-w-3xl">
-              Carte interactive (transport / douane-DDP / TVA), imports Sage + coûts réels, rapprochement automatique,
+              Carte interactive (transport / douane-DDP / TVA), imports factures + coûts réels, rapprochement automatique,
               KPIs marge & couverture transit, alertes de cohérence. Données locales, zéro backend.
             </p>
             <div className="flex flex-wrap gap-3">
@@ -88,7 +88,7 @@ export default function Home() {
                 <ShieldCheck className="h-5 w-5 text-primary" />
                 Contrôle & rapprochement
               </CardTitle>
-              <CardDescription>Imports CSV (Sage, coûts réels), match auto, couverture transit, alertes.</CardDescription>
+              <CardDescription>Imports CSV (factures, coûts réels), match auto, couverture transit, alertes.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <p>Importez factures et coûts, vérifiez match, marge et alertes (incoterm, DDP, TVA, transit).</p>
@@ -127,7 +127,7 @@ export default function Home() {
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-muted-foreground">
             <div className="space-y-2">
-              <p>1. Importer : onglet Imports → CSV Sage (factures) + CSV Coûts réels (transit/douane).</p>
+              <p>1. Importer : onglet Imports → CSV Factures + CSV Coûts réels (transit/douane).</p>
               <p>2. Visualiser : onglet Flows → carte des flux par couches, vérifier les destinations sensibles.</p>
               <p>3. Contrôler : onglet Invoices → rapprochements, alertes, couverture transit.</p>
             </div>

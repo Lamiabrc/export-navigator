@@ -10,9 +10,10 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, Download, ExternalLink, Eye, TrendingDown, TrendingUp } from "lucide-react";
 
 import { useLocalStorage } from "@/hooks/useLocalStorage";
-import type { SageInvoice } from "@/types/sage";
+import { useImportedInvoices } from "@/hooks/useImportedInvoices";
+import type { ImportedInvoice } from "@/types/sage";
 import type { CostDoc } from "@/types/costs";
-import { COST_DOCS_KEY, SAGE_INVOICES_KEY } from "@/lib/constants/storage";
+import { COST_DOCS_KEY } from "@/lib/constants/storage";
 import { reconcile } from "@/lib/reco/reconcile";
 import { aggregateCases, margin, transitCoverage } from "@/lib/kpi/exportKpis";
 
@@ -86,16 +87,19 @@ function buildRecommendation(tags: RiskTag[], info: { hasTransit: boolean }) {
 export default function MarginAnalysis() {
   const navigate = useNavigate();
 
-  const [sageInvoices] = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
-  const [costDocs] = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
+  const { value: importedInvoices } = useImportedInvoices();
+  const { value: costDocs } = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
 
   // Seuils persistants (indispensable pour que l’outil serve en RUN)
-  const [thresholds, setThresholds] = useLocalStorage<Thresholds>("margin_thresholds_v1", DEFAULT_THRESHOLDS);
+  const { value: thresholds, setValue: setThresholds } = useLocalStorage<Thresholds>(
+    "margin_thresholds_v1",
+    DEFAULT_THRESHOLDS
+  );
 
   // Recherche persistante (optionnel mais pratique)
-  const [query, setQuery] = useLocalStorage<string>("margin_query_v1", "");
+  const { value: query, setValue: setQuery } = useLocalStorage<string>("margin_query_v1", "");
 
-  const cases = useMemo(() => reconcile(sageInvoices, costDocs), [sageInvoices, costDocs]);
+  const cases = useMemo(() => reconcile(importedInvoices, costDocs), [importedInvoices, costDocs]);
   const aggregates = useMemo(() => aggregateCases(cases), [cases]);
 
   const riskRows = useMemo(() => {

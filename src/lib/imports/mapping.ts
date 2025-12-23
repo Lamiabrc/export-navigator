@@ -1,5 +1,5 @@
 import type { CostDoc, CostLine, CostType } from '@/types/costs';
-import type { SageInvoice } from '@/types/sage';
+import type { ImportedInvoice } from '@/types/sage';
 import type { CsvRow } from './parseCsv';
 
 export interface MappingError {
@@ -12,7 +12,7 @@ export interface MappingResult<T> {
   invalid: MappingError[];
 }
 
-export interface SageInvoiceMapping {
+export interface InvoiceImportMapping {
   invoiceNumber: string;
   clientName: string;
   invoiceDate: string;
@@ -50,12 +50,12 @@ const parseNumber = (value: string | undefined): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-export const mapSageInvoices = (
+export const mapInvoices = (
   rows: CsvRow[],
-  mapping: SageInvoiceMapping
-): MappingResult<SageInvoice> => {
+  mapping: InvoiceImportMapping
+): MappingResult<ImportedInvoice> => {
   const invalid: MappingError[] = [];
-  const items: SageInvoice[] = [];
+  const items: ImportedInvoice[] = [];
 
   rows.forEach((row, idx) => {
     const rowNumber = idx + 2; // +1 header +1 index

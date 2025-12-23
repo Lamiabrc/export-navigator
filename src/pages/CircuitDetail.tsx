@@ -18,9 +18,9 @@ import {
   Send,
 } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import type { SageInvoice } from '@/types/sage';
+import { useImportedInvoices } from '@/hooks/useImportedInvoices';
 import type { CostDoc } from '@/types/costs';
-import { COST_DOCS_KEY, SAGE_INVOICES_KEY } from '@/lib/constants/storage';
+import { COST_DOCS_KEY } from '@/lib/constants/storage';
 import { reconcile } from '@/lib/reco/reconcile';
 import { evaluateCase } from '@/lib/rules/riskEngine';
 import { useReferenceData } from '@/hooks/useReferenceData';
@@ -57,20 +57,20 @@ const payerLabel = (payer: 'SELLER' | 'BUYER' | 'VARIABLE') => {
 export default function CircuitDetail() {
   const { id } = useParams<{ id: string }>();
   const circuit = id ? getCircuitById(id) : undefined;
-  const [sageInvoices] = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
-  const [costDocs] = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
+  const { value: importedInvoices } = useImportedInvoices();
+  const { value: costDocs } = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
   const { referenceData } = useReferenceData();
 
   const relatedCases = useMemo(() => {
     if (!id) return [];
-    const base = reconcile(sageInvoices, costDocs);
+    const base = reconcile(importedInvoices, costDocs);
     return base
       .filter((c) => c.invoice.flowCode === id || c.costDocs.some((doc) => doc.flowCode === id))
       .map((c) => {
         const risk = evaluateCase(c, referenceData);
         return { ...c, alerts: risk.alerts, riskScore: risk.riskScore };
       });
-  }, [id, sageInvoices, costDocs, referenceData]);
+  }, [id, importedInvoices, costDocs, referenceData]);
 
   const caseAlerts = useMemo(() => relatedCases.flatMap((c) => c.alerts || []), [relatedCases]);
 

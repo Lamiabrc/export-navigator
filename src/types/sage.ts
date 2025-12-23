@@ -1,6 +1,6 @@
 import type { Destination, Incoterm } from './index';
 
-export interface SageInvoiceLine {
+export interface ImportedInvoiceLine {
   lineNumber: number;
   description: string;
   account?: string;
@@ -12,7 +12,7 @@ export interface SageInvoiceLine {
   costType?: string;
 }
 
-export interface SageInvoice {
+export interface ImportedInvoice {
   invoiceNumber: string;
   clientName: string;
   clientCode?: string;
@@ -28,5 +28,9 @@ export interface SageInvoice {
   incoterm?: Incoterm;
   destination?: Destination;
   flowCode?: string;
-  lines?: SageInvoiceLine[];
+  lines?: ImportedInvoiceLine[];
 }
+
+// Legacy aliases to avoid breaking older imports while removing "Sage" wording elsewhere
+export type SageInvoice = ImportedInvoice;
+export type SageInvoiceLine = ImportedInvoiceLine;

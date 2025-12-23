@@ -7,14 +7,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, CheckCircle, ExternalLink, Shield, ShieldAlert } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useImportedInvoices } from '@/hooks/useImportedInvoices';
 import { reconcile } from '@/lib/reco/reconcile';
 import { evaluateCase } from '@/lib/rules/riskEngine';
 import { aggregateCases, margin, transitCoverage } from '@/lib/kpi/exportKpis';
 import { useReferenceData } from '@/hooks/useReferenceData';
-import type { SageInvoice } from '@/types/sage';
 import type { CostDoc } from '@/types/costs';
 import type { ExportCase } from '@/types/case';
-import { COST_DOCS_KEY, SAGE_INVOICES_KEY } from '@/lib/constants/storage';
+import { COST_DOCS_KEY } from '@/lib/constants/storage';
 
 const statusBadge = (status: ExportCase['matchStatus']) => {
   switch (status) {
@@ -35,17 +35,17 @@ const alertBadge = (alertsCount: number, hasBlocker: boolean) => {
 };
 
 export default function Invoices() {
-  const [sageInvoices] = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
-  const [costDocs] = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
+  const { value: importedInvoices } = useImportedInvoices();
+  const { value: costDocs } = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
   const { referenceData } = useReferenceData();
 
   const cases = useMemo(() => {
-    const base = reconcile(sageInvoices, costDocs);
+    const base = reconcile(importedInvoices, costDocs);
     return base.map((c) => {
       const risk = evaluateCase(c, referenceData);
       return { ...c, alerts: risk.alerts, riskScore: risk.riskScore };
     });
-  }, [sageInvoices, costDocs, referenceData]);
+  }, [importedInvoices, costDocs, referenceData]);
 
   const aggregates = useMemo(() => aggregateCases(cases), [cases]);
   const matchCounts = useMemo(
@@ -65,9 +65,9 @@ export default function Invoices() {
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Contrôle & Rapprochement factures</h1>
+            <h1 className="text-2xl font-bold text-foreground">Contrôle & rapprochement factures</h1>
             <p className="text-muted-foreground">
-              Factures Sage ↔ coûts réels (transit/douane) avec score de match et alertes
+              Factures importées ↔ coûts réels (transit/douane) avec score de match et alertes
             </p>
           </div>
           <div className="flex gap-2">
@@ -81,7 +81,7 @@ export default function Invoices() {
           <Card>
             <CardContent className="pt-5">
               <p className="text-xs text-muted-foreground">Factures importées</p>
-              <p className="text-2xl font-bold">{sageInvoices.length}</p>
+              <p className="text-2xl font-bold">{importedInvoices.length}</p>
             </CardContent>
           </Card>
           <Card>

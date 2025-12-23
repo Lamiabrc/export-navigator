@@ -7,10 +7,10 @@ import { RecentFlowsTable } from '@/components/dashboard/RecentFlowsTable';
 import { useFlows } from '@/hooks/useFlows';
 import { useReferenceData } from '@/hooks/useReferenceData';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useImportedInvoices } from '@/hooks/useImportedInvoices';
 import { reconcile } from '@/lib/reco/reconcile';
 import { evaluateCase } from '@/lib/rules/riskEngine';
 import { aggregateCases, margin } from '@/lib/kpi/exportKpis';
-import type { SageInvoice } from '@/types/sage';
 import type { CostDoc } from '@/types/costs';
 import {
   Package,
@@ -20,22 +20,22 @@ import {
   FileCheck,
   ShieldAlert,
 } from 'lucide-react';
-import { COST_DOCS_KEY, SAGE_INVOICES_KEY } from '@/lib/constants/storage';
+import { COST_DOCS_KEY } from '@/lib/constants/storage';
 
 export default function Dashboard() {
   const { flows, isLoading } = useFlows();
   const { referenceData } = useReferenceData();
-  const { value: sageInvoices } = useLocalStorage<SageInvoice[]>(SAGE_INVOICES_KEY, []);
+  const { value: importedInvoices } = useImportedInvoices();
   const { value: costDocs } = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
 
   // Rapprochement factures/coûts importés
   const cases = useMemo(() => {
-    const base = reconcile(sageInvoices, costDocs);
+    const base = reconcile(importedInvoices, costDocs);
     return base.map((c) => {
       const risk = evaluateCase(c, referenceData);
       return { ...c, alerts: risk.alerts, riskScore: risk.riskScore };
     });
-  }, [sageInvoices, costDocs, referenceData]);
+  }, [importedInvoices, costDocs, referenceData]);
 
   const aggregates = useMemo(() => aggregateCases(cases), [cases]);
   const matchCounts = useMemo(
