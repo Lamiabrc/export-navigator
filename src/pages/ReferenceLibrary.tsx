@@ -17,6 +17,8 @@ import { toast } from 'sonner';
 import { chargesTaxesKnowledge, type ChargeRule } from '@/data/chargesTaxesKnowledge';
 import { defaultHsCatalog, type HsItem } from '@/data/hsCatalog';
 import { buildSwissTaresUrl, buildTaricUrl } from '@/lib/customs/lookupLinks';
+import { REFERENCE_OVERRIDES_KEY } from '@/lib/constants/storage';
+import { defaultReferenceData, type ReferenceData } from '@/hooks/useReferenceData';
 
 const DEST_KEY = 'export_destinations_v1';
 const INCOTERM_KEY = 'export_incoterms_v1';
@@ -235,6 +237,93 @@ const isDestinationArray = (value: unknown): value is DestinationRow[] => Array.
 const isIncotermArray = (value: unknown): value is IncotermRow[] => Array.isArray(value);
 const isHsArray = (value: unknown): value is HsItem[] => Array.isArray(value);
 
+const docsFromFlags = (docs: DocFlags) => {
+  const list: string[] = [];
+  if (docs.facture) list.push('Facture');
+  if (docs.packing) list.push('Packing list');
+  if (docs.blAwb) list.push('BL/AWB');
+  if (docs.certifOrigine) list.push('Certificat d’origine');
+  if (docs.declarationDouane) list.push('Déclaration douane');
+  if (docs.preuveExport) list.push('Preuve export');
+  if (docs.autres?.trim()) list.push(docs.autres.trim());
+  return list;
+};
+
+const controlsFromFlags = (controls: ControlFlags) =>
+  Object.entries(controls)
+    .filter(([, value]) => Boolean(value))
+    .map(([key]) => {
+      switch (key) {
+        case 'incotermVsPayeur':
+          return 'Incoterm cohérent avec le payeur';
+        case 'refacturationTransit':
+          return 'Refacturation transit validée';
+        case 'justificatifsTVA':
+          return 'Justificatifs TVA disponibles';
+        case 'taxesDOM':
+          return 'Taxes DOM (OM/OMR) anticipées';
+        case 'autoliquidation':
+          return 'Autoliquidation possible';
+        default:
+          return key;
+      }
+    });
+
+const buildReferenceOverrides = (
+  destinations: DestinationRow[],
+  incoterms: IncotermRow[],
+  hsCatalog: HsItem[],
+  logisticsMode: (typeof logisticModes)[number]
+): ReferenceData => {
+  const mappedDestinations = destinations.map<ReferenceData['destinations'][number]>((d) => ({
+    destination: d.name,
+    zone: d.zone,
+    tvaRegime: d.controls.autoliquidation ? 'Autoliquidation potentielle' : '',
+    taxesPossibles: d.controls.taxesDOM ? ['OM/OMR possibles'] : [],
+    flags: controlsFromFlags(d.controls),
+    documents: docsFromFlags(d.docs),
+    restrictions: d.notes,
+  }));
+
+  const mappedIncoterms = incoterms.map<ReferenceData['incoterms'][number]>((inc) => ({
+    code: inc.code,
+    description: inc.notes || `Incoterm ${inc.code}`,
+    payerTransport: inc.payers.transport,
+    notes: inc.notes,
+    obligations: [
+      `Transport: ${inc.payers.transport}`,
+      `Dédouanement import: ${inc.payers.dedouanementImport}`,
+      `Droits: ${inc.payers.droits}`,
+      `TVA import: ${inc.payers.tvaImport}`,
+      `OM/OMR: ${inc.payers.omOmr}`,
+    ],
+  }));
+
+  const mappedHs = hsCatalog.map<ReferenceData['nomenclature'][number]>((item) => ({
+    hsCode: item.hsCode,
+    label: item.label,
+    usages: [item.notes],
+    documents: [],
+    taricUrl: buildTaricUrl(item.hsCode),
+    taresUrl: buildSwissTaresUrl(item.hsCode),
+  }));
+
+  return {
+    ...defaultReferenceData,
+    sourceLabel: 'Bible Export (local)',
+    sourceUrl: '',
+    incoterms: mappedIncoterms,
+    destinations: mappedDestinations,
+    nomenclature: mappedHs,
+    logistics: defaultReferenceData.logistics.map((log) =>
+      log.mode === 'Dépositaire (stock local)' || log.mode === 'Envoi direct depuis métropole'
+        ? { ...log, notes: logisticsMode === log.mode ? 'Mode par défaut' : log.notes }
+        : log
+    ),
+    updatedAt: new Date().toISOString(),
+  };
+};
+
 export default function ReferenceLibrary() {
   const [destinations, setDestinations] = useState<DestinationRow[]>(() => loadFromStorage(DEST_KEY, defaultDestinations, isDestinationArray));
   const [incoterms, setIncoterms] = useState<IncotermRow[]>(() => loadFromStorage(INCOTERM_KEY, defaultIncoterms, isIncotermArray));
@@ -272,6 +361,11 @@ export default function ReferenceLibrary() {
   useEffect(() => {
     persistToStorage(LOGISTICS_MODE_KEY, logisticsMode);
   }, [logisticsMode]);
+
+  useEffect(() => {
+    const overrides = buildReferenceOverrides(destinations, incoterms, hsCatalog, logisticsMode);
+    persistToStorage(REFERENCE_OVERRIDES_KEY, overrides);
+  }, [destinations, incoterms, hsCatalog, logisticsMode]);
 
   const handlePrefill = () => {
     setDestinations((current) => mergeWithoutDuplicateNames(current, defaultDestinations));
