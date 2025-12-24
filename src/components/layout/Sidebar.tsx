@@ -1,4 +1,5 @@
 import type { ElementType } from "react";
+import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -71,11 +72,7 @@ const navigation: NavSection[] = [
     title: "Facturation & conformité",
     items: [
       { name: "Factures", href: "/invoices", icon: FileInput },
-      {
-        name: "Vérification PDF",
-        href: "/invoice-verification",
-        icon: FileInput,
-      },
+      { name: "Vérification PDF", href: "/invoice-verification", icon: FileInput },
     ],
   },
   {
@@ -83,7 +80,6 @@ const navigation: NavSection[] = [
     items: [
       { name: "Finance", href: "/finance", icon: Calculator },
       { name: "Analyse marges", href: "/margin-analysis", icon: TrendingUp },
-      // Si tu gardes Simulator, il reste ici. Sinon supprime la ligne.
       { name: "Simulateur", href: "/simulator", icon: Calculator },
     ],
   },
@@ -106,23 +102,26 @@ const roleLabels: Record<string, string> = {
   admin: "Administrateur",
 };
 
-export function Sidebar() {
+export type SidebarProps = {
+  /** Optionnel : utile si Sidebar est affichée dans un drawer mobile */
+  onNavigate?: () => void;
+  /** Optionnel : classes supplémentaires si besoin */
+  className?: string;
+};
+
+export function Sidebar({ onNavigate, className }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
 
-  const handleLogout = () => {
-    signOut();
-    navigate("/auth");
-  };
+  const safeName = user?.name?.trim() || "Utilisateur";
+  const safeRoleLabel = user?.role ? roleLabels[user.role] ?? user.role : "";
 
-  const getInitials = (name: string) =>
-    name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+  const getInitials = (name: string) => {
+    const parts = name.split(" ").filter(Boolean);
+    const initials = parts.map((p) => p[0]).join("").toUpperCase();
+    return (initials || "??").slice(0, 2);
+  };
 
   const isItemActive = (item: NavItem) => {
     const matchesAlias = item.aliases?.some(
@@ -136,23 +135,36 @@ export function Sidebar() {
     );
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } finally {
+      onNavigate?.();
+      navigate("/auth");
+    }
+  };
+
   const renderLink = (item: NavItem) => {
     const active = isItemActive(item);
+
     return (
       <Link
         key={item.name}
         to={item.href}
+        onClick={() => onNavigate?.()}
         className={cn(
           "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
-          "hover:bg-white/10 hover:text-white",
+          "hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary/50",
           active
             ? "bg-gradient-to-r from-primary/30 via-primary/20 to-transparent text-white shadow-lg shadow-primary/20 border border-primary/40"
             : "text-sidebar-foreground/80 border border-transparent",
           item.featured && !active && "border border-primary/30 bg-primary/5"
         )}
+        aria-current={active ? "page" : undefined}
       >
         <item.icon className="h-5 w-5" />
-        <span>{item.name}</span>
+        <span className="truncate">{item.name}</span>
+
         {item.badge && (
           <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
             {item.badge}
@@ -163,11 +175,21 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-slate-900/80 backdrop-blur-xl border-r border-white/10 shadow-xl shadow-primary/10">
+    <aside
+      className={cn(
+        // z-index renforcé pour fonctionner aussi en drawer mobile
+        "fixed inset-y-0 left-0 z-[70] flex w-64 flex-col",
+        "bg-slate-900/80 backdrop-blur-xl border-r border-white/10 shadow-xl shadow-primary/10",
+        className
+      )}
+      aria-label="Navigation principale"
+    >
       <div className="flex h-16 items-center gap-3 px-6 border-b border-white/10">
         <img src={logoOrliman} alt="ORLIMAN" className="h-8 w-auto" />
-        <div>
-          <p className="text-xs text-sidebar-foreground/60">La Mézière, France</p>
+        <div className="min-w-0">
+          <p className="text-xs text-sidebar-foreground/60 truncate">
+            La Mézière, France
+          </p>
         </div>
       </div>
 
@@ -196,26 +218,27 @@ export function Sidebar() {
       <div className="border-t border-white/10 p-4 bg-black/30">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 text-primary-foreground border border-primary/40">
-            <span className="text-sm font-medium">
-              {user ? getInitials(user.name) : "??"}
-            </span>
+            <span className="text-sm font-medium">{getInitials(safeName)}</span>
           </div>
+
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">
-              {user?.name || "Utilisateur"}
-            </p>
-            <p className="text-xs text-sidebar-foreground/70">
-              {user?.role ? roleLabels[user.role] : ""}
+            <p className="text-sm font-medium text-white truncate">{safeName}</p>
+            <p className="text-xs text-sidebar-foreground/70 truncate">
+              {safeRoleLabel}
             </p>
           </div>
+
           <button
+            type="button"
             onClick={handleLogout}
-            className="p-2 rounded-lg hover:bg-white/10 transition-smooth"
+            className="p-2 rounded-lg hover:bg-white/10 transition focus:outline-none focus:ring-2 focus:ring-primary/50"
+            aria-label="Déconnexion"
             title="Déconnexion"
           >
             <LogOut className="h-4 w-4 text-sidebar-foreground/70" />
           </button>
         </div>
+
         <p className="mt-2 text-[10px] text-sidebar-foreground/40 text-center">
           Mode local
         </p>
