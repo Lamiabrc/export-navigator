@@ -36,6 +36,8 @@ type IncotermFilter = 'ALL' | Incoterm;
 type RiskFilter = 'ALL' | RiskLevel;
 type HealthFilter = 'ALL' | 'OK' | 'A_SURVEILLER' | 'RISQUE';
 
+const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v ?? 0) || 0);
+
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(amount);
 
@@ -93,6 +95,17 @@ export default function ControlTower() {
   const [health, setHealth] = useState<HealthFilter>('ALL');
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [onlyOverdue, setOnlyOverdue] = useState(false);
+
+  const resetFilters = () => {
+    setQ('');
+    setZone('ALL');
+    setDestination('ALL');
+    setIncoterm('ALL');
+    setRisk('ALL');
+    setHealth('ALL');
+    setOnlyMissing(false);
+    setOnlyOverdue(false);
+  };
 
   // Presets (quick filters)
   const applyPreset = (preset: 'DROM_DDP' | 'SUISSE_BLOQUE' | 'UE_AUTOLIQ' | 'DOCS') => {
@@ -177,6 +190,19 @@ export default function ControlTower() {
       .sort((a, b) => a.health.score - b.health.score);
   }, [rows, q, zone, destination, incoterm, risk, health, onlyMissing, onlyOverdue]);
 
+  const hasActiveFilters = useMemo(
+    () =>
+      q.trim() !== '' ||
+      zone !== 'ALL' ||
+      destination !== 'ALL' ||
+      incoterm !== 'ALL' ||
+      risk !== 'ALL' ||
+      health !== 'ALL' ||
+      onlyMissing ||
+      onlyOverdue,
+    [q, zone, destination, incoterm, risk, health, onlyMissing, onlyOverdue]
+  );
+
   const kpis = useMemo(() => {
     const total = flows.length;
     const active = flows.filter(
@@ -188,19 +214,19 @@ export default function ControlTower() {
 
     const now = new Date();
     const overdue = rows.filter((r) => r.health.isOverdue).length;
-    const missing = rows.filter((r) => r.health.missing.length > 0).length;
+    const missing = rows.filter((r) => r.health.missing.length > 0 || r.health.blockers.length > 0).length;
 
-    const goodsValue = flows.reduce((s, f) => s + (f.goods_value || 0), 0);
+    const goodsValue = flows.reduce((s, f) => n(s) + n(f.goods_value), 0);
     const costs = flows.reduce(
       (s, f) =>
-        s +
-        f.cost_transport +
-        f.cost_customs_clearance +
-        f.cost_duties +
-        f.cost_import_vat +
-        f.cost_octroi_mer +
-        f.cost_octroi_mer_regional +
-        f.cost_other,
+        n(s) +
+        n(f.cost_transport) +
+        n(f.cost_customs_clearance) +
+        n(f.cost_duties) +
+        n(f.cost_import_vat) +
+        n(f.cost_octroi_mer) +
+        n(f.cost_octroi_mer_regional) +
+        n(f.cost_other),
       0
     );
 
@@ -229,15 +255,15 @@ export default function ControlTower() {
       Lieu: flow.incoterm_place,
       'Départ': flow.departure_date,
       'Livraison': flow.delivery_date,
-      'Valeur marchandises': flow.goods_value,
+      'Valeur marchandises': n(flow.goods_value),
       'Charges totales':
-        flow.cost_transport +
-        flow.cost_customs_clearance +
-        flow.cost_duties +
-        flow.cost_import_vat +
-        flow.cost_octroi_mer +
-        flow.cost_octroi_mer_regional +
-        flow.cost_other,
+        n(flow.cost_transport) +
+        n(flow.cost_customs_clearance) +
+        n(flow.cost_duties) +
+        n(flow.cost_import_vat) +
+        n(flow.cost_octroi_mer) +
+        n(flow.cost_octroi_mer_regional) +
+        n(flow.cost_other),
       Risque: flow.risk_level ?? 'ok',
       Santé: h.bucket,
       Score: h.score,
@@ -348,7 +374,7 @@ export default function ControlTower() {
               <CardDescription>Somme des flux</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(kpis.goodsValue)}</div>
+              <div className="text-2xl font-bold">{formatCurrency(n(kpis.goodsValue))}</div>
             </CardContent>
           </Card>
           <Card>
@@ -357,7 +383,7 @@ export default function ControlTower() {
               <CardDescription>Transport + douane + taxes</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(kpis.costs)}</div>
+              <div className="text-2xl font-bold">{formatCurrency(n(kpis.costs))}</div>
             </CardContent>
           </Card>
         </div>
@@ -390,10 +416,20 @@ export default function ControlTower() {
         {/* Filters */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Filtres
-            </CardTitle>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                Filtres
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">RÇ¸sultats: {filtered.length}</Badge>
+                {hasActiveFilters && (
+                  <Button variant="ghost" size="sm" onClick={resetFilters}>
+                    RÇ¸initialiser
+                  </Button>
+                )}
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             <div className="lg:col-span-2">

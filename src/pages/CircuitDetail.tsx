@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useImportedInvoices } from '@/hooks/useImportedInvoices';
-import type { CostDoc } from '@/types/costs';
+import type { CostDoc } from '@/types/Couts';
 import { COST_DOCS_KEY } from '@/lib/constants/storage';
 import { reconcile } from '@/lib/reco/reconcile';
 import { evaluateCase } from '@/lib/rules/riskEngine';
@@ -201,9 +201,9 @@ export default function CircuitDetail() {
 
         <Tabs defaultValue="schema" className="space-y-6">
           <TabsList>
-            <TabsTrigger value="schema">Schéma du flux</TabsTrigger>
+            <TabsTrigger value="schema">Schema du circuit</TabsTrigger>
             <TabsTrigger value="transitaires">Transitaires</TabsTrigger>
-            <TabsTrigger value="costs">Coûts</TabsTrigger>
+            <TabsTrigger value="Couts">Couts</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
             <TabsTrigger value="risks">Risques & Conseils</TabsTrigger>
           </TabsList>
@@ -211,7 +211,7 @@ export default function CircuitDetail() {
           <TabsContent value="schema" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Flux simplifié</CardTitle>
+                <CardTitle className="text-lg">Circuit simplifie</CardTitle>
                 <CardDescription>Visualisation du circuit export</CardDescription>
               </CardHeader>
               <CardContent>
@@ -242,7 +242,7 @@ export default function CircuitDetail() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Étapes détaillées</CardTitle>
-                <CardDescription>Description de chaque étape du flux</CardDescription>
+                <CardDescription>Description de chaque étape du Circuit</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col gap-4">
@@ -279,7 +279,7 @@ export default function CircuitDetail() {
                   <Truck className="h-5 w-5" />
                   Transitaires pour ce circuit
                 </CardTitle>
-                <CardDescription>Partenaires logistiques recommandés selon le type de flux</CardDescription>
+                <CardDescription>Partenaires logistiques recommandés selon le type de Circuit</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -336,12 +336,12 @@ export default function CircuitDetail() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="costs" className="space-y-6">
+          <TabsContent value="Couts" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Euro className="h-5 w-5" />
-                  Répartition des coûts
+                  Répartition des Couts
                 </CardTitle>
                 <CardDescription>Qui paie quoi selon ce circuit</CardDescription>
               </CardHeader>
@@ -455,7 +455,7 @@ export default function CircuitDetail() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5 text-primary" />
-                  Alertes rapprochées (factures / coûts)
+                  Alertes rapprochées (factures / Couts)
                 </CardTitle>
                 <CardDescription>Issues détectées par le moteur de règles sur ce circuit</CardDescription>
               </CardHeader>
@@ -494,7 +494,7 @@ export default function CircuitDetail() {
           <Link to="/simulator">
             <Button>
               <Euro className="h-4 w-4 mr-2" />
-              Simuler les coûts
+              Simuler les Couts
             </Button>
           </Link>
           <Link to="/invoices">
@@ -508,3 +508,8 @@ export default function CircuitDetail() {
     </MainLayout>
   );
 }
+
+
+
+
+

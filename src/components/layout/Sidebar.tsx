@@ -1,4 +1,5 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
+import type { ElementType } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,14 +18,18 @@ import {
   FileInput,
   Home as HomeIcon,
   ChevronDown,
+  Users,
+  LineChart,
 } from 'lucide-react';
 import logoOrliman from '@/assets/logo-orliman.png';
 
 const essentialNav = [
-  { name: 'Tour de contrôle', href: '/control-tower', icon: ShieldCheck, badge: 'NEW', featured: true },
+  { name: 'Tour de controle', href: '/control-tower', icon: ShieldCheck, badge: 'NEW', featured: true },
   { name: 'Accueil', href: '/home', icon: HomeIcon },
-  { name: 'Flux Export', href: '/flows', icon: FileText },
-  { name: 'Contrôle Factures', href: '/invoices', icon: Upload },
+  { name: 'Circuits export', href: '/flows', icon: FileText, aliases: ['/circuits'] },
+  { name: 'Flux & marges', href: '/flow-manager', icon: LineChart },
+  { name: 'Clients', href: '/clients', icon: Users },
+  { name: 'Controle factures', href: '/invoices', icon: Upload },
   { name: 'Finance', href: '/finance', icon: Calculator },
   { name: 'Guide', href: '/guide', icon: BookOpen },
 ];
@@ -69,8 +74,9 @@ export function Sidebar() {
       .toUpperCase()
       .slice(0, 2);
 
-  const renderLink = (item: { name: string; href: string; icon: React.ElementType; badge?: string; featured?: boolean }) => {
-    const isActive = location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
+  const renderLink = (item: { name: string; href: string; icon: ElementType; badge?: string; featured?: boolean; aliases?: string[] }) => {
+    const matchesAlias = item.aliases?.some((alias) => location.pathname === alias || location.pathname.startsWith(`${alias}/`));
+    const isActive = matchesAlias || location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
     return (
       <Link
         key={item.name}
@@ -117,7 +123,7 @@ export function Sidebar() {
             onClick={() => setAdvancedOpen((v) => !v)}
             className="flex w-full items-center justify-between px-3 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60 hover:text-white transition-colors"
           >
-            <span>Outils avancés</span>
+            <span>Outils avances</span>
             <ChevronDown className={cn('h-4 w-4 transition-transform', advancedOpen ? 'rotate-180' : 'rotate-0')} />
           </button>
           {advancedOpen && <div className="mt-2 space-y-1.5">{advancedNav.map(renderLink)}</div>}

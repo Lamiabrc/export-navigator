@@ -12,7 +12,7 @@ import { computeCircuitSummary } from '@/lib/stats/computeCircuitSummary';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useReferenceData } from '@/hooks/useReferenceData';
 import { useImportedInvoices } from '@/hooks/useImportedInvoices';
-import type { CostDoc } from '@/types/costs';
+import type { CostDoc } from '@/types/couts';
 import { COST_DOCS_KEY } from '@/lib/constants/storage';
 import { zoneLabel } from '@/types/circuits';
 
@@ -48,7 +48,7 @@ export default function Flows() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Circuits Export</h1>
           <p className="mt-1 text-muted-foreground">
-            Vue cartographique des flux d'export depuis la France avec les 3 couches de coûts (transport, douane/DDP, TVA)
+            Vue cartographique des circuits d'export depuis la France avec les 3 couches de couts (transport, douane/DDP, TVA)
           </p>
         </div>
 
@@ -56,7 +56,7 @@ export default function Flows() {
           <TabsList>
             <TabsTrigger value="mindmap" className="flex items-center gap-2">
               <Map className="h-4 w-4" />
-              Carte des flux (couches)
+              Carte des circuits (couches)
             </TabsTrigger>
             <TabsTrigger value="circuits" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
@@ -132,7 +132,7 @@ export default function Flows() {
         </Tabs>
 
         <div className="bg-muted/50 rounded-xl p-6">
-          <h3 className="font-semibold mb-2">Comprendre les couches de coûts</h3>
+          <h3 className="font-semibold mb-2">Comprendre les couches de couts</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
             <div className="flex items-start gap-3">
               <div className="w-3 h-3 rounded-full mt-1.5" style={{ backgroundColor: 'hsl(var(--chart-1))' }} />
@@ -161,3 +161,8 @@ export default function Flows() {
     </MainLayout>
   );
 }
+
+
+
+
+

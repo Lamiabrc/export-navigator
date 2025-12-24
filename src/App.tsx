@@ -23,6 +23,8 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Imports from "./pages/Imports";
 import Home from "./pages/Home";
+import Clients from "./pages/Clients";
+import FlowManager from "./pages/FlowManager";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +54,10 @@ const App = () => (
             <Route path="/reference-library" element={<ProtectedRoute><ReferenceLibrary /></ProtectedRoute>} />
             <Route path="/imports" element={<ProtectedRoute><Imports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+            <Route path="/flow-manager" element={<ProtectedRoute><FlowManager /></ProtectedRoute>} />
+            <Route path="/circuits" element={<Navigate to="/flows" replace />} />
+            <Route path="/circuits/:id" element={<Navigate to="/flows/:id" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
