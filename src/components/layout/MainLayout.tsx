@@ -36,17 +36,18 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
         <Sidebar />
       </div>
 
-      {/* Sidebar mobile (drawer simple) */}
+      {/* Sidebar mobile (drawer) */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-[60] md:hidden">
+        <div className="fixed inset-0 z-[80] md:hidden">
           {/* overlay */}
           <button
             aria-label="Fermer le menu"
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-black/60"
             onClick={() => setSidebarOpen(false)}
           />
-          <div className="relative z-[61]">
-            <Sidebar />
+          {/* panel */}
+          <div className="relative z-[81]">
+            <Sidebar onNavigate={() => setSidebarOpen(false)} />
           </div>
         </div>
       )}
@@ -73,9 +74,7 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
             </div>
 
             {/* Slot actions (plus tard: search, quick import, etc.) */}
-            <div className="flex items-center gap-2">
-              {/* placeholder */}
-            </div>
+            <div className="flex items-center gap-2">{/* placeholder */}</div>
           </div>
         </header>
 
