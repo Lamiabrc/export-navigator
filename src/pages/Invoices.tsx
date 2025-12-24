@@ -15,6 +15,8 @@ import { useReferenceData } from '@/hooks/useReferenceData';
 import type { CostDoc } from '@/types/costs';
 import type { ExportCase } from '@/types/case';
 import { COST_DOCS_KEY } from '@/lib/constants/storage';
+import { usePilotageRules } from '@/hooks/usePilotageRules';
+import { computePilotageKpis } from '@/lib/pilotage/kpis';
 
 const statusBadge = (status: ExportCase['matchStatus']) => {
   switch (status) {
@@ -38,14 +40,17 @@ export default function Invoices() {
   const { value: importedInvoices } = useImportedInvoices();
   const { value: costDocs } = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
   const { referenceData } = useReferenceData();
+  const { rules: pilotageRules } = usePilotageRules();
 
   const cases = useMemo(() => {
-    const base = reconcile(importedInvoices, costDocs);
+    const base = reconcile(importedInvoices, costDocs, { rules: pilotageRules });
     return base.map((c) => {
-      const risk = evaluateCase(c, referenceData);
+      const risk = evaluateCase(c, referenceData, {
+        coverageThreshold: pilotageRules.coverageThreshold,
+      });
       return { ...c, alerts: risk.alerts, riskScore: risk.riskScore };
     });
-  }, [importedInvoices, costDocs, referenceData]);
+  }, [importedInvoices, costDocs, referenceData, pilotageRules]);
 
   const aggregates = useMemo(() => aggregateCases(cases), [cases]);
   const matchCounts = useMemo(
@@ -58,6 +63,10 @@ export default function Invoices() {
         { match: 0, partial: 0, none: 0 } as Record<ExportCase['matchStatus'], number>
       ),
     [cases]
+  );
+  const pilotageKpis = useMemo(
+    () => computePilotageKpis(cases, pilotageRules.coverageThreshold),
+    [cases, pilotageRules.coverageThreshold]
   );
 
   return (
@@ -103,6 +112,46 @@ export default function Invoices() {
             <CardContent className="pt-5">
               <p className="text-xs text-muted-foreground">Sans match</p>
               <p className="text-2xl font-bold text-muted-foreground">{matchCounts.none}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-5">
+              <p className="text-xs text-muted-foreground">Marge totale</p>
+              <p className="text-2xl font-bold">
+                {pilotageKpis.marginTotal.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} €
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-5">
+              <p className="text-xs text-muted-foreground">Marge moyenne (%)</p>
+              <p className="text-2xl font-bold">
+                {pilotageKpis.marginAveragePct.toFixed(1)}%
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-5">
+              <p className="text-xs text-muted-foreground">Couverture transit moyenne</p>
+              <p className="text-2xl font-bold">
+                {Math.round(pilotageKpis.coverageAveragePct)}%
+                <span className="text-xs text-muted-foreground ml-2">
+                  seuil {Math.round(pilotageRules.coverageThreshold * 100)}%
+                </span>
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-5">
+              <p className="text-xs text-muted-foreground">Points critiques</p>
+              <p className="text-sm text-foreground">
+                <span className="font-semibold">{pilotageKpis.belowThreshold}</span> transit &lt; seuil •{' '}
+                <span className="font-semibold">{pilotageKpis.notBilled}</span> transit non facturé •{' '}
+                <span className="font-semibold">{pilotageKpis.amountMismatch}</span> écart HT/TVA/TTC
+              </p>
             </CardContent>
           </Card>
         </div>

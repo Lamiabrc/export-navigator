@@ -21,21 +21,25 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { COST_DOCS_KEY } from '@/lib/constants/storage';
+import { usePilotageRules } from '@/hooks/usePilotageRules';
 
 export default function Dashboard() {
   const { flows, isLoading } = useFlows();
   const { referenceData } = useReferenceData();
   const { value: importedInvoices } = useImportedInvoices();
   const { value: costDocs } = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
+  const { rules: pilotageRules } = usePilotageRules();
 
   // Rapprochement factures/coûts importés
   const cases = useMemo(() => {
-    const base = reconcile(importedInvoices, costDocs);
+    const base = reconcile(importedInvoices, costDocs, { rules: pilotageRules });
     return base.map((c) => {
-      const risk = evaluateCase(c, referenceData);
+      const risk = evaluateCase(c, referenceData, {
+        coverageThreshold: pilotageRules.coverageThreshold,
+      });
       return { ...c, alerts: risk.alerts, riskScore: risk.riskScore };
     });
-  }, [importedInvoices, costDocs, referenceData]);
+  }, [importedInvoices, costDocs, referenceData, pilotageRules]);
 
   const aggregates = useMemo(() => aggregateCases(cases), [cases]);
   const matchCounts = useMemo(

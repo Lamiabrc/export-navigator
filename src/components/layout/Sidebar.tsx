@@ -30,7 +30,7 @@ const essentialNav = [
   { name: 'Flux & marges', href: '/flow-manager', icon: LineChart },
   { name: 'Clients', href: '/clients', icon: Users },
   { name: 'Controle factures', href: '/invoices', icon: Upload },
-  { name: 'Finance', href: '/finance', icon: Calculator },
+  { name: 'Analyse marges', href: '/margin-analysis', icon: Calculator },
   { name: 'Guide', href: '/guide', icon: BookOpen },
 ];
 
@@ -42,7 +42,6 @@ const advancedNav = [
   { name: 'Verif Facture PDF', href: '/invoice-verification', icon: FileInput },
   { name: 'Imports CSV', href: '/imports', icon: FileInput },
   { name: 'Base Documentaire', href: '/reference-library', icon: Library },
-  { name: 'Dashboard Export', href: '/export-dashboard', icon: LayoutDashboard },
 ];
 
 const adminNavigation = [{ name: 'Parametres', href: '/settings', icon: Settings }];

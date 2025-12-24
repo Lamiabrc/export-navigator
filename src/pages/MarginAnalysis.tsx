@@ -16,6 +16,7 @@ import type { CostDoc } from "@/types/costs";
 import { COST_DOCS_KEY } from "@/lib/constants/storage";
 import { reconcile } from "@/lib/reco/reconcile";
 import { aggregateCases, margin, transitCoverage } from "@/lib/kpi/exportKpis";
+import { usePilotageRules } from "@/hooks/usePilotageRules";
 
 type RiskTag =
   | "PERTE"
@@ -89,6 +90,7 @@ export default function MarginAnalysis() {
 
   const { value: importedInvoices } = useImportedInvoices();
   const { value: costDocs } = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
+  const { rules: pilotageRules } = usePilotageRules();
 
   // Seuils persistants (indispensable pour que l’outil serve en RUN)
   const { value: thresholds, setValue: setThresholds } = useLocalStorage<Thresholds>(
@@ -99,7 +101,10 @@ export default function MarginAnalysis() {
   // Recherche persistante (optionnel mais pratique)
   const { value: query, setValue: setQuery } = useLocalStorage<string>("margin_query_v1", "");
 
-  const cases = useMemo(() => reconcile(importedInvoices, costDocs), [importedInvoices, costDocs]);
+  const cases = useMemo(
+    () => reconcile(importedInvoices, costDocs, { rules: pilotageRules }),
+    [importedInvoices, costDocs, pilotageRules]
+  );
   const aggregates = useMemo(() => aggregateCases(cases), [cases]);
 
   const riskRows = useMemo(() => {
@@ -231,8 +236,8 @@ export default function MarginAnalysis() {
   };
 
   const goFinance = (caseId: string) => {
-    // On prépare le terrain : si Finance lit plus tard ?flow=..., c’est déjà compatible.
-    navigate(`/finance?flow=${encodeURIComponent(caseId)}`);
+    // Redirige vers la page unique d’analyse marge (anciennement “Finance”).
+    navigate(`/margin-analysis?flow=${encodeURIComponent(caseId)}`);
   };
 
   const goFlows = (caseId: string) => {
@@ -445,10 +450,10 @@ export default function MarginAnalysis() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => goFinance(r.caseId)}
-                                title="Ouvrir la page Finance"
+                                title="Ouvrir la page Analyse marges"
                               >
                                 <Eye className="h-4 w-4 mr-1" />
-                                Finance
+                                Analyse
                               </Button>
 
                               <Button

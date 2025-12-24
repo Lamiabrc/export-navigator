@@ -19,12 +19,13 @@ import {
 } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useImportedInvoices } from '@/hooks/useImportedInvoices';
-import type { CostDoc } from '@/types/Couts';
+import type { CostDoc } from '@/types/costs';
 import { COST_DOCS_KEY } from '@/lib/constants/storage';
 import { reconcile } from '@/lib/reco/reconcile';
 import { evaluateCase } from '@/lib/rules/riskEngine';
 import { useReferenceData } from '@/hooks/useReferenceData';
 import { zoneLabel } from '@/types/circuits';
+import { usePilotageRules } from '@/hooks/usePilotageRules';
 
 const zoneColors: Record<string, string> = {
   UE: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
@@ -60,17 +61,20 @@ export default function CircuitDetail() {
   const { value: importedInvoices } = useImportedInvoices();
   const { value: costDocs } = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
   const { referenceData } = useReferenceData();
+  const { rules: pilotageRules } = usePilotageRules();
 
   const relatedCases = useMemo(() => {
     if (!id) return [];
-    const base = reconcile(importedInvoices, costDocs);
+    const base = reconcile(importedInvoices, costDocs, { rules: pilotageRules });
     return base
       .filter((c) => c.invoice.flowCode === id || c.costDocs.some((doc) => doc.flowCode === id))
       .map((c) => {
-        const risk = evaluateCase(c, referenceData);
+        const risk = evaluateCase(c, referenceData, {
+          coverageThreshold: pilotageRules.coverageThreshold,
+        });
         return { ...c, alerts: risk.alerts, riskScore: risk.riskScore };
       });
-  }, [id, importedInvoices, costDocs, referenceData]);
+  }, [id, importedInvoices, costDocs, referenceData, pilotageRules]);
 
   const caseAlerts = useMemo(() => relatedCases.flatMap((c) => c.alerts || []), [relatedCases]);
 
@@ -508,8 +512,6 @@ export default function CircuitDetail() {
     </MainLayout>
   );
 }
-
-
 
 
 

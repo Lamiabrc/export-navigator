@@ -9,13 +9,11 @@ import Dashboard from "./pages/Dashboard";
 import Flows from "./pages/Flows";
 import CircuitDetail from "./pages/CircuitDetail";
 import Logistics from "./pages/Logistics";
-import Finance from "./pages/Finance";
 import Guide from "./pages/Guide";
 import Invoices from "./pages/Invoices";
 import InvoiceVerification from "./pages/InvoiceVerification";
 import Settings from "./pages/Settings";
 import Simulator from "./pages/Simulator";
-import ExportDashboard from "./pages/ExportDashboard";
 import MarginAnalysis from "./pages/MarginAnalysis";
 import ReferenceLibrary from "./pages/ReferenceLibrary";
 import ControlTower from "./pages/ControlTower";
@@ -44,12 +42,12 @@ const App = () => (
             <Route path="/flows" element={<ProtectedRoute><Flows /></ProtectedRoute>} />
             <Route path="/flows/:id" element={<ProtectedRoute><CircuitDetail /></ProtectedRoute>} />
             <Route path="/logistics" element={<ProtectedRoute><Logistics /></ProtectedRoute>} />
-            <Route path="/finance" element={<ProtectedRoute><Finance /></ProtectedRoute>} />
+            <Route path="/finance" element={<Navigate to="/margin-analysis" replace />} />
             <Route path="/guide" element={<ProtectedRoute><Guide /></ProtectedRoute>} />
             <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
             <Route path="/invoice-verification" element={<ProtectedRoute><InvoiceVerification /></ProtectedRoute>} />
             <Route path="/simulator" element={<ProtectedRoute><Simulator /></ProtectedRoute>} />
-            <Route path="/export-dashboard" element={<ProtectedRoute><ExportDashboard /></ProtectedRoute>} />
+            <Route path="/export-dashboard" element={<Navigate to="/dashboard" replace />} />
             <Route path="/margin-analysis" element={<ProtectedRoute><MarginAnalysis /></ProtectedRoute>} />
             <Route path="/reference-library" element={<ProtectedRoute><ReferenceLibrary /></ProtectedRoute>} />
             <Route path="/imports" element={<ProtectedRoute><Imports /></ProtectedRoute>} />

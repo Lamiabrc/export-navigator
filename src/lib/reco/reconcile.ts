@@ -1,6 +1,13 @@
 import type { ExportCase, MatchStatus, MatchMethod } from '@/types/case';
 import type { CostDoc } from '@/types/costs';
 import type { ImportedInvoice } from '@/types/sage';
+import type { PilotageRules } from '@/lib/pilotage/rules';
+import {
+  applyRulesToCostDocs,
+  applyRulesToInvoice,
+  defaultPilotageRules,
+  normalizeRules,
+} from '@/lib/pilotage/rules';
 
 const sumCostDoc = (doc: CostDoc): number =>
   doc.lines.reduce((sum, line) => sum + (line.amount || 0), 0);
@@ -65,22 +72,31 @@ const computeScore = (method: MatchMethod, invoice: ImportedInvoice, docs: CostD
   return 0;
 };
 
-export const reconcile = (invoices: ImportedInvoice[], costDocs: CostDoc[]): ExportCase[] => {
-  return invoices.map((invoice, index) => {
+export const reconcile = (
+  invoices: ImportedInvoice[],
+  costDocs: CostDoc[],
+  options?: { rules?: PilotageRules }
+): ExportCase[] => {
+  const rules = normalizeRules(options?.rules ?? defaultPilotageRules);
+
+  const enrichedInvoices = invoices.map((inv) => applyRulesToInvoice(inv, rules));
+  const enrichedCostDocs = applyRulesToCostDocs(costDocs, rules);
+
+  return enrichedInvoices.map((invoice, index) => {
     let matched: CostDoc[] = [];
     let method: MatchMethod = 'none';
 
-    const byNumber = matchByInvoiceNumber(invoice, costDocs);
+    const byNumber = matchByInvoiceNumber(invoice, enrichedCostDocs);
     if (byNumber.length) {
       matched = byNumber;
       method = 'invoiceNumber';
     } else {
-      const byShipment = matchByShipment(invoice, costDocs);
+      const byShipment = matchByShipment(invoice, enrichedCostDocs);
       if (byShipment.length) {
         matched = byShipment;
         method = 'shipmentRef';
       } else {
-        const byDateAmount = matchByDateAmount(invoice, costDocs);
+        const byDateAmount = matchByDateAmount(invoice, enrichedCostDocs);
         if (byDateAmount.length) {
           matched = byDateAmount;
           method = 'client_date_amount';

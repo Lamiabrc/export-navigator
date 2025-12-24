@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Download, RefreshCw, Upload } from 'lucide-react';
 import { useReferenceData, type ReferenceData } from '@/hooks/useReferenceData';
+import { usePilotageRules } from '@/hooks/usePilotageRules';
 import { toast } from 'sonner';
 
 const downloadJson = (data: ReferenceData, filename: string) => {
@@ -17,14 +18,31 @@ const downloadJson = (data: ReferenceData, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
+const downloadString = (content: string, filename: string) => {
+  const blob = new Blob([content], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
 export default function Settings() {
   const { referenceData, saveReferenceData, resetReferenceData } = useReferenceData();
+  const { rules: pilotageRules, setRules: savePilotageRules, resetRules, exportRules, importRules, requestImport } =
+    usePilotageRules();
   const [preview, setPreview] = useState(JSON.stringify(referenceData, null, 2));
+  const [rulesPreview, setRulesPreview] = useState(JSON.stringify(pilotageRules, null, 2));
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setPreview(JSON.stringify(referenceData, null, 2));
   }, [referenceData]);
+
+  useEffect(() => {
+    setRulesPreview(JSON.stringify(pilotageRules, null, 2));
+  }, [pilotageRules]);
 
   const handleImport = (file?: File) => {
     if (!file) return;
@@ -48,6 +66,27 @@ export default function Settings() {
       toast.success('Référentiel sauvegardé');
     } catch {
       toast.error('Format JSON incorrect');
+    }
+  };
+
+  const handleRulesSave = () => {
+    try {
+      const parsed = JSON.parse(rulesPreview);
+      savePilotageRules(parsed);
+      toast.success('Règles pilotage sauvegardées');
+    } catch {
+      toast.error('Format JSON incorrect');
+    }
+  };
+
+  const handleRulesImport = async () => {
+    try {
+      const imported = await requestImport({ accept: '.json', parse: 'text' });
+      importRules(imported.text);
+      toast.success('Règles importées');
+    } catch (err) {
+      console.error(err);
+      toast.error('Import impossible');
     }
   };
 
@@ -96,6 +135,46 @@ export default function Settings() {
             />
             <div className="flex justify-end">
               <Button onClick={handleSave}>Sauvegarder</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle>Règles de pilotage</CardTitle>
+              <CardDescription>Moteur de mapping mots-clés / comptes pour classer les lignes</CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => downloadString(exportRules(), 'pilotage_rules.json')}>
+                <Download className="h-4 w-4 mr-2" />
+                Export JSON
+              </Button>
+              <Button variant="outline" onClick={handleRulesImport}>
+                <Upload className="h-4 w-4 mr-2" />
+                Import JSON
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  resetRules();
+                  toast.success('Règles réinitialisées');
+                }}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Reset
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Textarea
+              rows={14}
+              value={rulesPreview}
+              onChange={(e) => setRulesPreview(e.target.value)}
+              className="font-mono text-xs"
+            />
+            <div className="flex justify-end">
+              <Button onClick={handleRulesSave}>Sauvegarder</Button>
             </div>
           </CardContent>
         </Card>

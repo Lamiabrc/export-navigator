@@ -2,6 +2,7 @@
 import type { ImportedInvoice } from '@/types/sage';
 import type { CostDoc } from '@/types/costs';
 import type { ReferenceData } from '@/hooks/useReferenceData';
+import type { PilotageRules } from '@/lib/pilotage/rules';
 import { reconcile } from '@/lib/reco/reconcile';
 import { transitCoverage } from '@/lib/kpi/exportKpis';
 import { evaluateCase } from '@/lib/rules/riskEngine';
@@ -21,7 +22,8 @@ export const computeCircuitSummary = (
   circuits: ExportCircuit[],
   invoices: ImportedInvoice[],
   costDocs: CostDoc[],
-  referenceData?: ReferenceData
+  referenceData?: ReferenceData,
+  pilotageRules?: PilotageRules
 ): Record<string, CircuitSummary> => {
   const summaries: Record<string, CircuitSummary> = {};
 
@@ -39,9 +41,11 @@ export const computeCircuitSummary = (
       return;
     }
 
-    const cases = reconcile(relatedInvoices, relatedCostDocs);
+    const cases = reconcile(relatedInvoices, relatedCostDocs, { rules: pilotageRules });
     const evaluated = referenceData
-      ? cases.map((c) => evaluateCase(c, referenceData))
+      ? cases.map((c) =>
+          evaluateCase(c, referenceData, { coverageThreshold: pilotageRules?.coverageThreshold })
+        )
       : cases.map(() => ({ alerts: [], riskScore: 100 }));
 
     const coverageValues = cases.map((c) => transitCoverage(c).coverage);

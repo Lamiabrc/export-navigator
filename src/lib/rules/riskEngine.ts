@@ -13,10 +13,11 @@ const buildAlertId = (code: string, idx: number) => `${code}-${idx}`;
 export const evaluateCase = (
   exportCase: ExportCase,
   referenceData: ReferenceData,
-  options?: { coverageThreshold?: number }
+  options?: { coverageThreshold?: number; amountTolerance?: number }
 ): RiskResult => {
   const alerts: Alert[] = [];
   const coverageThreshold = options?.coverageThreshold ?? 0.6;
+  const amountTolerance = options?.amountTolerance ?? 1;
 
   const coverage = transitCoverage(exportCase);
   const costs = totalCosts(exportCase);
@@ -58,10 +59,14 @@ export const evaluateCase = (
   }
 
   // Incohérence HT/TVA/TTC
-  if (exportCase.invoice.totalHT !== undefined && exportCase.invoice.totalTVA !== undefined && exportCase.invoice.totalTTC !== undefined) {
+  if (
+    exportCase.invoice.totalHT !== undefined &&
+    exportCase.invoice.totalTVA !== undefined &&
+    exportCase.invoice.totalTTC !== undefined
+  ) {
     const expectedTTC = (exportCase.invoice.totalHT || 0) + (exportCase.invoice.totalTVA || 0);
     const gap = Math.abs(expectedTTC - (exportCase.invoice.totalTTC || 0));
-    if (gap > 1) {
+    if (gap > amountTolerance) {
       alerts.push({
         id: buildAlertId('AMOUNT_MISMATCH', alerts.length),
         code: 'AMOUNT_MISMATCH',

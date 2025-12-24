@@ -15,6 +15,7 @@ import { useImportedInvoices } from '@/hooks/useImportedInvoices';
 import type { CostDoc } from '@/types/couts';
 import { COST_DOCS_KEY } from '@/lib/constants/storage';
 import { zoneLabel } from '@/types/circuits';
+import { usePilotageRules } from '@/hooks/usePilotageRules';
 
 const zoneColors: Record<string, string> = {
   UE: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
@@ -36,10 +37,12 @@ export default function Flows() {
   const { value: importedInvoices } = useImportedInvoices();
   const { value: costDocs } = useLocalStorage<CostDoc[]>(COST_DOCS_KEY, []);
   const { referenceData } = useReferenceData();
+  const { rules: pilotageRules } = usePilotageRules();
 
   const summaries = useMemo(
-    () => computeCircuitSummary(exportCircuits, importedInvoices, costDocs, referenceData),
-    [importedInvoices, costDocs, referenceData]
+    () =>
+      computeCircuitSummary(exportCircuits, importedInvoices, costDocs, referenceData, pilotageRules),
+    [importedInvoices, costDocs, referenceData, pilotageRules]
   );
 
   return (
@@ -161,7 +164,6 @@ export default function Flows() {
     </MainLayout>
   );
 }
-
 
 
 
