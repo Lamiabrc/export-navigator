@@ -1,93 +1,154 @@
-﻿import { useState } from 'react';
-import type { ElementType } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { cn } from '@/lib/utils';
-import { useAuth } from '@/contexts/AuthContext';
+import type { ElementType } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 import {
-  LayoutDashboard,
   ShieldCheck,
+  LayoutDashboard,
   FileText,
   Truck,
-  Calculator,
-  BookOpen,
+  Users,
   Upload,
+  FileInput,
+  Library,
+  Calculator,
+  TrendingUp,
+  BookOpen,
   Settings,
   LogOut,
-  TrendingUp,
-  Library,
-  FileInput,
-  Home as HomeIcon,
-  ChevronDown,
-  Users,
-  LineChart,
-} from 'lucide-react';
-import logoOrliman from '@/assets/logo-orliman.png';
+} from "lucide-react";
+import logoOrliman from "@/assets/logo-orliman.png";
 
-const essentialNav = [
-  { name: 'Tour de controle', href: '/control-tower', icon: ShieldCheck, badge: 'NEW', featured: true },
-  { name: 'Accueil', href: '/home', icon: HomeIcon },
-  { name: 'Circuits export', href: '/flows', icon: FileText, aliases: ['/circuits'] },
-  { name: 'Flux & marges', href: '/flow-manager', icon: LineChart },
-  { name: 'Clients', href: '/clients', icon: Users },
-  { name: 'Controle factures', href: '/invoices', icon: Upload },
-  { name: 'Finance', href: '/finance', icon: Calculator },
-  { name: 'Guide', href: '/guide', icon: BookOpen },
+type NavItem = {
+  name: string;
+  href: string;
+  icon: ElementType;
+  badge?: string;
+  featured?: boolean;
+  aliases?: string[];
+};
+
+type NavSection = {
+  title: string;
+  items: NavItem[];
+};
+
+const navigation: NavSection[] = [
+  {
+    title: "Pilotage",
+    items: [
+      {
+        name: "Tour de contrôle",
+        href: "/control-tower",
+        icon: ShieldCheck,
+        badge: "NEW",
+        featured: true,
+      },
+      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: "Données",
+    items: [
+      { name: "Imports", href: "/imports", icon: Upload },
+      { name: "Base documentaire", href: "/reference-library", icon: Library },
+    ],
+  },
+  {
+    title: "Opérations",
+    items: [
+      {
+        name: "Circuits export",
+        href: "/flows",
+        icon: FileText,
+        aliases: ["/circuits"],
+      },
+      { name: "Logistique", href: "/logistics", icon: Truck },
+      { name: "Clients", href: "/clients", icon: Users },
+    ],
+  },
+  {
+    title: "Facturation & conformité",
+    items: [
+      { name: "Factures", href: "/invoices", icon: FileInput },
+      {
+        name: "Vérification PDF",
+        href: "/invoice-verification",
+        icon: FileInput,
+      },
+    ],
+  },
+  {
+    title: "Finance",
+    items: [
+      { name: "Finance", href: "/finance", icon: Calculator },
+      { name: "Analyse marges", href: "/margin-analysis", icon: TrendingUp },
+      // Si tu gardes Simulator, il reste ici. Sinon supprime la ligne.
+      { name: "Simulateur", href: "/simulator", icon: Calculator },
+    ],
+  },
+  {
+    title: "Support",
+    items: [{ name: "Guide", href: "/guide", icon: BookOpen }],
+  },
 ];
 
-const advancedNav = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Logistique', href: '/logistics', icon: Truck },
-  { name: 'Simulateur', href: '/simulator', icon: Calculator },
-  { name: 'Analyse Marges', href: '/margin-analysis', icon: TrendingUp },
-  { name: 'Verif Facture PDF', href: '/invoice-verification', icon: FileInput },
-  { name: 'Imports CSV', href: '/imports', icon: FileInput },
-  { name: 'Base Documentaire', href: '/reference-library', icon: Library },
-  { name: 'Dashboard Export', href: '/export-dashboard', icon: LayoutDashboard },
-];
-
-const adminNavigation = [{ name: 'Parametres', href: '/settings', icon: Settings }];
+const adminNavigation: NavSection = {
+  title: "Administration",
+  items: [{ name: "Paramètres", href: "/settings", icon: Settings }],
+};
 
 const roleLabels: Record<string, string> = {
-  direction: 'Direction',
-  adv_export: 'ADV Export',
-  logistique: 'Logistique',
-  finance: 'Finance/Compta',
-  admin: 'Administrateur',
+  direction: "Direction",
+  adv_export: "ADV Export",
+  logistique: "Logistique",
+  finance: "Finance/Compta",
+  admin: "Administrateur",
 };
 
 export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const [advancedOpen, setAdvancedOpen] = useState(true);
 
   const handleLogout = () => {
     signOut();
-    navigate('/auth');
+    navigate("/auth");
   };
 
   const getInitials = (name: string) =>
     name
-      .split(' ')
+      .split(" ")
       .map((n) => n[0])
-      .join('')
+      .join("")
       .toUpperCase()
       .slice(0, 2);
 
-  const renderLink = (item: { name: string; href: string; icon: ElementType; badge?: string; featured?: boolean; aliases?: string[] }) => {
-    const matchesAlias = item.aliases?.some((alias) => location.pathname === alias || location.pathname.startsWith(`${alias}/`));
-    const isActive = matchesAlias || location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
+  const isItemActive = (item: NavItem) => {
+    const matchesAlias = item.aliases?.some(
+      (alias) =>
+        location.pathname === alias || location.pathname.startsWith(`${alias}/`)
+    );
+    return (
+      matchesAlias ||
+      location.pathname === item.href ||
+      location.pathname.startsWith(`${item.href}/`)
+    );
+  };
+
+  const renderLink = (item: NavItem) => {
+    const active = isItemActive(item);
     return (
       <Link
         key={item.name}
         to={item.href}
         className={cn(
-          'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all',
-          'hover:bg-white/10 hover:text-white',
-          isActive
-            ? 'bg-gradient-to-r from-primary/30 via-primary/20 to-transparent text-white shadow-lg shadow-primary/20 border border-primary/40'
-            : 'text-sidebar-foreground/80 border border-transparent',
-          item.featured && !isActive && 'border border-primary/30 bg-primary/5'
+          "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+          "hover:bg-white/10 hover:text-white",
+          active
+            ? "bg-gradient-to-r from-primary/30 via-primary/20 to-transparent text-white shadow-lg shadow-primary/20 border border-primary/40"
+            : "text-sidebar-foreground/80 border border-transparent",
+          item.featured && !active && "border border-primary/30 bg-primary/5"
         )}
       >
         <item.icon className="h-5 w-5" />
@@ -106,35 +167,28 @@ export function Sidebar() {
       <div className="flex h-16 items-center gap-3 px-6 border-b border-white/10">
         <img src={logoOrliman} alt="ORLIMAN" className="h-8 w-auto" />
         <div>
-          <p className="text-xs text-sidebar-foreground/60">La Meziere, France</p>
+          <p className="text-xs text-sidebar-foreground/60">La Mézière, France</p>
         </div>
       </div>
 
-      <nav className="flex-1 space-y-4 px-3 py-4 text-sidebar-foreground">
-        <div>
-          <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
-            Essentiel
+      <nav className="flex-1 space-y-4 px-3 py-4 text-sidebar-foreground overflow-y-auto">
+        {navigation.map((section) => (
+          <div key={section.title}>
+            <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
+              {section.title}
+            </div>
+            <div className="space-y-1.5">{section.items.map(renderLink)}</div>
           </div>
-          <div className="space-y-1.5">{essentialNav.map(renderLink)}</div>
-        </div>
+        ))}
 
-        <div>
-          <button
-            onClick={() => setAdvancedOpen((v) => !v)}
-            className="flex w-full items-center justify-between px-3 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60 hover:text-white transition-colors"
-          >
-            <span>Outils avances</span>
-            <ChevronDown className={cn('h-4 w-4 transition-transform', advancedOpen ? 'rotate-180' : 'rotate-0')} />
-          </button>
-          {advancedOpen && <div className="mt-2 space-y-1.5">{advancedNav.map(renderLink)}</div>}
-        </div>
-
-        {user?.role === 'admin' && (
+        {user?.role === "admin" && (
           <div>
             <div className="mt-4 mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
-              Administration
+              {adminNavigation.title}
             </div>
-            <div className="space-y-1.5">{adminNavigation.map(renderLink)}</div>
+            <div className="space-y-1.5">
+              {adminNavigation.items.map(renderLink)}
+            </div>
           </div>
         )}
       </nav>
@@ -142,21 +196,29 @@ export function Sidebar() {
       <div className="border-t border-white/10 p-4 bg-black/30">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 text-primary-foreground border border-primary/40">
-            <span className="text-sm font-medium">{user ? getInitials(user.name) : '??'}</span>
+            <span className="text-sm font-medium">
+              {user ? getInitials(user.name) : "??"}
+            </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">{user?.name || 'Utilisateur'}</p>
-            <p className="text-xs text-sidebar-foreground/70">{user?.role ? roleLabels[user.role] : ''}</p>
+            <p className="text-sm font-medium text-white truncate">
+              {user?.name || "Utilisateur"}
+            </p>
+            <p className="text-xs text-sidebar-foreground/70">
+              {user?.role ? roleLabels[user.role] : ""}
+            </p>
           </div>
           <button
             onClick={handleLogout}
             className="p-2 rounded-lg hover:bg-white/10 transition-smooth"
-            title="Deconnexion"
+            title="Déconnexion"
           >
             <LogOut className="h-4 w-4 text-sidebar-foreground/70" />
           </button>
         </div>
-        <p className="mt-2 text-[10px] text-sidebar-foreground/40 text-center">Mode local</p>
+        <p className="mt-2 text-[10px] text-sidebar-foreground/40 text-center">
+          Mode local
+        </p>
       </div>
     </aside>
   );
