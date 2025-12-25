@@ -57,8 +57,16 @@ export default function ScenarioLab() {
     const octroi = form.octroiPct ?? dromRule.octroiPct;
     const lppr = form.lpprMarkupPct ?? dromRule.lpprMarkupPct;
 
-    const baseCatalog = form.catalogPriceMetro && form.catalogPriceMetro > 0 ? form.catalogPriceMetro : baseCost;
-    const localizedBase = baseCatalog * (1 + octroi / 100) * (1 + vat / 100) * (1 + lppr / 100);
+    const metroBase =
+      form.lpprBaseMetro && form.lpprBaseMetro > 0
+        ? form.lpprBaseMetro
+        : form.catalogPriceMetro && form.catalogPriceMetro > 0
+          ? form.catalogPriceMetro
+          : baseCost;
+
+    // Applique d'abord la majoration LPPR sur le tarif métropole, puis les taxes locales (octroi + TVA)
+    const baseWithLppr = metroBase * (1 + lppr / 100);
+    const localizedBase = baseWithLppr * (1 + octroi / 100) * (1 + vat / 100);
 
     const recommendedPrice =
       form.targetPrice && form.targetPrice > 0
@@ -71,9 +79,10 @@ export default function ScenarioLab() {
     const rationale = [
       `Strategie: ${form.strategy}`,
       `Base coût (produit + logistique): €${baseCost.toFixed(2)}`,
-      `Prix catalogue métropole: €${baseCatalog.toFixed(2)}`,
-      `Ajustements DROM: Octroi ${octroi}% + TVA locale ${vat}% + LPPR +${lppr}%`,
-      `Base locale après taxes/LPPR: €${localizedBase.toFixed(2)}`,
+      `Prix LPPR/catalogue métropole: €${metroBase.toFixed(2)}`,
+      `Majoration LPPR appliquée: +${lppr}% => €${baseWithLppr.toFixed(2)}`,
+      `Ajustements DROM: Octroi ${octroi}% + TVA locale ${vat}%`,
+      `Base locale après LPPR + taxes: €${localizedBase.toFixed(2)}`,
       form.targetPrice ? "Prix cible imposé" : `Marge cible: ${(marginTarget * 100).toFixed(0)}%`,
     ];
 
