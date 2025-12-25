@@ -13,7 +13,20 @@ type FormState = {
   incoterm: string;
   logisticsCost: number;
   productCost: number;
+  catalogPriceMetro?: number;
+  vatPct?: number;
+  octroiPct?: number;
+  lpprMarkupPct?: number;
   targetPrice?: number;
+};
+
+const DROM_RULES: Record<string, { vatPct: number; octroiPct: number; lpprMarkupPct: number }> = {
+  DROM: { vatPct: 8.5, octroiPct: 7, lpprMarkupPct: 8 },
+  MQ: { vatPct: 8.5, octroiPct: 7, lpprMarkupPct: 8 },
+  GP: { vatPct: 8.5, octroiPct: 7, lpprMarkupPct: 8 },
+  RE: { vatPct: 8.5, octroiPct: 7, lpprMarkupPct: 8 },
+  GF: { vatPct: 0, octroiPct: 0, lpprMarkupPct: 8 },
+  YT: { vatPct: 0, octroiPct: 0, lpprMarkupPct: 8 },
 };
 
 export default function ScenarioLab() {
@@ -25,6 +38,10 @@ export default function ScenarioLab() {
     incoterm: "DAP",
     logisticsCost: 12,
     productCost: 40,
+    catalogPriceMetro: search.get("catalogPrice") ? Number(search.get("catalogPrice")) : 60,
+    vatPct: DROM_RULES[search.get("market") ?? "DROM"]?.vatPct ?? 8.5,
+    octroiPct: DROM_RULES[search.get("market") ?? "DROM"]?.octroiPct ?? 7,
+    lpprMarkupPct: DROM_RULES[search.get("market") ?? "DROM"]?.lpprMarkupPct ?? 8,
     targetPrice: search.get("targetPrice") ? Number(search.get("targetPrice")) : undefined,
   });
   const [result, setResult] = React.useState<ScenarioResult | null>(null);
@@ -35,18 +52,29 @@ export default function ScenarioLab() {
     form.strategy === "premium" ? 0.35 : form.strategy === "match" ? 0.25 : 0.18;
 
   const compute = () => {
+    const dromRule = DROM_RULES[form.market] ?? DROM_RULES.DROM;
+    const vat = form.vatPct ?? dromRule.vatPct;
+    const octroi = form.octroiPct ?? dromRule.octroiPct;
+    const lppr = form.lpprMarkupPct ?? dromRule.lpprMarkupPct;
+
+    const baseCatalog = form.catalogPriceMetro && form.catalogPriceMetro > 0 ? form.catalogPriceMetro : baseCost;
+    const localizedBase = baseCatalog * (1 + octroi / 100) * (1 + vat / 100) * (1 + lppr / 100);
+
     const recommendedPrice =
       form.targetPrice && form.targetPrice > 0
         ? form.targetPrice
-        : Number((baseCost * (1 + marginTarget)).toFixed(2));
+        : Number((localizedBase * (1 + marginTarget)).toFixed(2));
     const margin = Number((recommendedPrice - baseCost).toFixed(2));
     const riskLevel: ScenarioResult["riskLevel"] =
       margin <= 0 || !form.market || !form.channel ? "high" : margin < 10 ? "medium" : "low";
 
     const rationale = [
       `Strategie: ${form.strategy}`,
-      `Base cost (produit + logistique): €${baseCost.toFixed(2)}`,
-      form.targetPrice ? "Prix cible impose" : `Marge cible: ${(marginTarget * 100).toFixed(0)}%`,
+      `Base coût (produit + logistique): €${baseCost.toFixed(2)}`,
+      `Prix catalogue métropole: €${baseCatalog.toFixed(2)}`,
+      `Ajustements DROM: Octroi ${octroi}% + TVA locale ${vat}% + LPPR +${lppr}%`,
+      `Base locale après taxes/LPPR: €${localizedBase.toFixed(2)}`,
+      form.targetPrice ? "Prix cible imposé" : `Marge cible: ${(marginTarget * 100).toFixed(0)}%`,
     ];
 
     setResult({
@@ -86,12 +114,29 @@ export default function ScenarioLab() {
           <h2 className="text-lg font-semibold text-foreground">Parametres</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="space-y-1 text-sm text-muted-foreground">
-              <span>Marche</span>
-              <input
+              <span>Marché (DROM)</span>
+              <select
                 value={form.market}
-                onChange={(e) => handleChange("market", e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  const rule = DROM_RULES[next];
+                  setForm((prev) => ({
+                    ...prev,
+                    market: next,
+                    vatPct: rule?.vatPct ?? prev.vatPct,
+                    octroiPct: rule?.octroiPct ?? prev.octroiPct,
+                    lpprMarkupPct: rule?.lpprMarkupPct ?? prev.lpprMarkupPct,
+                  }));
+                }}
                 className="w-full rounded-lg bg-background border border-border px-3 py-2 text-foreground dark:bg-white/5 dark:border-white/10 dark:text-white"
-              />
+              >
+                <option value="DROM">DROM (générique)</option>
+                <option value="MQ">Martinique (MQ)</option>
+                <option value="GP">Guadeloupe (GP)</option>
+                <option value="RE">Réunion (RE)</option>
+                <option value="GF">Guyane (GF)</option>
+                <option value="YT">Mayotte (YT)</option>
+              </select>
             </label>
             <label className="space-y-1 text-sm text-muted-foreground">
               <span>Canal</span>
@@ -136,6 +181,43 @@ export default function ScenarioLab() {
                 type="number"
                 value={form.productCost}
                 onChange={(e) => handleChange("productCost", Number(e.target.value))}
+                className="w-full rounded-lg bg-background border border-border px-3 py-2 text-foreground dark:bg-white/5 dark:border-white/10 dark:text-white"
+              />
+            </label>
+            <label className="space-y-1 text-sm text-muted-foreground">
+              <span>Prix catalogue métropole (HT)</span>
+              <input
+                type="number"
+                value={form.catalogPriceMetro ?? ""}
+                onChange={(e) => handleChange("catalogPriceMetro", Number(e.target.value))}
+                className="w-full rounded-lg bg-background border border-border px-3 py-2 text-foreground dark:bg-white/5 dark:border-white/10 dark:text-white"
+              />
+            </label>
+            <label className="space-y-1 text-sm text-muted-foreground">
+              <span>TVA locale (%)</span>
+              <input
+                type="number"
+                value={form.vatPct ?? ""}
+                onChange={(e) => handleChange("vatPct", Number(e.target.value))}
+                className="w-full rounded-lg bg-background border border-border px-3 py-2 text-foreground dark:bg-white/5 dark:border-white/10 dark:text-white"
+              />
+              <p className="text-[11px] text-muted-foreground">La TVA locale influence le remboursement LPPR.</p>
+            </label>
+            <label className="space-y-1 text-sm text-muted-foreground">
+              <span>Octroi de mer (%)</span>
+              <input
+                type="number"
+                value={form.octroiPct ?? ""}
+                onChange={(e) => handleChange("octroiPct", Number(e.target.value))}
+                className="w-full rounded-lg bg-background border border-border px-3 py-2 text-foreground dark:bg-white/5 dark:border-white/10 dark:text-white"
+              />
+            </label>
+            <label className="space-y-1 text-sm text-muted-foreground">
+              <span>Majoration LPPR (%)</span>
+              <input
+                type="number"
+                value={form.lpprMarkupPct ?? ""}
+                onChange={(e) => handleChange("lpprMarkupPct", Number(e.target.value))}
                 className="w-full rounded-lg bg-background border border-border px-3 py-2 text-foreground dark:bg-white/5 dark:border-white/10 dark:text-white"
               />
             </label>
