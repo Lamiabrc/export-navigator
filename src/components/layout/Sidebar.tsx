@@ -39,7 +39,7 @@ const navigation: NavSection[] = [
     title: "Pilotage",
     items: [
       {
-        name: "Tour de contrôle",
+        name: "Tour de controle",
         href: "/control-tower",
         icon: ShieldCheck,
         badge: "NEW",
@@ -49,14 +49,14 @@ const navigation: NavSection[] = [
     ],
   },
   {
-    title: "Données",
+    title: "Donnees",
     items: [
       { name: "Imports", href: "/imports", icon: Upload },
       { name: "Base documentaire", href: "/reference-library", icon: Library },
     ],
   },
   {
-    title: "Opérations",
+    title: "Operations",
     items: [
       {
         name: "Circuits export",
@@ -69,10 +69,10 @@ const navigation: NavSection[] = [
     ],
   },
   {
-    title: "Facturation & conformité",
+    title: "Facturation & conformite",
     items: [
       { name: "Factures", href: "/invoices", icon: FileInput },
-      { name: "Vérification PDF", href: "/invoice-verification", icon: FileInput },
+      { name: "Verification PDF", href: "/invoice-verification", icon: FileInput },
     ],
   },
   {
@@ -90,8 +90,8 @@ const navigation: NavSection[] = [
 ];
 
 const adminNavigation: NavSection = {
-  title: "Administration",
-  items: [{ name: "Paramètres", href: "/settings", icon: Settings }],
+  title: "Systeme",
+  items: [{ name: "Parametres", href: "/settings", icon: Settings }],
 };
 
 const roleLabels: Record<string, string> = {
@@ -103,9 +103,9 @@ const roleLabels: Record<string, string> = {
 };
 
 export type SidebarProps = {
-  /** Optionnel : utile si Sidebar est affichée dans un drawer mobile */
+  /** Optional: useful when Sidebar is displayed in a mobile drawer */
   onNavigate?: () => void;
-  /** Optionnel : classes supplémentaires si besoin */
+  /** Optional: extra classes when needed */
   className?: string;
 };
 
@@ -177,7 +177,6 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
   return (
     <aside
       className={cn(
-        // z-index renforcé pour fonctionner aussi en drawer mobile
         "fixed inset-y-0 left-0 z-[70] flex w-64 flex-col",
         "bg-slate-900/80 backdrop-blur-xl border-r border-white/10 shadow-xl shadow-primary/10",
         className
@@ -188,7 +187,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
         <img src={logoOrliman} alt="ORLIMAN" className="h-8 w-auto" />
         <div className="min-w-0">
           <p className="text-xs text-sidebar-foreground/60 truncate">
-            La Mézière, France
+            La Meziere, France
           </p>
         </div>
       </div>
@@ -232,8 +231,8 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
             type="button"
             onClick={handleLogout}
             className="p-2 rounded-lg hover:bg-white/10 transition focus:outline-none focus:ring-2 focus:ring-primary/50"
-            aria-label="Déconnexion"
-            title="Déconnexion"
+            aria-label="Deconnexion"
+            title="Deconnexion"
           >
             <LogOut className="h-4 w-4 text-sidebar-foreground/70" />
           </button>

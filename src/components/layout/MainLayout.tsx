@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 interface MainLayoutProps {
   children: React.ReactNode;
-  /** Optionnel: certains écrans (tableaux) peuvent demander plus d’espace */
+  /** Optional: some pages (tables) may need more space */
   contentClassName?: string;
 }
 
@@ -38,7 +38,7 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
 
       {/* Sidebar mobile (drawer) */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-[80] md:hidden">
+        <div className="fixed inset-0 z-[90] md:hidden">
           {/* overlay */}
           <button
             aria-label="Fermer le menu"
@@ -46,9 +46,10 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
             onClick={() => setSidebarOpen(false)}
           />
           {/* panel */}
-          <div className="relative z-[81]">
-            <Sidebar onNavigate={() => setSidebarOpen(false)} />
-          </div>
+          <Sidebar
+            onNavigate={() => setSidebarOpen(false)}
+            className="z-[95] bg-slate-900/90 shadow-2xl shadow-black/40"
+          />
         </div>
       )}
 
@@ -69,11 +70,11 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
                 Export Navigator
               </div>
               <div className="text-xs text-white/60 truncate">
-                Pilotage export • factures • conformité • marges
+                Pilotage export - factures - conformite - marges
               </div>
             </div>
 
-            {/* Slot actions (plus tard: search, quick import, etc.) */}
+            {/* Slot actions (placeholder for search, quick actions, etc.) */}
             <div className="flex items-center gap-2">{/* placeholder */}</div>
           </div>
         </header>

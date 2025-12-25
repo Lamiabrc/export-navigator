@@ -10,7 +10,7 @@ import logoOrliman from '@/assets/logo-orliman.png';
 const FORCED_EMAIL = 'lamia.brechetighil@orliman.fr';
 const DEFAULT_PASSWORD_HINT = 'Orliman2025!';
 
-export default function Auth() {
+export default function AuthPage() {
   const [email] = useState(FORCED_EMAIL);
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
