@@ -71,11 +71,11 @@ export default function CompetitiveIntel() {
         />
       </div>
 
-      <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+      <div className="mt-6 rounded-2xl border border-border bg-card p-4 space-y-3 dark:border-white/10 dark:bg-white/5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">Observations de prix</h2>
-            <p className="text-sm text-white/70">
+            <h2 className="text-lg font-semibold text-foreground">Observations de prix</h2>
+            <p className="text-sm text-muted-foreground">
               Filtre par marche / categorie pour identifier un levier.
             </p>
           </div>
@@ -83,7 +83,7 @@ export default function CompetitiveIntel() {
             <select
               value={marketFilter}
               onChange={(e) => setMarketFilter(e.target.value)}
-              className="rounded-lg bg-white/5 border border-white/10 px-2 py-1 text-sm text-white"
+              className="rounded-lg bg-background border border-border px-2 py-1 text-sm text-foreground dark:bg-white/5 dark:border-white/10 dark:text-white"
             >
               <option value="ALL">Tous marches</option>
               {markets.map((mkt) => (
@@ -95,7 +95,7 @@ export default function CompetitiveIntel() {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-lg bg-white/5 border border-white/10 px-2 py-1 text-sm text-white"
+              className="rounded-lg bg-background border border-border px-2 py-1 text-sm text-foreground dark:bg-white/5 dark:border-white/10 dark:text-white"
             >
               <option value="ALL">Toutes categories</option>
               {categories.map((cat) => (
@@ -107,9 +107,9 @@ export default function CompetitiveIntel() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-white/10">
-          <table className="min-w-full text-sm">
-            <thead className="bg-white/5 text-white/80">
+        <div className="overflow-hidden rounded-xl border border-border dark:border-white/10">
+          <table className="min-w-full text-sm text-foreground">
+            <thead className="bg-muted/40 text-muted-foreground dark:bg-white/5 dark:text-white/80">
               <tr>
                 <th className="px-3 py-2 text-left">Competiteur</th>
                 <th className="px-3 py-2 text-left">Categorie</th>
@@ -121,7 +121,7 @@ export default function CompetitiveIntel() {
             </thead>
             <tbody>
               {filtered.map((obs) => (
-                <tr key={obs.id} className="border-t border-white/5">
+                <tr key={obs.id} className="border-t border-border dark:border-white/5">
                   <td className="px-3 py-2">{getCompetitorName(obs.competitorId)}</td>
                   <td className="px-3 py-2">{obs.category}</td>
                   <td className="px-3 py-2">{obs.productName ?? "-"}</td>
@@ -129,7 +129,9 @@ export default function CompetitiveIntel() {
                   <td className="px-3 py-2">
                     {obs.price} {obs.currency}
                   </td>
-                  <td className="px-3 py-2 text-white/70">{obs.sourceLabel}</td>
+                  <td className="px-3 py-2 text-muted-foreground dark:text-white/70">
+                    {obs.sourceLabel}
+                  </td>
                 </tr>
               ))}
             </tbody>

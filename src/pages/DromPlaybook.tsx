@@ -38,25 +38,25 @@ export default function DromPlaybook() {
         subtitle="Checklists operationnelles DROM (structure a completer)."
       />
 
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 mt-4">
+      <div className="rounded-2xl border border-border bg-card p-4 mt-4 dark:border-white/10 dark:bg-white/5">
         <Accordion type="single" collapsible className="space-y-2">
           {sections.map((section) => (
             <AccordionItem
               key={section.id}
               value={section.id}
-              className="border-white/10 rounded-xl overflow-hidden"
+              className="border-border dark:border-white/10 rounded-xl overflow-hidden"
             >
               <AccordionTrigger className="px-4 py-3 text-left">
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold text-white">{section.title}</span>
-                  <span className="text-[11px] rounded-full bg-amber-500/15 text-amber-200 border border-amber-400/30 px-2 py-1">
+                  <span className="text-sm font-semibold text-foreground">{section.title}</span>
+                  <span className="text-[11px] rounded-full bg-amber-100 text-amber-700 border border-amber-200 px-2 py-1 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-400/30">
                     A completer
                   </span>
                 </div>
               </AccordionTrigger>
-              <AccordionContent className="px-4 pb-4 pt-2 text-sm text-white/80 space-y-3 bg-white/5 border-t border-white/10">
+              <AccordionContent className="px-4 pb-4 pt-2 text-sm text-muted-foreground space-y-3 bg-muted/30 border-t border-border dark:bg-white/5 dark:border-white/10">
                 <p>{section.content}</p>
-                <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/70">
+                <div className="rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground dark:border-white/10 dark:bg-white/5">
                   Sources / liens (a renseigner)
                 </div>
               </AccordionContent>
