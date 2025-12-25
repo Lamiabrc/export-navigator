@@ -6,7 +6,8 @@ const THEME_STORAGE_KEY = "theme";
 
 const applyTheme = () => {
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
-  const theme = stored === "dark" ? "dark" : "light";
+  // Default to dark theme for better contrast across the app unless the user explicitly chose light
+  const theme = stored === "light" ? "light" : "dark";
   document.documentElement.classList.toggle("dark", theme === "dark");
   if (stored !== theme) {
     localStorage.setItem(THEME_STORAGE_KEY, theme);
