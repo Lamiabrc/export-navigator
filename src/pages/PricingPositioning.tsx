@@ -82,7 +82,7 @@ const positioningBadge = (pos: PositionRow) => {
   return <Badge variant="outline">Donnees manquantes</Badge>;
 };
 
-const brandVisuals: { brand: Brand; title: string; tone: string; desc: string; size?: "lg" | "sm" }[] = [
+const brandCards: { brand: Brand; title: string; tone: string; desc: string; size?: "lg" | "sm" }[] = [
   { brand: "THUASNE", title: "Thuasne", tone: "from-sky-200/80 to-sky-400/60", desc: "Premium remboursement" },
   { brand: "DONJOY_ENOVIS", title: "DonJoy / Enovis", tone: "from-purple-200/80 to-purple-400/60", desc: "Sport + ortho" },
   { brand: "ORLIMAN", title: "ORLIMAN", tone: "from-orange-200/90 to-orange-500/80", desc: "Reference au centre", size: "lg" },
@@ -208,17 +208,17 @@ export default function PricingPositioning() {
           />
 
           <SectionCard
-            title="Panorama concurrence (ORLIMAN au centre)"
-            icon="🧭"
-            rightSlot={<p className="text-xs text-muted-foreground">Place des marques par rapport a ORLIMAN.</p>}
-          >
-            <div className="flex flex-wrap items-stretch justify-center gap-3">
-              {brandVisuals.map((b) => (
-                <div
-                  key={b.brand}
-                  className={`relative overflow-hidden rounded-2xl border border-border shadow-sm dark:border-white/10 ${
-                    b.size === "lg" ? "w-64" : "w-44"
-                  }`}
+          title="Panorama concurrence (ORLIMAN au centre)"
+          icon="🧭"
+          rightSlot={<p className="text-xs text-muted-foreground">Place des marques par rapport a ORLIMAN.</p>}
+        >
+          <div className="flex flex-wrap items-stretch justify-center gap-3">
+            {brandCards.map((b) => (
+              <div
+                key={b.brand}
+                className={`relative overflow-hidden rounded-2xl border border-border shadow-sm dark:border-white/10 ${
+                  b.size === "lg" ? "w-64" : "w-44"
+                }`}
                 >
                   <div className={`absolute inset-0 bg-gradient-to-br ${b.tone}`} />
                   <div className="relative z-10 p-4 space-y-2 text-slate-900">
