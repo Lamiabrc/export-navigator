@@ -34,6 +34,7 @@ import StrategyHub from "./pages/StrategyHub";
 import CompetitiveIntel from "./pages/CompetitiveIntel";
 import ScenarioLab from "./pages/ScenarioLab";
 import DromPlaybook from "./pages/DromPlaybook";
+import PricingPositioning from "./pages/PricingPositioning";
 
 const queryClient = new QueryClient();
 
@@ -70,6 +71,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <StrategyHub />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/pricing-positioning"
+              element={
+                <ProtectedRoute>
+                  <PricingPositioning />
                 </ProtectedRoute>
               }
             />

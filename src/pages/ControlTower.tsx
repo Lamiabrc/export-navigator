@@ -285,6 +285,11 @@ export default function ControlTower() {
     }
   };
 
+  useEffect(() => {
+    // Silence unused warning when hooks haven't returned yet
+    void operationsSync;
+  }, [operationsSync]);
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -418,10 +423,10 @@ export default function ControlTower() {
                 Filtres
               </CardTitle>
               <div className="flex items-center gap-2">
-                <Badge variant="outline">RÇ¸sultats: {filtered.length}</Badge>
+                <Badge variant="outline">Résultats: {filtered.length}</Badge>
                 {hasActiveFilters && (
                   <Button variant="ghost" size="sm" onClick={resetFilters}>
-                    RÇ¸initialiser
+                    Réinitialiser
                   </Button>
                 )}
               </div>
@@ -439,6 +444,7 @@ export default function ControlTower() {
             </div>
             <div>
               <Label>Zone</Label>
+              <p className="text-[11px] text-muted-foreground">Pourquoi ? Zone = UE/DROM/Hors UE impacte TVA et preuves.</p>
               <Select value={zone} onValueChange={(v) => setZone(v as ZoneFilter)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Toutes" />
@@ -469,6 +475,7 @@ export default function ControlTower() {
             </div>
             <div>
               <Label>Incoterm</Label>
+              <p className="text-[11px] text-muted-foreground">Pourquoi ? DDP/DAP modifient responsabilités douane/TVA.</p>
               <Select value={incoterm} onValueChange={(v) => setIncoterm(v as IncotermFilter)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Tous" />

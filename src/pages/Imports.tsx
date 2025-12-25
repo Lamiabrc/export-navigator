@@ -22,12 +22,24 @@ import type { CostDoc } from '@/types/costs';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { COST_DOCS_KEY } from '@/lib/constants/storage';
 import { useImportedInvoices } from '@/hooks/useImportedInvoices';
+import { CsvFileType, getCsvTemplate, importOrder } from '@/lib/csvSchemas';
 
 interface FileState<TMapping> {
   filename: string;
   headers: string[];
   mapping: TMapping | null;
 }
+
+const downloadTemplate = (fileType: CsvFileType) => {
+  const content = getCsvTemplate(fileType);
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${fileType}.template.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 
 const autoPick = (headers: string[], candidates: string[]): string => {
   const lowerHeaders = headers.map((h) => h.toLowerCase());
@@ -193,10 +205,41 @@ export default function Imports() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div>
+        <div className="space-y-2">
           <h1 className="text-2xl font-bold text-foreground">Imports CSV</h1>
-          <p className="text-muted-foreground">Alimentez l'outil avec vos factures et les coûts réels (transit/douane)</p>
+          <p className="text-muted-foreground">
+            Pipeline local-first : chargez vos fichiers dans <code>data-import/</code>, validez, puis alimentez l'app.
+          </p>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Ordre recommandé (pricing + opérations)</CardTitle>
+            <CardDescription>Respectez l'ordre ci-dessous pour éviter les clés orphelines.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+              {importOrder.map((file) => (
+                <div key={file} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold">{file}.csv</p>
+                    <p className="text-xs text-muted-foreground">
+                      Template prêt à l'emploi (en-têtes propres, 1-2 lignes d'exemple).
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => downloadTemplate(file)}>
+                    <FileSpreadsheet className="h-4 w-4 mr-1" />
+                    Template
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              <p>Erreurs fréquentes : devises non ISO, dates non ISO (attendu YYYY-MM-DD), price_type ≠ HT/TTC, brand inconnu.</p>
+              <p>Voir aussi : <code>docs/START_HERE.md</code> et <code>docs/DATA_IMPORT_GUIDE.md</code>.</p>
+            </div>
+          </CardContent>
+        </Card>
 
         <Tabs defaultValue="invoices" className="space-y-4">
           <TabsList>

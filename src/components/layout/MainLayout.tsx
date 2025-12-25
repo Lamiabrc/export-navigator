@@ -60,7 +60,7 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
         <header className="sticky top-0 z-20 border-b border-border/60 bg-[hsl(var(--background))/0.7] backdrop-blur-xl dark:border-white/10">
           <div className="flex items-center gap-3 px-4 py-3 md:px-6">
             <button
-              className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition"
+              className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card shadow-sm hover:-translate-y-0.5 hover:shadow-md transition"
               onClick={() => setSidebarOpen(true)}
               aria-label="Ouvrir le menu"
             >
@@ -68,25 +68,25 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
             </button>
 
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-white truncate">
+              <div className="text-sm font-semibold text-foreground truncate">
                 Export Navigator
               </div>
-              <div className="text-xs text-white/60 truncate">
+              <div className="text-xs text-muted-foreground truncate">
                 Pilotage export - factures - conformite - marges
               </div>
             </div>
 
             <div className="flex items-center gap-2 w-full max-w-md">
               <div className="relative flex-1 hidden sm:block">
-                <Search className="h-4 w-4 text-white/60 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
                   placeholder="Rechercher facture, client, circuit…"
-                  className="pl-9 bg-white/5 border-white/10 text-sm text-white placeholder:text-white/60"
+                  className="pl-9 bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground rounded-xl shadow-inner dark:bg-white/5 dark:border-white/10"
                 />
               </div>
               <Link
                 to="/imports"
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 border border-primary/60 hover:shadow-primary/50 transition"
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 border border-primary/50 hover:shadow-primary/50 hover:-translate-y-0.5 transition"
               >
                 Importer
               </Link>
@@ -96,7 +96,7 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
 
         {/* Content */}
         <div className={cn("p-4 md:p-10", contentClassName)}>
-          <div className="glass rounded-2xl bg-slate-900/60 border border-white/10 shadow-xl shadow-black/20">
+          <div className="glass rounded-2xl bg-card/90 border border-border shadow-xl shadow-black/20 dark:border-white/10 dark:bg-white/5">
             <div className="p-4 md:p-8 space-y-4">{children}</div>
           </div>
         </div>
