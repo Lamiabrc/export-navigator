@@ -80,6 +80,20 @@ const positioningBadge = (pos: PositionRow) => {
   return <Badge variant="outline">Données manquantes</Badge>;
 };
 
+const brandVisuals: { brand: Brand; title: string; tone: string; desc: string; size?: "lg" | "sm" }[] = [
+  { brand: "THUASNE", title: "Thuasne", tone: "from-sky-200/80 to-sky-400/60", desc: "Premium remboursement" },
+  { brand: "DONJOY_ENOVIS", title: "DonJoy / Enovis", tone: "from-purple-200/80 to-purple-400/60", desc: "Sport + ortho" },
+  { brand: "ORLIMAN", title: "ORLIMAN", tone: "from-orange-200/90 to-orange-500/80", desc: "Reference au centre", size: "lg" },
+  { brand: "GIBAUD", title: "Gibaud", tone: "from-emerald-200/80 to-emerald-400/60", desc: "Retail remboursement" },
+];
+
+const brandVisuals: { brand: Brand; title: string; tone: string; desc: string; size?: "lg" | "sm" }[] = [
+  { brand: "THUASNE", title: "Thuasne", tone: "from-sky-200/80 to-sky-400/60", desc: "Premium remboursement" },
+  { brand: "DONJOY_ENOVIS", title: "DonJoy / Enovis", tone: "from-purple-200/80 to-purple-400/60", desc: "Sport + ortho" },
+  { brand: "ORLIMAN", title: "ORLIMAN", tone: "from-orange-200/90 to-orange-500/80", desc: "Référence / centre", size: "lg" },
+  { brand: "GIBAUD", title: "Gibaud", tone: "from-emerald-200/80 to-emerald-400/60", desc: "Retail remboursement" },
+];
+
 export default function PricingPositioning() {
   const [market, setMarket] = React.useState<string>("ALL");
   const [category, setCategory] = React.useState<string>("ALL");
@@ -90,6 +104,7 @@ export default function PricingPositioning() {
   const [search, setSearch] = React.useState("");
   const [sortKey, setSortKey] = React.useState<SortKey>("gapAvgPct");
   const [sortDir, setSortDir] = React.useState<SortDir>("asc");
+  const [groupFilter, setGroupFilter] = React.useState<string>("");
 
   const filteredProducts = React.useMemo(
     () => (category === "ALL" ? products : products.filter((p) => p.category === category)),
@@ -101,11 +116,12 @@ export default function PricingPositioning() {
       if (pp.confidence < minConfidence) return false;
       if (market !== "ALL" && pp.market !== market) return false;
       if (channel !== "ALL" && pp.channel !== channel) return false;
+      if (groupFilter && !pp.channel.toLowerCase().includes(groupFilter.toLowerCase())) return false;
       if (priceType !== "ALL" && pp.priceType !== priceType) return false;
       if (pp.brand !== "ORLIMAN" && brandFilters.length && !brandFilters.includes(pp.brand)) return false;
       return true;
     });
-  }, [market, channel, priceType, minConfidence, brandFilters]);
+  }, [market, channel, priceType, minConfidence, brandFilters, groupFilter]);
 
   const rows = React.useMemo(() => {
     const baseRows = groupByProductMarketChannel(filteredProducts, filteredPricePoints, {
@@ -169,6 +185,7 @@ export default function PricingPositioning() {
     category !== "ALL" && { label: `Catégorie: ${category}`, onRemove: () => setCategory("ALL") },
     channel !== "ALL" && { label: `Canal: ${channel}`, onRemove: () => setChannel("ALL") },
     priceType !== "ALL" && { label: `Type: ${priceType}`, onRemove: () => setPriceType("ALL") },
+    groupFilter && { label: `Groupement: ${groupFilter}`, onRemove: () => setGroupFilter("") },
   ].filter(Boolean) as { label: string; onRemove: () => void }[];
 
   return (
@@ -193,6 +210,37 @@ export default function PricingPositioning() {
             </>
           }
         />
+
+        <SectionCard
+          title="Panorama concurrence (ORLIMAN au centre)"
+          icon="🧭"
+          rightSlot={<p className="text-xs text-muted-foreground">Visualisez rapidement la place de chaque marque par rapport à ORLIMAN.</p>}
+        >
+          <div className="flex flex-wrap items-stretch justify-center gap-3">
+            {brandVisuals.map((b) => (
+              <div
+                key={b.brand}
+                className={`relative overflow-hidden rounded-2xl border border-border shadow-sm dark:border-white/10 ${b.size === "lg" ? "w-60" : "w-44"}`}
+              >
+                <div className={`absolute inset-0 bg-gradient-to-br ${b.tone}`} />
+                <div className="relative z-10 p-4 space-y-2 text-slate-900">
+                  <div className="text-sm font-semibold flex items-center gap-2">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-sm font-bold text-slate-900">
+                      {b.title.charAt(0)}
+                    </span>
+                    <span>{b.title}</span>
+                  </div>
+                  <p className="text-xs text-slate-900/80">{b.desc}</p>
+                  {b.brand === "ORLIMAN" && (
+                    <Badge variant="secondary" className="bg-white/70 text-slate-900 border-white">
+                      Référence
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           <StatCard
@@ -260,7 +308,7 @@ export default function PricingPositioning() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+              <div>
               <p className="text-xs text-muted-foreground mb-1">Canal</p>
               <Select value={channel} onValueChange={setChannel}>
                 <SelectTrigger><SelectValue placeholder="Tous" /></SelectTrigger>
@@ -269,6 +317,15 @@ export default function PricingPositioning() {
                   {channels.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Groupement pharmaceutique</p>
+              <Input
+                placeholder="Nom de groupement (contient)..."
+                value={groupFilter}
+                onChange={(e) => setGroupFilter(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">Filtre libre sur le canal/groupement.</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-1">Type prix</p>
