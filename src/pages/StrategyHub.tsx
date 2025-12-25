@@ -50,7 +50,7 @@ export default function StrategyHub() {
         <div className="lg:col-span-2 space-y-4">
           <InsightCard
             accent="primary"
-            title="Recommandation du jour ✅"
+            title="Recommandation du jour"
             bullets={[
               "Prioriser offre premium sur DROM avec pack service",
               "Aligner prix retail sur Gibaud pour proteger volumes",
@@ -58,20 +58,20 @@ export default function StrategyHub() {
             ]}
           />
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+          <div className="rounded-2xl border border-border bg-card p-4 space-y-3 dark:border-white/10 dark:bg-white/5">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                 ⚠️ Alertes a traiter
               </h2>
-              <span className="text-xs text-white/60">Automatique + manuel</span>
+              <span className="text-xs text-muted-foreground">Automatique + manuel</span>
             </div>
             <div className="space-y-2">
               {alerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className="flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3 py-2"
+                  className="flex items-center justify-between rounded-xl bg-muted/40 border border-border px-3 py-2 dark:border-white/10 dark:bg-white/5"
                 >
-                  <span className="text-sm text-white/90">{alert.label}</span>
+                  <span className="text-sm text-foreground">{alert.label}</span>
                   <RiskBadge level={alert.level} />
                 </div>
               ))}
@@ -80,11 +80,11 @@ export default function StrategyHub() {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <div className="rounded-2xl border border-border bg-card p-4 dark:border-white/10 dark:bg-white/5">
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               🚀 Scenarios rapides
             </h2>
-            <p className="text-sm text-white/70 mb-3">
+            <p className="text-sm text-muted-foreground mb-3">
               Pre-remplis Scenario Lab avec une strategie cible.
             </p>
             <div className="grid grid-cols-1 gap-2">
@@ -96,7 +96,7 @@ export default function StrategyHub() {
                 <Link
                   key={item.strategy}
                   to={`/scenario-lab?strategy=${item.strategy}&market=DROM&channel=hospital`}
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-white hover:border-primary/50 hover:-translate-y-0.5 transition"
+                  className="rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground hover:border-primary/50 hover:-translate-y-0.5 transition dark:border-white/10 dark:bg-white/5 dark:text-white"
                 >
                   {item.label}
                 </Link>
@@ -104,18 +104,18 @@ export default function StrategyHub() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-2">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <div className="rounded-2xl border border-border bg-card p-4 space-y-2 dark:border-white/10 dark:bg-white/5">
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               🔗 Liens rapides
             </h2>
-            <div className="space-y-2 text-sm text-white/80">
-              <Link to="/competitive" className="block hover:text-primary">
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <Link to="/competitive" className="block hover:text-primary text-foreground">
                 Competitive Intel
               </Link>
-              <Link to="/drom-playbook" className="block hover:text-primary">
+              <Link to="/drom-playbook" className="block hover:text-primary text-foreground">
                 DROM Playbook
               </Link>
-              <Link to="/dashboard" className="block hover:text-primary">
+              <Link to="/dashboard" className="block hover:text-primary text-foreground">
                 Dashboard
               </Link>
             </div>
