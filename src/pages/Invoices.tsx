@@ -15,6 +15,7 @@ import { useReferenceData } from '@/hooks/useReferenceData';
 import type { CostDoc } from '@/types/costs';
 import type { ExportCase } from '@/types/case';
 import { COST_DOCS_KEY } from '@/lib/constants/storage';
+import { PageHeader } from '@/components/PageHeader';
 
 const statusBadge = (status: ExportCase['matchStatus']) => {
   switch (status) {
@@ -63,24 +64,20 @@ export default function Invoices() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Contrôle & rapprochement factures</h1>
-            <p className="text-muted-foreground">
-              Factures importées ↔ coûts réels (transit/douane) avec score de match et alertes
-            </p>
-          </div>
-          <div className="flex gap-2">
+        <PageHeader
+          title="Controle & rapprochement factures"
+          subtitle="Factures importees vs couts reels (transit/douane) avec score de match et alertes."
+          actions={(
             <Link to="/imports">
               <Button variant="outline">Aller aux imports CSV</Button>
             </Link>
-          </div>
-        </div>
+          )}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
             <CardContent className="pt-5">
-              <p className="text-xs text-muted-foreground">Factures importées</p>
+              <p className="text-xs text-muted-foreground">Factures importÃ©es</p>
               <p className="text-2xl font-bold">{importedInvoices.length}</p>
             </CardContent>
           </Card>
@@ -130,7 +127,7 @@ export default function Invoices() {
                   {cases.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                        Importez des fichiers dans l’onglet Imports CSV pour lancer le rapprochement.
+                        Importez des fichiers dans lâ€™onglet Imports CSV pour lancer le rapprochement.
                       </TableCell>
                     </TableRow>
                   ) : (

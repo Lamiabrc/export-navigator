@@ -16,6 +16,10 @@ import {
   TrendingUp,
   BookOpen,
   Settings,
+  Sparkles,
+  Radar,
+  FlaskConical,
+  Map,
   LogOut,
 } from "lucide-react";
 import logoOrliman from "@/assets/logo-orliman.png";
@@ -35,6 +39,15 @@ type NavSection = {
 };
 
 const navigation: NavSection[] = [
+  {
+    title: "Strategie ✨",
+    items: [
+      { name: "Strategy Hub", href: "/strategy", icon: Sparkles, badge: "NEW" },
+      { name: "Competitive Intel", href: "/competitive", icon: Radar },
+      { name: "Scenario Lab", href: "/scenario-lab", icon: FlaskConical },
+      { name: "DROM Playbook", href: "/drom-playbook", icon: Map },
+    ],
+  },
   {
     title: "Pilotage",
     items: [
@@ -90,7 +103,7 @@ const navigation: NavSection[] = [
 ];
 
 const adminNavigation: NavSection = {
-  title: "Systeme",
+  title: "Administration",
   items: [{ name: "Parametres", href: "/settings", icon: Settings }],
 };
 

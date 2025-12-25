@@ -30,6 +30,7 @@ import { AlertTriangle, Download, Filter, ShieldCheck, Sparkles, Target } from '
 import { cn } from '@/lib/utils';
 import { useOperationsSync } from '@/hooks/useOperationsSync';
 import { toast } from 'sonner';
+import { PageHeader } from '@/components/PageHeader';
 
 type ZoneFilter = 'ALL' | Zone;
 type IncotermFilter = 'ALL' | Incoterm;
@@ -297,30 +298,25 @@ export default function ControlTower() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <ShieldCheck className="h-6 w-6 text-primary" />
-              Tour de contrôle Export
-            </h1>
-            <p className="mt-1 text-muted-foreground">
-              États des lieux chiffrés, priorisation et contrôle des risques (DOM, Suisse, UE)
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="gap-2" onClick={exportFilteredCsv}>
-              <Download className="h-4 w-4" />
-              Export état des lieux
-            </Button>
-            <Button variant="secondary" className="gap-2" onClick={handleSync} disabled={operationsSync.isLoading}>
-              <Sparkles className="h-4 w-4" />
-              {operationsSync.isLoading ? 'Sync en cours...' : 'Sync OneDrive'}
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          title="Tour de controle Export"
+          subtitle="Etat des lieux chiffre, priorisation et controle des risques (DOM, Suisse, UE)."
+          actions={(
+            <div className="flex gap-2">
+              <Button variant="outline" className="gap-2" onClick={exportFilteredCsv}>
+                <Download className="h-4 w-4" />
+                Export etat des lieux
+              </Button>
+              <Button variant="secondary" className="gap-2" onClick={handleSync} disabled={operationsSync.isLoading}>
+                <Sparkles className="h-4 w-4" />
+                {operationsSync.isLoading ? 'Sync en cours...' : 'Sync OneDrive'}
+              </Button>
+            </div>
+          )}
+        />
 
-        {/* KPI Row */}
+        {
+/* KPI Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
           <Card>
             <CardContent className="p-4">

@@ -30,6 +30,10 @@ import NotFound from "./pages/NotFound";
 import Imports from "./pages/Imports";
 import Home from "./pages/Home";
 import Clients from "./pages/Clients";
+import StrategyHub from "./pages/StrategyHub";
+import CompetitiveIntel from "./pages/CompetitiveIntel";
+import ScenarioLab from "./pages/ScenarioLab";
+import DromPlaybook from "./pages/DromPlaybook";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +62,38 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Home />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/strategy"
+              element={
+                <ProtectedRoute>
+                  <StrategyHub />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/competitive"
+              element={
+                <ProtectedRoute>
+                  <CompetitiveIntel />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/scenario-lab"
+              element={
+                <ProtectedRoute>
+                  <ScenarioLab />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/drom-playbook"
+              element={
+                <ProtectedRoute>
+                  <DromPlaybook />
                 </ProtectedRoute>
               }
             />

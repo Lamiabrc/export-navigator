@@ -11,6 +11,7 @@ import { useImportedInvoices } from '@/hooks/useImportedInvoices';
 import { reconcile } from '@/lib/reco/reconcile';
 import { evaluateCase } from '@/lib/rules/riskEngine';
 import { aggregateCases, margin } from '@/lib/kpi/exportKpis';
+import { PageHeader } from '@/components/PageHeader';
 import type { CostDoc } from '@/types/costs';
 import {
   Package,
@@ -86,11 +87,10 @@ export default function Dashboard() {
   return (
     <MainLayout>
       <div className="space-y-8">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard Direction</h1>
-          <p className="mt-1 text-muted-foreground">Vue d'ensemble des flux d'export et indicateurs clés</p>
-        </div>
+        <PageHeader
+          title="Dashboard"
+          subtitle="Vue d'ensemble des flux d'export et indicateurs cles."
+        />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

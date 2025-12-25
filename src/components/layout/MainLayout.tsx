@@ -1,7 +1,9 @@
 import React from "react";
 import { Sidebar } from "./Sidebar";
-import { Menu } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Menu, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -74,15 +76,28 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
               </div>
             </div>
 
-            {/* Slot actions (placeholder for search, quick actions, etc.) */}
-            <div className="flex items-center gap-2">{/* placeholder */}</div>
+            <div className="flex items-center gap-2 w-full max-w-md">
+              <div className="relative flex-1 hidden sm:block">
+                <Search className="h-4 w-4 text-white/60 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Input
+                  placeholder="Rechercher facture, client, circuit…"
+                  className="pl-9 bg-white/5 border-white/10 text-sm text-white placeholder:text-white/60"
+                />
+              </div>
+              <Link
+                to="/imports"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 border border-primary/60 hover:shadow-primary/50 transition"
+              >
+                Importer
+              </Link>
+            </div>
           </div>
         </header>
 
         {/* Content */}
         <div className={cn("p-4 md:p-10", contentClassName)}>
-          <div className="glass rounded-2xl">
-            <div className="p-4 md:p-8">{children}</div>
+          <div className="glass rounded-2xl bg-slate-900/60 border border-white/10 shadow-xl shadow-black/20">
+            <div className="p-4 md:p-8 space-y-4">{children}</div>
           </div>
         </div>
       </main>

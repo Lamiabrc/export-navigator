@@ -11,6 +11,7 @@ import type { CostDoc } from "@/types/costs";
 import { COST_DOCS_KEY } from "@/lib/constants/storage";
 import { reconcile } from "@/lib/reco/reconcile";
 import { aggregateCases, margin, transitCoverage } from "@/lib/kpi/exportKpis";
+import { PageHeader } from "@/components/PageHeader";
 
 type RiskTag = "PERTE" | "MARGE_FAIBLE" | "TRANSIT_NON_COUVERT";
 
@@ -141,25 +142,28 @@ export default function MarginAnalysis() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Détection marge insuffisante</h1>
-            <p className="text-muted-foreground">
-              Analyse basée sur le rapprochement factures & coûts : pertes, marges faibles, transit non couvert.
-            </p>
-          </div>
-
-          {cases.length > 0 && (
-            <button
-              onClick={exportRiskCsv}
-              className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm hover:bg-muted transition"
-              title="Exporter la liste des dossiers à risque"
-            >
-              <Download className="h-4 w-4" />
-              Export CSV (à risque)
-            </button>
+        <PageHeader
+          title="Detection marge insuffisante"
+          subtitle="Analyse basee sur le rapprochement factures & couts : pertes, marges faibles, transit non couvert."
+          actions={cases.length > 0 && (
+            <div className="flex gap-2">
+              <button
+                onClick={exportCsv}
+                className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm font-semibold"
+              >
+                Export CSV
+              </button>
+              <button
+                onClick={exportRiskCsv}
+                className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm hover:bg-muted transition"
+                title="Exporter la liste des dossiers a risque"
+              >
+                <Download className="h-4 w-4" />
+                Export CSV (risque)
+              </button>
+            </div>
           )}
-        </div>
+        />
 
         {cases.length === 0 && (
           <Card>
