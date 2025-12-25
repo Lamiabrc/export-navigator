@@ -1,27 +1,30 @@
-import { useMemo, useState } from 'react';
-import { MainLayout } from '@/components/layout/MainLayout';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { AlertTriangle, CheckCircle, FileSpreadsheet, Upload } from 'lucide-react';
-import { toast } from 'sonner';
-import { parseCsv } from '@/lib/imports/parseCsv';
+import { useMemo, useState } from "react";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { AlertTriangle, CheckCircle, FileSpreadsheet, Upload } from "lucide-react";
+import { toast } from "sonner";
+import { parseCsv } from "@/lib/imports/parseCsv";
 import {
   CostDocMapping,
   mapCostDocs,
   mapInvoices,
   MappingResult,
   InvoiceImportMapping,
-} from '@/lib/imports/mapping';
-import type { ImportedInvoice } from '@/types/sage';
-import type { CostDoc } from '@/types/costs';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { COST_DOCS_KEY } from '@/lib/constants/storage';
-import { useImportedInvoices } from '@/hooks/useImportedInvoices';
+} from "@/lib/imports/mapping";
+import type { ImportedInvoice } from "@/types/sage";
+import type { CostDoc } from "@/types/costs";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { COST_DOCS_KEY } from "@/lib/constants/storage";
+import { useImportedInvoices } from "@/hooks/useImportedInvoices";
+import { parseCSV, validateCompetitors, validatePricePoints, validateProducts } from "@/lib/csvImport";
+import { loadJson, saveJson, STORAGE_KEYS } from "@/lib/storage";
+import type { Competitor, Product, PricePoint } from "@/types/pricing";
 import { CsvFileType, getCsvTemplate, importOrder } from '@/lib/csvSchemas';
 
 interface FileState<TMapping> {
@@ -29,6 +32,13 @@ interface FileState<TMapping> {
   headers: string[];
   mapping: TMapping | null;
 }
+
+type ImportUpload<T> = {
+  filename: string;
+  rows: Record<string, string>[];
+  valid: T[];
+  invalid: { row: number; errors: string[] }[];
+};
 
 const downloadTemplate = (fileType: CsvFileType) => {
   const content = getCsvTemplate(fileType);
@@ -114,6 +124,113 @@ const useUpload = <TMapping,>(initial: TMapping | null) => {
 };
 
 export default function Imports() {
+  // Pricing imports (local CSV -> localStorage)
+  const [storedCompetitors, setStoredCompetitors] = useState<Competitor[]>(() =>
+    loadJson<Competitor[]>(STORAGE_KEYS.competitors, [])
+  );
+  const [storedProducts, setStoredProducts] = useState<Product[]>(() =>
+    loadJson<Product[]>(STORAGE_KEYS.products, [])
+  );
+  const [storedPricePoints, setStoredPricePoints] = useState<PricePoint[]>(() =>
+    loadJson<PricePoint[]>(STORAGE_KEYS.pricePoints, [])
+  );
+  const [competitorsUpload, setCompetitorsUpload] = useState<ImportUpload<Competitor> | null>(null);
+  const [productsUpload, setProductsUpload] = useState<ImportUpload<Product> | null>(null);
+  const [pricePointsUpload, setPricePointsUpload] = useState<ImportUpload<PricePoint> | null>(null);
+
+  const handlePricingFile = async (file: File, type: "competitors" | "products" | "price_points") => {
+    const rows = await parseCSV(file);
+    if (type === "competitors") {
+      const res = validateCompetitors(rows);
+      setCompetitorsUpload({ filename: file.name, rows, ...res });
+      toast.success(`Fichier ${file.name} chargé (${rows.length} lignes)`);
+    }
+    if (type === "products") {
+      const res = validateProducts(rows);
+      setProductsUpload({ filename: file.name, rows, ...res });
+      toast.success(`Fichier ${file.name} chargé (${rows.length} lignes)`);
+    }
+    if (type === "price_points") {
+      const baseProducts = (productsUpload?.valid?.length ? productsUpload.valid : storedProducts) || [];
+      const res = validatePricePoints(rows, baseProducts);
+      setPricePointsUpload({ filename: file.name, rows, ...res });
+      toast.success(`Fichier ${file.name} chargé (${rows.length} lignes)`);
+    }
+  };
+
+  const importPricing = (type: "competitors" | "products" | "price_points") => {
+    if (type === "competitors") {
+      if (!competitorsUpload) return toast.error("Charge d'abord competitors.csv");
+      saveJson(STORAGE_KEYS.competitors, competitorsUpload.valid);
+      setStoredCompetitors(competitorsUpload.valid);
+      toast.success(`Competitors importés (${competitorsUpload.valid.length} valides)`);
+    }
+    if (type === "products") {
+      if (!productsUpload) return toast.error("Charge d'abord products.csv");
+      saveJson(STORAGE_KEYS.products, productsUpload.valid);
+      setStoredProducts(productsUpload.valid);
+      toast.success(`Produits importés (${productsUpload.valid.length} valides)`);
+    }
+    if (type === "price_points") {
+      if (!pricePointsUpload) return toast.error("Charge d'abord price_points.csv");
+      saveJson(STORAGE_KEYS.pricePoints, pricePointsUpload.valid);
+      setStoredPricePoints(pricePointsUpload.valid);
+      toast.success(`Price points importés (${pricePointsUpload.valid.length} valides)`);
+    }
+  };
+
+  const importAll = () => {
+    if (!competitorsUpload || !productsUpload || !pricePointsUpload) {
+      toast.error("Charge les 3 fichiers avant d'importer tout");
+      return;
+    }
+    importPricing("competitors");
+    importPricing("products");
+    importPricing("price_points");
+  };
+
+  const resetPricing = () => {
+    localStorage.removeItem(STORAGE_KEYS.competitors);
+    localStorage.removeItem(STORAGE_KEYS.products);
+    localStorage.removeItem(STORAGE_KEYS.pricePoints);
+    setStoredCompetitors([]);
+    setStoredProducts([]);
+    setStoredPricePoints([]);
+    setCompetitorsUpload(null);
+    setProductsUpload(null);
+    setPricePointsUpload(null);
+    toast.success("Données pricing locales réinitialisées");
+  };
+
+  const renderPreview = (upload?: ImportUpload<any> | null) => {
+    if (!upload || upload.valid.length === 0) return null;
+    const sample = upload.valid.slice(0, 10);
+    const headers = Object.keys(sample[0] ?? {});
+    return (
+      <div className="border rounded-lg overflow-hidden">
+        <div className="px-3 py-2 border-b text-sm font-semibold">Aperçu (10 lignes)</div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {headers.map((h) => (
+                <TableHead key={h}>{h}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sample.map((row, idx) => (
+              <TableRow key={idx}>
+                {headers.map((h) => (
+                  <TableCell key={h}>{(row as any)[h]}</TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+
   const [invoiceResult, setInvoiceResult] = useState<MappingResult<ImportedInvoice> | null>(null);
   const [costResult, setCostResult] = useState<MappingResult<CostDoc> | null>(null);
   const { state: invoiceState, setState: setInvoiceState, rawRows: invoiceRows, onFile: onInvoiceFile } =

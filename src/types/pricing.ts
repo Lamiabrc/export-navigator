@@ -1,26 +1,40 @@
-export type Product = {
+export type Competitor = {
   id: string;
-  sku: string;
   name: string;
-  category: string;
-  lppCode?: string;
-  cost?: number;
+  brand_code: "ORLIMAN" | "THUASNE" | "DONJOY_ENOVIS" | "GIBAUD" | "AUTRE";
+  notes?: string;
 };
 
-export type Brand = "ORLIMAN" | "THUASNE" | "DONJOY_ENOVIS" | "GIBAUD";
+export type Product = {
+  product_id: string;
+  sku: string;
+  product_name: string;
+  category: string;
+  height_cm?: number;
+  unit?: string;
+  notes?: string;
+  // Compat legacy
+  id?: string;
+  name?: string;
+};
 
 export type PricePoint = {
-  id: string;
-  productId: string;
-  brand: Brand;
+  price_id: string;
+  product_id: string;
+  brand: "ORLIMAN" | "THUASNE" | "DONJOY_ENOVIS" | "GIBAUD";
   market: string;
   channel: string;
   currency: string;
   price: number;
-  priceType: "HT" | "TTC";
-  date: string;
-  sourceLabel: string;
-  confidence: number;
+  price_type: "HT" | "TTC";
+  date: string; // YYYY-MM-DD
+  confidence: number; // 0..100
+  source_label: string;
+  lppr_reimbursement_ttc?: number;
+  vat_rate?: number;
+  // Compat legacy
+  id?: string;
+  productId?: string;
 };
 
 export type PricingConfig = {
@@ -37,7 +51,7 @@ export type PositionRow = {
   market: string;
   channel: string;
   orlimanPrice?: number;
-  bestCompetitor?: { brand: Brand; price: number };
+  bestCompetitor?: { brand: PricePoint["brand"]; price: number };
   avgCompetitorPrice?: number;
   gapBestPct?: number;
   gapAvgPct?: number;
