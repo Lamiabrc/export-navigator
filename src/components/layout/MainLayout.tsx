@@ -18,14 +18,14 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
     <div className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))] relative overflow-hidden">
       {/* Futuristic glow + grid */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-40"
+        className="pointer-events-none absolute inset-0 opacity-20"
         style={{
           background:
             "radial-gradient(circle at 20% 20%, rgba(56,189,248,0.15), transparent 35%), radial-gradient(circle at 80% 0%, rgba(99,102,241,0.12), transparent 32%), radial-gradient(circle at 50% 60%, rgba(14,165,233,0.10), transparent 45%)",
         }}
       />
       <div
-        className="pointer-events-none absolute inset-0 opacity-12"
+        className="pointer-events-none absolute inset-0 opacity-6"
         style={{
           backgroundImage:
             "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)",
@@ -57,7 +57,7 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
 
       <main className="relative z-10 md:pl-64">
         {/* Topbar */}
-        <header className="sticky top-0 z-20 border-b border-white/10 bg-slate-900/40 backdrop-blur-xl">
+        <header className="sticky top-0 z-20 border-b border-border/60 bg-[hsl(var(--background))/0.7] backdrop-blur-xl dark:border-white/10">
           <div className="flex items-center gap-3 px-4 py-3 md:px-6">
             <button
               className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition"
