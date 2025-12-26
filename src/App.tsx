@@ -6,7 +6,10 @@ import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
-import Dashboard from "./pages/Dashboard";
+import Home from "./pages/Home";
+import AuthPage from "./pages/Auth";
+import NotFound from "./pages/NotFound";
+
 import Flows from "./pages/Flows";
 import CircuitDetail from "./pages/CircuitDetail";
 import Logistics from "./pages/Logistics";
@@ -18,22 +21,19 @@ import Settings from "./pages/Settings";
 import Simulator from "./pages/Simulator";
 import MarginAnalysis from "./pages/MarginAnalysis";
 import ReferenceLibrary from "./pages/ReferenceLibrary";
-import ControlTower from "./pages/ControlTower";
-import AuthPage from "./pages/Auth";
-import NotFound from "./pages/NotFound";
 import Imports from "./pages/Imports";
-import Home from "./pages/Home";
 import Clients from "./pages/Clients";
 
-// Anciennes pages (on les garde dans le code, mais plus utilisées comme hub principal)
+// ✅ Hub fusionné
+import CommandCenter from "./pages/CommandCenter";
+
+// Legacy (on garde pour ne rien perdre)
+import Dashboard from "./pages/Dashboard";
+import ControlTower from "./pages/ControlTower";
 import StrategyHub from "./pages/StrategyHub";
 import CompetitiveIntel from "./pages/CompetitiveIntel";
 import ScenarioLab from "./pages/ScenarioLab";
-import DromPlaybook from "./pages/DromPlaybook";
 import PricingPositioning from "./pages/PricingPositioning";
-
-// ✅ Nouveau hub fusionné
-import CommandCenter from "./pages/CommandCenter";
 
 const queryClient = new QueryClient();
 
@@ -66,7 +66,7 @@ const App = () => (
               }
             />
 
-            {/* ✅ HUB UNIQUE : /strategy + /dashboard + /control-tower */}
+            {/* ✅ HUB UNIQUE */}
             <Route
               path="/control-tower"
               element={
@@ -79,7 +79,7 @@ const App = () => (
               path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <CommandCenter />
+                  <Navigate to="/control-tower" replace />
                 </ProtectedRoute>
               }
             />
@@ -87,46 +87,12 @@ const App = () => (
               path="/strategy"
               element={
                 <ProtectedRoute>
-                  <CommandCenter />
+                  <Navigate to="/control-tower" replace />
                 </ProtectedRoute>
               }
             />
 
-            {/* Optionnel : on conserve les anciennes pages accessibles (tu pourras les retirer plus tard) */}
-            <Route
-              path="/strategy-hub"
-              element={
-                <ProtectedRoute>
-                  <StrategyHub />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/pricing-positioning"
-              element={
-                <ProtectedRoute>
-                  <PricingPositioning />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/competitive"
-              element={
-                <ProtectedRoute>
-                  <CompetitiveIntel />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/scenario-lab"
-              element={
-                <ProtectedRoute>
-                  <ScenarioLab />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* ✅ DROM Playbook intégré au Guide : on redirige vers Guide */}
+            {/* ✅ DROM Playbook intégré au Guide */}
             <Route
               path="/drom-playbook"
               element={
@@ -136,7 +102,7 @@ const App = () => (
               }
             />
 
-            {/* Le reste inchangé */}
+            {/* Pages principales */}
             <Route
               path="/flows"
               element={
@@ -242,12 +208,62 @@ const App = () => (
               }
             />
 
+            {/* Legacy pages (si tu veux encore y accéder ponctuellement) */}
+            <Route
+              path="/dashboard-legacy"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/control-tower-legacy"
+              element={
+                <ProtectedRoute>
+                  <ControlTower />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/strategy-hub"
+              element={
+                <ProtectedRoute>
+                  <StrategyHub />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/pricing-positioning"
+              element={
+                <ProtectedRoute>
+                  <PricingPositioning />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/competitive"
+              element={
+                <ProtectedRoute>
+                  <CompetitiveIntel />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/scenario-lab"
+              element={
+                <ProtectedRoute>
+                  <ScenarioLab />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Legacy redirects */}
             <Route
               path="/export-dashboard"
               element={
                 <ProtectedRoute>
-                  <Navigate to="/dashboard" replace />
+                  <Navigate to="/control-tower" replace />
                 </ProtectedRoute>
               }
             />
