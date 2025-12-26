@@ -27,6 +27,9 @@ import Clients from "./pages/Clients";
 // ✅ Hub fusionné
 import CommandCenter from "./pages/CommandCenter";
 
+// ✅ Produits
+import Products from "./pages/Products";
+
 // Legacy (on garde pour ne rien perdre)
 import Dashboard from "./pages/Dashboard";
 import ControlTower from "./pages/ControlTower";
@@ -183,6 +186,18 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+
+            {/* ✅ Produits */}
+            <Route
+              path="/products"
+              element={
+                <ProtectedRoute>
+                  <Products />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* On garde Imports en legacy (mais plus dans la nav principale) */}
             <Route
               path="/imports"
               element={
@@ -191,6 +206,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+
             <Route
               path="/clients"
               element={
@@ -208,7 +224,7 @@ const App = () => (
               }
             />
 
-            {/* Legacy pages (si tu veux encore y accéder ponctuellement) */}
+            {/* Legacy pages (accessibles ponctuellement) */}
             <Route
               path="/dashboard-legacy"
               element={
