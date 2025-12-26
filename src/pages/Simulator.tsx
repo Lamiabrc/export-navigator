@@ -11,13 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Calculator,
   Euro,
@@ -64,8 +58,16 @@ const WT_MODE_KEY = "export_simulator_weight_mode_v1";
 export default function Simulator() {
   const { vatRates, octroiMerRates, transportCosts, serviceCharges } = useReferenceRates();
 
-  // 🔥 produits
-  const { byCodeArticle, loading: productsLoading, error: productsError, refresh: refreshProducts } = useProducts();
+  // ✅ produits (hook propre)
+  const {
+    products,
+    isLoading: productsLoading,
+    error: productsError,
+    refresh: refreshProducts,
+    getProductByCode,
+    envOk: productsEnvOk,
+    stats: productsStats,
+  } = useProducts({ pageSize: 500 });
 
   // valeurs existantes
   const [goodsValue, setGoodsValue] = useState<number>(10000);
@@ -85,7 +87,7 @@ export default function Simulator() {
   const [addCode, setAddCode] = useState("");
   const [addQty, setAddQty] = useState<number>(1);
 
-  // restore from localStorage (pour ne pas perdre la saisie)
+  // restore from localStorage
   useEffect(() => {
     try {
       const rawLines = localStorage.getItem(LINES_KEY);
@@ -117,42 +119,53 @@ export default function Simulator() {
   // zone
   const zone = getZoneFromDestination(destination);
 
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(
+      Number.isFinite(amount) ? amount : 0
+    );
+
+  const resolveUnitPrice = (p?: ProductRow, type?: ProductType) => {
+    if (!p) return 0;
+    if (type === "lppr") {
+      return safeNumber(p.tarif_lppr_eur) || safeNumber(p.tarif_catalogue_2025);
+    }
+    return safeNumber(p.tarif_catalogue_2025) || safeNumber(p.tarif_lppr_eur);
+  };
+
   // calc marchandise HT depuis produits
   const goodsValueFromProducts = useMemo(() => {
     if (!lines.length) return 0;
 
     return lines.reduce((sum, l) => {
-      const p = byCodeArticle.get(String(l.code_article ?? "").trim());
+      const code = String(l.code_article ?? "").trim();
+      const p = getProductByCode(code);
       const qty = Math.max(0, safeNumber(l.qty));
-
-      // si productType = lppr => on prend tarif_lppr_eur, sinon tarif_catalogue_2025
-      const unit =
-        productType === "lppr"
-          ? safeNumber(p?.tarif_lppr_eur) || safeNumber(p?.tarif_catalogue_2025)
-          : safeNumber(p?.tarif_catalogue_2025) || safeNumber(p?.tarif_lppr_eur);
-
+      const unit = resolveUnitPrice(p, productType);
       return sum + qty * unit;
     }, 0);
-  }, [lines, byCodeArticle, productType]);
+  }, [lines, getProductByCode, productType]);
 
   // calc poids depuis produits (kg)
   const weightFromProducts = useMemo(() => {
     if (!lines.length) return 0;
+
     const grams = lines.reduce((sum, l) => {
-      const p = byCodeArticle.get(String(l.code_article ?? "").trim());
+      const code = String(l.code_article ?? "").trim();
+      const p = getProductByCode(code);
       const qty = Math.max(0, safeNumber(l.qty));
       return sum + qty * safeNumber(p?.unite_vente_poids_brut_g);
     }, 0);
+
     return grams / 1000;
-  }, [lines, byCodeArticle]);
+  }, [lines, getProductByCode]);
 
   // valeurs effectives passées au moteur
   const effectiveGoodsValue = goodsValueMode === "products" ? goodsValueFromProducts : goodsValue;
   const effectiveWeight = weightMode === "products" ? weightFromProducts : weight;
 
   const invalidCodesCount = useMemo(() => {
-    return lines.filter((l) => !byCodeArticle.get(String(l.code_article ?? "").trim())).length;
-  }, [lines, byCodeArticle]);
+    return lines.filter((l) => !getProductByCode(String(l.code_article ?? "").trim())).length;
+  }, [lines, getProductByCode]);
 
   const costBreakdown = useMemo<CostBreakdown | null>(() => {
     if (effectiveGoodsValue <= 0) return null;
@@ -181,13 +194,10 @@ export default function Simulator() {
     serviceCharges,
   ]);
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(amount);
-
   const exportToCsv = () => {
     if (!costBreakdown) return;
 
-    const linesCsv = [
+    const linesCsv: string[][] = [
       ["Simulateur Export ORLIMAN", ""],
       ["", ""],
       ["Paramètres", ""],
@@ -197,18 +207,16 @@ export default function Simulator() {
       ["Incoterm", incoterm],
       ["Type produit", productType === "lppr" ? "LPPR (remboursé)" : "Standard"],
       ["Transport", transportMode],
-      ["Poids (kg)", effectiveWeight.toString()],
+      ["Poids (kg)", String(effectiveWeight)],
       ["", ""],
       ["Panier produits (optionnel)", ""],
       ["Code article", "Libellé", "Qté", "Prix unitaire HT", "Sous-total HT"],
       ...lines.map((l) => {
-        const p = byCodeArticle.get(String(l.code_article ?? "").trim());
+        const code = String(l.code_article ?? "").trim();
+        const p = getProductByCode(code);
         const qty = Math.max(0, safeNumber(l.qty));
-        const unit =
-          productType === "lppr"
-            ? safeNumber(p?.tarif_lppr_eur) || safeNumber(p?.tarif_catalogue_2025)
-            : safeNumber(p?.tarif_catalogue_2025) || safeNumber(p?.tarif_lppr_eur);
-        return [l.code_article, p?.libelle_article ?? "INCONNU", qty.toString(), unit.toString(), (qty * unit).toString()];
+        const unit = resolveUnitPrice(p, productType);
+        return [code, p?.libelle_article ?? "INCONNU", String(qty), String(unit), String(qty * unit)];
       }),
       ["", ""],
       ["Détail des charges", ""],
@@ -224,10 +232,13 @@ export default function Simulator() {
     const csvContent = linesCsv.map((row) => row.join(";")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
+
     const link = document.createElement("a");
     link.href = url;
     link.download = `simulation_${destination}_${incoterm}_${new Date().toISOString().split("T")[0]}.csv`;
     link.click();
+
+    URL.revokeObjectURL(url);
   };
 
   const addLine = () => {
@@ -236,7 +247,6 @@ export default function Simulator() {
     if (!code) return;
 
     setLines((prev) => {
-      // si existe déjà, on cumule
       const idx = prev.findIndex((p) => p.code_article === code);
       if (idx >= 0) {
         const clone = [...prev];
@@ -251,13 +261,10 @@ export default function Simulator() {
   };
 
   const updateQty = (code: string, qty: number) => {
-    setLines((prev) =>
-      prev.map((l) => (l.code_article === code ? { ...l, qty: Math.max(1, safeNumber(qty)) } : l))
-    );
+    setLines((prev) => prev.map((l) => (l.code_article === code ? { ...l, qty: Math.max(1, safeNumber(qty)) } : l)));
   };
 
   const removeLine = (code: string) => setLines((prev) => prev.filter((l) => l.code_article !== code));
-
   const clearLines = () => setLines([]);
 
   return (
@@ -360,6 +367,7 @@ export default function Simulator() {
                     ))}
                   </SelectContent>
                 </Select>
+
                 <div className="flex gap-2">
                   <Badge
                     variant={zone === "UE" ? "default" : zone === "DROM" ? "secondary" : "outline"}
@@ -466,14 +474,7 @@ export default function Simulator() {
                   <TrendingUp className="h-4 w-4" />
                   Marge souhaitée (%)
                 </Label>
-                <Input
-                  id="margin"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={margin}
-                  onChange={(e) => setMargin(Number(e.target.value))}
-                />
+                <Input id="margin" type="number" min="0" max="100" value={margin} onChange={(e) => setMargin(Number(e.target.value))} />
               </div>
 
               {/* Products Basket */}
@@ -487,9 +488,18 @@ export default function Simulator() {
                   </Button>
                 </div>
 
-                {productsError ? (
-                  <p className="text-xs text-red-600">Erreur produits: {productsError}</p>
+                {!productsEnvOk ? (
+                  <p className="text-xs text-red-600">
+                    Supabase non configuré (env manquantes) : impossible de charger les produits.
+                  </p>
                 ) : null}
+
+                {productsError ? <p className="text-xs text-red-600">Erreur produits: {productsError}</p> : null}
+
+                <p className="text-[11px] text-muted-foreground">
+                  Produits chargés: <span className="font-medium">{productsStats.total}</span>
+                  {productsLoading ? " (chargement…)" : ""}.
+                </p>
 
                 <div className="grid grid-cols-3 gap-2">
                   <div className="col-span-2">
@@ -499,7 +509,7 @@ export default function Simulator() {
                       placeholder="Code article (ex: 2118674)"
                     />
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Astuce : tu peux coller un code, puis “Ajouter”. (On mettra une recherche dropdown après si tu veux.)
+                      Astuce : colle un code + “Ajouter”. (On fera une recherche dropdown ensuite.)
                     </p>
                   </div>
                   <div>
@@ -521,40 +531,31 @@ export default function Simulator() {
                 {lines.length > 0 ? (
                   <div className="space-y-2 pt-2">
                     {lines.map((l) => {
-                      const p: ProductRow | undefined = byCodeArticle.get(String(l.code_article ?? "").trim());
+                      const code = String(l.code_article ?? "").trim();
+                      const p: ProductRow | undefined = getProductByCode(code);
                       const qty = Math.max(1, safeNumber(l.qty));
-
-                      const unit =
-                        productType === "lppr"
-                          ? safeNumber(p?.tarif_lppr_eur) || safeNumber(p?.tarif_catalogue_2025)
-                          : safeNumber(p?.tarif_catalogue_2025) || safeNumber(p?.tarif_lppr_eur);
-
+                      const unit = resolveUnitPrice(p, productType);
                       const subtotal = qty * unit;
 
                       return (
-                        <div key={l.code_article} className="rounded-lg border p-3 space-y-2">
+                        <div key={code} className="rounded-lg border p-3 space-y-2">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <div className="text-sm font-medium truncate">
-                                {l.code_article} — {p?.libelle_article ?? "Produit introuvable"}
+                                {code} — {p?.libelle_article ?? "Produit introuvable"}
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 PU HT: {formatCurrency(unit)} • Sous-total: {formatCurrency(subtotal)}
                               </div>
                             </div>
-                            <Button variant="ghost" onClick={() => removeLine(l.code_article)}>
+                            <Button variant="ghost" onClick={() => removeLine(code)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
 
                           <div className="flex items-center gap-2">
                             <Label className="text-xs">Qté</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              value={qty}
-                              onChange={(e) => updateQty(l.code_article, Number(e.target.value))}
-                            />
+                            <Input type="number" min="1" value={qty} onChange={(e) => updateQty(code, Number(e.target.value))} />
                           </div>
                         </div>
                       );
@@ -585,11 +586,7 @@ export default function Simulator() {
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground">Valeur marchandise</p>
                       <p className="text-xl font-bold">{formatCurrency(effectiveGoodsValue)}</p>
-                      {goodsValueMode === "products" ? (
-                        <p className="text-xs text-muted-foreground">Source: produits</p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">Source: manuel</p>
-                      )}
+                      <p className="text-xs text-muted-foreground">{goodsValueMode === "products" ? "Source: produits" : "Source: manuel"}</p>
                     </CardContent>
                   </Card>
 
@@ -598,7 +595,7 @@ export default function Simulator() {
                       <p className="text-xs text-muted-foreground">Prix de revient</p>
                       <p className="text-xl font-bold text-primary">{formatCurrency(costBreakdown.prixDeRevient)}</p>
                       <p className="text-xs text-muted-foreground">
-                        +{((costBreakdown.prixDeRevient / effectiveGoodsValue - 1) * 100).toFixed(1)}%
+                        +{((costBreakdown.prixDeRevient / Math.max(1, effectiveGoodsValue) - 1) * 100).toFixed(1)}%
                       </p>
                     </CardContent>
                   </Card>
@@ -655,13 +652,9 @@ export default function Simulator() {
                                   <tr key={i} className="border-t">
                                     <td className="p-3">{line.label}</td>
                                     <td className="p-3 text-right font-medium">{formatCurrency(line.amount)}</td>
-                                    <td className="p-3 text-right text-[hsl(var(--status-ok))]">
-                                      {formatCurrency(line.tvaAmount)}
-                                    </td>
+                                    <td className="p-3 text-right text-[hsl(var(--status-ok))]">{formatCurrency(line.tvaAmount)}</td>
                                     <td className="p-3 text-center">
-                                      <Badge variant={line.payer === "Fournisseur" ? "default" : "outline"}>
-                                        {line.payer}
-                                      </Badge>
+                                      <Badge variant={line.payer === "Fournisseur" ? "default" : "outline"}>{line.payer}</Badge>
                                     </td>
                                   </tr>
                                 ))}
@@ -693,9 +686,7 @@ export default function Simulator() {
                                   .map((line, i) => (
                                     <tr key={i} className="border-t">
                                       <td className="p-3">{line.label}</td>
-                                      <td className="p-3 text-right font-medium text-[hsl(var(--status-risk))]">
-                                        {formatCurrency(line.amount)}
-                                      </td>
+                                      <td className="p-3 text-right font-medium text-[hsl(var(--status-risk))]">{formatCurrency(line.amount)}</td>
                                       <td className="p-3 text-center">
                                         <Badge variant="destructive">{line.payer}</Badge>
                                       </td>
@@ -733,7 +724,11 @@ export default function Simulator() {
                                       <td className="p-3">{line.label}</td>
                                       <td className="p-3 text-right font-medium">{formatCurrency(line.amount)}</td>
                                       <td className="p-3 text-center">
-                                        {line.isRecoverable ? <Badge className="badge-ok">Oui (autoliq.)</Badge> : <Badge variant="secondary">Client</Badge>}
+                                        {line.isRecoverable ? (
+                                          <Badge className="badge-ok">Oui (autoliq.)</Badge>
+                                        ) : (
+                                          <Badge variant="secondary">Client</Badge>
+                                        )}
                                       </td>
                                       <td className="p-3 text-xs text-muted-foreground">{line.notes}</td>
                                     </tr>
@@ -758,15 +753,11 @@ export default function Simulator() {
                         </div>
                         <div className="p-4 rounded-lg bg-[hsl(var(--status-risk))]/5">
                           <p className="text-xs text-muted-foreground">Taxes non récup.</p>
-                          <p className="text-lg font-bold text-[hsl(var(--status-risk))]">
-                            {formatCurrency(costBreakdown.totalTaxesNonRecuperables)}
-                          </p>
+                          <p className="text-lg font-bold text-[hsl(var(--status-risk))]">{formatCurrency(costBreakdown.totalTaxesNonRecuperables)}</p>
                         </div>
                         <div className="p-4 rounded-lg bg-[hsl(var(--status-ok))]/5">
                           <p className="text-xs text-muted-foreground">TVA récupérable</p>
-                          <p className="text-lg font-bold text-[hsl(var(--status-ok))]">
-                            {formatCurrency(costBreakdown.totalTvaRecuperablePrestations)}
-                          </p>
+                          <p className="text-lg font-bold text-[hsl(var(--status-ok))]">{formatCurrency(costBreakdown.totalTvaRecuperablePrestations)}</p>
                         </div>
                       </div>
                     </div>
