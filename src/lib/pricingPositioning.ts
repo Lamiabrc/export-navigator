@@ -7,6 +7,14 @@ import type {
   Product,
 } from "@/types/pricing";
 
+/**
+ * Helpers
+ */
+const safeNumber = (v: unknown): number | undefined => {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : undefined;
+};
+
 const byConfidenceThenDate = (a: PricePoint, b: PricePoint) => {
   if (b.confidence !== a.confidence) return b.confidence - a.confidence;
   return new Date(b.date).getTime() - new Date(a.date).getTime();
@@ -16,6 +24,30 @@ const selectPrice = (points: PricePoint[]) => {
   if (!points.length) return undefined;
   const sorted = [...points].sort(byConfidenceThenDate);
   return sorted[0];
+};
+
+/**
+ * Essaie de déduire un "prix Orliman" depuis la fiche produit DB
+ * (sans imposer un schéma strict : on lit plusieurs clés possibles).
+ *
+ * On garde ça volontairement permissif car ton type `Product` côté pricing
+ * n’est pas forcément le même que ta table `products`.
+ */
+const getFallbackOrlimanPriceFromProduct = (product: Product): number | undefined => {
+  const p: any = product as any;
+
+  // Priorités (ajuste si besoin) :
+  // 1) un champ "orlimanPrice" si tu l’ajoutes dans le futur
+  // 2) tarif_catalogue_2025 (table products)
+  // 3) tarif_lppr_eur (si tu veux piloter par LPPR)
+  // 4) catalogPrice / price (si ton type pricing le contient)
+  return (
+    safeNumber(p?.orlimanPrice) ??
+    safeNumber(p?.tarif_catalogue_2025) ??
+    safeNumber(p?.tarif_lppr_eur) ??
+    safeNumber(p?.catalogPrice) ??
+    safeNumber(p?.price)
+  );
 };
 
 export const computeBestCompetitorPrice = (points: PricePoint[]) => {
@@ -35,7 +67,7 @@ export const computeGaps = (
   best?: { brand: Brand; price: number },
   avg?: number
 ): { gapBestPct?: number; gapAvgPct?: number } => {
-  if (!orlimanPrice) return {};
+  if (orlimanPrice === undefined) return {};
   const gapBestPct = best ? ((orlimanPrice - best.price) / best.price) * 100 : undefined;
   const gapAvgPct = avg ? ((orlimanPrice - avg) / avg) * 100 : undefined;
   return { gapBestPct, gapAvgPct };
@@ -58,10 +90,11 @@ export const recommendAction = (
   if (!config) {
     return { recommendation: "Collecter données", hint: "Config pricing manquante" };
   }
+
   if (positioning === "no_data") {
     return {
       recommendation: "Collecter données",
-      hint: "Pas assez de prix concurrents ou confiance faible",
+      hint: "Pas assez de prix concurrents ou prix Orliman manquant",
     };
   }
 
@@ -75,10 +108,10 @@ export const recommendAction = (
 
   if (positioning === "premium") {
     const deltaBest = gapBestPct !== undefined ? `${gapBestPct.toFixed(0)}%` : "";
-    const margin = cost !== undefined ? ` (cout ${cost}€ estimé)` : "";
+    const marginInfo = cost !== undefined ? ` (coût ${cost}€ estimé)` : "";
     return {
       recommendation: "Aligner partiellement",
-      hint: `Au-dessus du marché ${deltaBest}. Vérifier valeur perçue${margin} ou descendre vers best.`,
+      hint: `Au-dessus du marché ${deltaBest}. Vérifier valeur perçue${marginInfo} ou descendre vers best.`,
     };
   }
 
@@ -95,6 +128,7 @@ export const groupByProductMarketChannel = (
 ): PositionRow[] => {
   const rows: PositionRow[] = [];
 
+  // index points by product
   const byProduct = pricePoints.reduce<Record<string, PricePoint[]>>((acc, pp) => {
     if (pp.confidence < config.minConfidence) return acc;
     const list = acc[pp.productId] || [];
@@ -107,6 +141,7 @@ export const groupByProductMarketChannel = (
     const productPoints = byProduct[product.id] ?? [];
     const byMarketChannel = new Map<string, PricePoint[]>();
 
+    // Regroupe les points existants
     productPoints.forEach((pp) => {
       const key = `${pp.market}__${pp.channel}`;
       const arr = byMarketChannel.get(key) ?? [];
@@ -114,21 +149,67 @@ export const groupByProductMarketChannel = (
       byMarketChannel.set(key, arr);
     });
 
+    // ✅ Fallback ORLIMAN si absent (prix “catalogue”)
+    const fallbackOrlimanPrice = getFallbackOrlimanPriceFromProduct(product);
+
+    if (fallbackOrlimanPrice !== undefined) {
+      // Pour chaque couple market/channel existant : si pas de ORLIMAN, on injecte un point synthétique
+      byMarketChannel.forEach((points, key) => {
+        const hasOrliman = points.some((p) => p.brand === "ORLIMAN");
+        if (hasOrliman) return;
+
+        const [market, channel] = key.split("__");
+
+        points.push({
+          id: `synthetic-orliman-${product.id}-${market}-${channel}`,
+          productId: product.id,
+          brand: "ORLIMAN",
+          price: fallbackOrlimanPrice,
+          market,
+          channel,
+          confidence: 90,
+          date: new Date().toISOString(),
+          source: "catalogue_fallback",
+        } as any);
+      });
+
+      // Si aucun point du tout sur ce produit, on crée au moins 1 ligne “DEFAULT”
+      if (byMarketChannel.size === 0) {
+        const key = `DEFAULT__DEFAULT`;
+        byMarketChannel.set(key, [
+          {
+            id: `synthetic-orliman-${product.id}-DEFAULT-DEFAULT`,
+            productId: product.id,
+            brand: "ORLIMAN",
+            price: fallbackOrlimanPrice,
+            market: "DEFAULT",
+            channel: "DEFAULT",
+            confidence: 80,
+            date: new Date().toISOString(),
+            source: "catalogue_fallback",
+          } as any,
+        ]);
+      }
+    }
+
     byMarketChannel.forEach((points, key) => {
       const [market, channel] = key.split("__");
+
       const orlimanPoints = points.filter((p) => p.brand === "ORLIMAN");
       const competitorPoints = points.filter((p) => p.brand !== "ORLIMAN");
 
       const chosenOrliman = selectPrice(orlimanPoints);
       const best = computeBestCompetitorPrice(competitorPoints);
       const avg = computeAvgCompetitorPrice(competitorPoints);
+
       const { gapBestPct, gapAvgPct } = computeGaps(chosenOrliman?.price, best, avg);
       const positioning = classifyPositioning(gapAvgPct, config);
+
       const { recommendation, hint } = recommendAction(
         positioning,
         gapBestPct,
         gapAvgPct,
-        product.cost,
+        (product as any)?.cost,
         config
       );
 
