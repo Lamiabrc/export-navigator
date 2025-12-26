@@ -1,7 +1,7 @@
 import React from "react";
 import { Sidebar } from "./Sidebar";
 import { Link } from "react-router-dom";
-import { Menu, Search } from "lucide-react";
+import { Menu, Search, FileCheck2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
@@ -68,11 +68,9 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
             </button>
 
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-foreground truncate">
-                Export Navigator
-              </div>
+              <div className="text-sm font-semibold text-foreground truncate">Export Navigator</div>
               <div className="text-xs text-muted-foreground truncate">
-                Pilotage export - factures - conformite - marges
+                Tour de contrôle export • factures • conformité • transit • OM/TVA
               </div>
             </div>
 
@@ -80,15 +78,17 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
               <div className="relative flex-1 hidden sm:block">
                 <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
-                  placeholder="Rechercher facture, client, circuit…"
+                  placeholder="Rechercher client, facture, produit…"
                   className="pl-9 bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground rounded-xl shadow-inner dark:bg-white/5 dark:border-white/10"
                 />
               </div>
+
               <Link
-                to="/imports"
+                to="/invoice-verification"
                 className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 border border-primary/50 hover:shadow-primary/50 hover:-translate-y-0.5 transition"
               >
-                Importer
+                <FileCheck2 className="h-4 w-4" />
+                Contrôler une facture
               </Link>
             </div>
           </div>
