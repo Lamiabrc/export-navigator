@@ -25,12 +25,13 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useFlows } from '@/hooks/useFlows';
 import { useFlowChecklists } from '@/hooks/useFlowChecklists';
 import { computeFlowHealth } from '@/lib/flows/flowHealth';
-import type { Flow, Incoterm, RiskLevel, Zone } from '@/types';
-import { AlertTriangle, Download, Filter, ShieldCheck, Sparkles, Target } from 'lucide-react';
+import type { Incoterm, RiskLevel, Zone } from '@/types';
+import { AlertTriangle, Download, Filter, RefreshCw, Sparkles, Target, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useOperationsSync } from '@/hooks/useOperationsSync';
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/PageHeader';
+import { supabase } from '@/integrations/supabase/client';
 
 type ZoneFilter = 'ALL' | Zone;
 type IncotermFilter = 'ALL' | Incoterm;
@@ -82,10 +83,71 @@ const HealthBadge = ({ bucket, score }: { bucket: 'OK' | 'A_SURVEILLER' | 'RISQU
   );
 };
 
+type DbCounts = {
+  products: number | null;
+  clients: number | null;
+  flows: number | null;
+  byZone: Array<{ export_zone: string | null; nb_clients: number }>;
+  byDrom: Array<{ drom_code: string | null; nb_clients: number }>;
+  error?: string | null;
+};
+
+async function countTable(table: string) {
+  const { count, error } = await supabase.from(table).select('*', { head: true, count: 'exact' });
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export default function ControlTower() {
   const { flows, isLoading } = useFlows();
   const { getChecklist } = useFlowChecklists();
   const operationsSync = useOperationsSync();
+
+  // --- Supabase DB quick stats ---
+  const [db, setDb] = useState<DbCounts>({
+    products: null,
+    clients: null,
+    flows: null,
+    byZone: [],
+    byDrom: [],
+    error: null,
+  });
+  const [dbLoading, setDbLoading] = useState(false);
+
+  const refreshDb = async () => {
+    setDbLoading(true);
+    try {
+      const [productsCount, clientsCount, flowsCount] = await Promise.all([
+        countTable('products'),   // ✅ ton vrai nom de table
+        countTable('clients'),
+        countTable('flows'),
+      ]);
+
+      const { data: byZone, error: e1 } = await supabase.from('v_clients_by_zone').select('*');
+      if (e1) throw e1;
+
+      const { data: byDrom, error: e2 } = await supabase.from('v_clients_drom').select('*');
+      if (e2) throw e2;
+
+      setDb({
+        products: productsCount,
+        clients: clientsCount,
+        flows: flowsCount,
+        byZone: (byZone ?? []) as any,
+        byDrom: (byDrom ?? []) as any,
+        error: null,
+      });
+    } catch (e: any) {
+      setDb((prev) => ({ ...prev, error: e?.message ?? 'Erreur DB' }));
+    } finally {
+      setDbLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshDb();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Filters
   const [q, setQ] = useState('');
@@ -108,21 +170,23 @@ export default function ControlTower() {
     setOnlyOverdue(false);
   };
 
+  const hasActiveFilters =
+    q.trim() !== '' ||
+    zone !== 'ALL' ||
+    destination !== 'ALL' ||
+    incoterm !== 'ALL' ||
+    risk !== 'ALL' ||
+    health !== 'ALL' ||
+    onlyMissing ||
+    onlyOverdue;
+
   // Presets (quick filters)
   const applyPreset = (preset: 'DROM_DDP' | 'SUISSE_BLOQUE' | 'UE_AUTOLIQ' | 'DOCS') => {
-    setQ('');
-    setDestination('ALL');
-    setOnlyMissing(false);
-    setOnlyOverdue(false);
-    setRisk('ALL');
-    setHealth('ALL');
-    setZone('ALL');
-    setIncoterm('ALL');
+    resetFilters();
 
     if (preset === 'DROM_DDP') {
-      setZone('DROM');
-      setIncoterm('DDP');
-      setRisk('ALL');
+      setZone('DROM' as ZoneFilter);
+      setIncoterm('DDP' as IncotermFilter);
       setOnlyMissing(true);
     }
     if (preset === 'SUISSE_BLOQUE') {
@@ -130,7 +194,7 @@ export default function ControlTower() {
       setHealth('RISQUE');
     }
     if (preset === 'UE_AUTOLIQ') {
-      setZone('UE');
+      setZone('UE' as ZoneFilter);
       setOnlyMissing(true);
       setQ('autoliquid');
     }
@@ -144,43 +208,51 @@ export default function ControlTower() {
     const now = new Date();
 
     return flows.map((flow) => {
-      const checklist = getChecklist(flow);
-      const h = computeFlowHealth(flow, checklist, now);
+      const checklistRaw: any = getChecklist(flow);
 
-      // Search tokens: also include checklist labels so "autoliquid" works as shortcut
+      // ✅ robuste : certains hooks renvoient un tableau, d'autres un objet { checklist: [] }
+      const checklistItems: Array<{ label: string; done?: boolean }> = Array.isArray(checklistRaw)
+        ? checklistRaw
+        : Array.isArray(checklistRaw?.checklist)
+          ? checklistRaw.checklist
+          : [];
+
+      const h = computeFlowHealth(flow as any, checklistRaw, now);
+
+      // Search tokens: include checklist labels so "autoliquid" works
       const searchBlob = [
-        flow.flow_code,
-        flow.client_name,
-        flow.destination,
-        flow.zone,
-        flow.incoterm,
-        flow.incoterm_place,
-        ...checklist.map((c) => c.label),
+        (flow as any).flow_code,
+        (flow as any).client_name,
+        (flow as any).destination,
+        (flow as any).zone,
+        (flow as any).incoterm,
+        (flow as any).incoterm_place,
+        ...checklistItems.map((c) => c.label),
       ]
+        .filter(Boolean)
         .join(' ')
         .toLowerCase();
 
       return {
-        flow,
-        checklist,
+        flow: flow as any,
+        checklist: checklistRaw,
         health: h,
         searchBlob,
       };
     });
-    // getChecklist has internal map; flows change => safe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flows]);
 
   const destinations = useMemo(() => {
     const set = new Set<string>();
-    flows.forEach((f) => set.add(f.destination));
+    flows.forEach((f: any) => f?.destination && set.add(f.destination));
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [flows]);
 
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase();
     return rows
-      .filter(({ flow, health }) => (zone === 'ALL' ? true : flow.zone === zone))
+      .filter(({ flow }) => (zone === 'ALL' ? true : flow.zone === zone))
       .filter(({ flow }) => (destination === 'ALL' ? true : flow.destination === destination))
       .filter(({ flow }) => (incoterm === 'ALL' ? true : flow.incoterm === incoterm))
       .filter(({ flow }) => (risk === 'ALL' ? true : (flow.risk_level ?? 'ok') === risk))
@@ -191,47 +263,28 @@ export default function ControlTower() {
       .sort((a, b) => a.health.score - b.health.score);
   }, [rows, q, zone, destination, incoterm, risk, health, onlyMissing, onlyOverdue]);
 
-  const hasActiveFilters = useMemo(
-    () =>
-      q.trim() !== '' ||
-      zone !== 'ALL' ||
-      destination !== 'ALL' ||
-      incoterm !== 'ALL' ||
-      risk !== 'ALL' ||
-      health !== 'ALL' ||
-      onlyMissing ||
-      onlyOverdue,
-    [q, zone, destination, incoterm, risk, health, onlyMissing, onlyOverdue]
-  );
-
   const kpis = useMemo(() => {
-    const total = flows.length;
-    const active = flows.filter(
-      (f) => f.status_transport !== 'termine' || f.status_customs !== 'termine' || f.status_invoicing !== 'termine'
-    ).length;
-
-    const atRisk = flows.filter((f) => f.risk_level === 'risque').length;
-    const watch = flows.filter((f) => f.risk_level === 'a_surveiller').length;
-
-    const now = new Date();
+    const total = rows.length;
+    const active = rows.filter((r) => String(r.flow?.status ?? '').toLowerCase() !== 'cloture').length;
+    const atRisk = rows.filter((r) => r.health.bucket === 'RISQUE').length;
+    const watch = rows.filter((r) => r.health.bucket === 'A_SURVEILLER').length;
     const overdue = rows.filter((r) => r.health.isOverdue).length;
-    const missing = rows.filter((r) => r.health.missing.length > 0 || r.health.blockers.length > 0).length;
+    const missing = rows.filter((r) => r.health.missing.length > 0).length;
 
-    const goodsValue = flows.reduce((s, f) => n(s) + n(f.goods_value), 0);
-    const costs = flows.reduce(
-      (s, f) =>
-        n(s) +
-        n(f.cost_transport) +
-        n(f.cost_customs_clearance) +
-        n(f.cost_duties) +
-        n(f.cost_import_vat) +
-        n(f.cost_octroi_mer) +
-        n(f.cost_octroi_mer_regional) +
-        n(f.cost_other),
+    const goodsValue = rows.reduce((acc, r) => acc + n(r.flow?.goods_value), 0);
+    const costs = rows.reduce(
+      (acc, r) =>
+        acc +
+        n(r.flow?.cost_transport) +
+        n(r.flow?.cost_customs_clearance) +
+        n(r.flow?.cost_duties) +
+        n(r.flow?.cost_import_vat) +
+        n(r.flow?.cost_octroi_mer) +
+        n(r.flow?.cost_octroi_mer_regional) +
+        n(r.flow?.cost_other),
       0
     );
 
-    // Priorities: worst health
     const topPriorities = [...rows]
       .sort((a, b) => a.health.score - b.health.score)
       .slice(0, 5)
@@ -243,8 +296,8 @@ export default function ControlTower() {
         blockers: r.health.blockers.slice(0, 2),
       }));
 
-    return { total, active, atRisk, watch, overdue, missing, goodsValue, costs, topPriorities, now };
-  }, [flows, rows]);
+    return { total, active, atRisk, watch, overdue, missing, goodsValue, costs, topPriorities };
+  }, [rows]);
 
   const exportFilteredCsv = () => {
     const exportRows = filtered.map(({ flow, health: h }) => ({
@@ -254,8 +307,8 @@ export default function ControlTower() {
       Zone: flow.zone,
       Incoterm: flow.incoterm,
       Lieu: flow.incoterm_place,
-      'Départ': flow.departure_date,
-      'Livraison': flow.delivery_date,
+      Départ: flow.departure_date ?? '',
+      Livraison: flow.delivery_date ?? '',
       'Valeur marchandises': n(flow.goods_value),
       'Charges totales':
         n(flow.cost_transport) +
@@ -268,10 +321,11 @@ export default function ControlTower() {
       Risque: flow.risk_level ?? 'ok',
       Santé: h.bucket,
       Score: h.score,
-      Overdue: h.isOverdue,
+      Retard: h.isOverdue,
       Bloquants: h.blockers.join(' | '),
       'Docs à faire': h.missing.join(' | '),
     }));
+
     const csv = toCsv(exportRows);
     downloadText(csv, `etat_des_lieux_${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
   };
@@ -285,16 +339,11 @@ export default function ControlTower() {
     }
   };
 
-  useEffect(() => {
-    // Silence unused warning when hooks haven't returned yet
-    void operationsSync;
-  }, [operationsSync]);
-
   if (isLoading) {
     return (
       <MainLayout>
         <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Chargement...</p>
+          <p className="text-muted-foreground">Chargement.</p>
         </div>
       </MainLayout>
     );
@@ -304,24 +353,68 @@ export default function ControlTower() {
     <MainLayout>
       <div className="space-y-6">
         <PageHeader
-          title="Tour de controle Export"
-          subtitle="Etat des lieux chiffre, priorisation et controle des risques (DOM, Suisse, UE)."
+          title="Tour de contrôle Export"
+          subtitle="État des lieux chiffré, priorisation et contrôle des risques (DOM, Suisse, UE)."
           actions={(
             <div className="flex gap-2">
               <Button variant="outline" className="gap-2" onClick={exportFilteredCsv}>
                 <Download className="h-4 w-4" />
-                Export etat des lieux
+                Export état des lieux
               </Button>
               <Button variant="secondary" className="gap-2" onClick={handleSync} disabled={operationsSync.isLoading}>
                 <Sparkles className="h-4 w-4" />
-                {operationsSync.isLoading ? 'Sync en cours...' : 'Sync OneDrive'}
+                {operationsSync.isLoading ? 'Sync en cours…' : 'Sync OneDrive'}
               </Button>
             </div>
           )}
         />
 
-        {
-/* KPI Row */}
+        {/* ✅ Supabase quick status */}
+        <Card>
+          <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Base de données (Supabase)
+              </CardTitle>
+              <CardDescription>
+                Tables: clients / products / flows + vues: v_clients_by_zone, v_clients_drom
+              </CardDescription>
+              {db.error ? (
+                <p className="text-sm text-[hsl(var(--status-risk))]">{db.error}</p>
+              ) : null}
+            </div>
+            <Button variant="outline" size="sm" onClick={refreshDb} disabled={dbLoading}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              {dbLoading ? 'Rafraîchissement…' : 'Rafraîchir'}
+            </Button>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Badge variant="outline">Clients: {db.clients ?? '—'}</Badge>
+            <Badge variant="outline">Produits: {db.products ?? '—'}</Badge>
+            <Badge variant="outline">Flows: {db.flows ?? '—'}</Badge>
+            {!!db.byZone?.length && (
+              <div className="w-full mt-2 flex flex-wrap gap-2">
+                {db.byZone.map((r, i) => (
+                  <Badge key={`${r.export_zone ?? 'NA'}-${i}`} variant="secondary">
+                    {r.export_zone ?? '—'}: {r.nb_clients}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            {!!db.byDrom?.length && (
+              <div className="w-full mt-2 flex flex-wrap gap-2">
+                {db.byDrom.map((r, i) => (
+                  <Badge key={`${r.drom_code ?? 'NA'}-${i}`} variant="outline">
+                    DROM {r.drom_code ?? '—'}: {r.nb_clients}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* KPI Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
           <Card>
             <CardContent className="p-4">
@@ -341,21 +434,21 @@ export default function ControlTower() {
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">À risque</p>
               <p className="text-2xl font-bold">{kpis.atRisk}</p>
-              <p className="text-[11px] text-muted-foreground">Risque déclaré</p>
+              <p className="text-[11px] text-muted-foreground">Santé “Risque”</p>
             </CardContent>
           </Card>
           <Card className="border-[hsl(var(--status-warning))]/30">
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">À surveiller</p>
               <p className="text-2xl font-bold">{kpis.watch}</p>
-              <p className="text-[11px] text-muted-foreground">Risque modéré</p>
+              <p className="text-[11px] text-muted-foreground">Santé “À surveiller”</p>
             </CardContent>
           </Card>
           <Card className={cn('border', kpis.overdue > 0 ? 'border-[hsl(var(--status-risk))]/30' : '')}>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">Retards</p>
               <p className="text-2xl font-bold">{kpis.overdue}</p>
-              <p className="text-[11px] text-muted-foreground">Livraison/clôture</p>
+              <p className="text-[11px] text-muted-foreground">Overdue</p>
             </CardContent>
           </Card>
           <Card>
@@ -393,26 +486,26 @@ export default function ControlTower() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="h-5 w-5" />
+              <Target className="h-5 w-5" />
               États des lieux instantanés
             </CardTitle>
-            <CardDescription>1 clic pour sortir un point chiffré en réunion</CardDescription>
+            <CardDescription>1 clic pour sortir un point chiffré</CardDescription>
           </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              <Button variant="secondary" size="sm" onClick={() => applyPreset('DROM_DDP')}>
-                {'DOM > DDP > docs manquants'}
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => applyPreset('SUISSE_BLOQUE')}>
-                {'Suisse > dossiers à risque'}
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => applyPreset('DOCS')}>
-                {'Tous > docs à faire'}
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => applyPreset('UE_AUTOLIQ')}>
-                {'UE > autoliquidation'}
-              </Button>
-            </CardContent>
-          </Card>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" onClick={() => applyPreset('DROM_DDP')}>
+              DOM &gt; DDP &gt; docs manquants
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => applyPreset('SUISSE_BLOQUE')}>
+              Suisse &gt; dossiers à risque
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => applyPreset('DOCS')}>
+              Tous &gt; docs à faire
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => applyPreset('UE_AUTOLIQ')}>
+              UE &gt; autoliquidation
+            </Button>
+          </CardContent>
+        </Card>
 
         {/* Filters */}
         <Card>
@@ -432,6 +525,7 @@ export default function ControlTower() {
               </div>
             </div>
           </CardHeader>
+
           <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             <div className="lg:col-span-2">
               <Label htmlFor="q">Recherche</Label>
@@ -442,9 +536,10 @@ export default function ControlTower() {
                 onChange={(e) => setQ(e.target.value)}
               />
             </div>
+
             <div>
               <Label>Zone</Label>
-              <p className="text-[11px] text-muted-foreground">Pourquoi ? Zone = UE/DROM/Hors UE impacte TVA et preuves.</p>
+              <p className="text-[11px] text-muted-foreground">UE/DROM/Hors UE impacte TVA et preuves.</p>
               <Select value={zone} onValueChange={(v) => setZone(v as ZoneFilter)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Toutes" />
@@ -453,10 +548,12 @@ export default function ControlTower() {
                   <SelectItem value="ALL">Toutes</SelectItem>
                   <SelectItem value="UE">UE</SelectItem>
                   <SelectItem value="DROM">DROM</SelectItem>
+                  <SelectItem value="Suisse">Suisse</SelectItem>
                   <SelectItem value="Hors UE">Hors UE</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+
             <div>
               <Label>Destination</Label>
               <Select value={destination} onValueChange={setDestination}>
@@ -473,22 +570,24 @@ export default function ControlTower() {
                 </SelectContent>
               </Select>
             </div>
+
             <div>
               <Label>Incoterm</Label>
-              <p className="text-[11px] text-muted-foreground">Pourquoi ? DDP/DAP modifient responsabilités douane/TVA.</p>
               <Select value={incoterm} onValueChange={(v) => setIncoterm(v as IncotermFilter)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Tous" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Tous</SelectItem>
-                  <SelectItem value="EXW">EXW</SelectItem>
-                  <SelectItem value="FCA">FCA</SelectItem>
-                  <SelectItem value="DAP">DAP</SelectItem>
-                  <SelectItem value="DDP">DDP</SelectItem>
+                  {(['EXW', 'FCA', 'FOB', 'CIF', 'CPT', 'CIP', 'DAP', 'DDP'] as const).map((i) => (
+                    <SelectItem key={i} value={i}>
+                      {i}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+
             <div>
               <Label>Risque</Label>
               <Select value={risk} onValueChange={(v) => setRisk(v as RiskFilter)}>
@@ -498,12 +597,13 @@ export default function ControlTower() {
                 <SelectContent>
                   <SelectItem value="ALL">Tous</SelectItem>
                   <SelectItem value="ok">OK</SelectItem>
-                  <SelectItem value="a_surveiller">À surveiller</SelectItem>
-                  <SelectItem value="risque">Risque</SelectItem>
+                  <SelectItem value="watch">À surveiller</SelectItem>
+                  <SelectItem value="risk">Risque</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div>
+
+            <div className="lg:col-span-2">
               <Label>Santé</Label>
               <Select value={health} onValueChange={(v) => setHealth(v as HealthFilter)}>
                 <SelectTrigger>
@@ -517,56 +617,16 @@ export default function ControlTower() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-3 lg:col-span-2">
-              <div className="flex items-center gap-2">
-                <Switch checked={onlyMissing} onCheckedChange={setOnlyMissing} />
-                <span className="text-sm">Docs / bloquants</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch checked={onlyOverdue} onCheckedChange={setOnlyOverdue} />
-                <span className="text-sm">Retards</span>
-              </div>
-            </div>
-            <div className="lg:col-span-4 flex items-center justify-end gap-2">
-              <Badge variant="outline">Résultats: {filtered.length}</Badge>
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Priorities */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Target className="h-5 w-5" />
-              Top priorités (à traiter)
-            </CardTitle>
-            <CardDescription>Les 5 dossiers les plus critiques, basés sur le score santé</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {kpis.topPriorities.length === 0 ? (
-              <p className="text-muted-foreground">Aucun dossier</p>
-            ) : (
-              kpis.topPriorities.map((p) => (
-                <div key={p.code} className="flex items-start justify-between gap-3 p-3 rounded-lg border">
-                  <div>
-                    <p className="font-medium text-foreground">{p.code}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {p.client} → {p.dest}
-                    </p>
-                    {p.blockers.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {p.blockers.map((b) => (
-                          <Badge key={b} variant="secondary" className="text-xs">
-                            {b}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <HealthBadge bucket={p.score >= 80 ? 'OK' : p.score >= 55 ? 'A_SURVEILLER' : 'RISQUE'} score={p.score} />
-                </div>
-              ))
-            )}
+            <div className="flex items-center gap-3">
+              <Switch checked={onlyMissing} onCheckedChange={setOnlyMissing} />
+              <span className="text-sm">Docs / bloquants</span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Switch checked={onlyOverdue} onCheckedChange={setOnlyOverdue} />
+              <span className="text-sm">Retards</span>
+            </div>
           </CardContent>
         </Card>
 
@@ -577,10 +637,9 @@ export default function ControlTower() {
               <AlertTriangle className="h-5 w-5" />
               Dossiers (filtrés)
             </CardTitle>
-            <CardDescription>
-              Tri par criticité (score santé croissant). Clique sur export pour partager l'état des lieux.
-            </CardDescription>
+            <CardDescription>Tri par criticité (score santé croissant).</CardDescription>
           </CardHeader>
+
           <CardContent>
             <div className="overflow-x-auto">
               <Table>
@@ -591,72 +650,74 @@ export default function ControlTower() {
                     <TableHead>Destination</TableHead>
                     <TableHead>Zone</TableHead>
                     <TableHead>Incoterm</TableHead>
-                    <TableHead>Santé</TableHead>
-                    <TableHead className="text-right">Valeur</TableHead>
+                    <TableHead className="text-right">Marchandises</TableHead>
                     <TableHead className="text-right">Charges</TableHead>
-                    <TableHead>Docs à faire</TableHead>
+                    <TableHead>Risque</TableHead>
+                    <TableHead>Santé</TableHead>
+                    <TableHead>Retard</TableHead>
+                    <TableHead className="min-w-[220px]">Docs / bloquants</TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
+                  {filtered.map(({ flow, health: h }) => {
+                    const totalCosts =
+                      n(flow.cost_transport) +
+                      n(flow.cost_customs_clearance) +
+                      n(flow.cost_duties) +
+                      n(flow.cost_import_vat) +
+                      n(flow.cost_octroi_mer) +
+                      n(flow.cost_octroi_mer_regional) +
+                      n(flow.cost_other);
+
+                    const riskLevel = (flow.risk_level ?? 'ok') as RiskLevel;
+
+                    const checklistRaw: any = getChecklist(flow);
+                    const checklistItems: Array<{ label: string; done?: boolean }> = Array.isArray(checklistRaw)
+                      ? checklistRaw
+                      : Array.isArray(checklistRaw?.checklist)
+                        ? checklistRaw.checklist
+                        : [];
+
+                    const missingPreview = [...h.blockers, ...h.missing]
+                      .filter(Boolean)
+                      .slice(0, 4)
+                      .join(' • ');
+
+                    return (
+                      <TableRow key={flow.id}>
+                        <TableCell className="font-medium">{flow.flow_code}</TableCell>
+                        <TableCell>{flow.client_name}</TableCell>
+                        <TableCell>{flow.destination}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{flow.zone}</Badge>
+                        </TableCell>
+                        <TableCell>{flow.incoterm}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(n(flow.goods_value))}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(totalCosts)}</TableCell>
+                        <TableCell>
+                          <StatusBadge status={riskLevel as any} />
+                        </TableCell>
+                        <TableCell>
+                          <HealthBadge bucket={h.bucket} score={h.score} />
+                        </TableCell>
+                        <TableCell>
+                          {h.isOverdue ? <Badge variant="destructive">Oui</Badge> : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {missingPreview || (checklistItems.length ? 'OK' : '—')}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+
                   {filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center text-muted-foreground py-10">
-                        Aucun résultat
+                      <TableCell colSpan={11} className="text-center text-sm text-muted-foreground">
+                        Aucun dossier ne correspond aux filtres.
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    filtered.map(({ flow, health: h }) => {
-                      const charges =
-                        flow.cost_transport +
-                        flow.cost_customs_clearance +
-                        flow.cost_duties +
-                        flow.cost_import_vat +
-                        flow.cost_octroi_mer +
-                        flow.cost_octroi_mer_regional +
-                        flow.cost_other;
-                      return (
-                        <TableRow key={flow.id} className={cn(h.isOverdue && 'bg-[hsl(var(--status-risk))]/5')}>
-                          <TableCell className="font-medium text-primary">{flow.flow_code}</TableCell>
-                          <TableCell>{flow.client_name}</TableCell>
-                          <TableCell>{flow.destination}</TableCell>
-                          <TableCell>
-                            <StatusBadge status={flow.zone} type="zone" />
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{flow.incoterm}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <HealthBadge bucket={h.bucket} score={h.score} />
-                          </TableCell>
-                          <TableCell className="text-right">{formatCurrency(flow.goods_value)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(charges)}</TableCell>
-                          <TableCell>
-                            {h.missing.length === 0 && h.blockers.length === 0 ? (
-                              <span className="text-sm text-muted-foreground">—</span>
-                            ) : (
-                              <div className="flex flex-wrap gap-1">
-                                {h.blockers.slice(0, 1).map((b) => (
-                                  <Badge key={b} className="text-xs" variant="destructive">
-                                    {b}
-                                  </Badge>
-                                ))}
-                                {h.missing.slice(0, 2).map((m) => (
-                                  <Badge key={m} className="text-xs" variant="secondary">
-                                    {m}
-                                  </Badge>
-                                ))}
-                                {(h.missing.length + h.blockers.length > 3) && (
-                                  <Badge className="text-xs" variant="outline">
-                                    +{h.missing.length + h.blockers.length - 3}
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
+                  ) : null}
                 </TableBody>
               </Table>
             </div>
