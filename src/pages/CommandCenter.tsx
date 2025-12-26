@@ -1,4 +1,4 @@
-import React from "react";
+import * as React from "react";
 import { Link } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -16,11 +16,10 @@ import {
   Calculator,
   Users,
   Package,
-  Globe,
   BookOpen,
   Settings2,
-  ArrowRight,
   RefreshCw,
+  ArrowRight,
 } from "lucide-react";
 
 type FlowRow = {
@@ -36,7 +35,6 @@ function safeText(v: any): string {
 }
 
 function extractDestination(data: any): string {
-  // On essaye plusieurs chemins possibles (selon ce que tu stockes dans flows.data)
   return (
     safeText(data?.destination) ||
     safeText(data?.destination_name) ||
@@ -47,9 +45,7 @@ function extractDestination(data: any): string {
 }
 
 export default function CommandCenter() {
-  const { products, isLoading: productsLoading, error: productsError, refresh: refreshProducts, stats } = useProducts({
-    pageSize: 1000,
-  });
+  const { stats, isLoading: productsLoading, error: productsError, refresh: refreshProducts } = useProducts({ pageSize: 2000 });
 
   const [flowsLoading, setFlowsLoading] = React.useState(true);
   const [flowsError, setFlowsError] = React.useState("");
@@ -77,7 +73,7 @@ export default function CommandCenter() {
         .from("flows")
         .select("id, flow_code, data, created_at")
         .order("created_at", { ascending: false })
-        .limit(30);
+        .limit(40);
 
       if (error) throw error;
 
@@ -89,8 +85,6 @@ export default function CommandCenter() {
         const dest = extractDestination(r.data);
         if (!dest) continue;
 
-        // getZoneFromDestination prend tes destinations connues (DROM/UE/Hors UE)
-        // si destination inconnue => on ignore (ou on met dans Hors UE par défaut)
         let z: Zone;
         try {
           z = getZoneFromDestination(dest as any);
@@ -113,52 +107,6 @@ export default function CommandCenter() {
     void loadFlows();
   }, [loadFlows]);
 
-  const topNav = (
-    <div className="flex flex-wrap gap-2">
-      <Button asChild variant="default" className="gap-2">
-        <Link to="/invoice-verification">
-          <FileCheck2 className="h-4 w-4" />
-          Contrôle facture
-        </Link>
-      </Button>
-
-      <Button asChild variant="outline" className="gap-2">
-        <Link to="/simulator">
-          <Calculator className="h-4 w-4" />
-          Simulation export
-        </Link>
-      </Button>
-
-      <Button asChild variant="outline" className="gap-2">
-        <Link to="/clients">
-          <Users className="h-4 w-4" />
-          Clients
-        </Link>
-      </Button>
-
-      <Button asChild variant="outline" className="gap-2">
-        <Link to="/products">
-          <Package className="h-4 w-4" />
-          Produits
-        </Link>
-      </Button>
-
-      <Button asChild variant="outline" className="gap-2">
-        <Link to="/guide">
-          <BookOpen className="h-4 w-4" />
-          Guide (incl. DROM)
-        </Link>
-      </Button>
-
-      <Button asChild variant="ghost" className="gap-2">
-        <Link to="/settings">
-          <Settings2 className="h-4 w-4" />
-          Réglages
-        </Link>
-      </Button>
-    </div>
-  );
-
   return (
     <MainLayout>
       <div className="space-y-6">
@@ -174,10 +122,47 @@ export default function CommandCenter() {
             </p>
           </div>
 
-          {topNav}
+          <div className="flex flex-wrap gap-2">
+            <Button asChild className="gap-2">
+              <Link to="/invoice-verification">
+                <FileCheck2 className="h-4 w-4" />
+                Contrôle facture
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="gap-2">
+              <Link to="/simulator">
+                <Calculator className="h-4 w-4" />
+                Simulation export
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="gap-2">
+              <Link to="/clients">
+                <Users className="h-4 w-4" />
+                Clients
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="gap-2">
+              <Link to="/products">
+                <Package className="h-4 w-4" />
+                Produits
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="gap-2">
+              <Link to="/guide">
+                <BookOpen className="h-4 w-4" />
+                Guide (incl. DROM)
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" className="gap-2">
+              <Link to="/settings">
+                <Settings2 className="h-4 w-4" />
+                Réglages
+              </Link>
+            </Button>
+          </div>
         </div>
 
-        {/* KPI cards */}
+        {/* KPI */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <CardHeader className="pb-2">
@@ -185,7 +170,7 @@ export default function CommandCenter() {
                 <Package className="h-4 w-4" />
                 Produits
               </CardTitle>
-              <CardDescription>Source : table Supabase “products”</CardDescription>
+              <CardDescription>Table Supabase : products</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {productsError ? <p className="text-sm text-red-600">{productsError}</p> : null}
@@ -198,10 +183,10 @@ export default function CommandCenter() {
               <div className="flex flex-wrap gap-2 text-xs">
                 <Badge variant="secondary">Nouveautés: {stats.nouveautes}</Badge>
                 <Badge variant="secondary">LPPR: {stats.lppr}</Badge>
-                <Badge variant="secondary">TVA renseignée: {stats.withTva}</Badge>
+                <Badge variant="secondary">TVA OK: {stats.withTva}</Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                Prochaine étape : ajouter <code>hs_code</code> aux produits pour OM/OMR par code douanier.
+                Prochaine étape : ajouter <code>hs_code</code> pour OM/OMR par code douanier.
               </p>
             </CardContent>
           </Card>
@@ -209,18 +194,18 @@ export default function CommandCenter() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Globe className="h-4 w-4" />
-                Flux export (30 derniers)
+                <Activity className="h-4 w-4" />
+                Flux (40 derniers)
               </CardTitle>
-              <CardDescription>Source : table Supabase “flows”</CardDescription>
+              <CardDescription>Table Supabase : flows</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {flowsError ? <p className="text-sm text-red-600">{flowsError}</p> : null}
               <div className="text-2xl font-bold">{flowsLoading ? "…" : recentFlows.length}</div>
               <div className="flex flex-wrap gap-2 text-xs">
-                <Badge className="badge-ue">UE: {flowsByZone.UE}</Badge>
-                <Badge className="badge-drom">DROM: {flowsByZone.DROM}</Badge>
-                <Badge className="badge-hors-ue">Hors UE: {flowsByZone["Hors UE"]}</Badge>
+                <Badge variant="outline">UE: {flowsByZone.UE}</Badge>
+                <Badge variant="outline">DROM: {flowsByZone.DROM}</Badge>
+                <Badge variant="outline">Hors UE: {flowsByZone["Hors UE"]}</Badge>
               </div>
               <Button variant="outline" size="sm" onClick={loadFlows} disabled={flowsLoading} className="w-full">
                 <RefreshCw className={`h-4 w-4 mr-2 ${flowsLoading ? "animate-spin" : ""}`} />
@@ -235,48 +220,42 @@ export default function CommandCenter() {
                 <FileCheck2 className="h-4 w-4" />
                 Contrôle facture
               </CardTitle>
-              <CardDescription>Objectif : recalcul HT/TVA/TTC, transit, OM/OMR</CardDescription>
+              <CardDescription>Comparer facture vs calcul interne</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Ici on va comparer ta facture vs calcul interne (produit + client + destination).
+                Recalcul HT/TVA/TTC + frais transit + OM/OMR + TVA export/import.
               </p>
-
               <div className="grid grid-cols-1 gap-2">
                 <Button asChild className="justify-between">
                   <Link to="/invoice-verification">
                     Vérifier une facture <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
-
                 <Button asChild variant="outline" className="justify-between">
                   <Link to="/simulator">
-                    Simuler un envoi export <ArrowRight className="h-4 w-4" />
+                    Simuler un envoi <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
               </div>
-
-              <p className="text-xs text-muted-foreground">
-                Transit : aujourd’hui facteur fixe → demain règles par destination + OM/TVA.
-              </p>
             </CardContent>
           </Card>
         </div>
 
         <Separator />
 
-        {/* Recent flows list */}
+        {/* Derniers flux */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Derniers flux</CardTitle>
-            <CardDescription>Lecture rapide pour piloter l’activité (sans “opportunités prix”).</CardDescription>
+            <CardDescription>Lecture rapide (destination / zone)</CardDescription>
           </CardHeader>
           <CardContent>
             {recentFlows.length === 0 ? (
               <p className="text-sm text-muted-foreground">Aucun flux à afficher.</p>
             ) : (
               <div className="space-y-2">
-                {recentFlows.slice(0, 12).map((f) => {
+                {recentFlows.slice(0, 14).map((f) => {
                   const dest = extractDestination(f.data);
                   let z: Zone | "" = "";
                   try {
@@ -286,7 +265,10 @@ export default function CommandCenter() {
                   }
 
                   return (
-                    <div key={f.id} className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 rounded-lg border p-3">
+                    <div
+                      key={f.id}
+                      className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 rounded-lg border p-3"
+                    >
                       <div className="min-w-0">
                         <div className="text-sm font-semibold truncate">{f.flow_code}</div>
                         <div className="text-xs text-muted-foreground truncate">
