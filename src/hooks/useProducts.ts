@@ -1,31 +1,50 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
+/** Helper partagé (Simulator.tsx l’importe) */
+export const safeNumber = (value: unknown, fallback = 0): number => {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+
+  // support "12,34" => 12.34
+  const s = String(value).trim().replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : fallback;
+};
+
 export type ProductRow = {
   id: string;
+
   nouveaute: boolean | null;
   code_article: string | null;
   libelle_article: string | null;
   code_acl13_ou_ean13: string | null;
   code_acl7: string | null;
   code_iud_id: string | null;
+
   tarif_catalogue_2025: number | null;
+
   code_lppr_generique: string | null;
   tarif_lppr_eur: number | null;
   code_lppr_individuel: string | null;
+
   tva_percent: number | null;
+
   caracteristiques: string | null;
   indications: string | null;
+
   unite_vente_longueur_mm: number | null;
   unite_vente_largeur_mm: number | null;
   unite_vente_hauteur_mm: number | null;
   unite_vente_poids_brut_g: number | null;
+
   marquage_ce: boolean | null;
   type_du_dispositif: string | null;
   classe_du_dispositif: string | null;
   type_de_vigilance: string | null;
   nom_du_fabricant: string | null;
   conditionnement_conforme_dss_lpp: boolean | null;
+
   created_at: string | null;
   updated_at: string | null;
 
@@ -41,13 +60,15 @@ export type ProductRow = {
 };
 
 type UseProductsOptions = {
-  enabled?: boolean;          // default true
-  pageSize?: number;          // default 500
+  enabled?: boolean; // default true
+  pageSize?: number; // default 500
+  orderBy?: keyof ProductRow; // default "libelle_article"
 };
 
 export function useProducts(options: UseProductsOptions = {}) {
   const enabled = options.enabled ?? true;
   const pageSize = options.pageSize ?? 500;
+  const orderBy = options.orderBy ?? "libelle_article";
 
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -60,6 +81,7 @@ export function useProducts(options: UseProductsOptions = {}) {
       setIsLoading(false);
       return;
     }
+
     if (!envOk) {
       setError("Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).");
       setProducts([]);
@@ -71,12 +93,10 @@ export function useProducts(options: UseProductsOptions = {}) {
     setError("");
 
     try {
-      // Pagination simple (évite les limites implicites)
       const all: ProductRow[] = [];
       let from = 0;
 
-      // on boucle tant qu'on récupère des pages pleines
-      // (si table énorme on pourra optimiser ensuite)
+      // Pagination : .range(from, to)
       // eslint-disable-next-line no-constant-condition
       while (true) {
         const to = from + pageSize - 1;
@@ -84,7 +104,7 @@ export function useProducts(options: UseProductsOptions = {}) {
         const { data, error: sbError } = await supabase
           .from("products")
           .select("*")
-          .order("libelle_article", { ascending: true, nullsFirst: false })
+          .order(String(orderBy), { ascending: true, nullsFirst: false })
           .range(from, to);
 
         if (sbError) throw sbError;
@@ -103,7 +123,7 @@ export function useProducts(options: UseProductsOptions = {}) {
     } finally {
       setIsLoading(false);
     }
-  }, [enabled, envOk, pageSize]);
+  }, [enabled, envOk, pageSize, orderBy]);
 
   useEffect(() => {
     void refresh();
@@ -143,13 +163,27 @@ export function useProducts(options: UseProductsOptions = {}) {
     [products]
   );
 
+  const stats = useMemo(() => {
+    const total = products.length;
+    const nouveautes = products.filter((p) => Boolean(p.nouveaute)).length;
+    const lppr = products.filter((p) => safeNumber(p.tarif_lppr_eur, 0) > 0 || Boolean(p.code_lppr_individuel || p.code_lppr_generique)).length;
+    const withTva = products.filter((p) => safeNumber(p.tva_percent, 0) > 0).length;
+
+    return { total, nouveautes, lppr, withTva };
+  }, [products]);
+
   return {
     products,
     isLoading,
     error,
     refresh,
+
+    // helpers
     getProductByCode,
     searchProducts,
+
+    // meta
     envOk,
+    stats,
   };
 }
