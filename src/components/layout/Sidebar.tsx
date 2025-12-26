@@ -5,22 +5,17 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   ShieldCheck,
-  LayoutDashboard,
   FileText,
   Truck,
   Users,
-  Upload,
   FileInput,
-  Library,
-  Calculator,
-  TrendingUp,
   BookOpen,
   Settings,
-  Sparkles,
-  Radar,
-  FlaskConical,
-  Map,
+  Calculator,
+  Library,
+  Package,
   LogOut,
+  Activity,
 } from "lucide-react";
 import logoOrliman from "@/assets/logo-orliman.png";
 
@@ -40,72 +35,49 @@ type NavSection = {
 
 const navigation: NavSection[] = [
   {
-    title: "Strategie ✨",
-    items: [
-      { name: "Strategy Hub", href: "/strategy", icon: Sparkles, badge: "NEW" },
-      { name: "Positionnement prix", href: "/pricing-positioning", icon: TrendingUp },
-      { name: "Competitive Intel", href: "/competitive", icon: Radar },
-      { name: "Scenario Lab", href: "/scenario-lab", icon: FlaskConical },
-      { name: "DROM Playbook", href: "/drom-playbook", icon: Map },
-    ],
-  },
-  {
     title: "Pilotage",
     items: [
       {
-        name: "Tour de controle",
+        name: "Tour de contrôle",
         href: "/control-tower",
         icon: ShieldCheck,
-        badge: "NEW",
+        badge: "HUB",
         featured: true,
+        aliases: ["/dashboard", "/strategy"],
       },
-      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    ],
-  },
-  {
-    title: "Donnees",
-    items: [
-      { name: "Imports", href: "/imports", icon: Upload },
-      { name: "Base documentaire", href: "/reference-library", icon: Library },
-    ],
-  },
-  {
-    title: "Operations",
-    items: [
       {
-        name: "Circuits export",
+        name: "Flux export",
         href: "/flows",
-        icon: FileText,
+        icon: Activity,
         aliases: ["/circuits"],
       },
       { name: "Logistique", href: "/logistics", icon: Truck },
-      { name: "Clients", href: "/clients", icon: Users },
+      { name: "Finance", href: "/finance", icon: Calculator },
+      { name: "Analyse marges", href: "/margin-analysis", icon: Calculator },
     ],
   },
   {
-    title: "Facturation & conformite",
+    title: "Facturation & conformité",
     items: [
       { name: "Factures", href: "/invoices", icon: FileInput },
-      { name: "Verification PDF", href: "/invoice-verification", icon: FileInput },
+      { name: "Contrôle facture (PDF)", href: "/invoice-verification", icon: FileInput, badge: "PRIO" },
+      { name: "Simulateur export", href: "/simulator", icon: Calculator },
     ],
   },
   {
-    title: "Finance",
+    title: "Référentiels",
     items: [
-      { name: "Finance", href: "/finance", icon: Calculator },
-      { name: "Analyse marges", href: "/margin-analysis", icon: TrendingUp },
-      { name: "Simulateur", href: "/simulator", icon: Calculator },
+      { name: "Clients", href: "/clients", icon: Users },
+      { name: "Produits", href: "/products", icon: Package, badge: "NEW" },
+      { name: "Références", href: "/reference-library", icon: Library },
+      { name: "Guide (incl. DROM)", href: "/guide", icon: BookOpen, aliases: ["/drom-playbook"] },
     ],
-  },
-  {
-    title: "Support",
-    items: [{ name: "Guide", href: "/guide", icon: BookOpen }],
   },
 ];
 
 const adminNavigation: NavSection = {
   title: "Administration",
-  items: [{ name: "Parametres", href: "/settings", icon: Settings }],
+  items: [{ name: "Paramètres", href: "/settings", icon: Settings }],
 };
 
 const roleLabels: Record<string, string> = {
@@ -117,9 +89,7 @@ const roleLabels: Record<string, string> = {
 };
 
 export type SidebarProps = {
-  /** Optional: useful when Sidebar is displayed in a mobile drawer */
   onNavigate?: () => void;
-  /** Optional: extra classes when needed */
   className?: string;
 };
 
@@ -139,9 +109,9 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
 
   const isItemActive = (item: NavItem) => {
     const matchesAlias = item.aliases?.some(
-      (alias) =>
-        location.pathname === alias || location.pathname.startsWith(`${alias}/`)
+      (alias) => location.pathname === alias || location.pathname.startsWith(`${alias}/`)
     );
+
     return (
       matchesAlias ||
       location.pathname === item.href ||
@@ -200,9 +170,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
       <div className="flex h-16 items-center gap-3 px-6 border-b border-[hsl(var(--sidebar-border))]">
         <img src={logoOrliman} alt="ORLIMAN" className="h-8 w-auto" />
         <div className="min-w-0">
-          <p className="text-xs text-sidebar-foreground/60 truncate">
-            La Meziere, France
-          </p>
+          <p className="text-xs text-sidebar-foreground/60 truncate">La Mézière, France</p>
         </div>
       </div>
 
@@ -221,9 +189,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
             <div className="mt-4 mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
               {adminNavigation.title}
             </div>
-            <div className="space-y-1.5">
-              {adminNavigation.items.map(renderLink)}
-            </div>
+            <div className="space-y-1.5">{adminNavigation.items.map(renderLink)}</div>
           </div>
         )}
       </nav>
@@ -236,24 +202,22 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
 
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white truncate">{safeName}</p>
-            <p className="text-xs text-sidebar-foreground/70 truncate">
-              {safeRoleLabel}
-            </p>
+            <p className="text-xs text-sidebar-foreground/70 truncate">{safeRoleLabel}</p>
           </div>
 
           <button
             type="button"
             onClick={handleLogout}
             className="p-2 rounded-lg hover:bg-white/10 transition focus:outline-none focus:ring-2 focus:ring-primary/50"
-            aria-label="Deconnexion"
-            title="Deconnexion"
+            aria-label="Déconnexion"
+            title="Déconnexion"
           >
             <LogOut className="h-4 w-4 text-sidebar-foreground/70" />
           </button>
         </div>
 
         <p className="mt-2 text-[10px] text-sidebar-foreground/40 text-center">
-          Mode local
+          Données Supabase
         </p>
       </div>
     </aside>
