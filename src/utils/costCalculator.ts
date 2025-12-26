@@ -23,8 +23,23 @@ export interface CustomRates {
   serviceCharges?: ServiceCharge[];
 }
 
+/**
+ * Contexte client (optionnel) — on branche plus tard sur table clients / groupements.
+ * - canal: direct / indirect / depositaire
+ * - groupement_discount_pct: remise groupement (ex: 5 = -5%)
+ */
+export type SalesCanal = 'direct' | 'indirect' | 'depositaire';
+
+export interface ClientContext {
+  client_id?: string;
+  canal?: SalesCanal;
+  depositaire_id?: string;
+  groupement_id?: string;
+  groupement_discount_pct?: number; // ex: 5 => -5%
+}
+
 export interface CostCalculationParams {
-  goodsValue: number;           // Valeur marchandise HT (coût d'achat)
+  goodsValue: number;           // Valeur marchandise HT (coût d'achat ou valeur panier HT)
   destination: Destination;
   incoterm: Incoterm;
   productType: ProductType;     // LPPR remboursé ou standard
@@ -33,14 +48,17 @@ export interface CostCalculationParams {
   customsCode?: string;         // Code nomenclature douanière
   margin?: number;              // Marge souhaitée en %
   customRates?: CustomRates;    // Taux personnalisés (optionnel)
+
+  // Nouveau (optionnel)
+  client?: ClientContext;
 }
 
 export interface CostLine {
   label: string;
-  amount: number;
+  amount: number; // IMPORTANT : montant HT ou taxe (hors TVA sur prestation)
   payer: 'Fournisseur' | 'Client';
   tvaApplicable: boolean;       // TVA sur la prestation
-  tvaAmount: number;            // Montant TVA récupérable
+  tvaAmount: number;            // Montant TVA (récupérable si isRecoverable=true)
   isRecoverable: boolean;       // TVA récupérable (neutre trésorerie)
   category: 'prestation' | 'taxe' | 'tva_import';
   notes: string;
@@ -50,19 +68,37 @@ export interface CostBreakdown {
   params: CostCalculationParams;
   zone: Zone;
   lines: CostLine[];
+
   totalPrestationsHT: number;
   totalTvaRecuperablePrestations: number;
   totalTaxesNonRecuperables: number;
   totalTvaImport: number;
-  totalFournisseur: number;
-  totalClient: number;
+
+  totalFournisseur: number;        // somme des montants payés par fournisseur (HT/taxes/TVA import)
+  totalClient: number;             // somme des montants payés par client (HT/taxes/TVA import)
+
+  totalFournisseurNetCost: number; // ✅ vrai coût fournisseur (hors TVA récupérable/auto)
   prixDeRevient: number;
   prixVenteHT: number;
   margeAppliquee: number;
+
+  // Optionnel (si groupement)
+  remiseGroupementPct?: number;
+  prixVenteHTApresRemise?: number;
 }
 
 export function calculateCosts(params: CostCalculationParams): CostBreakdown {
-  const { goodsValue, destination, incoterm, productType, transportMode, weight = 100, margin = 25, customRates } = params;
+  const {
+    goodsValue,
+    destination,
+    incoterm,
+    productType,
+    transportMode,
+    weight = 100,
+    margin = 25,
+    customRates,
+    client,
+  } = params;
 
   const vatRates = customRates?.vatRates || defaultVatRates;
   const omRates = customRates?.octroiMerRates || defaultOmRates;
@@ -76,9 +112,10 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
 
   // OM/OMR rate
   const omRatesForDest = omRates.filter((r) => r.destination === destination);
-  const omRate = productType === 'lppr'
-    ? omRatesForDest.find((r) => r.category === 'Orthopedie') || omRatesForDest.find((r) => r.category === 'Standard')
-    : omRatesForDest.find((r) => r.category === 'Standard');
+  const omRate =
+    productType === 'lppr'
+      ? omRatesForDest.find((r) => r.category === 'Orthopedie') || omRatesForDest.find((r) => r.category === 'Standard')
+      : omRatesForDest.find((r) => r.category === 'Standard');
 
   // Transport cost estimate
   const transportCost = transportCostsData.find((t) => t.destination === destination && t.transport_mode === transportMode);
@@ -129,9 +166,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
 
   // ============= 3. DEDOUANEMENT EXPORT =============
   if (zone !== 'UE') {
-    const dedouanementExport = serviceChargesData.find(
-      (s) => s.type === 'dedouanement_export' && s.zone === zone
-    );
+    const dedouanementExport = serviceChargesData.find((s) => s.type === 'dedouanement_export' && s.zone === zone);
     if (dedouanementExport && dedouanementExport.fixed_cost > 0) {
       const dedouanementExportPayer = incotermRule?.dedouanement_export || 'Fournisseur';
       const dedouanementTva = dedouanementExport.fixed_cost * (dedouanementExport.tva_on_service / 100);
@@ -151,9 +186,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
 
   // ============= 4. DEDOUANEMENT IMPORT =============
   if (zone !== 'UE') {
-    const dedouanementImport = serviceChargesData.find(
-      (s) => s.type === 'dedouanement_import' && s.zone === zone
-    );
+    const dedouanementImport = serviceChargesData.find((s) => s.type === 'dedouanement_import' && s.zone === zone);
     if (dedouanementImport && dedouanementImport.fixed_cost > 0) {
       const dedouanementImportPayer = incotermRule?.dedouanement_import || 'Client';
       const dedouanementTva = dedouanementImport.fixed_cost * (dedouanementImport.tva_on_service / 100);
@@ -190,9 +223,8 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
 
   // ============= 6. ASSURANCE =============
   const assurance = serviceChargesData.find((s) => s.type === 'assurance' && s.zone === zone);
-  let assuranceAmount = 0;
   if (assurance && assurance.percentage) {
-    assuranceAmount = goodsValue * (assurance.percentage / 100);
+    const assuranceAmount = goodsValue * (assurance.percentage / 100);
     const assurancePayer = incotermRule?.assurance || 'Fournisseur';
 
     lines.push({
@@ -263,18 +295,23 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
     const rate = productType === 'lppr' ? vatRate.rate_lppr : vatRate.rate_standard;
     if (rate > 0) {
       const taxesAmount = lines.filter((l) => l.category === 'taxe').reduce((s, l) => s + l.amount, 0);
+
       const prestationsFournisseur = lines
         .filter((l) => l.category === 'prestation' && l.payer === 'Fournisseur')
         .reduce((s, l) => s + l.amount, 0);
+
       const baseTva = goodsValue + taxesAmount + prestationsFournisseur;
       const tvaImportAmount = baseTva * (rate / 100);
-      const isAuto = vatRate.autoliquidation && zone !== 'Hors UE'; // DROM autoliquidation possible (selon schéma)
-      const recoverable = isAuto && (incotermRule?.tva_import || 'Client') === 'Fournisseur';
+
+      const isAuto = Boolean(vatRate.autoliquidation) && zone !== 'Hors UE';
+      const payer = incotermRule?.tva_import || 'Client';
+
+      const recoverable = isAuto && payer === 'Fournisseur';
 
       lines.push({
         label: `TVA Import ${destination}`,
         amount: tvaImportAmount,
-        payer: incotermRule?.tva_import || 'Client',
+        payer,
         tvaApplicable: false,
         tvaAmount: recoverable ? tvaImportAmount : 0,
         isRecoverable: recoverable,
@@ -287,9 +324,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
   }
 
   // ============= 10. TAXE CARBONE (si applicable) =============
-  const carbonTax = environmentalTaxes.find(
-    (t) => t.transport_mode === transportMode && t.type === 'taxe_carbone_ets'
-  );
+  const carbonTax = environmentalTaxes.find((t) => t.transport_mode === transportMode && t.type === 'taxe_carbone_ets');
   if (carbonTax && carbonTax.rate_percentage) {
     const carbonAmount = transportAmount * (carbonTax.rate_percentage / 100);
 
@@ -314,27 +349,35 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
   const totalTvaRecuperablePrestations = prestations
     .filter((l) => l.isRecoverable)
     .reduce((s, l) => s + l.tvaAmount, 0);
+
   const totalTaxesNonRecuperables = taxes.reduce((s, l) => s + l.amount, 0);
   const totalTvaImport = tvaImport.reduce((s, l) => s + l.amount, 0);
 
-  const totalFournisseur = lines
+  const totalFournisseur = lines.filter((l) => l.payer === 'Fournisseur').reduce((s, l) => s + l.amount, 0);
+  const totalClient = lines.filter((l) => l.payer === 'Client').reduce((s, l) => s + l.amount, 0);
+
+  /**
+   * ✅ VRAI coût fournisseur :
+   * - Les montants "amount" sont HT/taxes (la TVA de prestation n’est pas incluse dans amount)
+   * - Si la TVA import est en autoliquidation et payée par fournisseur (recoverable=true),
+   *   elle est neutre -> on ne l’ajoute pas au coût.
+   */
+  const totalFournisseurNetCost = lines
     .filter((l) => l.payer === 'Fournisseur')
-    .reduce((s, l) => s + l.amount, 0);
-  const totalClient = lines
-    .filter((l) => l.payer === 'Client')
+    .filter((l) => !(l.category === 'tva_import' && l.isRecoverable))
     .reduce((s, l) => s + l.amount, 0);
 
-  const chargesFournisseurNonRecuperables = lines
-    .filter((l) => l.payer === 'Fournisseur' && !l.isRecoverable)
-    .reduce((s, l) => s + l.amount, 0);
-  const chargesFournisseurRecuperables = lines
-    .filter((l) => l.payer === 'Fournisseur' && l.isRecoverable)
-    .reduce((s, l) => s + l.amount - l.tvaAmount, 0);
-
-  const prixDeRevient = goodsValue + chargesFournisseurNonRecuperables + chargesFournisseurRecuperables;
+  const prixDeRevient = goodsValue + totalFournisseurNetCost;
 
   const margeAppliquee = margin || 25;
   const prixVenteHT = prixDeRevient * (1 + margeAppliquee / 100);
+
+  // Option remise groupement (à brancher quand tu auras ta table)
+  const remiseGroupementPct = client?.groupement_discount_pct;
+  const prixVenteHTApresRemise =
+    typeof remiseGroupementPct === 'number' && remiseGroupementPct > 0
+      ? prixVenteHT * (1 - remiseGroupementPct / 100)
+      : undefined;
 
   return {
     params,
@@ -346,9 +389,12 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
     totalTvaImport,
     totalFournisseur,
     totalClient,
+    totalFournisseurNetCost,
     prixDeRevient,
     prixVenteHT,
     margeAppliquee,
+    remiseGroupementPct,
+    prixVenteHTApresRemise,
   };
 }
 
