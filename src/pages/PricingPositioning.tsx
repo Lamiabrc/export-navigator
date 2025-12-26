@@ -11,9 +11,14 @@ import { FilterChips } from "@/components/ui-kit/FilterChips";
 import { PageHeader } from "@/components/ui-kit/PageHeader";
 import { SectionCard } from "@/components/ui-kit/SectionCard";
 import { StatCard } from "@/components/ui-kit/StatCard";
-import { pricingConfig, pricePoints, products } from "@/data/mockPricingData";
+
+import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
+import { useProducts, type ProductRow } from "@/hooks/useProducts";
+
+import { pricingConfig as mockPricingConfig, pricePoints as mockPricePoints } from "@/data/mockPricingData";
 import { groupByProductMarketChannel } from "@/lib/pricingPositioning";
-import type { Brand, PositionRow } from "@/types/pricing";
+import type { Brand, PositionRow, PricePoint, PricingConfig, Product as PricingProduct } from "@/types/pricing";
+
 import { Download, Filter, Rocket, Target } from "lucide-react";
 import logoOrliman from "@/assets/logo-orliman.png";
 
@@ -21,9 +26,28 @@ type SortKey = "product" | "gapAvgPct" | "gapBestPct" | "positioning";
 type SortDir = "asc" | "desc";
 
 const brands: Brand[] = ["THUASNE", "DONJOY_ENOVIS", "GIBAUD"];
-const markets = Array.from(new Set(pricePoints.map((p) => p.market))).sort();
-const channels = Array.from(new Set(pricePoints.map((p) => p.channel))).sort();
-const categories = Array.from(new Set(products.map((p) => p.category))).sort();
+
+/**
+ * Convertit une ligne Supabase "products" vers le type pricing minimal attendu
+ */
+const toPricingProduct = (p: ProductRow): PricingProduct => {
+  const name = (p.libelle_article || p.code_article || "Produit").trim();
+
+  // Catégorie : on prend un champ de classement utile, fallback sinon
+  const category =
+    (p.classement_groupe ||
+      p.classement_produit_libelle ||
+      p.classement_detail ||
+      p.classement_sous_famille_code ||
+      "Non classé") ?? "Non classé";
+
+  return {
+    id: p.id,
+    name,
+    category,
+    // Optionnel : si ton type PricingProduct a d'autres champs, on les laisse absents
+  } as PricingProduct;
+};
 
 const toCsv = (rows: PositionRow[]) => {
   if (!rows.length) return "";
@@ -77,24 +101,87 @@ const colorForGap = (gap?: number) => {
 
 const positioningBadge = (pos: PositionRow) => {
   if (pos.positioning === "premium") return <Badge className="bg-orange-100 text-orange-800">Premium</Badge>;
-  if (pos.positioning === "underpriced") return <Badge className="bg-emerald-100 text-emerald-800">Sous marche</Badge>;
-  if (pos.positioning === "aligned") return <Badge variant="outline">Aligne</Badge>;
-  return <Badge variant="outline">Donnees manquantes</Badge>;
+  if (pos.positioning === "underpriced") return <Badge className="bg-emerald-100 text-emerald-800">Sous marché</Badge>;
+  if (pos.positioning === "aligned") return <Badge variant="outline">Aligné</Badge>;
+  return <Badge variant="outline">Données manquantes</Badge>;
 };
 
 const brandCards: { brand: Brand; title: string; tone: string; desc: string; size?: "lg" | "sm" }[] = [
   { brand: "THUASNE", title: "Thuasne", tone: "from-sky-200/80 to-sky-400/60", desc: "Premium remboursement" },
   { brand: "DONJOY_ENOVIS", title: "DonJoy / Enovis", tone: "from-purple-200/80 to-purple-400/60", desc: "Sport + ortho" },
-  { brand: "ORLIMAN", title: "ORLIMAN", tone: "from-orange-200/90 to-orange-500/80", desc: "Reference au centre", size: "lg" },
+  { brand: "ORLIMAN", title: "ORLIMAN", tone: "from-orange-200/90 to-orange-500/80", desc: "Référence au centre", size: "lg" },
   { brand: "GIBAUD", title: "Gibaud", tone: "from-emerald-200/80 to-emerald-400/60", desc: "Retail remboursement" },
 ];
 
+async function fetchSupabasePricePoints(): Promise<{ data: PricePoint[]; error?: string }> {
+  if (!SUPABASE_ENV_OK) return { data: [], error: "Env Supabase manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)" };
+
+  // ⚠️ Cette table peut ne pas exister encore : on gère le cas en fallback.
+  const { data, error } = await supabase.from("price_points").select("*").limit(10000);
+
+  if (error) {
+    return { data: [], error: error.message };
+  }
+
+  // On cast en PricePoint : tu aligneras le schéma quand on crée la table.
+  return { data: (data ?? []) as PricePoint[] };
+}
+
 export default function PricingPositioning() {
+  // ✅ Produits réels (Supabase)
+  const { products: sbProducts, isLoading: productsLoading, error: productsError } = useProducts({ pageSize: 1000 });
+
+  // Price points (Supabase si dispo, sinon mock)
+  const [sbPricePoints, setSbPricePoints] = React.useState<PricePoint[] | null>(null);
+  const [ppError, setPpError] = React.useState<string>("");
+  const [ppLoading, setPpLoading] = React.useState<boolean>(true);
+
+  // Config (pour l’instant mock — on la mettra en DB plus tard)
+  const [config] = React.useState<PricingConfig>(mockPricingConfig);
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setPpLoading(true);
+      const res = await fetchSupabasePricePoints();
+      if (!mounted) return;
+
+      if (res.error) {
+        // fallback mock
+        setPpError(res.error);
+        setSbPricePoints(null);
+      } else {
+        setPpError("");
+        setSbPricePoints(res.data);
+      }
+      setPpLoading(false);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const pricingProducts = React.useMemo(() => sbProducts.map(toPricingProduct), [sbProducts]);
+
+  const pricePoints: PricePoint[] = React.useMemo(() => {
+    // si on a des PP Supabase => on les utilise
+    if (sbPricePoints) return sbPricePoints;
+    // sinon fallback mock
+    return mockPricePoints as PricePoint[];
+  }, [sbPricePoints]);
+
+  const markets = React.useMemo(() => Array.from(new Set(pricePoints.map((p) => p.market))).sort(), [pricePoints]);
+  const channels = React.useMemo(() => Array.from(new Set(pricePoints.map((p) => p.channel))).sort(), [pricePoints]);
+  const categories = React.useMemo(
+    () => Array.from(new Set(pricingProducts.map((p) => p.category))).sort(),
+    [pricingProducts]
+  );
+
   const [market, setMarket] = React.useState<string>("ALL");
   const [category, setCategory] = React.useState<string>("ALL");
   const [channel, setChannel] = React.useState<string>("ALL");
   const [brandFilters, setBrandFilters] = React.useState<Brand[]>(brands);
-  const [minConfidence, setMinConfidence] = React.useState<number>(pricingConfig.minConfidence);
+  const [minConfidence, setMinConfidence] = React.useState<number>(config.minConfidence);
   const [priceType, setPriceType] = React.useState<"ALL" | "HT" | "TTC">("ALL");
   const [search, setSearch] = React.useState("");
   const [sortKey, setSortKey] = React.useState<SortKey>("gapAvgPct");
@@ -102,8 +189,8 @@ export default function PricingPositioning() {
   const [groupFilter, setGroupFilter] = React.useState<string>("");
 
   const filteredProducts = React.useMemo(
-    () => (category === "ALL" ? products : products.filter((p) => p.category === category)),
-    [category]
+    () => (category === "ALL" ? pricingProducts : pricingProducts.filter((p) => p.category === category)),
+    [category, pricingProducts]
   );
 
   const filteredPricePoints = React.useMemo(() => {
@@ -112,22 +199,24 @@ export default function PricingPositioning() {
       if (market !== "ALL" && pp.market !== market) return false;
       if (channel !== "ALL" && pp.channel !== channel) return false;
       if (groupFilter && !pp.channel.toLowerCase().includes(groupFilter.toLowerCase())) return false;
-      if (priceType !== "ALL" && pp.priceType !== priceType) return false;
+      if (priceType !== "ALL" && (pp as any).priceType !== priceType) return false;
       if (pp.brand !== "ORLIMAN" && brandFilters.length && !brandFilters.includes(pp.brand)) return false;
       return true;
     });
-  }, [market, channel, priceType, minConfidence, brandFilters, groupFilter]);
+  }, [market, channel, priceType, minConfidence, brandFilters, groupFilter, pricePoints]);
 
   const rows = React.useMemo(() => {
     const baseRows = groupByProductMarketChannel(filteredProducts, filteredPricePoints, {
-      ...pricingConfig,
+      ...config,
       minConfidence,
     });
+
     const searched = baseRows.filter((r) =>
       [r.product.name, r.product.category, r.market, r.channel].some((field) =>
         field.toLowerCase().includes(search.toLowerCase())
       )
     );
+
     const sorted = [...searched].sort((a, b) => {
       const dir = sortDir === "asc" ? 1 : -1;
       if (sortKey === "product") return dir * a.product.name.localeCompare(b.product.name);
@@ -135,8 +224,9 @@ export default function PricingPositioning() {
       if (sortKey === "gapBestPct") return dir * ((a.gapBestPct ?? 0) - (b.gapBestPct ?? 0));
       return dir * ((a.gapAvgPct ?? 0) - (b.gapAvgPct ?? 0));
     });
+
     return sorted;
-  }, [filteredProducts, filteredPricePoints, minConfidence, search, sortKey, sortDir]);
+  }, [filteredProducts, filteredPricePoints, config, minConfidence, search, sortKey, sortDir]);
 
   const kpi = React.useMemo(() => {
     const withComp = rows.filter((r) => r.avgCompetitorPrice && r.orlimanPrice);
@@ -144,9 +234,11 @@ export default function PricingPositioning() {
       withComp.length === 0
         ? 0
         : withComp.reduce((acc, r) => acc + (r.orlimanPrice! / r.avgCompetitorPrice!), 0) / withComp.length;
+
     const premium = rows.filter((r) => r.positioning === "premium").length;
     const under = rows.filter((r) => r.positioning === "underpriced").length;
     const coverage = rows.length === 0 ? 0 : Math.round((withComp.length / rows.length) * 100);
+
     return { priceIndex, premium, under, coverage };
   }, [rows]);
 
@@ -176,8 +268,8 @@ export default function PricingPositioning() {
   };
 
   const activeChips = [
-    market !== "ALL" && { label: `Marche: ${market}`, onRemove: () => setMarket("ALL") },
-    category !== "ALL" && { label: `Categorie: ${category}`, onRemove: () => setCategory("ALL") },
+    market !== "ALL" && { label: `Marché: ${market}`, onRemove: () => setMarket("ALL") },
+    category !== "ALL" && { label: `Catégorie: ${category}`, onRemove: () => setCategory("ALL") },
     channel !== "ALL" && { label: `Canal: ${channel}`, onRemove: () => setChannel("ALL") },
     priceType !== "ALL" && { label: `Type: ${priceType}`, onRemove: () => setPriceType("ALL") },
     groupFilter && { label: `Groupement: ${groupFilter}`, onRemove: () => setGroupFilter("") },
@@ -189,7 +281,7 @@ export default function PricingPositioning() {
         <div className="space-y-6">
           <PageHeader
             title="Positionnement Tarification"
-            subtitle="Comparer ORLIMAN vs Thuasne / DonJoy-Enovis / Gibaud par marche et canal."
+            subtitle="Comparer ORLIMAN vs Thuasne / DonJoy-Enovis / Gibaud par marché et canal."
             rightSlot={
               <>
                 <Button variant="outline" className="gap-2" onClick={exportCsv}>
@@ -201,16 +293,49 @@ export default function PricingPositioning() {
                   className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/30 hover:-translate-y-0.5 transition"
                 >
                   <Rocket className="h-4 w-4" />
-                  Creer un scenario
+                  Créer un scénario
                 </Link>
               </>
             }
           />
 
+          {/* Status data */}
+          <SectionCard
+            title="Sources de données"
+            icon="🧩"
+            rightSlot={<p className="text-xs text-muted-foreground">Produits Supabase + Prix concurrence (Supabase si table dispo)</p>}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="rounded-xl border p-3">
+                <div className="text-sm font-semibold">Produits</div>
+                <div className="text-xs text-muted-foreground">
+                  {productsLoading ? "Chargement…" : productsError ? `Erreur: ${productsError}` : `${pricingProducts.length} produits (Supabase)`}
+                </div>
+              </div>
+              <div className="rounded-xl border p-3">
+                <div className="text-sm font-semibold">Price points</div>
+                <div className="text-xs text-muted-foreground">
+                  {ppLoading
+                    ? "Chargement…"
+                    : sbPricePoints
+                    ? `${sbPricePoints.length} lignes (Supabase)`
+                    : `${pricePoints.length} lignes (mock fallback)`}
+                </div>
+              </div>
+              <div className="rounded-xl border p-3">
+                <div className="text-sm font-semibold">Supabase</div>
+                <div className="text-xs text-muted-foreground">
+                  {SUPABASE_ENV_OK ? "OK" : "Env manquantes (l’app reste stable)"}{" "}
+                  {ppError ? <span className="text-orange-700">— {ppError}</span> : null}
+                </div>
+              </div>
+            </div>
+          </SectionCard>
+
           <SectionCard
             title="Panorama concurrence (ORLIMAN au centre)"
             icon="🧭"
-            rightSlot={<p className="text-xs text-muted-foreground">Place des marques par rapport a ORLIMAN.</p>}
+            rightSlot={<p className="text-xs text-muted-foreground">Place des marques par rapport à ORLIMAN.</p>}
           >
             <div className="flex flex-wrap items-stretch justify-center gap-3">
               {brandCards.map((b) => (
@@ -224,14 +349,18 @@ export default function PricingPositioning() {
                   <div className="relative z-10 p-4 space-y-2 text-slate-900">
                     <div className="flex items-center gap-2">
                       <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-sm font-bold text-slate-900">
-                        {b.brand === "ORLIMAN" ? <img src={logoOrliman} alt="ORLIMAN" className="h-6 w-auto" /> : b.title.charAt(0)}
+                        {b.brand === "ORLIMAN" ? (
+                          <img src={logoOrliman} alt="ORLIMAN" className="h-6 w-auto" />
+                        ) : (
+                          b.title.charAt(0)
+                        )}
                       </span>
                       <span className="text-sm font-semibold">{b.title}</span>
                     </div>
                     <p className="text-xs text-slate-900/80">{b.desc}</p>
                     {b.brand === "ORLIMAN" && (
                       <Badge variant="secondary" className="bg-white/70 text-slate-900 border-white">
-                        Reference
+                        Référence
                       </Badge>
                     )}
                   </div>
@@ -249,16 +378,16 @@ export default function PricingPositioning() {
               icon="EUR"
             />
             <StatCard
-              title="% a risque prix"
+              title="Lignes à risque prix"
               value={`${kpi.premium}`}
-              subtitle="Produits au-dessus du marche"
+              subtitle="Produits au-dessus du marché"
               tone="warning"
               icon="!"
             />
             <StatCard
-              title="Opportunites marge"
+              title="Opportunités marge"
               value={`${kpi.under}`}
-              subtitle="Produits sous-positionnes (remonter prix)"
+              subtitle="Produits sous-positionnés"
               tone="success"
               icon="▲"
             />
@@ -276,7 +405,7 @@ export default function PricingPositioning() {
             icon={<Filter className="h-5 w-5" />}
             rightSlot={
               <div className="flex items-center gap-2">
-                <Badge variant="outline">Resultats: {rows.length}</Badge>
+                <Badge variant="outline">Résultats: {rows.length}</Badge>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -285,60 +414,84 @@ export default function PricingPositioning() {
                     setCategory("ALL");
                     setChannel("ALL");
                     setBrandFilters(brands);
-                    setMinConfidence(pricingConfig.minConfidence);
+                    setMinConfidence(config.minConfidence);
                     setPriceType("ALL");
                     setSearch("");
                     setGroupFilter("");
                   }}
                 >
-                  Reinitialiser
+                  Réinitialiser
                 </Button>
               </div>
             }
           >
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Marche</p>
+                <p className="text-xs text-muted-foreground mb-1">Marché</p>
                 <Select value={market} onValueChange={setMarket}>
-                  <SelectTrigger><SelectValue placeholder="Tous" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Tous" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">Tous</SelectItem>
-                    {markets.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                    {markets.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Categorie</p>
+                <p className="text-xs text-muted-foreground mb-1">Catégorie</p>
                 <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger><SelectValue placeholder="Toutes" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Toutes" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">Toutes</SelectItem>
-                    {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {categories.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Canal</p>
                 <Select value={channel} onValueChange={setChannel}>
-                  <SelectTrigger><SelectValue placeholder="Tous" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Tous" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">Tous</SelectItem>
-                    {channels.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {channels.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Groupement pharma</p>
+                <p className="text-xs text-muted-foreground mb-1">Groupement</p>
                 <Input
-                  placeholder="Nom de groupement (contient)..."
+                  placeholder="Contient…"
                   value={groupFilter}
                   onChange={(e) => setGroupFilter(e.target.value)}
                 />
               </div>
+
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Type prix</p>
                 <Select value={priceType} onValueChange={(v) => setPriceType(v as "ALL" | "HT" | "TTC")}>
-                  <SelectTrigger><SelectValue placeholder="HT/TTC" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="HT/TTC" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">HT + TTC</SelectItem>
                     <SelectItem value="HT">HT</SelectItem>
@@ -346,6 +499,7 @@ export default function PricingPositioning() {
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Min. confiance</p>
                 <Input
@@ -356,6 +510,7 @@ export default function PricingPositioning() {
                   onChange={(e) => setMinConfidence(Number(e.target.value))}
                 />
               </div>
+
               <div className="lg:col-span-2">
                 <p className="text-xs text-muted-foreground mb-1">Concurrents</p>
                 <div className="flex gap-2 flex-wrap">
@@ -372,21 +527,22 @@ export default function PricingPositioning() {
                 </div>
               </div>
             </div>
+
             <div className="pt-2">
               <FilterChips chips={activeChips} />
             </div>
           </SectionCard>
 
           <SectionCard
-            title="Heatmap categorie x marche"
+            title="Heatmap catégorie x marché"
             icon="Heatmap"
-            rightSlot={<p className="text-xs text-muted-foreground">Couleur = ecart vs moyenne concurrente</p>}
+            rightSlot={<p className="text-xs text-muted-foreground">Couleur = écart vs moyenne concurrente</p>}
           >
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Categorie</TableHead>
+                    <TableHead>Catégorie</TableHead>
                     {markets.map((m) => (
                       <TableHead key={m}>{m}</TableHead>
                     ))}
@@ -414,16 +570,18 @@ export default function PricingPositioning() {
           </SectionCard>
 
           <SectionCard
-            title="Details par produit"
+            title="Détails par produit"
             icon={<Target className="h-5 w-5" />}
             rightSlot={
               <div className="flex items-center gap-2 text-xs">
                 <span>Tri</span>
                 <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
-                  <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-32">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gapAvgPct">Ecart moyenne</SelectItem>
-                    <SelectItem value="gapBestPct">Ecart best</SelectItem>
+                    <SelectItem value="gapAvgPct">Écart moyenne</SelectItem>
+                    <SelectItem value="gapBestPct">Écart best</SelectItem>
                     <SelectItem value="product">Produit</SelectItem>
                     <SelectItem value="positioning">Position</SelectItem>
                   </SelectContent>
@@ -445,13 +603,13 @@ export default function PricingPositioning() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Produit</TableHead>
-                    <TableHead>Categorie</TableHead>
-                    <TableHead>Marche</TableHead>
+                    <TableHead>Catégorie</TableHead>
+                    <TableHead>Marché</TableHead>
                     <TableHead>Canal</TableHead>
                     <TableHead>Prix ORLIMAN</TableHead>
                     <TableHead>Best concurrent</TableHead>
-                    <TableHead>Ecart best %</TableHead>
-                    <TableHead>Ecart moyenne %</TableHead>
+                    <TableHead>Écart best %</TableHead>
+                    <TableHead>Écart moyenne %</TableHead>
                     <TableHead>Positionnement</TableHead>
                     <TableHead>Reco</TableHead>
                     <TableHead>Actions</TableHead>
@@ -465,6 +623,7 @@ export default function PricingPositioning() {
                       </TableCell>
                     </TableRow>
                   )}
+
                   {rows.map((r) => (
                     <TableRow key={`${r.product.id}-${r.market}-${r.channel}`}>
                       <TableCell className="font-semibold">{r.product.name}</TableCell>
@@ -503,7 +662,7 @@ export default function PricingPositioning() {
                             }`}
                             className="text-sm text-primary hover:underline"
                           >
-                            Scenario
+                            Scénario
                           </Link>
                         </div>
                       </TableCell>
