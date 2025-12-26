@@ -58,7 +58,7 @@ const WT_MODE_KEY = "export_simulator_weight_mode_v1";
 export default function Simulator() {
   const { vatRates, octroiMerRates, transportCosts, serviceCharges } = useReferenceRates();
 
-  // ✅ produits (hook propre)
+  // ✅ produits (Supabase)
   const {
     products,
     isLoading: productsLoading,
@@ -67,7 +67,7 @@ export default function Simulator() {
     getProductByCode,
     envOk: productsEnvOk,
     stats: productsStats,
-  } = useProducts({ pageSize: 500 });
+  } = useProducts({ pageSize: 5000 });
 
   // valeurs existantes
   const [goodsValue, setGoodsValue] = useState<number>(10000);
@@ -78,7 +78,6 @@ export default function Simulator() {
   const [weight, setWeight] = useState<number>(100);
   const [margin, setMargin] = useState<number>(25);
 
-  // 🧠 modes : valeur marchandise / poids
   const [goodsValueMode, setGoodsValueMode] = useState<GoodsValueMode>("manual");
   const [weightMode, setWeightMode] = useState<WeightMode>("manual");
 
@@ -116,23 +115,19 @@ export default function Simulator() {
     localStorage.setItem(WT_MODE_KEY, weightMode);
   }, [weightMode]);
 
-  // zone
   const zone = getZoneFromDestination(destination);
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(
-      Number.isFinite(amount) ? amount : 0
+      Number.isFinite(amount) ? amount : 0,
     );
 
   const resolveUnitPrice = (p?: ProductRow, type?: ProductType) => {
     if (!p) return 0;
-    if (type === "lppr") {
-      return safeNumber(p.tarif_lppr_eur) || safeNumber(p.tarif_catalogue_2025);
-    }
+    if (type === "lppr") return safeNumber(p.tarif_lppr_eur) || safeNumber(p.tarif_catalogue_2025);
     return safeNumber(p.tarif_catalogue_2025) || safeNumber(p.tarif_lppr_eur);
   };
 
-  // calc marchandise HT depuis produits
   const goodsValueFromProducts = useMemo(() => {
     if (!lines.length) return 0;
 
@@ -145,7 +140,6 @@ export default function Simulator() {
     }, 0);
   }, [lines, getProductByCode, productType]);
 
-  // calc poids depuis produits (kg)
   const weightFromProducts = useMemo(() => {
     if (!lines.length) return 0;
 
@@ -159,12 +153,22 @@ export default function Simulator() {
     return grams / 1000;
   }, [lines, getProductByCode]);
 
-  // valeurs effectives passées au moteur
   const effectiveGoodsValue = goodsValueMode === "products" ? goodsValueFromProducts : goodsValue;
   const effectiveWeight = weightMode === "products" ? weightFromProducts : weight;
 
-  const invalidCodesCount = useMemo(() => {
-    return lines.filter((l) => !getProductByCode(String(l.code_article ?? "").trim())).length;
+  const invalidCodesCount = useMemo(
+    () => lines.filter((l) => !getProductByCode(String(l.code_article ?? "").trim())).length,
+    [lines, getProductByCode],
+  );
+
+  const missingHsCount = useMemo(() => {
+    return lines.reduce((acc, l) => {
+      const code = String(l.code_article ?? "").trim();
+      const p = getProductByCode(code);
+      if (!p) return acc;
+      const hs = (p as any).hs_code;
+      return hs ? acc : acc + 1;
+    }, 0);
   }, [lines, getProductByCode]);
 
   const costBreakdown = useMemo<CostBreakdown | null>(() => {
@@ -210,13 +214,14 @@ export default function Simulator() {
       ["Poids (kg)", String(effectiveWeight)],
       ["", ""],
       ["Panier produits (optionnel)", ""],
-      ["Code article", "Libellé", "Qté", "Prix unitaire HT", "Sous-total HT"],
+      ["Code article", "HS code", "Libellé", "Qté", "Prix unitaire HT", "Sous-total HT"],
       ...lines.map((l) => {
         const code = String(l.code_article ?? "").trim();
         const p = getProductByCode(code);
         const qty = Math.max(0, safeNumber(l.qty));
         const unit = resolveUnitPrice(p, productType);
-        return [code, p?.libelle_article ?? "INCONNU", String(qty), String(unit), String(qty * unit)];
+        const hs = p ? String((p as any).hs_code ?? "") : "";
+        return [code, hs, p?.libelle_article ?? "INCONNU", String(qty), String(unit), String(qty * unit)];
       }),
       ["", ""],
       ["Détail des charges", ""],
@@ -277,7 +282,9 @@ export default function Simulator() {
               <Calculator className="h-6 w-6 text-accent" />
               Simulateur de prix export
             </h1>
-            <p className="mt-1 text-muted-foreground">Estimez vos coûts selon destination, incoterm et type de produit</p>
+            <p className="mt-1 text-muted-foreground">
+              Estimez vos coûts selon destination, incoterm, type produit — avec panier produits (HS code visible)
+            </p>
           </div>
           {costBreakdown && (
             <Button variant="outline" onClick={exportToCsv}>
@@ -302,9 +309,7 @@ export default function Simulator() {
               <div className="space-y-2">
                 <Label>Valeur marchandise</Label>
                 <Select value={goodsValueMode} onValueChange={(v) => setGoodsValueMode(v as GoodsValueMode)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="manual">Saisie manuelle</SelectItem>
                     <SelectItem value="products">Calculée depuis produits</SelectItem>
@@ -327,8 +332,9 @@ export default function Simulator() {
                   />
                   {goodsValueMode === "products" && (
                     <p className="text-xs text-muted-foreground">
-                      Basé sur ton panier produits ({lines.length} ligne(s)).{" "}
+                      Basé sur ton panier ({lines.length} ligne(s)).{" "}
                       {invalidCodesCount > 0 ? `⚠️ ${invalidCodesCount} code(s) introuvable(s).` : ""}
+                      {missingHsCount > 0 ? ` ⚠️ ${missingHsCount} HS code manquant.` : ""}
                     </p>
                   )}
                 </div>
@@ -341,29 +347,10 @@ export default function Simulator() {
                   Destination
                 </Label>
                 <Select value={destination} onValueChange={(v) => setDestination(v as Destination)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">DROM</div>
-                    {destinations
-                      .filter((d) => ["Guadeloupe", "Martinique", "Guyane", "Reunion", "Mayotte"].includes(d))
-                      .map((d) => (
-                        <SelectItem key={d} value={d}>
-                          {d}
-                        </SelectItem>
-                      ))}
-                    <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">UE</div>
-                    {destinations.filter((d) => ["Belgique", "Espagne", "Luxembourg"].includes(d)).map((d) => (
-                      <SelectItem key={d} value={d}>
-                        {d}
-                      </SelectItem>
-                    ))}
-                    <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Hors UE</div>
-                    {destinations.filter((d) => ["Suisse"].includes(d)).map((d) => (
-                      <SelectItem key={d} value={d}>
-                        {d}
-                      </SelectItem>
+                    {destinations.map((d) => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -382,14 +369,10 @@ export default function Simulator() {
               <div className="space-y-2">
                 <Label>Incoterm</Label>
                 <Select value={incoterm} onValueChange={(v) => setIncoterm(v as Incoterm)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {incoterms.map((i) => (
-                      <SelectItem key={i} value={i}>
-                        {i}
-                      </SelectItem>
+                      <SelectItem key={i} value={i}>{i}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -405,19 +388,12 @@ export default function Simulator() {
               <div className="space-y-2">
                 <Label>Type de produit (impact taxes)</Label>
                 <Select value={productType} onValueChange={(v) => setProductType(v as ProductType)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="lppr">LPPR (remboursé)</SelectItem>
                     <SelectItem value="standard">Standard</SelectItem>
                   </SelectContent>
                 </Select>
-                {productType === "lppr" && (
-                  <p className="text-xs text-[hsl(var(--status-ok))]">
-                    ✓ Règles LPPR appliquées par le moteur (selon tes tables de référence)
-                  </p>
-                )}
               </div>
 
               {/* Transport Mode */}
@@ -427,14 +403,10 @@ export default function Simulator() {
                   Mode de transport
                 </Label>
                 <Select value={transportMode} onValueChange={(v) => setTransportMode(v as TransportMode)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {transportModes.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -444,9 +416,7 @@ export default function Simulator() {
               <div className="space-y-2">
                 <Label>Poids estimé</Label>
                 <Select value={weightMode} onValueChange={(v) => setWeightMode(v as WeightMode)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="manual">Saisie manuelle</SelectItem>
                     <SelectItem value="products">Calculé depuis produits</SelectItem>
@@ -463,7 +433,7 @@ export default function Simulator() {
                 />
                 {weightMode === "products" && (
                   <p className="text-xs text-muted-foreground">
-                    Basé sur <code>unite_vente_poids_brut_g</code>. (Si vide, poids = 0.)
+                    Basé sur <code>unite_vente_poids_brut_g</code>.
                   </p>
                 )}
               </div>
@@ -481,7 +451,7 @@ export default function Simulator() {
               <Separator />
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Panier produits (pour calcul marchandise)</Label>
+                  <Label>Panier produits</Label>
                   <Button variant="outline" size="sm" onClick={refreshProducts} disabled={productsLoading}>
                     <RefreshCw className={`h-4 w-4 mr-2 ${productsLoading ? "animate-spin" : ""}`} />
                     Sync
@@ -490,7 +460,7 @@ export default function Simulator() {
 
                 {!productsEnvOk ? (
                   <p className="text-xs text-red-600">
-                    Supabase non configuré (env manquantes) : impossible de charger les produits.
+                    Supabase non configuré : impossible de charger les produits.
                   </p>
                 ) : null}
 
@@ -503,23 +473,13 @@ export default function Simulator() {
 
                 <div className="grid grid-cols-3 gap-2">
                   <div className="col-span-2">
-                    <Input
-                      value={addCode}
-                      onChange={(e) => setAddCode(e.target.value)}
-                      placeholder="Code article (ex: 2118674)"
-                    />
+                    <Input value={addCode} onChange={(e) => setAddCode(e.target.value)} placeholder="Code article (ex: 2118674)" />
                     <p className="text-[11px] text-muted-foreground mt-1">
-                      Astuce : colle un code + “Ajouter”. (On fera une recherche dropdown ensuite.)
+                      Colle un code + “Ajouter”. (On fera une recherche dropdown ensuite.)
                     </p>
                   </div>
                   <div>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={addQty}
-                      onChange={(e) => setAddQty(Number(e.target.value))}
-                      placeholder="Qté"
-                    />
+                    <Input type="number" min="1" value={addQty} onChange={(e) => setAddQty(Number(e.target.value))} placeholder="Qté" />
                   </div>
                 </div>
 
@@ -536,6 +496,7 @@ export default function Simulator() {
                       const qty = Math.max(1, safeNumber(l.qty));
                       const unit = resolveUnitPrice(p, productType);
                       const subtotal = qty * unit;
+                      const hs = p ? String((p as any).hs_code ?? "") : "";
 
                       return (
                         <div key={code} className="rounded-lg border p-3 space-y-2">
@@ -545,8 +506,11 @@ export default function Simulator() {
                                 {code} — {p?.libelle_article ?? "Produit introuvable"}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                PU HT: {formatCurrency(unit)} • Sous-total: {formatCurrency(subtotal)}
+                                HS: {hs || "—"} • PU HT: {formatCurrency(unit)} • Sous-total: {formatCurrency(subtotal)}
                               </div>
+                              {!hs && p ? (
+                                <p className="text-[11px] text-amber-600">⚠️ HS code manquant (impact OM/TVA selon DROM)</p>
+                              ) : null}
                             </div>
                             <Button variant="ghost" onClick={() => removeLine(code)}>
                               <Trash2 className="h-4 w-4" />
@@ -576,17 +540,18 @@ export default function Simulator() {
             </CardContent>
           </Card>
 
-          {/* Results Panel */}
+          {/* Results */}
           <div className="lg:col-span-2 space-y-6">
             {costBreakdown ? (
               <>
-                {/* Summary Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <Card>
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground">Valeur marchandise</p>
                       <p className="text-xl font-bold">{formatCurrency(effectiveGoodsValue)}</p>
-                      <p className="text-xs text-muted-foreground">{goodsValueMode === "products" ? "Source: produits" : "Source: manuel"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {goodsValueMode === "products" ? "Source: produits" : "Source: manuel"}
+                      </p>
                     </CardContent>
                   </Card>
 
@@ -619,146 +584,137 @@ export default function Simulator() {
                   </Card>
                 </div>
 
-                {/* Detailed Breakdown */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Détail des charges</CardTitle>
-                    <CardDescription>
-                      Répartition selon Incoterm {incoterm} vers {destination}
-                    </CardDescription>
+                    <CardDescription>Répartition selon Incoterm {incoterm} vers {destination}</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div className="space-y-6">
-                      {/* Prestations with recoverable VAT */}
+                  <CardContent className="space-y-6">
+                    <div>
+                      <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                        <Check className="h-4 w-4 text-[hsl(var(--status-ok))]" />
+                        Prestations avec TVA récupérable
+                      </h4>
+                      <div className="rounded-lg border overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50">
+                            <tr>
+                              <th className="text-left p-3 font-medium">Poste</th>
+                              <th className="text-right p-3 font-medium">Montant HT</th>
+                              <th className="text-right p-3 font-medium">TVA</th>
+                              <th className="text-center p-3 font-medium">Payeur</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {costBreakdown.lines
+                              .filter((l) => l.category === "prestation" && l.isRecoverable)
+                              .map((line, i) => (
+                                <tr key={i} className="border-t">
+                                  <td className="p-3">{line.label}</td>
+                                  <td className="p-3 text-right font-medium">{formatCurrency(line.amount)}</td>
+                                  <td className="p-3 text-right text-[hsl(var(--status-ok))]">{formatCurrency(line.tvaAmount)}</td>
+                                  <td className="p-3 text-center">
+                                    <Badge variant={line.payer === "Fournisseur" ? "default" : "outline"}>{line.payer}</Badge>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {costBreakdown.lines.filter((l) => l.category === "taxe").length > 0 && (
                       <div>
                         <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                          <Check className="h-4 w-4 text-[hsl(var(--status-ok))]" />
-                          Prestations avec TVA récupérable
+                          <AlertCircle className="h-4 w-4 text-[hsl(var(--status-risk))]" />
+                          Taxes non récupérables
                         </h4>
-                        <div className="rounded-lg border overflow-hidden">
+                        <div className="rounded-lg border border-[hsl(var(--status-risk))]/30 overflow-hidden">
                           <table className="w-full text-sm">
-                            <thead className="bg-muted/50">
+                            <thead className="bg-[hsl(var(--status-risk))]/5">
                               <tr>
-                                <th className="text-left p-3 font-medium">Poste</th>
-                                <th className="text-right p-3 font-medium">Montant HT</th>
-                                <th className="text-right p-3 font-medium">TVA</th>
+                                <th className="text-left p-3 font-medium">Taxe</th>
+                                <th className="text-right p-3 font-medium">Montant</th>
                                 <th className="text-center p-3 font-medium">Payeur</th>
+                                <th className="text-left p-3 font-medium">Note</th>
                               </tr>
                             </thead>
                             <tbody>
                               {costBreakdown.lines
-                                .filter((l) => l.category === "prestation" && l.isRecoverable)
+                                .filter((l) => l.category === "taxe")
                                 .map((line, i) => (
                                   <tr key={i} className="border-t">
                                     <td className="p-3">{line.label}</td>
-                                    <td className="p-3 text-right font-medium">{formatCurrency(line.amount)}</td>
-                                    <td className="p-3 text-right text-[hsl(var(--status-ok))]">{formatCurrency(line.tvaAmount)}</td>
+                                    <td className="p-3 text-right font-medium text-[hsl(var(--status-risk))]">{formatCurrency(line.amount)}</td>
                                     <td className="p-3 text-center">
-                                      <Badge variant={line.payer === "Fournisseur" ? "default" : "outline"}>{line.payer}</Badge>
+                                      <Badge variant="destructive">{line.payer}</Badge>
                                     </td>
+                                    <td className="p-3 text-xs text-muted-foreground">{line.notes}</td>
                                   </tr>
                                 ))}
                             </tbody>
                           </table>
                         </div>
                       </div>
+                    )}
 
-                      {/* Non-recoverable taxes */}
-                      {costBreakdown.lines.filter((l) => l.category === "taxe").length > 0 && (
-                        <div>
-                          <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                            <AlertCircle className="h-4 w-4 text-[hsl(var(--status-risk))]" />
-                            Taxes non récupérables (impactent le prix de revient)
-                          </h4>
-                          <div className="rounded-lg border border-[hsl(var(--status-risk))]/30 overflow-hidden">
-                            <table className="w-full text-sm">
-                              <thead className="bg-[hsl(var(--status-risk))]/5">
-                                <tr>
-                                  <th className="text-left p-3 font-medium">Taxe</th>
-                                  <th className="text-right p-3 font-medium">Montant</th>
-                                  <th className="text-center p-3 font-medium">Payeur</th>
-                                  <th className="text-left p-3 font-medium">Note</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {costBreakdown.lines
-                                  .filter((l) => l.category === "taxe")
-                                  .map((line, i) => (
-                                    <tr key={i} className="border-t">
-                                      <td className="p-3">{line.label}</td>
-                                      <td className="p-3 text-right font-medium text-[hsl(var(--status-risk))]">{formatCurrency(line.amount)}</td>
-                                      <td className="p-3 text-center">
-                                        <Badge variant="destructive">{line.payer}</Badge>
-                                      </td>
-                                      <td className="p-3 text-xs text-muted-foreground">{line.notes}</td>
-                                    </tr>
-                                  ))}
-                              </tbody>
-                            </table>
-                          </div>
+                    {costBreakdown.lines.filter((l) => l.category === "tva_import").length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                          <Info className="h-4 w-4 text-primary" />
+                          TVA Import
+                        </h4>
+                        <div className="rounded-lg border overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead className="bg-muted/50">
+                              <tr>
+                                <th className="text-left p-3 font-medium">Type</th>
+                                <th className="text-right p-3 font-medium">Montant</th>
+                                <th className="text-center p-3 font-medium">Récupérable</th>
+                                <th className="text-left p-3 font-medium">Note</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {costBreakdown.lines
+                                .filter((l) => l.category === "tva_import")
+                                .map((line, i) => (
+                                  <tr key={i} className="border-t">
+                                    <td className="p-3">{line.label}</td>
+                                    <td className="p-3 text-right font-medium">{formatCurrency(line.amount)}</td>
+                                    <td className="p-3 text-center">
+                                      {line.isRecoverable ? (
+                                        <Badge className="badge-ok">Oui (autoliq.)</Badge>
+                                      ) : (
+                                        <Badge variant="secondary">Client</Badge>
+                                      )}
+                                    </td>
+                                    <td className="p-3 text-xs text-muted-foreground">{line.notes}</td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
                         </div>
-                      )}
+                      </div>
+                    )}
 
-                      {/* TVA Import */}
-                      {costBreakdown.lines.filter((l) => l.category === "tva_import").length > 0 && (
-                        <div>
-                          <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                            <Info className="h-4 w-4 text-primary" />
-                            TVA Import
-                          </h4>
-                          <div className="rounded-lg border overflow-hidden">
-                            <table className="w-full text-sm">
-                              <thead className="bg-muted/50">
-                                <tr>
-                                  <th className="text-left p-3 font-medium">Type</th>
-                                  <th className="text-right p-3 font-medium">Montant</th>
-                                  <th className="text-center p-3 font-medium">Récupérable</th>
-                                  <th className="text-left p-3 font-medium">Note</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {costBreakdown.lines
-                                  .filter((l) => l.category === "tva_import")
-                                  .map((line, i) => (
-                                    <tr key={i} className="border-t">
-                                      <td className="p-3">{line.label}</td>
-                                      <td className="p-3 text-right font-medium">{formatCurrency(line.amount)}</td>
-                                      <td className="p-3 text-center">
-                                        {line.isRecoverable ? (
-                                          <Badge className="badge-ok">Oui (autoliq.)</Badge>
-                                        ) : (
-                                          <Badge variant="secondary">Client</Badge>
-                                        )}
-                                      </td>
-                                      <td className="p-3 text-xs text-muted-foreground">{line.notes}</td>
-                                    </tr>
-                                  ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      )}
+                    <Separator />
 
-                      <Separator />
-
-                      {/* Totals */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
-                        <div className="p-4 rounded-lg bg-muted/50">
-                          <p className="text-xs text-muted-foreground">Charges fournisseur</p>
-                          <p className="text-lg font-bold">{formatCurrency(costBreakdown.totalFournisseur)}</p>
-                        </div>
-                        <div className="p-4 rounded-lg bg-muted/50">
-                          <p className="text-xs text-muted-foreground">Charges client</p>
-                          <p className="text-lg font-bold">{formatCurrency(costBreakdown.totalClient)}</p>
-                        </div>
-                        <div className="p-4 rounded-lg bg-[hsl(var(--status-risk))]/5">
-                          <p className="text-xs text-muted-foreground">Taxes non récup.</p>
-                          <p className="text-lg font-bold text-[hsl(var(--status-risk))]">{formatCurrency(costBreakdown.totalTaxesNonRecuperables)}</p>
-                        </div>
-                        <div className="p-4 rounded-lg bg-[hsl(var(--status-ok))]/5">
-                          <p className="text-xs text-muted-foreground">TVA récupérable</p>
-                          <p className="text-lg font-bold text-[hsl(var(--status-ok))]">{formatCurrency(costBreakdown.totalTvaRecuperablePrestations)}</p>
-                        </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+                      <div className="p-4 rounded-lg bg-muted/50">
+                        <p className="text-xs text-muted-foreground">Charges fournisseur</p>
+                        <p className="text-lg font-bold">{formatCurrency(costBreakdown.totalFournisseur)}</p>
+                      </div>
+                      <div className="p-4 rounded-lg bg-muted/50">
+                        <p className="text-xs text-muted-foreground">Charges client</p>
+                        <p className="text-lg font-bold">{formatCurrency(costBreakdown.totalClient)}</p>
+                      </div>
+                      <div className="p-4 rounded-lg bg-[hsl(var(--status-risk))]/5">
+                        <p className="text-xs text-muted-foreground">Taxes non récup.</p>
+                        <p className="text-lg font-bold text-[hsl(var(--status-risk))]">{formatCurrency(costBreakdown.totalTaxesNonRecuperables)}</p>
+                      </div>
+                      <div className="p-4 rounded-lg bg-[hsl(var(--status-ok))]/5">
+                        <p className="text-xs text-muted-foreground">TVA récupérable</p>
+                        <p className="text-lg font-bold text-[hsl(var(--status-ok))]">{formatCurrency(costBreakdown.totalTvaRecuperablePrestations)}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -768,7 +724,7 @@ export default function Simulator() {
               <Card className="flex items-center justify-center h-64">
                 <CardContent className="text-center">
                   <Calculator className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">Entrez une valeur marchandise pour voir l'estimation</p>
+                  <p className="text-muted-foreground">Entrez une valeur marchandise pour voir l’estimation</p>
                 </CardContent>
               </Card>
             )}
