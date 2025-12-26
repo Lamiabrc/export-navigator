@@ -758,4 +758,777 @@ export default function ReferenceLibrary() {
           </div>
 
           <div className="flex flex-wrap gap-2 justify-end">
-            <Button variant="outline" onClick={() => fetchAll(false)} disabled=
+            <Button variant="outline" onClick={() => fetchAll(false)} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Synchroniser
+            </Button>
+            <Button variant="secondary" onClick={handlePrefill} disabled={loading}>
+              <Sparkles className="h-4 w-4 mr-2" />
+              Préremplir (Orliman)
+            </Button>
+            <Button variant="outline" onClick={handleExport}>
+              <Download className="h-4 w-4 mr-2" />
+              Exporter la bible
+            </Button>
+            <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Importer la bible
+            </Button>
+            <Button variant="ghost" onClick={() => setIsResetOpen(true)} disabled={loading}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Reset
+            </Button>
+          </div>
+        </div>
+
+        <Tabs defaultValue="destinations" className="space-y-4">
+          <TabsList className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+            <TabsTrigger value="destinations">A) Destinations</TabsTrigger>
+            <TabsTrigger value="incoterms">B) Incoterms</TabsTrigger>
+            <TabsTrigger value="charges">C) Charges &amp; Taxes</TabsTrigger>
+            <TabsTrigger value="cheatsheets">D) Cheatsheets</TabsTrigger>
+            <TabsTrigger value="logistics">E) Logistique</TabsTrigger>
+            <TabsTrigger value="hs">F) Nomenclature (HS)</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="destinations" className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <CardTitle className="flex items-center gap-2">Destinations &amp; contrôles terrain</CardTitle>
+                  <div className="flex flex-wrap gap-2">
+                    <Input placeholder="Recherche destination" value={destSearch} onChange={(e) => setDestSearch(e.target.value)} className="w-48" />
+                    <Select value={zoneFilter} onValueChange={setZoneFilter}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue placeholder="Zone" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={allFilter}>Toutes zones</SelectItem>
+                        {zones.map((z) => (
+                          <SelectItem key={z} value={z}>
+                            {z}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={logisticsFilter} onValueChange={setLogisticsFilter}>
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Mode logistique" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={allFilter}>Tous modes</SelectItem>
+                        {logisticModes.map((mode) => (
+                          <SelectItem key={mode} value={mode}>
+                            {mode}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button variant="outline" onClick={startNewDestination}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Ajouter
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Filter className="h-4 w-4" /> Filtre par zone et mode logistique. Actions par ligne : voir, modifier, supprimer.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nom</TableHead>
+                      <TableHead>Zone</TableHead>
+                      <TableHead>Mode logistique</TableHead>
+                      <TableHead>Docs requis</TableHead>
+                      <TableHead>Contrôles</TableHead>
+                      <TableHead className="w-[220px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredDestinations.map((dest) => (
+                      <TableRow key={dest.id}>
+                        <TableCell className="font-medium">{dest.name}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{dest.zone}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{dest.logisticMode}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{renderDocs(dest.docs)}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{renderControls(dest.controls)}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" variant="outline" onClick={() => setViewDestination(dest)}>
+                              <Eye className="h-4 w-4 mr-1" /> Voir
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setEditDestination(dest)}>
+                              <FileEdit className="h-4 w-4 mr-1" /> Modifier
+                            </Button>
+                            <Button size="sm" variant="destructive" onClick={() => setDeleteDestination(dest)}>
+                              <Trash2 className="h-4 w-4 mr-1" /> Supprimer
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {filteredDestinations.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                          Aucune destination ne correspond aux filtres.
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="incoterms" className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div className="space-y-1">
+                  <CardTitle>Incoterms (payeurs &amp; notes)</CardTitle>
+                  <p className="text-sm text-muted-foreground">Répartition des charges par poste. Ajout/édition en modale.</p>
+                </div>
+                <div className="flex gap-2">
+                  <Input placeholder="Recherche" value={destSearch} onChange={(e) => setDestSearch(e.target.value)} className="w-48" />
+                  <Button variant="outline" onClick={startNewIncoterm}>
+                    <Plus className="h-4 w-4 mr-2" /> Ajouter
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Alert variant="warning">
+                  <AlertTitle>Alerte DROM + DDP</AlertTitle>
+                  <AlertDescription>Si Zone = DROM et Incoterm = DDP ⇒ risque fort (anticiper OM/OMR, droits, TVA). Privilégier FCA/DAP.</AlertDescription>
+                </Alert>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Incoterm</TableHead>
+                      <TableHead>Notes</TableHead>
+                      <TableHead>Transport</TableHead>
+                      <TableHead>Dédouanement import</TableHead>
+                      <TableHead>Droits</TableHead>
+                      <TableHead>TVA import</TableHead>
+                      <TableHead>OM/OMR</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredIncoterms.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell className="font-semibold">
+                          <Badge variant="outline">{row.code}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{row.notes}</TableCell>
+                        <TableCell>{row.payers.transport}</TableCell>
+                        <TableCell>{row.payers.dedouanementImport}</TableCell>
+                        <TableCell>{row.payers.droits}</TableCell>
+                        <TableCell>{row.payers.tvaImport}</TableCell>
+                        <TableCell>{row.payers.omOmr}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => setEditIncoterm(row)}>
+                              <FileEdit className="h-4 w-4 mr-1" />
+                              Modifier
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {filteredIncoterms.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
+                          Aucun incoterm trouvé.
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="charges" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Charges &amp; Taxes par zone</CardTitle>
+                <p className="text-sm text-muted-foreground">Sources officielles, sans inventer de taux.</p>
+              </CardHeader>
+              <CardContent className="grid md:grid-cols-2 gap-3">
+                {chargesTaxesKnowledge.map((rule: ChargeRule, idx: number) => (
+                  <Card key={`${rule.zone}-${rule.label}-${idx}`}>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Badge variant="outline">{rule.zone}</Badge>
+                        <span>{rule.label}</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm text-muted-foreground">
+                      <p>{rule.description}</p>
+                      <div>
+                        <p className="font-semibold text-foreground">Contrôles</p>
+                        <ul className="list-disc ml-4 space-y-1">
+                          {rule.controls.map((control) => (
+                            <li key={control}>{control}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground">Sources</p>
+                        <div className="flex flex-wrap gap-2">
+                          {rule.sources.map((source) => (
+                            <Button key={source.url} asChild variant="link" className="px-0 text-primary">
+                              <a href={source.url} target="_blank" rel="noreferrer">
+                                {source.label}
+                              </a>
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="cheatsheets" className="space-y-4">
+            <div className="grid md:grid-cols-3 gap-3">
+              {cheatsheets.map((sheet) => (
+                <Card key={sheet.title}>
+                  <CardHeader>
+                    <CardTitle>{sheet.title}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{sheet.resume}</p>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm text-muted-foreground">
+                    <div>
+                      <p className="font-semibold text-foreground">Docs (checklist)</p>
+                      <ul className="list-disc ml-4 space-y-1">
+                        {sheet.docs.map((doc) => (
+                          <li key={doc}>{doc}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">Risques</p>
+                      <ul className="list-disc ml-4 space-y-1">
+                        {sheet.risques.map((risk) => (
+                          <li key={risk}>{risk}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">Contrôles</p>
+                      <ul className="list-disc ml-4 space-y-1">
+                        {sheet.controles.map((control) => (
+                          <li key={control}>{control}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {sheet.cta.map((cta) => (
+                        <Button key={cta.targetId} onClick={() => createDestinationFromCheat(cta.targetId)}>
+                          {cta.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="logistics" className="space-y-4">
+            <Card>
+              <CardHeader className="space-y-2">
+                <CardTitle>Logistique (Dépositaire vs Direct)</CardTitle>
+                <p className="text-sm text-muted-foreground">Mode par défaut stocké dans Supabase.</p>
+                <div className="flex flex-col md:flex-row md:items-center md:gap-3">
+                  <Select value={logisticsMode} onValueChange={(value) => void saveLogisticsMode(value as (typeof logisticModes)[number])}>
+                    <SelectTrigger className="w-[260px]">
+                      <SelectValue placeholder="Mode logistique par défaut" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {logisticModes.map((mode) => (
+                        <SelectItem key={mode} value={mode}>
+                          {mode}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Badge variant="secondary">Setting: export_settings[{SETTINGS_KEY_LOGISTICS}]</Badge>
+                </div>
+              </CardHeader>
+
+              <CardContent className="space-y-3">
+                <div className="grid md:grid-cols-2 gap-3">
+                  {logisticModes.map((mode) => (
+                    <Card key={mode} className={mode === logisticsMode ? 'border-primary/70' : ''}>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          {mode === logisticsMode ? <Badge>Mode par défaut</Badge> : null}
+                          {mode}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm text-muted-foreground">
+                        <div>
+                          <p className="font-semibold text-foreground">Documents</p>
+                          <ul className="list-disc ml-4 space-y-1">
+                            {(mode === 'Envoi direct depuis métropole'
+                              ? ['Facture + packing list', 'BL/AWB', 'Preuve export', 'Certificat origine si demandé']
+                              : ['Documents import initiaux', 'Inventaire stock local', 'Preuve de sortie locale']
+                            ).map((doc) => (
+                              <li key={doc}>{doc}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-foreground">Taxes / charges</p>
+                          <ul className="list-disc ml-4 space-y-1">
+                            {(mode === 'Envoi direct depuis métropole'
+                              ? ['Transit / frais dossier', 'Droits/TVA import (dépend HS/NC)', 'OM/OMR si DROM']
+                              : ['OM/OMR réglés à l’import DROM', 'Frais stockage local']
+                            ).map((tax) => (
+                              <li key={tax}>{tax}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-foreground">Contrôles</p>
+                          <ul className="list-disc ml-4 space-y-1">
+                            {(mode === 'Envoi direct depuis métropole'
+                              ? ['Incoterm cohérent avec payeur', 'Transit refacturé', 'Justificatifs TVA ou autoliquidation']
+                              : ['Suivi justificatifs TVA locale', 'Contrôle péremption stock', 'Accords de refacturation interne']
+                            ).map((control) => (
+                              <li key={control}>{control}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                <Alert variant="warning">
+                  <AlertTitle>Attention DROM + Dépositaire</AlertTitle>
+                  <AlertDescription>Vérifier déclaration d’entrée DOM, OM/OMR, preuves import + stock local avant livraison.</AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="hs" className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between">
+                <div>
+                  <CardTitle>Nomenclature HS (orthèses)</CardTitle>
+                  <p className="text-sm text-muted-foreground">Catalogue stocké dans Supabase. Bouton “Enregistrer” pour persister.</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={addHsLine} disabled={loading}>
+                    <Plus className="h-4 w-4 mr-2" /> Ajouter un code HS
+                  </Button>
+                  <Button onClick={saveHsCatalog} disabled={loading}>
+                    <Save className="h-4 w-4 mr-2" /> Enregistrer HS
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>HS</TableHead>
+                      <TableHead>Libellé</TableHead>
+                      <TableHead>Notes / risques</TableHead>
+                      <TableHead className="w-[200px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+
+                  <TableBody>
+                    {hsCatalog.map((item, idx) => (
+                      <TableRow key={`${item.hsCode}-${idx}`}>
+                        <TableCell>
+                          <Input value={item.hsCode} onChange={(e) => updateHsLine(idx, { hsCode: e.target.value })} />
+                        </TableCell>
+                        <TableCell>
+                          <Input value={item.label} onChange={(e) => updateHsLine(idx, { label: e.target.value })} />
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <Textarea value={item.notes} onChange={(e) => updateHsLine(idx, { notes: e.target.value })} rows={2} />
+                            <Select value={item.risk} onValueChange={(value) => updateHsLine(idx, { risk: value as HsItem['risk'] })}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Risque" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Faible">Faible</SelectItem>
+                                <SelectItem value="Modéré">Modéré</SelectItem>
+                                <SelectItem value="Fort">Fort</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-2">
+                            <Button asChild variant="outline" size="sm">
+                              <a href={buildTaricUrl(item.hsCode)} target="_blank" rel="noreferrer">
+                                Ouvrir TARIC
+                              </a>
+                            </Button>
+                            <Button asChild variant="outline" size="sm">
+                              <a href={buildSwissTaresUrl(item.hsCode)} target="_blank" rel="noreferrer">
+                                Ouvrir TARes
+                              </a>
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {hsCatalog.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
+                          Aucun code HS enregistré.
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Notes</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <p>Tout est synchronisé Supabase : destinations, incoterms, HS et mode logistique.</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Dialog open={!!viewDestination} onOpenChange={(open) => setViewDestination(open ? viewDestination : null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Fiche destination</DialogTitle>
+            <DialogDescription>Récapitulatif en 1 minute.</DialogDescription>
+          </DialogHeader>
+          {viewDestination ? (
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <div className="flex flex-wrap gap-2 items-center text-foreground">
+                <Badge variant="outline">{viewDestination.zone}</Badge>
+                <Badge variant="secondary">{viewDestination.logisticMode}</Badge>
+                <span className="font-semibold">{viewDestination.name}</span>
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">Documents</p>
+                <p>{renderDocs(viewDestination.docs)}</p>
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">Contrôles</p>
+                <p>{renderControls(viewDestination.controls)}</p>
+              </div>
+              {viewDestination.notes ? (
+                <div>
+                  <p className="font-semibold text-foreground">Notes</p>
+                  <p>{viewDestination.notes}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button onClick={() => setViewDestination(null)}>Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editDestination} onOpenChange={(open) => setEditDestination(open ? editDestination : null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{editDestination?.id && destinations.some((d) => d.id === editDestination.id) ? 'Modifier' : 'Ajouter'} une destination</DialogTitle>
+            <DialogDescription>Champs métiers uniquement.</DialogDescription>
+          </DialogHeader>
+          {editDestination ? (
+            <div className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <label className="text-xs text-muted-foreground">Nom</label>
+                  <Input value={editDestination.name} onChange={(e) => setEditDestination({ ...editDestination, name: e.target.value })} placeholder="Nom unique" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs text-muted-foreground">Zone</label>
+                  <Select value={editDestination.zone} onValueChange={(value) => setEditDestination({ ...editDestination, zone: value as DestinationRow['zone'] })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Zone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {zones.map((zone) => (
+                        <SelectItem key={zone} value={zone}>
+                          {zone}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <label className="text-xs text-muted-foreground">Mode logistique</label>
+                  <Select
+                    value={editDestination.logisticMode}
+                    onValueChange={(value) => setEditDestination({ ...editDestination, logisticMode: value as DestinationRow['logisticMode'] })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Mode logistique" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {logisticModes.map((mode) => (
+                        <SelectItem key={mode} value={mode}>
+                          {mode}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs text-muted-foreground">Notes</label>
+                  <Textarea value={editDestination.notes || ''} onChange={(e) => setEditDestination({ ...editDestination, notes: e.target.value })} placeholder="Contraintes locales, saisonnalité, etc." rows={3} />
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Docs requis</p>
+                  <div className="space-y-2">
+                    {docCheckboxes.map((doc) => (
+                      <label key={doc.key} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={editDestination.docs[doc.key]}
+                          onCheckedChange={(checked) => setEditDestination({ ...editDestination, docs: { ...editDestination.docs, [doc.key]: Boolean(checked) } })}
+                        />
+                        {doc.label}
+                      </label>
+                    ))}
+                    <Input placeholder="Autres" value={editDestination.docs.autres} onChange={(e) => setEditDestination({ ...editDestination, docs: { ...editDestination.docs, autres: e.target.value } })} />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Contrôles</p>
+                  <div className="space-y-2">
+                    {controlCheckboxes.map((ctrl) => (
+                      <label key={ctrl.key} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={editDestination.controls[ctrl.key]}
+                          onCheckedChange={(checked) => setEditDestination({ ...editDestination, controls: { ...editDestination.controls, [ctrl.key]: Boolean(checked) } })}
+                        />
+                        {ctrl.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditDestination(null)}>
+              Annuler
+            </Button>
+            <Button onClick={() => editDestination && upsertDestination(editDestination)} disabled={loading}>
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editIncoterm} onOpenChange={(open) => setEditIncoterm(open ? editIncoterm : null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editIncoterm && incoterms.some((i) => i.id === editIncoterm.id) ? 'Modifier' : 'Ajouter'} un incoterm</DialogTitle>
+            <DialogDescription>Choix du payeur par poste.</DialogDescription>
+          </DialogHeader>
+
+          {editIncoterm ? (
+            <div className="space-y-3">
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <label className="text-xs text-muted-foreground">Incoterm</label>
+                  <Select value={editIncoterm.code} onValueChange={(value) => setEditIncoterm({ ...editIncoterm, code: value as IncotermRow['code'] })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Incoterm" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {incotermCodes.map((code) => (
+                        <SelectItem key={code} value={code}>
+                          {code}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs text-muted-foreground">Notes</label>
+                  <Textarea value={editIncoterm.notes || ''} onChange={(e) => setEditIncoterm({ ...editIncoterm, notes: e.target.value })} rows={3} placeholder="Précisions commerciales" />
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-3">
+                {(
+                  [
+                    { key: 'transport', label: 'Transport' },
+                    { key: 'dedouanementImport', label: 'Dédouanement import' },
+                    { key: 'droits', label: 'Droits' },
+                    { key: 'tvaImport', label: 'TVA import' },
+                    { key: 'omOmr', label: 'OM/OMR' },
+                  ] as const
+                ).map((item) => (
+                  <div key={item.key} className="space-y-2">
+                    <label className="text-xs text-muted-foreground">{item.label}</label>
+                    <Select
+                      value={editIncoterm.payers[item.key]}
+                      onValueChange={(value) =>
+                        setEditIncoterm({ ...editIncoterm, payers: { ...editIncoterm.payers, [item.key]: value as IncotermPayer } })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Payeur" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Fournisseur">Fournisseur</SelectItem>
+                        <SelectItem value="Client">Client</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditIncoterm(null)}>
+              Annuler
+            </Button>
+            <Button onClick={() => editIncoterm && upsertIncoterm(editIncoterm)} disabled={loading}>
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteDestination} onOpenChange={(open) => setDeleteDestination(open ? deleteDestination : null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer cette destination ?</AlertDialogTitle>
+            <AlertDialogDescription>Action irréversible (Supabase).</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={removeDestination}>Supprimer</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Importer la bible</DialogTitle>
+            <DialogDescription>Choisissez un JSON, prévisualisez, puis appliquez (Supabase).</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input ref={fileInputRef} type="file" accept="application/json" onChange={(e) => handleImport(e.target.files?.[0] || undefined)} />
+            {importError ? <p className="text-sm text-destructive">{importError}</p> : null}
+            {importPreview ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Destinations</CardTitle>
+                  </CardHeader>
+                  <CardContent>{importPreview?.destinations?.length ?? 0} lignes</CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Incoterms</CardTitle>
+                  </CardHeader>
+                  <CardContent>{importPreview?.incoterms?.length ?? 0} lignes</CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Logistique / HS</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    Mode log : {importPreview?.logisticsMode || '—'}
+                    <br />
+                    Codes HS : {importPreview?.hsCatalog?.length ?? hsCatalog.length}
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Prévisualisation après sélection du fichier.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsImportOpen(false)}>
+              Annuler
+            </Button>
+            <Button onClick={applyImport} disabled={!importPreview || loading}>
+              Appliquer l’import
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset</DialogTitle>
+            <DialogDescription>Réinitialise le référentiel Supabase.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p>Reset référentiel : remet Destinations/Incoterms/Logistique/HS par défaut.</p>
+            <p>Reset tout : reset référentiel + settings.</p>
+          </div>
+          <DialogFooter className="flex flex-col md:flex-row md:gap-2">
+            <Button variant="outline" onClick={handleResetRef} disabled={loading}>
+              Reset référentiel
+            </Button>
+            <Button variant="destructive" onClick={handleResetAll} disabled={loading}>
+              Reset tout
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </MainLayout>
+  );
+}
+
+function mergeWithoutDuplicateNames(current: DestinationRow[], additions: DestinationRow[]) {
+  const names = new Set(current.map((d) => d.name.toLowerCase()));
+  const merged = [...current];
+  additions.forEach((dest) => {
+    if (!names.has(dest.name.toLowerCase())) {
+      merged.push(dest);
+      names.add(dest.name.toLowerCase());
+    }
+  });
+  return merged;
+}
+
+function mergeIncoterms(current: IncotermRow[], additions: IncotermRow[]) {
+  const existingCodes = new Set(current.map((i) => i.code));
+  const merged = [...current];
+  additions.forEach((inc) => {
+    if (!existingCodes.has(inc.code)) {
+      merged.push(inc);
+      existingCodes.add(inc.code);
+    }
+  });
+  return merged;
+}
