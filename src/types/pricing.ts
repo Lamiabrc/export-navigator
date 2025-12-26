@@ -13,9 +13,12 @@ export type Product = {
   height_cm?: number;
   unit?: string;
   notes?: string;
+  lpp_code?: string;
+  cost?: number;
   // Compat legacy
   id?: string;
   name?: string;
+  lppCode?: string;
 };
 
 export type PricePoint = {
@@ -35,6 +38,8 @@ export type PricePoint = {
   // Compat legacy
   id?: string;
   productId?: string;
+  priceType?: "HT" | "TTC";
+  sourceLabel?: string;
 };
 
 export type PricingConfig = {
