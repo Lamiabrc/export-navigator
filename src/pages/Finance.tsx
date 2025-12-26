@@ -148,12 +148,6 @@ export default function MarginAnalysis() {
           actions={cases.length > 0 && (
             <div className="flex gap-2">
               <button
-                onClick={exportCsv}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm font-semibold"
-              >
-                Export CSV
-              </button>
-              <button
                 onClick={exportRiskCsv}
                 className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm hover:bg-muted transition"
                 title="Exporter la liste des dossiers a risque"

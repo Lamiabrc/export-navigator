@@ -14,6 +14,7 @@ type FormState = {
   logisticsCost: number;
   productCost: number;
   catalogPriceMetro?: number;
+  lpprBaseMetro?: number;
   vatPct?: number;
   octroiPct?: number;
   lpprMarkupPct?: number;

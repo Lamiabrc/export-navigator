@@ -1,3 +1,5 @@
+export type Brand = "ORLIMAN" | "THUASNE" | "DONJOY_ENOVIS" | "GIBAUD" | "AUTRE";
+
 export type Competitor = {
   id: string;
   name: string;
@@ -24,7 +26,7 @@ export type Product = {
 export type PricePoint = {
   price_id: string;
   product_id: string;
-  brand: "ORLIMAN" | "THUASNE" | "DONJOY_ENOVIS" | "GIBAUD";
+  brand: Brand;
   market: string;
   channel: string;
   currency: string;

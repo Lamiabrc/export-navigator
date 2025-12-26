@@ -12,7 +12,7 @@ import { computeCircuitSummary } from '@/lib/stats/computeCircuitSummary';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useReferenceData } from '@/hooks/useReferenceData';
 import { useImportedInvoices } from '@/hooks/useImportedInvoices';
-import type { CostDoc } from '@/types/couts';
+import type { CostDoc } from '@/types/costs';
 import { COST_DOCS_KEY } from '@/lib/constants/storage';
 import { zoneLabel } from '@/types/circuits';
 

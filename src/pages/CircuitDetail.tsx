@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useImportedInvoices } from '@/hooks/useImportedInvoices';
-import type { CostDoc } from '@/types/Couts';
+import type { CostDoc } from '@/types/costs';
 import { COST_DOCS_KEY } from '@/lib/constants/storage';
 import { reconcile } from '@/lib/reco/reconcile';
 import { evaluateCase } from '@/lib/rules/riskEngine';
