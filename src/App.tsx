@@ -2,13 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  BrowserRouter,
-  Navigate,
-  Route,
-  Routes,
-  useParams,
-} from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
@@ -30,11 +24,16 @@ import NotFound from "./pages/NotFound";
 import Imports from "./pages/Imports";
 import Home from "./pages/Home";
 import Clients from "./pages/Clients";
+
+// Anciennes pages (on les garde dans le code, mais plus utilisées comme hub principal)
 import StrategyHub from "./pages/StrategyHub";
 import CompetitiveIntel from "./pages/CompetitiveIntel";
 import ScenarioLab from "./pages/ScenarioLab";
 import DromPlaybook from "./pages/DromPlaybook";
 import PricingPositioning from "./pages/PricingPositioning";
+
+// ✅ Nouveau hub fusionné
+import CommandCenter from "./pages/CommandCenter";
 
 const queryClient = new QueryClient();
 
@@ -66,8 +65,36 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+
+            {/* ✅ HUB UNIQUE : /strategy + /dashboard + /control-tower */}
+            <Route
+              path="/control-tower"
+              element={
+                <ProtectedRoute>
+                  <CommandCenter />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <CommandCenter />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/strategy"
+              element={
+                <ProtectedRoute>
+                  <CommandCenter />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Optionnel : on conserve les anciennes pages accessibles (tu pourras les retirer plus tard) */}
+            <Route
+              path="/strategy-hub"
               element={
                 <ProtectedRoute>
                   <StrategyHub />
@@ -98,31 +125,18 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+
+            {/* ✅ DROM Playbook intégré au Guide : on redirige vers Guide */}
             <Route
               path="/drom-playbook"
               element={
                 <ProtectedRoute>
-                  <DromPlaybook />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/control-tower"
-              element={
-                <ProtectedRoute>
-                  <ControlTower />
+                  <Navigate to="/guide?tab=drom" replace />
                 </ProtectedRoute>
               }
             />
 
+            {/* Le reste inchangé */}
             <Route
               path="/flows"
               element={
@@ -139,7 +153,6 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-
             <Route
               path="/logistics"
               element={
@@ -164,7 +177,6 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-
             <Route
               path="/invoices"
               element={
@@ -181,7 +193,6 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-
             <Route
               path="/simulator"
               element={
@@ -265,7 +276,7 @@ const App = () => (
               }
             />
 
-            {/* 404 guarded to avoid exposing the app without login */}
+            {/* 404 guarded */}
             <Route
               path="*"
               element={
