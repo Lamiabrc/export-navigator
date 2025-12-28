@@ -30,14 +30,6 @@ import CommandCenter from "./pages/CommandCenter";
 // ✅ Produits
 import Products from "./pages/Products";
 
-// Legacy (on garde pour ne rien perdre)
-import Dashboard from "./pages/Dashboard";
-import ControlTower from "./pages/ControlTower";
-import StrategyHub from "./pages/StrategyHub";
-import CompetitiveIntel from "./pages/CompetitiveIntel";
-import ScenarioLab from "./pages/ScenarioLab";
-import PricingPositioning from "./pages/PricingPositioning";
-
 const queryClient = new QueryClient();
 
 function CircuitsLegacyRedirect() {
@@ -225,55 +217,6 @@ const App = () => (
             />
 
             {/* Legacy pages (accessibles ponctuellement) */}
-            <Route
-              path="/dashboard-legacy"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/control-tower-legacy"
-              element={
-                <ProtectedRoute>
-                  <ControlTower />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/strategy-hub"
-              element={
-                <ProtectedRoute>
-                  <StrategyHub />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/pricing-positioning"
-              element={
-                <ProtectedRoute>
-                  <PricingPositioning />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/competitive"
-              element={
-                <ProtectedRoute>
-                  <CompetitiveIntel />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/scenario-lab"
-              element={
-                <ProtectedRoute>
-                  <ScenarioLab />
-                </ProtectedRoute>
-              }
-            />
-
             {/* Legacy redirects */}
             <Route
               path="/export-dashboard"
