@@ -265,7 +265,7 @@ export default function MarginAnalysis() {
           <Card>
             <CardContent className="py-6 text-muted-foreground flex items-center gap-2">
               <AlertTriangle className="h-4 w-4" />
-              Aucune donnée analysable. Importez des données dans <span className="font-medium">Imports CSV</span>.
+              Aucune donnee analysable. Ajoutez vos factures et couts reels dans Supabase (page Admin ou tables) pour activer l'analyse.
             </CardContent>
           </Card>
         )}

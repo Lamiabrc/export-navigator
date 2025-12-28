@@ -21,7 +21,6 @@ import Settings from "./pages/Settings";
 import Simulator from "./pages/Simulator";
 import MarginAnalysis from "./pages/MarginAnalysis";
 import ReferenceLibrary from "./pages/ReferenceLibrary";
-import Imports from "./pages/Imports";
 import Clients from "./pages/Clients";
 
 // ✅ Hub fusionné
@@ -185,16 +184,6 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Products />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* On garde Imports en legacy (mais plus dans la nav principale) */}
-            <Route
-              path="/imports"
-              element={
-                <ProtectedRoute>
-                  <Imports />
                 </ProtectedRoute>
               }
             />

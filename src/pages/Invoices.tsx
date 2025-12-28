@@ -1,27 +1,27 @@
-import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { MainLayout } from '@/components/layout/MainLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { AlertTriangle, CheckCircle, ExternalLink, Shield, ShieldAlert } from 'lucide-react';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { useImportedInvoices } from '@/hooks/useImportedInvoices';
-import { reconcile } from '@/lib/reco/reconcile';
-import { evaluateCase } from '@/lib/rules/riskEngine';
-import { aggregateCases, margin, transitCoverage } from '@/lib/kpi/exportKpis';
-import { useReferenceData } from '@/hooks/useReferenceData';
-import type { CostDoc } from '@/types/costs';
-import type { ExportCase } from '@/types/case';
-import { COST_DOCS_KEY } from '@/lib/constants/storage';
-import { PageHeader } from '@/components/PageHeader';
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, CheckCircle, ExternalLink, Shield, ShieldAlert } from "lucide-react";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useImportedInvoices } from "@/hooks/useImportedInvoices";
+import { reconcile } from "@/lib/reco/reconcile";
+import { evaluateCase } from "@/lib/rules/riskEngine";
+import { aggregateCases, margin, transitCoverage } from "@/lib/kpi/exportKpis";
+import { useReferenceData } from "@/hooks/useReferenceData";
+import type { CostDoc } from "@/types/costs";
+import type { ExportCase } from "@/types/case";
+import { COST_DOCS_KEY } from "@/lib/constants/storage";
+import { PageHeader } from "@/components/PageHeader";
 
-const statusBadge = (status: ExportCase['matchStatus']) => {
+const statusBadge = (status: ExportCase["matchStatus"]) => {
   switch (status) {
-    case 'match':
+    case "match":
       return <Badge className="bg-green-100 text-green-700 border-green-200">Match OK</Badge>;
-    case 'partial':
+    case "partial":
       return <Badge className="bg-amber-100 text-amber-700 border-amber-200">Partiel</Badge>;
     default:
       return <Badge variant="outline">Aucun</Badge>;
@@ -30,8 +30,7 @@ const statusBadge = (status: ExportCase['matchStatus']) => {
 
 const alertBadge = (alertsCount: number, hasBlocker: boolean) => {
   if (alertsCount === 0) return <Badge variant="outline">Aucune alerte</Badge>;
-  if (hasBlocker)
-    return <Badge className="bg-red-100 text-red-700 border-red-200">{alertsCount} alerte(s)</Badge>;
+  if (hasBlocker) return <Badge className="bg-red-100 text-red-700 border-red-200">{alertsCount} alerte(s)</Badge>;
   return <Badge className="bg-amber-100 text-amber-700 border-amber-200">{alertsCount} alerte(s)</Badge>;
 };
 
@@ -56,9 +55,9 @@ export default function Invoices() {
           acc[c.matchStatus] += 1;
           return acc;
         },
-        { match: 0, partial: 0, none: 0 } as Record<ExportCase['matchStatus'], number>
+        { match: 0, partial: 0, none: 0 } as Record<ExportCase["matchStatus"], number>,
       ),
-    [cases]
+    [cases],
   );
 
   return (
@@ -66,18 +65,13 @@ export default function Invoices() {
       <div className="space-y-6">
         <PageHeader
           title="Controle & rapprochement factures"
-          subtitle="Factures importees vs couts reels (transit/douane) avec score de match et alertes."
-          actions={(
-            <Link to="/imports">
-              <Button variant="outline">Aller aux imports CSV</Button>
-            </Link>
-          )}
+          subtitle="Factures et couts reels (transit/douane) depuis Supabase avec score de match et alertes."
         />
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
             <CardContent className="pt-5">
-              <p className="text-xs text-muted-foreground">Factures importÃ©es</p>
+              <p className="text-xs text-muted-foreground">Factures suivies</p>
               <p className="text-2xl font-bold">{importedInvoices.length}</p>
             </CardContent>
           </Card>
@@ -127,13 +121,14 @@ export default function Invoices() {
                   {cases.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                        Importez des fichiers dans lâ€™onglet Imports CSV pour lancer le rapprochement.
+                        Aucune facture ou cout reel disponible. Ajoutez-les dans Supabase (page Admin ou tables) pour
+                        lancer le rapprochement.
                       </TableCell>
                     </TableRow>
                   ) : (
                     cases.map((c) => {
                       const coverage = transitCoverage(c);
-                      const hasBlocker = (c.alerts || []).some((a) => a.severity === 'blocker');
+                      const hasBlocker = (c.alerts || []).some((a) => a.severity === "blocker");
                       const flowId = c.invoice.flowCode || c.costDocs[0]?.flowCode;
                       return (
                         <TableRow key={c.id} className="hover:bg-muted/40">
@@ -141,11 +136,11 @@ export default function Invoices() {
                           <TableCell>
                             <div className="flex flex-col">
                               <span>{c.invoice.clientName}</span>
-                              <span className="text-xs text-muted-foreground">{c.invoice.destination || '-'}</span>
+                              <span className="text-xs text-muted-foreground">{c.invoice.destination || "-"}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
-                            {c.invoice.totalHT?.toLocaleString('fr-FR') || '-'}
+                            {c.invoice.totalHT?.toLocaleString("fr-FR") || "-"}
                           </TableCell>
                           <TableCell>{statusBadge(c.matchStatus)}</TableCell>
                           <TableCell>
@@ -154,9 +149,9 @@ export default function Invoices() {
                           <TableCell>
                             {coverage.transitCosts > 0 ? (
                               <span className="text-sm">
-                                {Math.round(coverage.coverage * 100)}%{' '}
+                                {Math.round(coverage.coverage * 100)}%{" "}
                                 <span className="text-muted-foreground">
-                                  ({coverage.uncovered.toLocaleString('fr-FR')} non couvert)
+                                  ({coverage.uncovered.toLocaleString("fr-FR")} non couvert)
                                 </span>
                               </span>
                             ) : (
@@ -198,59 +193,27 @@ export default function Invoices() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {aggregates.topLosses.map((c) => {
                   const m = margin(c);
+                  const hasBlocker = (c.alerts || []).some((a) => a.severity === "blocker");
                   return (
-                    <div key={c.id} className="p-3 border rounded-lg">
-                      <div className="flex items-center justify-between">
+                    <div key={c.id} className="p-3 rounded-lg border bg-muted/40">
+                      <div className="flex items-start justify-between">
                         <div>
-                          <p className="font-semibold">{c.invoice.invoiceNumber}</p>
-                          <p className="text-xs text-muted-foreground">{c.invoice.clientName}</p>
+                          <p className="font-semibold">{c.invoice.clientName}</p>
+                          <p className="text-xs text-muted-foreground">{c.invoice.destination || "-"}</p>
                         </div>
-                        <Badge variant="outline">Incoterm {c.invoice.incoterm || 'NC'}</Badge>
+                        {hasBlocker ? (
+                          <ShieldAlert className="h-4 w-4 text-red-600" />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        )}
                       </div>
-                      <p className="mt-2 text-sm text-destructive">
-                        Perte: {m.amount.toLocaleString('fr-FR')} ({m.rate.toFixed(1)}%)
+                      <p className="text-sm mt-2">Marge : {m.marginPercent.toFixed(1)}%</p>
+                      <p className="text-sm text-muted-foreground">
+                        Ecart : {m.diff.toLocaleString("fr-FR")} € (HT)
                       </p>
                     </div>
                   );
                 })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {cases.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Alertes globales</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {cases.flatMap((c) => c.alerts || []).length === 0 ? (
-                  <Badge variant="outline">
-                    <CheckCircle className="h-4 w-4 mr-1" />
-                    Aucune alerte
-                  </Badge>
-                ) : (
-                  cases.flatMap((c) => c.alerts || []).map((alert) => (
-                    <Badge
-                      key={`${alert.code}-${alert.id}`}
-                      className={`flex items-center gap-1 ${
-                        alert.severity === 'blocker'
-                          ? 'bg-red-100 text-red-700 border-red-200'
-                          : alert.severity === 'warning'
-                          ? 'bg-amber-100 text-amber-700 border-amber-200'
-                          : 'bg-blue-100 text-blue-700 border-blue-200'
-                      }`}
-                    >
-                      {alert.severity === 'blocker' ? (
-                        <ShieldAlert className="h-4 w-4" />
-                      ) : (
-                        <AlertTriangle className="h-4 w-4" />
-                      )}
-                      {alert.code}
-                    </Badge>
-                  ))
-                )}
               </div>
             </CardContent>
           </Card>

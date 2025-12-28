@@ -1,9 +1,9 @@
-import { Link } from 'react-router-dom';
-import { MainLayout } from '@/components/layout/MainLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ArrowRight, Map, LayoutDashboard, ShieldCheck, Database, Compass, BellRing, Sparkles, PlayCircle } from 'lucide-react';
+import { Link } from "react-router-dom";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ArrowRight, Map, LayoutDashboard, ShieldCheck, Compass, BellRing, Sparkles, PlayCircle } from "lucide-react";
 
 export default function Home() {
   return (
@@ -22,8 +22,8 @@ export default function Home() {
               Contrôle des flux export <span className="text-cyan-300">par couches</span>, rapprochement, alertes
             </h1>
             <p className="text-slate-200/80 max-w-3xl">
-              Carte interactive (transport / douane-DDP / TVA), imports factures + coûts réels, rapprochement automatique,
-              KPIs marge & couverture transit, alertes de cohérence. Données locales, zéro backend.
+              Carte interactive (transport / douane-DDP / TVA), contrôle facture et coûts réels, rapprochement automatique,
+              KPIs marge & couverture transit, alertes de cohérence. Données Supabase centralisées.
             </p>
             <div className="flex flex-wrap gap-3">
               <Link to="/flows">
@@ -33,13 +33,7 @@ export default function Home() {
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link to="/imports">
-                <Button variant="secondary" className="gap-2 border border-white/20 bg-white/10 text-white hover:bg-white/20">
-                  <Database className="h-4 w-4" />
-                  Importer les données
-                </Button>
-              </Link>
-              <Link to="/dashboard">
+              <Link to="/control-tower">
                 <Button variant="ghost" className="gap-2 text-white hover:bg-white/10">
                   <LayoutDashboard className="h-4 w-4" />
                   Dashboard direction
@@ -48,9 +42,9 @@ export default function Home() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
               {[
-                { label: 'Couverture transit', value: 'Live', tone: 'text-cyan-200' },
-                { label: 'Rapprochements', value: 'Factures vs coûts', tone: 'text-emerald-200' },
-                { label: 'Alertes', value: 'Incoterm / DDP / TVA', tone: 'text-amber-200' },
+                { label: "Couverture transit", value: "Live", tone: "text-cyan-200" },
+                { label: "Rapprochements", value: "Factures vs coûts", tone: "text-emerald-200" },
+                { label: "Alertes", value: "Incoterm / DDP / TVA", tone: "text-amber-200" },
               ].map((kpi, idx) => (
                 <div
                   key={kpi.label}
@@ -88,12 +82,11 @@ export default function Home() {
                 <ShieldCheck className="h-5 w-5 text-primary" />
                 Contrôle & rapprochement
               </CardTitle>
-              <CardDescription>Imports CSV (factures, coûts réels), match auto, couverture transit, alertes.</CardDescription>
+              <CardDescription>Factures + coûts réels depuis Supabase, match auto, couverture transit, alertes.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>Importez factures et coûts, vérifiez match, marge et alertes (incoterm, DDP, TVA, transit).</p>
+              <p>Saisissez ou synchronisez factures et coûts (Supabase), vérifiez match, marge et alertes (incoterm, DDP, TVA, transit).</p>
               <div className="flex gap-2">
-                <Link to="/imports"><Button variant="link" className="px-0">Importer</Button></Link>
                 <Link to="/invoices"><Button variant="link" className="px-0">Rapprochements</Button></Link>
               </div>
             </CardContent>
@@ -127,13 +120,13 @@ export default function Home() {
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-muted-foreground">
             <div className="space-y-2">
-              <p>1. Importer : onglet Imports → CSV Factures + CSV Coûts réels (transit/douane).</p>
+              <p>1. Admin : saisir/mettre à jour factures, coûts, produits, clients dans Supabase (page Admin).</p>
               <p>2. Visualiser : onglet Flows → carte des flux par couches, vérifier les destinations sensibles.</p>
               <p>3. Contrôler : onglet Invoices → rapprochements, alertes, couverture transit.</p>
             </div>
             <div className="space-y-2">
               <p>4. Piloter : onglet Margin Analysis → top pertes, marge par destination/client/incoterm.</p>
-              <p>5. Référentiel : onglet Reference Library → Incoterms/destinations, import/export JSON.</p>
+              <p>5. Référentiel : onglet Reference Library → Incoterms/destinations, guide DROM, paramètres Supabase.</p>
               <p>6. Logistique/Finance : checklists, charges, documents (pages Logistics/Finance).</p>
             </div>
           </CardContent>
