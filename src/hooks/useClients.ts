@@ -38,7 +38,7 @@ export function useClients() {
 
   const envOk = SUPABASE_ENV_OK;
 
-  const refresh = useCallback(async () => {
+  const fetchClients = useCallback(async () => {
     if (!envOk) {
       setError("Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).");
       setClients([]);
@@ -49,19 +49,28 @@ export function useClients() {
     setIsLoading(true);
     setError(null);
 
+    const fullSelect =
+      "id,libelle_client,email,telephone,adresse,cp,ville,pays,tva_number,notes,code_ets,export_zone,drom_code,canal,sales_channel,depositaire_id,groupement_id,groupement,groupement_remise,default_destination";
+    const minimalSelect = "id,libelle_client,pays,export_zone,drom_code,default_destination,tva_number,email";
+
     try {
-      const { data, error: sbError } = await supabase
-        .from("clients")
-        .select(
-          "id,libelle_client,email,telephone,adresse,cp,ville,pays,tva_number,notes,code_ets,export_zone,drom_code,canal,sales_channel,depositaire_id,groupement_id,groupement,groupement_remise,default_destination"
-        )
-        .order("libelle_client", { ascending: true })
-        .limit(3000);
+      let query = supabase.from("clients").select(fullSelect).order("libelle_client", { ascending: true }).limit(3000);
+      const { data, error: sbError, status } = await query;
+
+      if (sbError && status === 400) {
+        // fallback minimal si colonne manquante
+        const { data: dataMin, error: errMin } = await supabase
+          .from("clients")
+          .select(minimalSelect)
+          .order("libelle_client", { ascending: true })
+          .limit(3000);
+        if (errMin) throw errMin;
+        setClients((dataMin ?? []) as ClientRow[]);
+        return;
+      }
 
       if (sbError) throw sbError;
-
-      const rows = (data ?? []) as ClientRow[];
-      setClients(rows);
+      setClients((data ?? []) as ClientRow[]);
     } catch (e: any) {
       setError(e?.message || "Erreur lors du chargement des clients.");
       setClients([]);
@@ -71,17 +80,17 @@ export function useClients() {
   }, [envOk]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    void fetchClients();
+  }, [fetchClients]);
 
   const filterByZone = useCallback(
     (zone: ExportZone | null) => clients.filter((c) => (zone ? c.export_zone === zone : true)),
-    [clients]
+    [clients],
   );
 
   const filterByDrom = useCallback(
     (dromCode: string | null) => clients.filter((c) => (dromCode ? c.drom_code === dromCode : true)),
-    [clients]
+    [clients],
   );
 
   const computeClientType = useCallback((c: ClientRow): ClientType => {
@@ -115,7 +124,7 @@ export function useClients() {
     isLoading,
     error,
     envOk,
-    refresh,
+    fetchClients,
     filterByZone,
     filterByDrom,
     computeClientType,
