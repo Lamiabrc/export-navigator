@@ -18,6 +18,7 @@ export type ProductRow = {
   nouveaute: boolean | null;
   code_article: string | null;
   libelle_article: string | null;
+  hs_code?: string | null;
   code_acl13_ou_ean13: string | null;
   code_acl7: string | null;
   code_iud_id: string | null;
@@ -146,6 +147,8 @@ export function useProducts(options: UseProductsOptions = {}) {
     [byCodeArticle]
   );
 
+  const getProductByCodeArticle = getProductByCode;
+
   const searchProducts = useCallback(
     (query: string, limit = 20) => {
       const q = (query || "").trim().toLowerCase();
@@ -159,6 +162,15 @@ export function useProducts(options: UseProductsOptions = {}) {
           return code.includes(q) || label.includes(q) || ean.includes(q);
         })
         .slice(0, limit);
+    },
+    [products]
+  );
+
+  const topProductsByZone = useCallback(
+    (zone: string, limit = 10) => {
+      // En l'absence de volumes par zone, on retourne les produits triés alpha pour préfigurer l'analytics.
+      const list = [...products].sort((a, b) => (a.libelle_article || "").localeCompare(b.libelle_article || ""));
+      return zone ? list.slice(0, limit) : list.slice(0, limit);
     },
     [products]
   );
@@ -181,6 +193,8 @@ export function useProducts(options: UseProductsOptions = {}) {
     // helpers
     getProductByCode,
     searchProducts,
+    getProductByCodeArticle,
+    topProductsByZone,
 
     // meta
     envOk,

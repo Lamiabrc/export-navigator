@@ -140,6 +140,18 @@ export function useReferenceRates() {
   }, [envOk]);
 
   const refresh = useCallback(async () => {
+    if (!envOk) {
+      setRates({
+        vatRates: defaultVatRates,
+        octroiMerRates: defaultOmRates as OctroiMerRateWithHs[],
+        transportCosts: defaultTransportCosts,
+        serviceCharges: defaultServiceCharges,
+      });
+      setError("Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY). Utilisation des valeurs par défaut.");
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -202,7 +214,7 @@ export function useReferenceRates() {
 
   useEffect(() => {
     // Au montage: charge depuis Supabase (si possible)
-    refresh();
+    void refresh();
   }, [refresh]);
 
   /**
