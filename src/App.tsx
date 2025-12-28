@@ -2,39 +2,22 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
-import Home from "./pages/Home";
-import AuthPage from "./pages/Auth";
-import NotFound from "./pages/NotFound";
-
-import Flows from "./pages/Flows";
-import CircuitDetail from "./pages/CircuitDetail";
-import Logistics from "./pages/Logistics";
-import Finance from "./pages/Finance";
-import Guide from "./pages/Guide";
-import Invoices from "./pages/Invoices";
-import InvoiceVerification from "./pages/InvoiceVerification";
-import Settings from "./pages/Settings";
-import Simulator from "./pages/Simulator";
-import MarginAnalysis from "./pages/MarginAnalysis";
-import ReferenceLibrary from "./pages/ReferenceLibrary";
-import Clients from "./pages/Clients";
-
-// ✅ Hub fusionné
-import CommandCenter from "./pages/CommandCenter";
-
-// ✅ Produits
-import Products from "./pages/Products";
+import Welcome from "@/pages/Welcome";
+import Login from "@/pages/Login";
+import Hub from "@/pages/Hub";
+import Simulator from "@/pages/Simulator";
+import InvoiceVerification from "@/pages/InvoiceVerification";
+import WatchCommercial from "@/pages/WatchCommercial";
+import WatchRegulatory from "@/pages/WatchRegulatory";
+import Admin from "@/pages/Admin";
+import Assistant from "@/pages/Assistant";
+import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
-
-function CircuitsLegacyRedirect() {
-  const { id } = useParams();
-  return <Navigate to={id ? `/flows/${id}` : "/flows"} replace />;
-}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -45,111 +28,16 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             {/* Public */}
-            <Route path="/auth" element={<AuthPage />} />
-
-            {/* Default */}
-            <Route path="/" element={<Navigate to="/control-tower" replace />} />
+            <Route path="/" element={<Navigate to="/welcome" replace />} />
+            <Route path="/welcome" element={<Welcome />} />
+            <Route path="/login" element={<Login />} />
 
             {/* Protected */}
             <Route
-              path="/home"
+              path="/hub"
               element={
                 <ProtectedRoute>
-                  <Home />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* ✅ HUB UNIQUE */}
-            <Route
-              path="/control-tower"
-              element={
-                <ProtectedRoute>
-                  <CommandCenter />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Navigate to="/control-tower" replace />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/strategy"
-              element={
-                <ProtectedRoute>
-                  <Navigate to="/control-tower" replace />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* ✅ DROM Playbook intégré au Guide */}
-            <Route
-              path="/drom-playbook"
-              element={
-                <ProtectedRoute>
-                  <Navigate to="/guide?tab=drom" replace />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Pages principales */}
-            <Route
-              path="/flows"
-              element={
-                <ProtectedRoute>
-                  <Flows />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/flows/:id"
-              element={
-                <ProtectedRoute>
-                  <CircuitDetail />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/logistics"
-              element={
-                <ProtectedRoute>
-                  <Logistics />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/finance"
-              element={
-                <ProtectedRoute>
-                  <Finance />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/guide"
-              element={
-                <ProtectedRoute>
-                  <Guide />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/invoices"
-              element={
-                <ProtectedRoute>
-                  <Invoices />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/invoice-verification"
-              element={
-                <ProtectedRoute>
-                  <InvoiceVerification />
+                  <Hub />
                 </ProtectedRoute>
               }
             />
@@ -162,93 +50,48 @@ const App = () => (
               }
             />
             <Route
-              path="/margin-analysis"
+              path="/verifier"
               element={
                 <ProtectedRoute>
-                  <MarginAnalysis />
+                  <InvoiceVerification />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/reference-library"
+              path="/watch/commercial"
               element={
                 <ProtectedRoute>
-                  <ReferenceLibrary />
+                  <WatchCommercial />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/watch/regulatory"
+              element={
+                <ProtectedRoute>
+                  <WatchRegulatory />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute>
+                  <Admin />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/assistant"
+              element={
+                <ProtectedRoute>
+                  <Assistant />
                 </ProtectedRoute>
               }
             />
 
-            {/* ✅ Produits */}
-            <Route
-              path="/products"
-              element={
-                <ProtectedRoute>
-                  <Products />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/clients"
-              element={
-                <ProtectedRoute>
-                  <Clients />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <ProtectedRoute>
-                  <Settings />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Legacy pages (accessibles ponctuellement) */}
-            {/* Legacy redirects */}
-            <Route
-              path="/export-dashboard"
-              element={
-                <ProtectedRoute>
-                  <Navigate to="/control-tower" replace />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/flow-manager"
-              element={
-                <ProtectedRoute>
-                  <Navigate to="/flows" replace />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/circuits"
-              element={
-                <ProtectedRoute>
-                  <Navigate to="/flows" replace />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/circuits/:id"
-              element={
-                <ProtectedRoute>
-                  <CircuitsLegacyRedirect />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* 404 guarded */}
-            <Route
-              path="*"
-              element={
-                <ProtectedRoute>
-                  <NotFound />
-                </ProtectedRoute>
-              }
-            />
+            {/* 404 */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

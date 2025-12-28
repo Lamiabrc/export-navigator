@@ -1,9 +1,10 @@
 import React from "react";
 import { Sidebar } from "./Sidebar";
-import { Link } from "react-router-dom";
-import { Menu, Search, FileCheck2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Menu, Search, FileCheck2, Bot, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -13,6 +14,8 @@ interface MainLayoutProps {
 
 export function MainLayout({ children, contentClassName }: MainLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))] relative overflow-hidden">
@@ -48,10 +51,7 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
             onClick={() => setSidebarOpen(false)}
           />
           {/* panel */}
-          <Sidebar
-            onNavigate={() => setSidebarOpen(false)}
-            className="z-[95] bg-slate-900/90 shadow-2xl shadow-black/40"
-          />
+          <Sidebar onNavigate={() => setSidebarOpen(false)} className="z-[95] bg-slate-900/90 shadow-2xl shadow-black/40" />
         </div>
       )}
 
@@ -69,12 +69,10 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
 
             <div className="min-w-0 flex-1">
               <div className="text-sm font-semibold text-foreground truncate">Export Navigator</div>
-              <div className="text-xs text-muted-foreground truncate">
-                Tour de contrôle export • factures • conformité • transit • OM/TVA
-              </div>
+              <div className="text-xs text-muted-foreground truncate">Hub contrôle facture, veille, IA Export</div>
             </div>
 
-            <div className="flex items-center gap-2 w-full max-w-md">
+            <div className="flex items-center gap-2 w-full max-w-xl">
               <div className="relative flex-1 hidden sm:block">
                 <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
@@ -84,12 +82,31 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
               </div>
 
               <Link
-                to="/invoice-verification"
+                to="/assistant"
+                className="inline-flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground border border-secondary/50 hover:shadow-md hover:-translate-y-0.5 transition"
+              >
+                <Bot className="h-4 w-4" />
+                IA Export
+              </Link>
+
+              <Link
+                to="/verifier"
                 className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/30 border border-primary/50 hover:shadow-primary/50 hover:-translate-y-0.5 transition"
               >
                 <FileCheck2 className="h-4 w-4" />
                 Contrôler une facture
               </Link>
+
+              <button
+                onClick={async () => {
+                  await signOut();
+                  navigate("/login");
+                }}
+                className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-muted transition"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </button>
             </div>
           </div>
         </header>

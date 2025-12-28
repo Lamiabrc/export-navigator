@@ -3,21 +3,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  ShieldCheck,
-  FileText,
-  Truck,
-  Users,
-  FileInput,
-  BookOpen,
-  Settings,
-  Calculator,
-  Library,
-  Package,
-  LogOut,
-  Activity,
-} from "lucide-react";
-import logoOrliman from "@/assets/logo-orliman.png";
+import { Home, BookOpen, ShieldCheck, LogOut, Bot } from "lucide-react";
 
 type NavItem = {
   name: string;
@@ -35,58 +21,22 @@ type NavSection = {
 
 const navigation: NavSection[] = [
   {
-    title: "Pilotage",
+    title: "Navigation",
     items: [
       {
-        name: "Tour de contrôle",
-        href: "/control-tower",
+        name: "Check rapide",
+        href: "/hub",
         icon: ShieldCheck,
         badge: "HUB",
         featured: true,
-        aliases: ["/dashboard", "/strategy"],
+        aliases: ["/control-tower", "/dashboard"],
       },
-      {
-        name: "Flux export",
-        href: "/flows",
-        icon: Activity,
-        aliases: ["/circuits"],
-      },
-      { name: "Logistique", href: "/logistics", icon: Truck },
-      { name: "Finance", href: "/finance", icon: Calculator },
-      { name: "Analyse marges", href: "/margin-analysis", icon: Calculator },
-    ],
-  },
-  {
-    title: "Facturation & conformité",
-    items: [
-      { name: "Factures", href: "/invoices", icon: FileInput },
-      { name: "Contrôle facture (PDF)", href: "/invoice-verification", icon: FileInput, badge: "PRIO" },
-      { name: "Simulateur export", href: "/simulator", icon: Calculator },
-    ],
-  },
-  {
-    title: "Référentiels",
-    items: [
-      { name: "Clients", href: "/clients", icon: Users },
-      { name: "Produits", href: "/products", icon: Package, badge: "NEW" },
-      { name: "Références", href: "/reference-library", icon: Library },
-      { name: "Guide (incl. DROM)", href: "/guide", icon: BookOpen, aliases: ["/drom-playbook"] },
+      { name: "Veille commerciale", href: "/watch/commercial", icon: Home },
+      { name: "Veille réglementaire", href: "/watch/regulatory", icon: BookOpen },
+      { name: "Admin", href: "/admin", icon: Home },
     ],
   },
 ];
-
-const adminNavigation: NavSection = {
-  title: "Administration",
-  items: [{ name: "Paramètres", href: "/settings", icon: Settings }],
-};
-
-const roleLabels: Record<string, string> = {
-  direction: "Direction",
-  adv_export: "ADV Export",
-  logistique: "Logistique",
-  finance: "Finance/Compta",
-  admin: "Administrateur",
-};
 
 export type SidebarProps = {
   onNavigate?: () => void;
@@ -98,8 +48,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
 
-  const safeName = user?.name?.trim() || "Utilisateur";
-  const safeRoleLabel = user?.role ? roleLabels[user.role] ?? user.role : "";
+  const safeName = (user?.email || "Utilisateur").split("@")[0];
 
   const getInitials = (name: string) => {
     const parts = name.split(" ").filter(Boolean);
@@ -109,14 +58,10 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
 
   const isItemActive = (item: NavItem) => {
     const matchesAlias = item.aliases?.some(
-      (alias) => location.pathname === alias || location.pathname.startsWith(`${alias}/`)
+      (alias) => location.pathname === alias || location.pathname.startsWith(`${alias}/`),
     );
 
-    return (
-      matchesAlias ||
-      location.pathname === item.href ||
-      location.pathname.startsWith(`${item.href}/`)
-    );
+    return matchesAlias || location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
   };
 
   const handleLogout = async () => {
@@ -124,7 +69,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
       await signOut();
     } finally {
       onNavigate?.();
-      navigate("/auth");
+      navigate("/login");
     }
   };
 
@@ -142,7 +87,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
           active
             ? "bg-sidebar-primary/20 text-sidebar-foreground shadow-[0_8px_24px_-12px_rgba(0,0,0,0.6)] ring-1 ring-sidebar-primary/40 border border-sidebar-primary/30"
             : "text-sidebar-foreground/80",
-          item.featured && !active && "border border-sidebar-primary/30 bg-sidebar-primary/5"
+          item.featured && !active && "border border-sidebar-primary/30 bg-sidebar-primary/5",
         )}
         aria-current={active ? "page" : undefined}
       >
@@ -163,14 +108,17 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
       className={cn(
         "fixed inset-y-0 left-0 z-[70] flex w-64 flex-col",
         "bg-[hsl(var(--sidebar-background))]/95 backdrop-blur-xl border-r border-[hsl(var(--sidebar-border))] shadow-2xl shadow-black/30",
-        className
+        className,
       )}
       aria-label="Navigation principale"
     >
       <div className="flex h-16 items-center gap-3 px-6 border-b border-[hsl(var(--sidebar-border))]">
-        <img src={logoOrliman} alt="ORLIMAN" className="h-8 w-auto" />
+        <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center text-primary-foreground font-semibold">
+          OR
+        </div>
         <div className="min-w-0">
-          <p className="text-xs text-sidebar-foreground/60 truncate">La Mézière, France</p>
+          <p className="text-xs text-sidebar-foreground/60 truncate">Export Navigator</p>
+          <p className="text-xs text-sidebar-foreground/40 truncate">DROM / UE / Hors UE</p>
         </div>
       </div>
 
@@ -183,15 +131,6 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
             <div className="space-y-1.5">{section.items.map(renderLink)}</div>
           </div>
         ))}
-
-        {user?.role === "admin" && (
-          <div>
-            <div className="mt-4 mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/60">
-              {adminNavigation.title}
-            </div>
-            <div className="space-y-1.5">{adminNavigation.items.map(renderLink)}</div>
-          </div>
-        )}
       </nav>
 
       <div className="border-t border-[hsl(var(--sidebar-border))] p-4 bg-[hsl(var(--sidebar-accent))/0.4]">
@@ -202,7 +141,6 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
 
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white truncate">{safeName}</p>
-            <p className="text-xs text-sidebar-foreground/70 truncate">{safeRoleLabel}</p>
           </div>
 
           <button
@@ -216,9 +154,10 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
           </button>
         </div>
 
-        <p className="mt-2 text-[10px] text-sidebar-foreground/40 text-center">
-          Données Supabase
-        </p>
+        <div className="flex items-center gap-2 mt-3 text-xs text-sidebar-foreground/60">
+          <Bot className="h-4 w-4" />
+          IA Export via Edge Function (clé côté serveur uniquement)
+        </div>
       </div>
     </aside>
   );
