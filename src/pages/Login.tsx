@@ -1,34 +1,84 @@
-import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { FormEvent, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
+
+function getErrorMessage(err: unknown): string {
+  if (!err) return "Une erreur inconnue est survenue.";
+  if (typeof err === "string") return err;
+  if (err instanceof Error) return err.message;
+  // Supabase-like errors sometimes have { message }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const anyErr = err as any;
+  if (typeof anyErr?.message === "string") return anyErr.message;
+  return "Une erreur est survenue. Réessaie.";
+}
 
 export default function Login() {
   const { signIn, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  // Permet de faire /welcome?next=/hub ou /login?next=/hub
+  const nextPath = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const next = params.get("next");
+    return next && next.startsWith("/") ? next : "/hub";
+  }, [location.search]);
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setPending(true);
     setError(null);
-    const { error: err } = await signIn(email.trim(), password);
-    setPending(false);
-    if (err) {
-      setError(err);
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setError("Merci de renseigner un email.");
       return;
     }
-    navigate("/hub");
+    if (!password) {
+      setError("Merci de renseigner un mot de passe.");
+      return;
+    }
+
+    try {
+      setPending(true);
+      const { error: err } = await signIn(normalizedEmail, password);
+      if (err) {
+        setError(getErrorMessage(err));
+        return;
+      }
+      navigate(nextPath, { replace: true });
+    } catch (e2) {
+      setError(getErrorMessage(e2));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const goForgotPassword = () => {
+    // tu peux aussi passer l’email en query si tu veux
+    // navigate(`/forgot-password?email=${encodeURIComponent(email.trim().toLowerCase())}`);
+    navigate("/forgot-password");
   };
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-slate-950 text-slate-50">
+      {/* VISUEL GAUCHE */}
       <div className="relative hidden lg:block">
         <img
           src="/assets/sea-login.jpg"
@@ -38,15 +88,21 @@ export default function Login() {
         <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-slate-900/70" />
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center px-10 space-y-4">
-            <p className="uppercase tracking-[0.3em] text-cyan-200 font-semibold">Contrôle Export</p>
-            <h2 className="text-4xl font-bold text-white drop-shadow-lg">Pilotage DROM / UE / Hors UE</h2>
+            <p className="uppercase tracking-[0.3em] text-cyan-200 font-semibold">
+              Contrôle Export
+            </p>
+            <h2 className="text-4xl font-bold text-white drop-shadow-lg">
+              Pilotage DROM / UE / Hors UE
+            </h2>
             <p className="text-slate-100/80 max-w-xl mx-auto">
-              Factures, OM/OMR, transport, concurrence, veille réglementaire, IA Export. Données sécurisées Supabase.
+              Factures, OM/OMR, transport, concurrence, veille réglementaire, IA Export.
+              Accès sécurisé via Supabase.
             </p>
           </div>
         </div>
       </div>
 
+      {/* LOGIN */}
       <div className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md space-y-6">
           <div className="flex items-center gap-3">
@@ -55,7 +111,7 @@ export default function Login() {
             </div>
             <div>
               <p className="text-sm text-slate-200/80">Orliman Export</p>
-              <p className="text-lg font-semibold text-white">Connexion sécurisée</p>
+              <p className="text-lg font-semibold text-white">Connexion</p>
             </div>
           </div>
 
@@ -63,9 +119,10 @@ export default function Login() {
             <CardHeader>
               <CardTitle>Se connecter</CardTitle>
               <CardDescription className="text-slate-300">
-                Email + mot de passe (Supabase Auth). Après connexion : redirection vers le Hub.
+                Connecte-toi pour accéder à l’outil. En cas de première connexion, définis ton mot de passe.
               </CardDescription>
             </CardHeader>
+
             <CardContent>
               <form className="space-y-4" onSubmit={onSubmit}>
                 <div className="space-y-2">
@@ -76,9 +133,11 @@ export default function Login() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="vous@exemple.com"
+                    autoComplete="email"
                     className="bg-slate-950 border-slate-800 text-white"
                   />
                 </div>
+
                 <div className="space-y-2">
                   <label className="text-sm text-slate-200">Mot de passe</label>
                   <Input
@@ -87,8 +146,24 @@ export default function Login() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
+                    autoComplete="current-password"
                     className="bg-slate-950 border-slate-800 text-white"
                   />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={goForgotPassword}
+                    className="text-sm text-cyan-200 hover:underline"
+                  >
+                    Mot de passe oublié / Première connexion
+                  </button>
+
+                  {/* Si tu veux, tu peux afficher la destination */}
+                  <span className="text-xs text-slate-500">
+                    → {nextPath}
+                  </span>
                 </div>
 
                 {error && (
@@ -103,14 +178,14 @@ export default function Login() {
                   className="w-full h-11 font-semibold"
                   disabled={pending || isLoading}
                 >
-                  {pending ? "Connexion..." : "Se connecter"}
+                  {pending || isLoading ? "Connexion..." : "Se connecter"}
                 </Button>
               </form>
             </CardContent>
           </Card>
 
           <div className="text-center text-sm text-slate-400">
-            Pas de compte ? Demandez une création dans Supabase Auth (admin) ou utilisez le compte existant.
+            Besoin d’un accès ? Demande à l’administrateur de créer ton compte.
           </div>
         </div>
       </div>
