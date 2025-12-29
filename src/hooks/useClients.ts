@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
+import { fetchAllWithPagination } from "@/utils/supabasePagination";
 
 type ExportZone = "UE" | "DROM" | "Hors UE" | "France" | string;
 type SalesChannel = "direct" | "indirect" | "depositaire" | "grossiste" | string | null;
@@ -49,28 +50,42 @@ export function useClients() {
     setIsLoading(true);
     setError(null);
 
+    const pageSize = 1000;
+
     const fullSelect =
       "id,libelle_client,email,telephone,adresse,cp,ville,pays,tva_number,notes,code_ets,export_zone,drom_code,canal,sales_channel,depositaire_id,groupement_id,groupement,groupement_remise,default_destination";
     const minimalSelect = "id,libelle_client,pays,export_zone,drom_code,default_destination,tva_number,email";
 
     try {
-      let query = supabase.from("clients").select(fullSelect).order("libelle_client", { ascending: true }).limit(3000);
-      const { data, error: sbError, status } = await query;
-
-      if (sbError && status === 400) {
-        // fallback minimal si colonne manquante
-        const { data: dataMin, error: errMin } = await supabase
-          .from("clients")
-          .select(minimalSelect)
-          .order("libelle_client", { ascending: true })
-          .limit(3000);
-        if (errMin) throw errMin;
-        setClients((dataMin ?? []) as ClientRow[]);
+      try {
+        const all = await fetchAllWithPagination<ClientRow>(
+          (from, to) =>
+            supabase
+              .from("clients")
+              .select(fullSelect)
+              .order("libelle_client", { ascending: true })
+              .range(from, to),
+          pageSize,
+        );
+        setClients(all);
         return;
+      } catch (e: any) {
+        // fallback minimal si colonne manquante / select invalide (400)
+        if (e?.status === 400) {
+          const allMin = await fetchAllWithPagination<ClientRow>(
+            (from, to) =>
+              supabase
+                .from("clients")
+                .select(minimalSelect)
+                .order("libelle_client", { ascending: true })
+                .range(from, to),
+            pageSize,
+          );
+          setClients(allMin);
+          return;
+        }
+        throw e;
       }
-
-      if (sbError) throw sbError;
-      setClients((data ?? []) as ClientRow[]);
     } catch (e: any) {
       setError(e?.message || "Erreur lors du chargement des clients.");
       setClients([]);
