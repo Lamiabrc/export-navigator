@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, RefreshCw, Download } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
+import { fetchAllWithPagination } from "@/utils/supabasePagination";
 
 type ExportZone = "UE" | "DROM" | "Suisse" | "Hors UE" | "France";
 type SalesChannel = "direct" | "indirect" | "depositaire" | "grossiste";
@@ -113,62 +114,72 @@ export default function Clients() {
   // Options DROM/COM (tu peux en ajouter si besoin)
   const dromOptions = useMemo(
     () => ["GP", "MQ", "GF", "RE", "YT", "SPM", "BL", "MF", "NC", "PF", "WF", "TF", "OUTRE-MER"] as const,
-    []
+    [],
   );
 
   async function fetchClients() {
+    if (!SUPABASE_ENV_OK) {
+      setError("Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).");
+      setClients([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError("");
 
     try {
-      let q = supabase
-        .from("clients")
-        .select(
-          "id,code_ets,libelle_client,telephone,adresse,cp,ville,pays,export_zone,drom_code,canal,sales_channel,depositaire_id,groupement_id,groupement"
-        )
-        .order("libelle_client", { ascending: true })
-        .limit(2000);
+      const pageSize = 1000;
 
-      // Recherche
-      const s = search.trim();
-      if (s) {
-        // PostgREST OR: conditions séparées par des virgules => on évite les virgules dans la valeur
-        const safe = s.replaceAll(",", " ").replaceAll("'", " ");
-        q = q.or(
-          [
-            `libelle_client.ilike.%${safe}%`,
-            `code_ets.ilike.%${safe}%`,
-            `pays.ilike.%${safe}%`,
-            `ville.ilike.%${safe}%`,
-          ].join(",")
-        );
-      }
+      const all = await fetchAllWithPagination<ClientRow>((from, to) => {
+        let q = supabase
+          .from("clients")
+          .select(
+            "id,code_ets,libelle_client,telephone,adresse,cp,ville,pays,export_zone,drom_code,canal,sales_channel,depositaire_id,groupement_id,groupement",
+          );
 
-      if (zoneFilter) q = q.eq("export_zone", zoneFilter);
-      if (dromFilter) q = q.eq("drom_code", dromFilter);
+        // Recherche
+        const s = search.trim();
+        if (s) {
+          // PostgREST OR: conditions séparées par des virgules => on évite les virgules dans la valeur
+          const safe = s.replaceAll(",", " ").replaceAll("'", " ");
+          q = q.or(
+            [
+              `libelle_client.ilike.%${safe}%`,
+              `code_ets.ilike.%${safe}%`,
+              `pays.ilike.%${safe}%`,
+              `ville.ilike.%${safe}%`,
+            ].join(","),
+          );
+        }
 
-      const p = paysFilter.trim();
-      if (p) q = q.ilike("pays", `%${p}%`);
+        if (zoneFilter) q = q.eq("export_zone", zoneFilter);
+        if (dromFilter) q = q.eq("drom_code", dromFilter);
 
-      if (salesChannelFilter) q = q.eq("sales_channel", salesChannelFilter);
+        const p = paysFilter.trim();
+        if (p) q = q.ilike("pays", `%${p}%`);
 
-      if (depoFilter === "DEPOS_ONLY") {
-        // Dépositaire = celui qui est lui-même un dépositaire
-        q = q.eq("sales_channel", "depositaire");
-      } else if (depoFilter === "ATTACHED_TO_DEPOS") {
-        // Client rattaché à un dépositaire
-        q = q.not("depositaire_id", "is", null);
-      }
+        if (salesChannelFilter) q = q.eq("sales_channel", salesChannelFilter);
 
-      const g = groupementFilter.trim();
-      if (g) q = q.ilike("groupement", `%${g}%`);
+        if (depoFilter === "DEPOS_ONLY") {
+          // Dépositaire = celui qui est lui-même un dépositaire
+          q = q.eq("sales_channel", "depositaire");
+        } else if (depoFilter === "ATTACHED_TO_DEPOS") {
+          // Client rattaché à un dépositaire
+          q = q.not("depositaire_id", "is", null);
+        }
 
-      const { data, error } = await q;
-      if (error) throw error;
+        const g = groupementFilter.trim();
+        if (g) q = q.ilike("groupement", `%${g}%`);
 
-      setClients((data ?? []) as ClientRow[]);
+        // Ordre stable + pagination
+        return q.order("libelle_client", { ascending: true }).range(from, to);
+      }, pageSize);
+
+      setClients(all);
     } catch (e: any) {
       setError(e?.message || "Erreur lors du chargement des clients.");
+      setClients([]);
     } finally {
       setLoading(false);
     }
@@ -298,8 +309,8 @@ export default function Clients() {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              ⚠️ Si tu as mis la DB en lecture seule (RLS), l’ajout/suppression depuis l’app sera refusé.
-              Dans ce cas, continue l’import via Supabase, et on activera une policy “admin” plus tard.
+              ⚠️ Si tu as mis la DB en lecture seule (RLS), l’ajout/suppression depuis l’app sera refusé. Dans ce cas,
+              continue l’import via Supabase, et on activera une policy “admin” plus tard.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -442,7 +453,11 @@ export default function Clients() {
 
               <div className="space-y-1">
                 <Label>Groupement (contient)</Label>
-                <Input value={groupementFilter} onChange={(e) => setGroupementFilter(e.target.value)} placeholder="ex: ABC / ..." />
+                <Input
+                  value={groupementFilter}
+                  onChange={(e) => setGroupementFilter(e.target.value)}
+                  placeholder="ex: ABC / ..."
+                />
               </div>
             </div>
 
