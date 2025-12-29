@@ -1,3 +1,5 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { normalizeSheet, type RawOperationRow } from "../src/lib/parsers/operationsSheet.js";
 import { normalizeSheet, type RawOperationRow } from '../src/lib/parsers/operationsSheet.js';
 
 type GraphRangeResponse = {
