@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import type { Flow } from "@/types";
 import { mockFlows } from "@/data/mockData";
 import { supabase, SUPABASE_ENV_OK } from "@/lib/supabaseClient";
+import { fetchAllWithPagination } from "@/utils/supabasePagination";
 
 type FlowRow = {
   id: string;
@@ -57,16 +58,24 @@ export function useFlows() {
     setIsLoading(true);
     setError("");
 
+    const pageSize = 1000;
+
+    const fetchAllFlowsRows = async (): Promise<FlowRow[]> => {
+      return await fetchAllWithPagination<FlowRow>(
+        (from, to) =>
+          supabase
+            .from("flows")
+            .select("id,flow_code,data,created_at,updated_at")
+            // ordre stable pour paginer correctement
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: false })
+            .range(from, to),
+        pageSize,
+      );
+    };
+
     try {
-      const { data, error } = await supabase
-        .from("flows")
-        .select("id,flow_code,data,created_at,updated_at")
-        .order("created_at", { ascending: false })
-        .limit(2000);
-
-      if (error) throw error;
-
-      const rows = (data ?? []) as FlowRow[];
+      const rows = await fetchAllFlowsRows();
 
       // Seed automatique au premier lancement si table vide (dev)
       if (rows.length === 0 && mockFlows?.length) {
@@ -81,20 +90,28 @@ export function useFlows() {
         const seedRes = await supabase.from("flows").upsert(seedPayload, { onConflict: "flow_code" });
         if (seedRes.error) throw seedRes.error;
 
-        const again = await supabase
-          .from("flows")
-          .select("id,flow_code,data,created_at,updated_at")
-          .order("created_at", { ascending: false })
-          .limit(2000);
-
-        if (again.error) throw again.error;
-
-        const againRows = (again.data ?? []) as FlowRow[];
-        setFlows(againRows.map((row) => ({ ...rowToFlow(row), data: validateFlowData((row as any).data) } as any)));
+        const againRows = await fetchAllFlowsRows();
+        setFlows(
+          againRows.map(
+            (row) =>
+              ({
+                ...rowToFlow(row),
+                data: validateFlowData((row as any).data),
+              }) as any,
+          ),
+        );
         return;
       }
 
-      setFlows(rows.map((row) => ({ ...rowToFlow(row), data: validateFlowData((row as any).data) } as any)));
+      setFlows(
+        rows.map(
+          (row) =>
+            ({
+              ...rowToFlow(row),
+              data: validateFlowData((row as any).data),
+            }) as any,
+        ),
+      );
     } catch (e: any) {
       setError(e?.message || "Erreur lors du chargement des flows.");
       setFlows([]);
