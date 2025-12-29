@@ -11,6 +11,7 @@ import {
 } from "@/data/referenceRates";
 
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
+import { fetchAllWithPagination } from "@/utils/supabasePagination";
 
 type OctroiMerRateWithHs = OctroiMerRate & { hs_code?: string };
 
@@ -87,8 +88,21 @@ export function useReferenceRates() {
   const fetchHsCatalogAsOmRates = useCallback(async (): Promise<OctroiMerRateWithHs[]> => {
     if (!envOk) return [];
 
-    const { data, error } = await supabase.from("export_hs_catalog").select("*").limit(5000);
-    if (error || !data?.length) return [];
+    const pageSize = 1000;
+
+    const data = await fetchAllWithPagination<any>(
+      (from, to) =>
+        supabase
+          .from("export_hs_catalog")
+          .select("*")
+          // ordre stable conseillé pour que la pagination soit fiable
+          .order("hs_code", { ascending: true })
+          .order("destination", { ascending: true })
+          .range(from, to),
+      pageSize,
+    );
+
+    if (!data?.length) return [];
 
     return data
       .map((row: any) => {
