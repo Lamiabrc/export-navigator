@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useProducts } from "@/hooks/useProducts";
 import { getZoneFromDestination } from "@/data/referenceRates";
+import { fetchAllWithPagination } from "@/utils/supabasePagination";
 
 import {
   Activity,
@@ -163,14 +164,20 @@ export default function CommandCenter() {
 
     try {
       // On lit un set minimal. Si tu as énormément de clients, on remplacera par une VIEW agrégée.
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, export_zone, drom_code, canal")
-        .limit(10000);
+      // IMPORTANT : on pagine pour éviter les plafonds (1000/10000/etc).
+      const pageSize = 1000;
 
-      if (error) throw error;
+      const rows = await fetchAllWithPagination<ClientMini>(
+        (from, to) =>
+          supabase
+            .from("clients")
+            .select("id, export_zone, drom_code, canal")
+            // ordre stable indispensable pour une pagination fiable
+            .order("id", { ascending: true })
+            .range(from, to),
+        pageSize,
+      );
 
-      const rows = (data ?? []) as ClientMini[];
       const total = rows.length;
 
       const byZone: Record<Zone, number> = { UE: 0, DROM: 0, "Hors UE": 0 };
