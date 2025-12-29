@@ -1,85 +1,68 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export default function SetPassword() {
-  const [password, setPassword] = useState("");
-  const [password2, setPassword2] = useState("");
-  const [ready, setReady] = useState(false);
+  const { isAuthenticated, isLoading, setPassword } = useAuth();
+  const [p1, setP1] = useState("");
+  const [p2, setP2] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Important : laisse Supabase “récupérer” la session depuis l’URL (reset/invite)
-    const init = async () => {
-      const { data } = await supabase.auth.getSession();
-      // Si la session est déjà là, on est ready.
-      setReady(!!data.session);
-    };
-
-    init();
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      // Quand l’utilisateur arrive depuis un lien recovery/invite, session peut apparaître ici.
-      setReady(!!session);
-    });
-
-    return () => sub.subscription.unsubscribe();
+    // Si l'utilisateur arrive depuis l'email, la session se crée automatiquement via l'URL,
+    // puis isAuthenticated passera à true.
   }, []);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (password.length < 8) return setError("Mot de passe trop court (min 8).");
-    if (password !== password2) return setError("Les mots de passe ne correspondent pas.");
+    if (p1.length < 8) return setError("Mot de passe trop court (min 8).");
+    if (p1 !== p2) return setError("Les mots de passe ne correspondent pas.");
+    if (!isAuthenticated) return setError("Lien invalide ou expiré. Redemande un lien.");
 
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) return setError("Lien invalide ou expiré. Demandez un nouveau lien.");
-
-    const { error } = await supabase.auth.updateUser({ password });
-    if (error) return setError(error.message);
+    const { error } = await setPassword(p1);
+    if (error) return setError(error);
 
     setDone(true);
-    // au choix: rediriger direct vers hub
-    setTimeout(() => navigate("/hub"), 500);
+    navigate("/hub", { replace: true });
   };
 
-  if (!ready && !done) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6">
-        <p>Chargement… (si rien ne se passe, lien expiré)</p>
-      </div>
-    );
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50">Chargement…</div>;
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6">
+    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950 text-slate-50">
       <div className="w-full max-w-md space-y-4">
         <h1 className="text-xl font-semibold">Choisir un mot de passe</h1>
 
         {done ? (
-          <p>Mot de passe défini ✅ Redirection…</p>
+          <p>Mot de passe défini ✅</p>
         ) : (
-          <form className="space-y-3" onSubmit={onSubmit}>
+          <form onSubmit={onSubmit} className="space-y-3">
             <Input
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              required
+              value={p1}
+              onChange={(e) => setP1(e.target.value)}
               placeholder="Nouveau mot de passe"
-              required
+              className="bg-slate-950 border-slate-800 text-white"
             />
             <Input
               type="password"
-              value={password2}
-              onChange={(e) => setPassword2(e.target.value)}
-              placeholder="Confirmer le mot de passe"
               required
+              value={p2}
+              onChange={(e) => setP2(e.target.value)}
+              placeholder="Confirmer le mot de passe"
+              className="bg-slate-950 border-slate-800 text-white"
             />
-            {error && <p className="text-red-500 text-sm">{error}</p>}
+            {error && <p className="text-sm text-red-300">{error}</p>}
             <Button className="w-full" type="submit">Valider</Button>
           </form>
         )}
