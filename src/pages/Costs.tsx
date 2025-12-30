@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Download, Receipt } from "lucide-react";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { fetchAllWithPagination } from "@/utils/supabasePagination";
+import { isMissingTableError } from "@/domain/calc";
 
 type CostRow = {
   id: string;
@@ -17,6 +18,8 @@ type CostRow = {
   market_zone: string | null;
   incoterm: string | null;
   client_id: string | null;
+  product_id: string | null;
+  destination: string | null;
 };
 
 function toCsv(rows: Record<string, any>[]) {
@@ -65,15 +68,20 @@ export default function Costs() {
         (from, to) =>
           supabase
             .from("cost_lines")
-            .select("id,date,cost_type,amount,currency,market_zone,incoterm,client_id")
+            .select("id,date,cost_type,amount,currency,market_zone,incoterm,client_id,product_id,destination")
             .order("date", { ascending: false })
             .range(from, to),
         pageSize,
       );
       setRows(data ?? []);
     } catch (e: any) {
-      setError(e?.message || "Erreur chargement charges");
-      setRows([]);
+      if (isMissingTableError(e)) {
+        setError("Table cost_lines manquante dans Supabase. Ajoute la migration SQL fournie pour activer la page.");
+        setRows([]);
+      } else {
+        setError(e?.message || "Erreur chargement charges");
+        setRows([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -87,7 +95,17 @@ export default function Costs() {
     const query = q.trim().toLowerCase();
     if (!query) return rows;
     return rows.filter((r) => {
-      const hay = [r.cost_type, r.market_zone, r.incoterm, r.client_id, r.currency, r.date, String(r.amount ?? "")]
+      const hay = [
+        r.cost_type,
+        r.market_zone,
+        r.destination,
+        r.incoterm,
+        r.client_id,
+        r.product_id,
+        r.currency,
+        r.date,
+        String(r.amount ?? ""),
+      ]
         .join(" ")
         .toLowerCase();
       return hay.includes(query);
@@ -104,8 +122,10 @@ export default function Costs() {
         amount: r.amount ?? 0,
         currency: r.currency ?? "",
         market_zone: r.market_zone ?? "",
+        destination: r.destination ?? "",
         incoterm: r.incoterm ?? "",
         client_id: r.client_id ?? "",
+        product_id: r.product_id ?? "",
       })),
     );
     downloadText(csv, `costs_${new Date().toISOString().slice(0, 10)}.csv`);
@@ -139,8 +159,8 @@ export default function Costs() {
         </div>
 
         {error ? (
-          <Card className="border-red-200">
-            <CardContent className="pt-6 text-sm text-red-600">{error}</CardContent>
+          <Card className={error.toLowerCase().includes("manquante") ? "border-amber-300 bg-amber-50" : "border-red-200"}>
+            <CardContent className="pt-6 text-sm text-foreground">{error}</CardContent>
           </Card>
         ) : null}
 
