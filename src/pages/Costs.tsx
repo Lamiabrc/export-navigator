@@ -5,22 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Download, Receipt } from "lucide-react";
-import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
-import { fetchAllWithPagination } from "@/utils/supabasePagination";
-import { isMissingTableError } from "@/domain/calc";
-
-type CostRow = {
-  id: string;
-  date: string | null;
-  cost_type: string | null; // transport, douane, stockage...
-  amount: number | null;
-  currency: string | null;
-  market_zone: string | null;
-  incoterm: string | null;
-  client_id: string | null;
-  product_id: string | null;
-  destination: string | null;
-};
+import { useCosts } from "@/hooks/useCosts";
 
 function toCsv(rows: Record<string, any>[]) {
   if (!rows.length) return "";
@@ -46,50 +31,8 @@ function downloadText(content: string, filename: string) {
 }
 
 export default function Costs() {
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState("");
-  const [rows, setRows] = React.useState<CostRow[]>([]);
+  const { rows, isLoading, error, warning, refresh } = useCosts();
   const [q, setQ] = React.useState("");
-
-  const fetchCosts = React.useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    if (!SUPABASE_ENV_OK) {
-      setError("Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).");
-      setRows([]);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const pageSize = 1000;
-      const data = await fetchAllWithPagination<CostRow>(
-        (from, to) =>
-          supabase
-            .from("cost_lines")
-            .select("id,date,cost_type,amount,currency,market_zone,incoterm,client_id,product_id,destination")
-            .order("date", { ascending: false })
-            .range(from, to),
-        pageSize,
-      );
-      setRows(data ?? []);
-    } catch (e: any) {
-      if (isMissingTableError(e)) {
-        setError("Table cost_lines manquante dans Supabase. Ajoute la migration SQL fournie pour activer la page.");
-        setRows([]);
-      } else {
-        setError(e?.message || "Erreur chargement charges");
-        setRows([]);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    void fetchCosts();
-  }, [fetchCosts]);
 
   const filtered = React.useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -147,20 +90,20 @@ export default function Costs() {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={exportCsv} disabled={loading || filtered.length === 0}>
+            <Button variant="outline" onClick={exportCsv} disabled={isLoading || filtered.length === 0}>
               <Download className="h-4 w-4 mr-2" />
               Export CSV
             </Button>
-            <Button variant="outline" onClick={fetchCosts} disabled={loading} className="gap-2">
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            <Button variant="outline" onClick={refresh} disabled={isLoading} className="gap-2">
+              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
               Actualiser
             </Button>
           </div>
         </div>
 
-        {error ? (
-          <Card className={error.toLowerCase().includes("manquante") ? "border-amber-300 bg-amber-50" : "border-red-200"}>
-            <CardContent className="pt-6 text-sm text-foreground">{error}</CardContent>
+        {error || warning ? (
+          <Card className={(warning || "").toLowerCase().includes("manquante") ? "border-amber-300 bg-amber-50" : "border-red-200"}>
+            <CardContent className="pt-6 text-sm text-foreground">{error || warning}</CardContent>
           </Card>
         ) : null}
 
@@ -190,7 +133,7 @@ export default function Costs() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {isLoading ? (
                   <tr><td className="py-3 text-muted-foreground" colSpan={7}>Chargement…</td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td className="py-3 text-muted-foreground" colSpan={7}>Aucune donnée.</td></tr>

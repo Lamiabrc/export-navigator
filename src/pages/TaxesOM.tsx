@@ -4,77 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Scale } from "lucide-react";
-import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
-import { isMissingTableError } from "@/domain/calc";
+import { useTaxesOm } from "@/hooks/useTaxesOm";
 
 export default function TaxesOM() {
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState("");
-  const [taxRulesCount, setTaxRulesCount] = React.useState(0);
-  const [omRulesCount, setOmRulesCount] = React.useState(0);
-  const [vatRatesCount, setVatRatesCount] = React.useState(0);
-
-  const load = React.useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    if (!SUPABASE_ENV_OK) {
-      setError("Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const [taxRes, omRes, vatRes] = await Promise.all([
-        supabase.from("tax_rules_extra").select("id", { count: "exact", head: true }),
-        supabase.from("om_rates").select("id", { count: "exact", head: true }),
-        supabase.from("vat_rates").select("id", { count: "exact", head: true }),
-      ]);
-
-      const missingTables: string[] = [];
-
-      if (taxRes.error) {
-        if (isMissingTableError(taxRes.error)) missingTables.push("tax_rules_extra");
-        else throw taxRes.error;
-        setTaxRulesCount(0);
-      } else {
-        setTaxRulesCount(taxRes.count ?? 0);
-      }
-
-      if (omRes.error) {
-        if (isMissingTableError(omRes.error)) missingTables.push("om_rates");
-        else throw omRes.error;
-        setOmRulesCount(0);
-      } else {
-        setOmRulesCount(omRes.count ?? 0);
-      }
-
-      if (vatRes.error) {
-        if (isMissingTableError(vatRes.error)) missingTables.push("vat_rates");
-        else throw vatRes.error;
-        setVatRatesCount(0);
-      } else {
-        setVatRatesCount(vatRes.count ?? 0);
-      }
-
-      if (missingTables.length) {
-        setError(`Tables manquantes côté Supabase: ${missingTables.join(", ")}. Ajoute les migrations pour activer la page.`);
-      } else {
-        setError("");
-      }
-    } catch (e: any) {
-      setError(e?.message || "Erreur chargement règles taxes/OM");
-      setTaxRulesCount(0);
-      setOmRulesCount(0);
-      setVatRatesCount(0);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    void load();
-  }, [load]);
+  const { counts, isLoading, error, warning, refresh } = useTaxesOm();
 
   return (
     <MainLayout>
@@ -91,18 +24,18 @@ export default function TaxesOM() {
           </p>
         </div>
 
-        {error ? (
-          <Card className={error.toLowerCase().includes("manquante") ? "border-amber-300 bg-amber-50" : "border-red-200"}>
-            <CardContent className="pt-6 text-sm text-foreground">{error}</CardContent>
+        {error || warning ? (
+          <Card className={(warning || "").toLowerCase().includes("manquante") ? "border-amber-300 bg-amber-50" : "border-red-200"}>
+            <CardContent className="pt-6 text-sm text-foreground">{error || warning}</CardContent>
           </Card>
         ) : null}
 
         <div className="flex flex-wrap gap-2 items-center">
-          <Badge variant="secondary">VAT rates: {loading ? "…" : vatRatesCount}</Badge>
-          <Badge variant="secondary">Tax rules: {loading ? "…" : taxRulesCount}</Badge>
-          <Badge variant="secondary">OM rules: {loading ? "…" : omRulesCount}</Badge>
-          <Button variant="outline" onClick={load} disabled={loading} className="ml-auto gap-2">
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          <Badge variant="secondary">VAT rates: {isLoading ? "…" : counts.vatRates}</Badge>
+          <Badge variant="secondary">Tax rules: {isLoading ? "…" : counts.taxRulesExtra}</Badge>
+          <Badge variant="secondary">OM rules: {isLoading ? "…" : counts.omRates}</Badge>
+          <Button variant="outline" onClick={refresh} disabled={isLoading} className="ml-auto gap-2">
+            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
             Actualiser
           </Button>
         </div>
