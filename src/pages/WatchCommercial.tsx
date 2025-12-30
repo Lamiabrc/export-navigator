@@ -169,6 +169,14 @@ export default function WatchCommercial() {
           </div>
         </div>
 
+        <Card className="border-amber-300 bg-amber-50">
+          <CardContent className="pt-4 text-sm text-foreground">
+            Données mockées pour rester robuste si les tables Supabase (ex: <code>competitive_prices</code>,{" "}
+            <code>pricing_strategy</code>) ne sont pas encore créées. Branche ces tables plus tard pour remplacer les
+            placeholders.
+          </CardContent>
+        </Card>
+
         {/* Filters */}
         <Card>
           <CardHeader className="pb-3">
@@ -399,7 +407,7 @@ export default function WatchCommercial() {
                   <CardDescription>Prix (index) vs Valeur perçue (score). Bulles = acteurs.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="rounded-lg border bg-white p-3">
+                  <div className="rounded-lg border bg-card p-3">
                     <div className="flex items-center justify-between">
                       <div className="text-xs text-muted-foreground">Valeur (↑)</div>
                       <div className="text-xs text-muted-foreground">Prix (→)</div>
@@ -432,7 +440,7 @@ export default function WatchCommercial() {
                             <div
                               className={[
                                 "flex items-center gap-2 rounded-full border px-3 py-1 text-xs shadow-sm",
-                                p.type === "us" ? "bg-primary text-primary-foreground border-primary" : "bg-white text-foreground",
+                                p.type === "us" ? "bg-primary text-primary-foreground border-primary" : "bg-card text-foreground",
                               ].join(" ")}
                             >
                               <span className="font-medium">{p.name}</span>
@@ -460,7 +468,7 @@ export default function WatchCommercial() {
                   <CardDescription>Forces/faiblesses par acteur, par segment.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="rounded-lg border bg-white p-3 text-sm">
+                  <div className="rounded-lg border bg-card p-3 text-sm">
                     <div className="font-medium">Lecture rapide</div>
                     <Separator className="my-2" />
                     <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
@@ -470,7 +478,7 @@ export default function WatchCommercial() {
                     </ul>
                   </div>
 
-                  <div className="rounded-lg border bg-white p-3 text-sm">
+                  <div className="rounded-lg border bg-card p-3 text-sm">
                     <div className="font-medium">Actions suggérées</div>
                     <Separator className="my-2" />
                     <div className="flex flex-wrap gap-2">
