@@ -29,6 +29,8 @@ import TaxesOM from "@/pages/TaxesOM";
 import WatchCommercial from "@/pages/WatchCommercial";
 import WatchRegulatory from "@/pages/WatchRegulatory";
 
+import ReferenceLibrary from "@/pages/ReferenceLibrary";
+
 import Admin from "@/pages/Admin";
 import Assistant from "@/pages/Assistant";
 import Settings from "@/pages/Settings";
@@ -62,9 +64,12 @@ export default function App() {
                 <Route path="/simulator" element={<ProtectedRoute><Simulator /></ProtectedRoute>} />
                 <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
 
+                {/* Reference / Bible export */}
+                <Route path="/reference-library" element={<ProtectedRoute><ReferenceLibrary /></ProtectedRoute>} />
+                <Route path="/reference" element={<Navigate to="/reference-library" replace />} />
+
                 {/* Contrôle documents (secondaire) */}
                 <Route path="/verifier" element={<ProtectedRoute><InvoiceVerification /></ProtectedRoute>} />
-                {/* Compat si tu avais un lien historique */}
                 <Route path="/invoice-verification" element={<Navigate to="/verifier" replace />} />
 
                 {/* Data */}
