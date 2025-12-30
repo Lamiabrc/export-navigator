@@ -93,7 +93,7 @@ Assurer la maîtrise et la cohérence des opérations d'export en centralisant :
 ### Mode Web (Développement)
 
 ```bash
-# Installer les dépendances
+# Installer les dépendances (registre npm public forcé via .npmrc pour éviter les 403)
 npm install
 
 # Lancer le serveur de développement
