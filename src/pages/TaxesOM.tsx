@@ -4,47 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Scale } from "lucide-react";
-import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
+import { useTaxesOm } from "@/hooks/useTaxesOm";
 
 export default function TaxesOM() {
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState("");
-  const [taxRulesCount, setTaxRulesCount] = React.useState(0);
-  const [omRulesCount, setOmRulesCount] = React.useState(0);
-
-  const load = React.useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    if (!SUPABASE_ENV_OK) {
-      setError("Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const [taxRes, omRes] = await Promise.all([
-        supabase.from("tax_rules").select("id", { count: "exact", head: true }),
-        supabase.from("om_rules").select("id", { count: "exact", head: true }),
-      ]);
-
-      if (taxRes.error) throw taxRes.error;
-      if (omRes.error) throw omRes.error;
-
-      setTaxRulesCount(taxRes.count ?? 0);
-      setOmRulesCount(omRes.count ?? 0);
-    } catch (e: any) {
-      setError(e?.message || "Erreur chargement règles taxes/OM");
-      setTaxRulesCount(0);
-      setOmRulesCount(0);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    void load();
-  }, [load]);
+  const { counts, isLoading, error, warning, refresh } = useTaxesOm();
 
   return (
     <MainLayout>
@@ -56,21 +19,23 @@ export default function TaxesOM() {
             Taxes & OM
           </h1>
           <p className="text-sm text-muted-foreground">
-            Référentiels: <code className="text-xs">tax_rules</code> et <code className="text-xs">om_rules</code>
+            Référentiels: <code className="text-xs">vat_rates</code>,{" "}
+            <code className="text-xs">tax_rules_extra</code> et <code className="text-xs">om_rates</code>
           </p>
         </div>
 
-        {error ? (
-          <Card className="border-red-200">
-            <CardContent className="pt-6 text-sm text-red-600">{error}</CardContent>
+        {error || warning ? (
+          <Card className={(warning || "").toLowerCase().includes("manquante") ? "border-amber-300 bg-amber-50" : "border-red-200"}>
+            <CardContent className="pt-6 text-sm text-foreground">{error || warning}</CardContent>
           </Card>
         ) : null}
 
         <div className="flex flex-wrap gap-2 items-center">
-          <Badge variant="secondary">Tax rules: {loading ? "…" : taxRulesCount}</Badge>
-          <Badge variant="secondary">OM rules: {loading ? "…" : omRulesCount}</Badge>
-          <Button variant="outline" onClick={load} disabled={loading} className="ml-auto gap-2">
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          <Badge variant="secondary">VAT rates: {isLoading ? "…" : counts.vatRates}</Badge>
+          <Badge variant="secondary">Tax rules: {isLoading ? "…" : counts.taxRulesExtra}</Badge>
+          <Badge variant="secondary">OM rules: {isLoading ? "…" : counts.omRates}</Badge>
+          <Button variant="outline" onClick={refresh} disabled={isLoading} className="ml-auto gap-2">
+            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
             Actualiser
           </Button>
         </div>
