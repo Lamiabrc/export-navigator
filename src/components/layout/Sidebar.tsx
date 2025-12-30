@@ -11,6 +11,7 @@ import {
   LogOut,
   Bot,
 } from "lucide-react";
+import { BrandLogo } from "../BrandLogo";
 
 type NavItem = {
   name: string;
@@ -131,13 +132,11 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
     >
       {/* Header */}
       <div className="flex h-16 items-center gap-3 px-6 border-b border-border">
-        <div className="h-9 w-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-semibold">
-          OR
-        </div>
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-foreground truncate">Export Navigator</p>
-          <p className="text-xs text-muted-foreground truncate">DROM / UE / Hors UE</p>
-        </div>
+        <BrandLogo
+          imageClassName="h-9"
+          titleClassName="text-xs sm:text-sm font-semibold text-foreground"
+          subtitleClassName="text-[11px] text-muted-foreground"
+        />
       </div>
 
       {/* Nav */}

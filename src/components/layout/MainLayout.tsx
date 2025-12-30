@@ -5,6 +5,7 @@ import { Menu, Search, FileCheck2, Bot, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
+import { BrandLogo } from "../BrandLogo";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -67,12 +68,17 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
               <Menu className="h-5 w-5" />
             </button>
 
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-foreground truncate">
-                Export Navigator
-              </div>
-              <div className="text-xs text-muted-foreground truncate">
-                Hub contrôle facture, veille, IA Export
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <BrandLogo className="hidden sm:flex" />
+              <BrandLogo withText={false} className="sm:hidden" imageClassName="h-8" />
+
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-foreground truncate">
+                  Export Navigator
+                </div>
+                <div className="text-xs text-muted-foreground truncate">
+                  Hub contrôle facture, veille, IA Export
+                </div>
               </div>
             </div>
 

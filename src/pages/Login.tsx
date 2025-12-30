@@ -11,6 +11,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
 
 function getErrorMessage(err: unknown): string {
   if (!err) return "Une erreur inconnue est survenue.";
@@ -105,15 +106,12 @@ export default function Login() {
       {/* LOGIN */}
       <div className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-cyan-500/20 border border-cyan-300/40 flex items-center justify-center text-cyan-100 font-semibold">
-              OR
-            </div>
-            <div>
-              <p className="text-sm text-slate-200/80">Orliman Export</p>
-              <p className="text-lg font-semibold text-white">Connexion</p>
-            </div>
-          </div>
+          <BrandLogo
+            className="flex items-center gap-3"
+            imageClassName="h-11 drop-shadow-lg"
+            titleClassName="text-base font-semibold text-white"
+            subtitleClassName="text-sm text-slate-200/80"
+          />
 
           <Card className="bg-slate-900/80 border-slate-800 text-slate-50 shadow-xl shadow-cyan-500/10">
             <CardHeader>
