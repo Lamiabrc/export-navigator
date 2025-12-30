@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export default function Welcome() {
   const navigate = useNavigate();
@@ -19,12 +20,16 @@ export default function Welcome() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/55 to-slate-950/85" />
       </div>
 
-      <div className="absolute top-6 inset-x-0 flex justify-center">
-        <div className="flex items-center gap-3 px-6 py-2 rounded-full bg-white/10 backdrop-blur-lg border border-white/15 shadow-2xl">
-          <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center text-white font-semibold">
-            OR
-          </div>
-          <span className="text-sm uppercase tracking-[0.25em] text-slate-100">Export Navigator</span>
+      <div className="absolute top-6 inset-x-0 flex justify-center px-4">
+        <div className="flex items-center gap-3 px-6 py-2 rounded-full bg-black/30 backdrop-blur-lg border border-white/20 shadow-2xl">
+          <BrandLogo
+            className="text-white"
+            textClassName="leading-tight min-w-0"
+            titleClassName="text-sm font-semibold text-white uppercase tracking-[0.2em]"
+            subtitleClassName="text-xs text-white/80"
+            locationClassName="text-[11px] text-white/70"
+            imageClassName="h-8 drop-shadow-lg"
+          />
         </div>
       </div>
 

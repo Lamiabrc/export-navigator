@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export default function ForgotPassword() {
   const { sendPasswordLink } = useAuth();
@@ -22,6 +23,16 @@ export default function ForgotPassword() {
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950 text-slate-50">
       <div className="w-full max-w-md space-y-4">
+        <div className="flex justify-center">
+          <BrandLogo
+            className="justify-center"
+            imageClassName="h-12 drop-shadow-lg"
+            titleClassName="text-base font-semibold text-white"
+            subtitleClassName="text-sm text-slate-200/80"
+            locationClassName="text-xs text-slate-200/80"
+          />
+        </div>
+
         <h1 className="text-xl font-semibold">Définir / réinitialiser le mot de passe</h1>
 
         {sent ? (
