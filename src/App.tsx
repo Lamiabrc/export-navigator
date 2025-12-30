@@ -8,6 +8,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
+import { ThemeProvider } from "@/components/theme-provider";
+
 import Welcome from "@/pages/Welcome";
 import Login from "@/pages/Login";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -29,86 +31,102 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          {/* UI global */}
-          <Toaster />
-          <Sonner />
+          {/* Thème UI: clair par défaut */}
+          <ThemeProvider defaultTheme="light" storageKey="export-ui-theme">
+            {/* UI global */}
+            <Toaster />
+            <Sonner />
 
-          {/* Router */}
-          <BrowserRouter>
-            <Routes>
-              {/* Root */}
-              <Route path="/" element={<Navigate to="/welcome" replace />} />
+            {/* Router */}
+            <BrowserRouter>
+              <Routes>
+                {/* Root */}
+                <Route path="/" element={<Navigate to="/welcome" replace />} />
 
-              {/* Public */}
-              <Route path="/welcome" element={<Welcome />} />
-              <Route path="/login" element={<Login />} />
+                {/* Public */}
+                <Route path="/welcome" element={<Welcome />} />
+                <Route path="/login" element={<Login />} />
 
-              {/* Public: password flow (reste dans ton outil) */}
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/set-password" element={<SetPassword />} />
+                {/* Public: password flow */}
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/set-password" element={<SetPassword />} />
 
-              {/* Protected */}
-              <Route
-                path="/hub"
-                element={
-                  <ProtectedRoute>
-                    <Hub />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/simulator"
-                element={
-                  <ProtectedRoute>
-                    <Simulator />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/verifier"
-                element={
-                  <ProtectedRoute>
-                    <InvoiceVerification />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/watch/commercial"
-                element={
-                  <ProtectedRoute>
-                    <WatchCommercial />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/watch/regulatory"
-                element={
-                  <ProtectedRoute>
-                    <WatchRegulatory />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedRoute>
-                    <Admin />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/assistant"
-                element={
-                  <ProtectedRoute>
-                    <Assistant />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Protected */}
+                <Route
+                  path="/hub"
+                  element={
+                    <ProtectedRoute>
+                      <Hub />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* 404 */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
+                <Route
+                  path="/simulator"
+                  element={
+                    <ProtectedRoute>
+                      <Simulator />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/verifier"
+                  element={
+                    <ProtectedRoute>
+                      <InvoiceVerification />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Veille concurrentielle (ancien chemin conservé) */}
+                <Route
+                  path="/watch/commercial"
+                  element={
+                    <ProtectedRoute>
+                      <WatchCommercial />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Alias propre : /watch/competitive */}
+                <Route
+                  path="/watch/competitive"
+                  element={<Navigate to="/watch/commercial" replace />}
+                />
+
+                <Route
+                  path="/watch/regulatory"
+                  element={
+                    <ProtectedRoute>
+                      <WatchRegulatory />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/admin"
+                  element={
+                    <ProtectedRoute>
+                      <Admin />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/assistant"
+                  element={
+                    <ProtectedRoute>
+                      <Assistant />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* 404 */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </ThemeProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
