@@ -27,6 +27,8 @@ import { chargesTaxesKnowledge, type ChargeRule } from '@/data/chargesTaxesKnowl
 import { defaultHsCatalog, type HsItem } from '@/data/hsCatalog';
 import { buildSwissTaresUrl, buildTaricUrl } from '@/lib/customs/lookupLinks';
 import { supabase } from '@/lib/supabaseClient';
+import { safeFileName } from '@/lib/fileName';
+import { extractPdfTextFromFile } from '@/lib/pdfText';
 
 const logisticModes = ['Envoi direct depuis métropole', 'Dépositaire / stock local'] as const;
 const zones = ['UE', 'DROM', 'Suisse', 'Hors UE'] as const;
@@ -83,6 +85,16 @@ type ImportPayload = {
   incoterms?: IncotermRow[];
   logisticsMode?: (typeof logisticModes)[number];
   hsCatalog?: HsItem[];
+};
+
+type DocRow = {
+  id: string;
+  title: string | null;
+  status: string | null;
+  bucket: string | null;
+  object_path: string | null;
+  published_at: string | null;
+  created_at: string | null;
 };
 
 const docCheckboxes: { key: keyof Omit<DocFlags, 'autres'>; label: string }[] = [
@@ -241,6 +253,10 @@ export default function ReferenceLibrary() {
   const [deleteDestination, setDeleteDestination] = useState<DestinationRow | null>(null);
   const [editIncoterm, setEditIncoterm] = useState<IncotermRow | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  const [docs, setDocs] = useState<DocRow[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [syncInfo, setSyncInfo] = useState<string>('');
@@ -372,11 +388,104 @@ export default function ReferenceLibrary() {
     const r4 = await supabase
       .from('export_settings')
       .upsert({ key: SETTINGS_KEY_LOGISTICS, value: { mode: logisticModes[0] } });
-    if (r4.error) throw r4.error;
+      if (r4.error) throw r4.error;
+    };
+
+  const fetchDocs = async () => {
+    setDocsLoading(true);
+    const { data, error } = await supabase
+      .from('documents')
+      .select('id,title,status,bucket,object_path,published_at,created_at')
+      .eq('bucket', 'reference-docs')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (error) {
+      toast.error(error.message);
+      setDocs([]);
+    } else {
+      setDocs(data ?? []);
+    }
+    setDocsLoading(false);
+  };
+
+  const openPdf = async (doc: DocRow) => {
+    if (!doc.bucket || !doc.object_path) return;
+    const { data, error } = await supabase.storage.from(doc.bucket).createSignedUrl(doc.object_path, 600);
+    if (error || !data?.signedUrl) {
+      toast.error(error?.message || 'Impossible de générer le lien sécurisé');
+      return;
+    }
+    window.open(data.signedUrl, '_blank', 'noopener');
+  };
+
+  const uploadAndAutoIngest = async (file: File) => {
+    const bucket = 'reference-docs';
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const path = `${yyyy}/${mm}/${Date.now()}-${safeFileName(file.name)}`;
+
+    setDocsLoading(true);
+    try {
+      const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, { contentType: 'application/pdf' });
+      if (uploadError) throw uploadError;
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('documents')
+        .insert({
+          title: file.name,
+          doc_type: 'reglementaire',
+          source: 'upload',
+          status: 'uploaded',
+          bucket,
+          object_path: path,
+          mime_type: 'application/pdf',
+          tags: [],
+        })
+        .select('id')
+        .single();
+
+      if (insertError) throw insertError;
+      const docId = inserted?.id;
+      if (!docId) throw new Error('Document ID manquant après insertion');
+
+      const extracted = await extractPdfTextFromFile(file);
+      if (extracted.length < 50) {
+        await supabase.from('documents').update({ status: 'needs_ocr' }).eq('id', docId);
+        toast.error('Texte insuffisant. OCR requis.');
+        await fetchDocs();
+        return;
+      }
+
+      await supabase.functions.invoke('set_extracted_text', {
+        body: { document_id: docId, extracted_text: extracted, language: 'fr' },
+      });
+
+      await supabase.functions.invoke('chunk_document', {
+        body: { document_id: docId, max_chars: 1200, overlap: 150 },
+      });
+
+      await supabase.from('documents').update({ status: 'chunked' }).eq('id', docId);
+      toast.success('Document ingéré et découpé (sans embedding)');
+      await fetchDocs();
+    } catch (error: any) {
+      toast.error(error?.message || 'Erreur ingestion PDF');
+    } finally {
+      setDocsLoading(false);
+    }
+  };
+
+  const onPickPdf = async (evt: React.ChangeEvent<HTMLInputElement>) => {
+    const file = evt.target.files?.[0];
+    if (!file) return;
+    await uploadAndAutoIngest(file);
+    evt.target.value = '';
   };
 
   useEffect(() => {
     fetchAll(true);
+    void fetchDocs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -782,13 +891,14 @@ export default function ReferenceLibrary() {
         </div>
 
         <Tabs defaultValue="destinations" className="space-y-4">
-          <TabsList className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+          <TabsList className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7">
             <TabsTrigger value="destinations">A) Destinations</TabsTrigger>
             <TabsTrigger value="incoterms">B) Incoterms</TabsTrigger>
             <TabsTrigger value="charges">C) Charges &amp; Taxes</TabsTrigger>
             <TabsTrigger value="cheatsheets">D) Cheatsheets</TabsTrigger>
             <TabsTrigger value="logistics">E) Logistique</TabsTrigger>
             <TabsTrigger value="hs">F) Nomenclature (HS)</TabsTrigger>
+            <TabsTrigger value="docs">G) Documents</TabsTrigger>
           </TabsList>
 
           <TabsContent value="destinations" className="space-y-4">
@@ -1198,6 +1308,88 @@ export default function ReferenceLibrary() {
                     ) : null}
                   </TableBody>
                 </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="docs" className="space-y-4">
+            <input
+              ref={pdfInputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={onPickPdf}
+            />
+            <Card>
+              <CardHeader className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Upload className="h-4 w-4" />
+                    G) Documents réglementaires (PDF)
+                  </CardTitle>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={() => pdfInputRef.current?.click()} disabled={docsLoading}>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Uploader un PDF
+                    </Button>
+                    <Button variant="ghost" onClick={fetchDocs} disabled={docsLoading}>
+                      <RefreshCw className={`h-4 w-4 mr-2 ${docsLoading ? 'animate-spin' : ''}`} />
+                      Rafraîchir
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Upload =&gt; stockage (bucket reference-docs) =&gt; extraction texte =&gt; set_extracted_text =&gt; chunk_document. Pas d&apos;embedding.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Titre</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Statut</TableHead>
+                        <TableHead className="w-[140px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {docsLoading ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-muted-foreground">Chargement…</TableCell>
+                        </TableRow>
+                      ) : docs.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-muted-foreground">Aucun document.</TableCell>
+                        </TableRow>
+                      ) : (
+                        docs.map((doc) => (
+                          <TableRow key={doc.id}>
+                            <TableCell className="font-medium">{doc.title ?? 'Sans titre'}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {doc.published_at || doc.created_at || '—'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={doc.status === 'chunked' ? 'secondary' : doc.status === 'needs_ocr' ? 'destructive' : 'outline'}>
+                                {doc.status ?? '—'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {doc.object_path ? (
+                                <Button variant="ghost" size="sm" onClick={() => openPdf(doc)} className="gap-2">
+                                  <Eye className="h-4 w-4" />
+                                  Voir
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

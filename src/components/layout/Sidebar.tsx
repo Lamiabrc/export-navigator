@@ -10,8 +10,14 @@ import {
   Settings,
   LogOut,
   Bot,
+  Activity,
+  TrendingUp,
+  Receipt,
+  Scale,
+  Users,
+  Package,
+  Calculator,
 } from "lucide-react";
-import { BrandLogo } from "../BrandLogo";
 
 type NavItem = {
   name: string;
@@ -38,6 +44,42 @@ const navigation: NavSection[] = [
         badge: "HUB",
         featured: true,
         aliases: ["/control-tower", "/dashboard"],
+      },
+      {
+        name: "Command Center",
+        href: "/command-center",
+        icon: Activity,
+        aliases: ["/dashboard"],
+      },
+      {
+        name: "Sales (ventes)",
+        href: "/sales",
+        icon: TrendingUp,
+      },
+      {
+        name: "Costs (charges)",
+        href: "/costs",
+        icon: Receipt,
+      },
+      {
+        name: "Taxes & OM",
+        href: "/taxes-om",
+        icon: Scale,
+      },
+      {
+        name: "Clients",
+        href: "/clients",
+        icon: Users,
+      },
+      {
+        name: "Produits",
+        href: "/products",
+        icon: Package,
+      },
+      {
+        name: "Simulateur",
+        href: "/simulator",
+        icon: Calculator,
       },
 
       // ✅ Renommé + route propre (alias géré dans App.tsx)
@@ -130,15 +172,6 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
       )}
       aria-label="Navigation principale"
     >
-      {/* Header */}
-      <div className="flex h-16 items-center gap-3 px-6 border-b border-border">
-        <BrandLogo
-          imageClassName="h-9"
-          titleClassName="text-xs sm:text-sm font-semibold text-foreground"
-          subtitleClassName="text-[11px] text-muted-foreground"
-        />
-      </div>
-
       {/* Nav */}
       <nav className="flex-1 space-y-4 px-3 py-4 overflow-y-auto">
         {navigation.map((section) => (
