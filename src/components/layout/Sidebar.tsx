@@ -131,14 +131,11 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
       aria-label="Navigation principale"
     >
       {/* Header */}
-      <div className="flex h-20 items-center px-5 border-b border-border">
+      <div className="flex h-16 items-center gap-3 px-6 border-b border-border">
         <BrandLogo
-          size="md"
-          className="flex-1"
-          textClassName="gap-[2px]"
-          titleClassName="text-foreground"
-          subtitleClassName="text-muted-foreground"
-          locationClassName="text-muted-foreground"
+          imageClassName="h-9"
+          titleClassName="text-xs sm:text-sm font-semibold text-foreground"
+          subtitleClassName="text-[11px] text-muted-foreground"
         />
       </div>
 

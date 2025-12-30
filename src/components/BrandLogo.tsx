@@ -18,27 +18,9 @@ type BrandLogoProps = {
 };
 
 const sizeConfig: Record<BrandSize, { img: string; title: string; subtitle: string; location: string; gap: string }> = {
-  sm: {
-    img: "h-8",
-    title: "text-sm",
-    subtitle: "text-xs",
-    location: "text-[11px]",
-    gap: "gap-2",
-  },
-  md: {
-    img: "h-10",
-    title: "text-sm",
-    subtitle: "text-xs",
-    location: "text-[11px]",
-    gap: "gap-3",
-  },
-  lg: {
-    img: "h-12",
-    title: "text-base",
-    subtitle: "text-sm",
-    location: "text-xs",
-    gap: "gap-3",
-  },
+  sm: { img: "h-8", title: "text-sm", subtitle: "text-xs", location: "text-[11px]", gap: "gap-2" },
+  md: { img: "h-10", title: "text-sm", subtitle: "text-xs", location: "text-[11px]", gap: "gap-3" },
+  lg: { img: "h-12", title: "text-base", subtitle: "text-sm", location: "text-xs", gap: "gap-3" },
 };
 
 export function BrandLogo({
@@ -64,7 +46,6 @@ export function BrandLogo({
         className={cn(styles.img, "w-auto drop-shadow-sm shrink-0", imageClassName)}
         loading="lazy"
       />
-
       {showText && (
         <div className={cn("flex flex-col leading-tight min-w-0", textClassName)}>
           <p className={cn(styles.title, "font-semibold text-foreground truncate", titleClassName)}>{title}</p>

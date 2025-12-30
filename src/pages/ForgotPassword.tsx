@@ -26,11 +26,9 @@ export default function ForgotPassword() {
         <div className="flex justify-center">
           <BrandLogo
             className="justify-center"
-            size="lg"
-            imageClassName="drop-shadow-lg"
-            titleClassName="text-white"
-            subtitleClassName="text-slate-200/80"
-            locationClassName="text-xs text-slate-200/80"
+            imageClassName="h-12 drop-shadow-lg"
+            titleClassName="text-base font-semibold text-white"
+            subtitleClassName="text-sm text-slate-200/80"
           />
         </div>
 

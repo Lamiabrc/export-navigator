@@ -108,11 +108,9 @@ export default function Login() {
         <div className="w-full max-w-md space-y-6">
           <BrandLogo
             className="flex items-center gap-3"
-            size="lg"
-            imageClassName="drop-shadow-lg"
-            titleClassName="text-white"
-            subtitleClassName="text-slate-200/80"
-            locationClassName="text-xs text-slate-300/80"
+            imageClassName="h-11 drop-shadow-lg"
+            titleClassName="text-base font-semibold text-white"
+            subtitleClassName="text-sm text-slate-200/80"
           />
 
           <Card className="bg-slate-900/80 border-slate-800 text-slate-50 shadow-xl shadow-cyan-500/10">

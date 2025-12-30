@@ -43,11 +43,9 @@ export default function AuthPage() {
           <div className="flex justify-center mb-6">
             <BrandLogo
               className="justify-center"
-              size="lg"
-              imageClassName="drop-shadow-lg"
+              imageClassName="h-16 drop-shadow-lg"
               titleClassName="text-lg font-semibold text-foreground"
               subtitleClassName="text-sm text-muted-foreground"
-              locationClassName="text-xs text-muted-foreground"
             />
           </div>
 
