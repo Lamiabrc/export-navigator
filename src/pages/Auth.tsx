@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import logoOrliman from '@/assets/logo-orliman.png';
+import { BrandLogo } from '@/components/BrandLogo';
 
 const FORCED_EMAIL = 'lamia.brechetighil@orliman.fr';
 const DEFAULT_PASSWORD_HINT = 'Orliman2025!';
@@ -41,10 +41,13 @@ export default function AuthPage() {
         <div className="bg-card rounded-2xl border shadow-lg p-8">
           {/* Logo */}
           <div className="flex justify-center mb-6">
-            <img 
-              src={logoOrliman} 
-              alt="ORLIMAN" 
-              className="h-16 object-contain"
+            <BrandLogo
+              className="justify-center"
+              size="lg"
+              imageClassName="drop-shadow-lg"
+              titleClassName="text-lg font-semibold text-foreground"
+              subtitleClassName="text-sm text-muted-foreground"
+              locationClassName="text-xs text-muted-foreground"
             />
           </div>
 

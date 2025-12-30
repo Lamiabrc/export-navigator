@@ -5,6 +5,7 @@ import { Menu, Search, FileCheck2, Bot, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
+import { BrandLogo } from "../BrandLogo";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -57,27 +58,38 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
 
       <main className="relative z-10 md:pl-64">
         {/* Topbar */}
-        <header className="sticky top-0 z-20 border-b border-border/70 bg-[hsl(var(--background))/0.75] backdrop-blur-xl">
-          <div className="flex items-center gap-3 px-4 py-3 md:px-6">
-            <button
-              className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card shadow-sm hover:-translate-y-0.5 hover:shadow-md transition"
-              onClick={() => setSidebarOpen(true)}
-              aria-label="Ouvrir le menu"
-            >
-              <Menu className="h-5 w-5" />
-            </button>
+        <header className="sticky top-0 z-20 border-b border-border/70 bg-[hsl(var(--background))/0.8] backdrop-blur-xl">
+          <div className="flex flex-col gap-3 px-4 py-3 md:px-6 lg:flex-row lg:items-center lg:gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                className="lg:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card shadow-sm hover:-translate-y-0.5 hover:shadow-md transition"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Ouvrir le menu"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
 
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-foreground truncate">
-                Export Navigator
-              </div>
-              <div className="text-xs text-muted-foreground truncate">
-                Hub contrôle facture, veille, IA Export
-              </div>
+              <BrandLogo
+                size="md"
+                className="hidden sm:flex min-w-0"
+                textClassName="min-w-0"
+                titleClassName="text-foreground"
+                subtitleClassName="text-muted-foreground"
+                locationClassName="text-muted-foreground/90"
+              />
+              <BrandLogo
+                size="sm"
+                className="sm:hidden min-w-0"
+                textClassName="min-w-0"
+                imageClassName="drop-shadow-sm"
+                titleClassName="text-foreground"
+                subtitleClassName="text-muted-foreground"
+                locationClassName="text-muted-foreground/90"
+              />
             </div>
 
-            <div className="flex items-center gap-2 w-full max-w-xl">
-              <div className="relative flex-1 hidden sm:block">
+            <div className="flex flex-col gap-2 w-full lg:flex-1">
+              <div className="relative flex-1 min-w-[220px]">
                 <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
                   placeholder="Rechercher client, facture, produit…"
@@ -85,32 +97,34 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
                 />
               </div>
 
-              <Link
-                to="/assistant"
-                className="inline-flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground border border-border hover:shadow-md hover:-translate-y-0.5 transition"
-              >
-                <Bot className="h-4 w-4" />
-                IA Export
-              </Link>
+              <div className="flex flex-wrap items-center gap-2 justify-start lg:justify-end">
+                <Link
+                  to="/assistant"
+                  className="inline-flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground border border-border hover:shadow-md hover:-translate-y-0.5 transition shrink-0"
+                >
+                  <Bot className="h-4 w-4" />
+                  IA Export
+                </Link>
 
-              <Link
-                to="/verifier"
-                className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 border border-primary/40 hover:shadow-primary/40 hover:-translate-y-0.5 transition"
-              >
-                <FileCheck2 className="h-4 w-4" />
-                Contrôler une facture
-              </Link>
+                <Link
+                  to="/verifier"
+                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 border border-primary/40 hover:shadow-primary/40 hover:-translate-y-0.5 transition shrink-0"
+                >
+                  <FileCheck2 className="h-4 w-4" />
+                  Contrôler une facture
+                </Link>
 
-              <button
-                onClick={async () => {
-                  await signOut();
-                  navigate("/login");
-                }}
-                className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-muted transition"
-              >
-                <LogOut className="h-4 w-4" />
-                Logout
-              </button>
+                <button
+                  onClick={async () => {
+                    await signOut();
+                    navigate("/login");
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-muted transition shrink-0"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              </div>
             </div>
           </div>
         </header>
