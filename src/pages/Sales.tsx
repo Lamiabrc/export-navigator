@@ -5,20 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Download, TrendingUp } from "lucide-react";
-import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
-import { fetchAllWithPagination } from "@/utils/supabasePagination";
-
-type SalesRow = {
-  id: string;
-  date: string | null;
-  client_id: string | null;
-  product_id: string | null;
-  qty: number | null;
-  net_sales_ht: number | null;
-  currency: string | null;
-  market_zone: string | null; // UE/DROM/Hors UE...
-  incoterm: string | null;
-};
+import { useSales } from "@/hooks/useSales";
 
 function toCsv(rows: Record<string, any>[]) {
   if (!rows.length) return "";
@@ -44,45 +31,8 @@ function downloadText(content: string, filename: string) {
 }
 
 export default function Sales() {
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState("");
-  const [rows, setRows] = React.useState<SalesRow[]>([]);
+  const { rows, isLoading, error, warning, refresh } = useSales();
   const [q, setQ] = React.useState("");
-
-  const fetchSales = React.useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    if (!SUPABASE_ENV_OK) {
-      setError("Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).");
-      setRows([]);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const pageSize = 1000;
-      const data = await fetchAllWithPagination<SalesRow>(
-        (from, to) =>
-          supabase
-            .from("sales_lines")
-            .select("id,date,client_id,product_id,qty,net_sales_ht,currency,market_zone,incoterm")
-            .order("date", { ascending: false })
-            .range(from, to),
-        pageSize,
-      );
-      setRows(data ?? []);
-    } catch (e: any) {
-      setError(e?.message || "Erreur chargement ventes");
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    void fetchSales();
-  }, [fetchSales]);
 
   const filtered = React.useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -92,6 +42,7 @@ export default function Sales() {
         r.client_id,
         r.product_id,
         r.market_zone,
+        r.destination,
         r.incoterm,
         r.currency,
         r.date,
@@ -118,6 +69,7 @@ export default function Sales() {
         net_sales_ht: r.net_sales_ht ?? 0,
         currency: r.currency ?? "",
         market_zone: r.market_zone ?? "",
+        destination: r.destination ?? "",
         incoterm: r.incoterm ?? "",
       })),
     );
@@ -140,20 +92,20 @@ export default function Sales() {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={exportCsv} disabled={loading || filtered.length === 0}>
+            <Button variant="outline" onClick={exportCsv} disabled={isLoading || filtered.length === 0}>
               <Download className="h-4 w-4 mr-2" />
               Export CSV
             </Button>
-            <Button variant="outline" onClick={fetchSales} disabled={loading} className="gap-2">
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            <Button variant="outline" onClick={refresh} disabled={isLoading} className="gap-2">
+              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
               Actualiser
             </Button>
           </div>
         </div>
 
-        {error ? (
-          <Card className="border-red-200">
-            <CardContent className="pt-6 text-sm text-red-600">{error}</CardContent>
+        {error || warning ? (
+          <Card className={(warning || "").toLowerCase().includes("manquante") ? "border-amber-300 bg-amber-50" : "border-red-200"}>
+            <CardContent className="pt-6 text-sm text-foreground">{error || warning}</CardContent>
           </Card>
         ) : null}
 
@@ -184,7 +136,7 @@ export default function Sales() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {isLoading ? (
                   <tr><td className="py-3 text-muted-foreground" colSpan={8}>Chargement…</td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td className="py-3 text-muted-foreground" colSpan={8}>Aucune donnée.</td></tr>
