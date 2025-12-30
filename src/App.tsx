@@ -58,6 +58,7 @@ export default function App() {
                 {/* Core */}
                 <Route path="/hub" element={<ProtectedRoute><Hub /></ProtectedRoute>} />
                 <Route path="/command-center" element={<ProtectedRoute><CommandCenter /></ProtectedRoute>} />
+                <Route path="/dashboard" element={<Navigate to="/command-center" replace />} />
                 <Route path="/simulator" element={<ProtectedRoute><Simulator /></ProtectedRoute>} />
                 <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
 

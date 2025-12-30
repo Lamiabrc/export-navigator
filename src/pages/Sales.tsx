@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Download, TrendingUp } from "lucide-react";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { fetchAllWithPagination } from "@/utils/supabasePagination";
+import { isMissingTableError } from "@/domain/calc";
 
 type SalesRow = {
   id: string;
@@ -18,6 +19,7 @@ type SalesRow = {
   currency: string | null;
   market_zone: string | null; // UE/DROM/Hors UE...
   incoterm: string | null;
+  destination: string | null;
 };
 
 function toCsv(rows: Record<string, any>[]) {
@@ -66,15 +68,20 @@ export default function Sales() {
         (from, to) =>
           supabase
             .from("sales_lines")
-            .select("id,date,client_id,product_id,qty,net_sales_ht,currency,market_zone,incoterm")
+            .select("id,date,client_id,product_id,qty,net_sales_ht,currency,market_zone,incoterm,destination")
             .order("date", { ascending: false })
             .range(from, to),
         pageSize,
       );
       setRows(data ?? []);
     } catch (e: any) {
-      setError(e?.message || "Erreur chargement ventes");
-      setRows([]);
+      if (isMissingTableError(e)) {
+        setError("Table sales_lines manquante dans Supabase. Ajoute la migration SQL fournie pour activer la page.");
+        setRows([]);
+      } else {
+        setError(e?.message || "Erreur chargement ventes");
+        setRows([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -92,6 +99,7 @@ export default function Sales() {
         r.client_id,
         r.product_id,
         r.market_zone,
+        r.destination,
         r.incoterm,
         r.currency,
         r.date,
@@ -118,6 +126,7 @@ export default function Sales() {
         net_sales_ht: r.net_sales_ht ?? 0,
         currency: r.currency ?? "",
         market_zone: r.market_zone ?? "",
+        destination: r.destination ?? "",
         incoterm: r.incoterm ?? "",
       })),
     );
@@ -152,8 +161,8 @@ export default function Sales() {
         </div>
 
         {error ? (
-          <Card className="border-red-200">
-            <CardContent className="pt-6 text-sm text-red-600">{error}</CardContent>
+          <Card className={error.toLowerCase().includes("manquante") ? "border-amber-300 bg-amber-50" : "border-red-200"}>
+            <CardContent className="pt-6 text-sm text-foreground">{error}</CardContent>
           </Card>
         ) : null}
 
