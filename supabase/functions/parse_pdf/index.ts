@@ -1,10 +1,6 @@
-/// <reference deno.ns="https://deno.land/x/deno@v1.41.0/mod.ts" />
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-type Body = {
-  document_id: string;
-};
+type Body = { document_id: string; max_chars?: number; overlap?: number };
 
 function json(status: number, data: unknown) {
   return new Response(JSON.stringify(data), {
@@ -13,21 +9,19 @@ function json(status: number, data: unknown) {
   });
 }
 
-/**
- * NOTE extraction PDF:
- * - En Edge Function, on ne peut pas compter sur des binaires OS.
- * - MVP robuste: on délègue l'extraction à un parser JS.
- * - Ici on utilise "pdf-parse" côté JS (fonctionne souvent, mais certains PDFs scannés => texte vide).
- *
- * Alternative si besoin plus tard: OCR (plus lourd).
- */
-async function extractTextFromPdf(bytes: Uint8Array): Promise<string> {
-  // pdf-parse attend un Buffer (Node), mais Deno + esm.sh fournit un shim Buffer.
-  const pdfParse = (await import("https://esm.sh/pdf-parse@1.1.1")).default;
-  // @ts-ignore Buffer polyfill fourni par esm.sh
-  const { Buffer } = await import("https://esm.sh/buffer@6.0.3");
-  const data = await pdfParse(Buffer.from(bytes));
-  return (data?.text ?? "").trim();
+function chunkText(text: string, maxChars = 1200, overlap = 150) {
+  const clean = text.replace(/\r\n/g, "\n").trim();
+  const chunks: string[] = [];
+  if (!clean) return chunks;
+
+  let i = 0;
+  while (i < clean.length) {
+    const end = Math.min(i + maxChars, clean.length);
+    chunks.push(clean.slice(i, end));
+    if (end === clean.length) break;
+    i = Math.max(0, end - overlap);
+  }
+  return chunks;
 }
 
 Deno.serve(async (req) => {
@@ -35,76 +29,46 @@ Deno.serve(async (req) => {
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const DOC_BUCKET = Deno.env.get("DOC_BUCKET") ?? "reference-docs";
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return json(500, { error: "Missing supabase env" });
 
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-    return json(500, { error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" });
-  }
-
-  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  });
+  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
   let body: Body;
-  try {
-    body = await req.json();
-  } catch {
-    return json(400, { error: "Invalid JSON body" });
-  }
-
+  try { body = await req.json(); } catch { return json(400, { error: "Invalid JSON body" }); }
   if (!body?.document_id) return json(400, { error: "document_id is required" });
 
-  // 1) Load document row
+  const maxChars = body.max_chars ?? 1200;
+  const overlap = body.overlap ?? 150;
+
   const { data: doc, error: docErr } = await supabase
     .from("documents")
-    .select("id, bucket, object_path, mime_type, status")
+    .select("id, extracted_text")
     .eq("id", body.document_id)
     .single();
 
   if (docErr || !doc) return json(404, { error: "Document not found", details: docErr?.message });
+  if (!doc.extracted_text) return json(400, { error: "No extracted_text (run parse_pdf first)" });
 
-  const bucket = doc.bucket || DOC_BUCKET;
-  const path = doc.object_path;
+  // Re-run safe
+  await supabase.from("document_chunks").delete().eq("document_id", body.document_id);
 
-  if (!path) return json(400, { error: "Document has no object_path" });
+  const chunks = chunkText(doc.extracted_text, maxChars, overlap);
+  const rows = chunks.map((content, idx) => ({
+    document_id: body.document_id,
+    chunk_index: idx,
+    content,
+    meta: { maxChars, overlap },
+  }));
 
-  // 2) Download from Storage
-  const { data: file, error: dlErr } = await supabase.storage.from(bucket).download(path);
-  if (dlErr || !file) {
-    await supabase.from("documents").update({ status: "error" }).eq("id", doc.id);
-    return json(500, { error: "Storage download failed", details: dlErr?.message });
+  if (rows.length) {
+    const { error: insErr } = await supabase.from("document_chunks").insert(rows);
+    if (insErr) {
+      await supabase.from("documents").update({ status: "error" }).eq("id", body.document_id);
+      return json(500, { error: "Insert chunks failed", details: insErr.message });
+    }
   }
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  await supabase.from("documents").update({ status: "chunked" }).eq("id", body.document_id);
 
-  // 3) Extract text
-  let extracted = "";
-  try {
-    extracted = await extractTextFromPdf(bytes);
-  } catch (e) {
-    await supabase.from("documents").update({ status: "error" }).eq("id", doc.id);
-    return json(500, { error: "PDF parsing failed", details: String(e) });
-  }
-
-  // 4) Update documents
-  const nextStatus = extracted.length > 0 ? "parsed" : "parsed"; // même status, mais on pourra alerter si vide
-  const { error: upErr } = await supabase
-    .from("documents")
-    .update({
-      extracted_text: extracted,
-      status: nextStatus,
-      language: "fr",
-    })
-    .eq("id", doc.id);
-
-  if (upErr) return json(500, { error: "Update failed", details: upErr.message });
-
-  return json(200, {
-    ok: true,
-    document_id: doc.id,
-    bucket,
-    object_path: path,
-    extracted_chars: extracted.length,
-    warning: extracted.length === 0 ? "No text extracted (maybe scanned PDF)" : null,
-  });
+  return json(200, { ok: true, document_id: body.document_id, chunks: rows.length });
 });
