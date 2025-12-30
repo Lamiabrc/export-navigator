@@ -110,6 +110,17 @@ create table if not exists public.om_rates (
   created_at timestamptz default now()
 );
 
+create table if not exists public.vat_rates (
+  id uuid primary key default gen_random_uuid(),
+  territory_code text not null,
+  hs_code text,
+  vat_rate numeric,
+  start_date date,
+  end_date date,
+  notes text,
+  created_at timestamptz default now()
+);
+
 create table if not exists public.tax_rules_extra (
   id uuid primary key default gen_random_uuid(),
   territory_code text not null,

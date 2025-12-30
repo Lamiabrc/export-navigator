@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { fetchAllWithPagination } from "@/utils/supabasePagination";
 import { CostLine, isMissingTableError } from "@/domain/calc";
@@ -46,6 +46,10 @@ export function useCosts(options: { pageSize?: number } = {}) {
       setIsLoading(false);
     }
   }, [pageSize]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const totalAmount = useMemo(() => rows.reduce((sum, r) => sum + (r.amount ?? 0), 0), [rows]);
 

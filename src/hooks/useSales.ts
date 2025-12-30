@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { fetchAllWithPagination } from "@/utils/supabasePagination";
 import { SalesLine } from "@/domain/calc";
@@ -47,6 +47,10 @@ export function useSales(options: { pageSize?: number } = {}) {
       setIsLoading(false);
     }
   }, [pageSize]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const totalNet = useMemo(() => rows.reduce((sum, r) => sum + (r.net_sales_ht ?? 0), 0), [rows]);
 
