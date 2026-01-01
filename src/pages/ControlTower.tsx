@@ -28,14 +28,14 @@ const MAP_HEIGHT = 680;
 
 const DESTINATIONS: Destination[] = [
   { code: "FR", name: "Metropole", lat: 46.6, lon: 2.3, color: "#38bdf8" },
-  { code: "GP", name: "Guadeloupe", lat: 16.265, lon: -61.551, color: "#fb7185", offset: { x: 28, y: -6 } },
-  { code: "MQ", name: "Martinique", lat: 14.6415, lon: -61.0242, color: "#f59e0b", offset: { x: 0, y: 18 } },
+  { code: "GP", name: "Guadeloupe", lat: 16.265, lon: -61.551, color: "#fb7185", offset: { x: 32, y: -20 } },
+  { code: "MQ", name: "Martinique", lat: 14.6415, lon: -61.0242, color: "#f59e0b", offset: { x: 6, y: 28 } },
   { code: "GF", name: "Guyane", lat: 4.0, lon: -53.0, color: "#22c55e" },
   { code: "RE", name: "Reunion", lat: -21.1151, lon: 55.5364, color: "#a855f7" },
   { code: "YT", name: "Mayotte", lat: -12.8275, lon: 45.1662, color: "#38bdf8" },
   { code: "SPM", name: "Saint-Pierre-et-Miquelon", lat: 46.8852, lon: -56.3159, color: "#0ea5e9" },
-  { code: "BL", name: "Saint-Barthelemy", lat: 17.9, lon: -62.85, color: "#ec4899", offset: { x: -26, y: -8 } },
-  { code: "MF", name: "Saint-Martin", lat: 18.0708, lon: -63.0501, color: "#10b981", offset: { x: 12, y: 14 } },
+  { code: "BL", name: "Saint-Barthelemy", lat: 17.9, lon: -62.85, color: "#ec4899", offset: { x: -24, y: -18 } },
+  { code: "MF", name: "Saint-Martin", lat: 18.0708, lon: -63.0501, color: "#10b981", offset: { x: 20, y: 8 } },
 ];
 
 const formatMoney = (n: number | null | undefined) =>
@@ -204,12 +204,12 @@ const regionPath = (pts: { lat: number; lon: number }[]) => {
 };
 
 return (
-    <MainLayout contentClassName="md:p-6">
+    <MainLayout contentClassName="md:p-6 bg-slate-950">
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm text-cyan-300/90 uppercase tracking-[0.2em]">Tour de controle export</p>
-            <h1 className="text-2xl font-bold text-cyan-50">Flux DOM-TOM en temps reel</h1>
+            <p className="text-xs text-cyan-300/90 uppercase tracking-[0.35em]">Tour de controle export</p>
+            <h1 className="text-3xl font-bold text-cyan-50 drop-shadow-sm">Flux DOM-TOM en temps reel</h1>
             <p className="text-sm text-slate-300/80">
               Carte geographique fidele: clic = filtre territoire, double clic = Explore prefiltre.
             </p>
@@ -220,7 +220,7 @@ return (
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[320px,1fr,320px]">
+        <div className="grid gap-4 lg:grid-cols-[340px,1fr,340px]">
           <Card className="bg-slate-900/80 border-cyan-500/30 shadow-[0_10px_60px_rgba(14,116,144,0.25)] backdrop-blur">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-cyan-100">
@@ -238,11 +238,12 @@ return (
             </CardContent>
           </Card>
 
-          <Card className="relative overflow-hidden border-cyan-500/30 bg-slate-950">
+          <Card className="relative overflow-hidden border-cyan-500/30 bg-slate-950 shadow-[0_10px_80px_rgba(8,47,73,0.35)]">
             <CardContent className="p-0">
-              <div className="relative w-full h-[640px] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
-                <div className="absolute inset-0 opacity-60" style={{ backgroundImage: "radial-gradient(circle at 10% 20%, rgba(56,189,248,0.14) 0, transparent 40%), radial-gradient(circle at 80% 10%, rgba(168,85,247,0.16) 0, transparent 35%), radial-gradient(circle at 30% 80%, rgba(34,197,94,0.1) 0, transparent 35%)" }} />
-                <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
+              <div className="relative w-full h-[680px] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-xl">
+                <div className="absolute inset-0 opacity-70" style={{ backgroundImage: "radial-gradient(circle at 10% 20%, rgba(56,189,248,0.18) 0, transparent 40%), radial-gradient(circle at 80% 10%, rgba(168,85,247,0.2) 0, transparent 35%), radial-gradient(circle at 30% 80%, rgba(34,197,94,0.14) 0, transparent 35%)" }} />
+                <div className="absolute inset-6 rounded-xl border border-cyan-500/10" />
+                <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
 
                 <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="w-full h-full relative z-10">
                   <g className="opacity-30">
@@ -314,7 +315,7 @@ return (
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.4 }}
-                    className="cursor-pointer drop-shadow-[0_0_16px_rgba(14,165,233,0.55)]"
+                    className="cursor-pointer drop-shadow-[0_0_16px_rgba(14,165,233,0.65)]"
                     onMouseEnter={() => setHovered("FR")}
                     onMouseLeave={() => setHovered(null)}
                     onClick={() => setVariable("territory_code", "FR")}
