@@ -17,6 +17,7 @@ type Destination = {
   lat: number;
   lon: number;
   color: string;
+  offset?: { x: number; y: number };
 };
 
 type SalesRow = { id: string; sale_date: string; territory_code: string | null; amount_ht: number | null; amount_ttc: number | null };
@@ -27,14 +28,14 @@ const MAP_HEIGHT = 680;
 
 const DESTINATIONS: Destination[] = [
   { code: "FR", name: "Metropole", lat: 46.6, lon: 2.3, color: "#38bdf8" },
-  { code: "GP", name: "Guadeloupe", lat: 16.265, lon: -61.551, color: "#fb7185" },
-  { code: "MQ", name: "Martinique", lat: 14.6415, lon: -61.0242, color: "#f59e0b" },
+  { code: "GP", name: "Guadeloupe", lat: 16.265, lon: -61.551, color: "#fb7185", offset: { x: 28, y: -6 } },
+  { code: "MQ", name: "Martinique", lat: 14.6415, lon: -61.0242, color: "#f59e0b", offset: { x: 0, y: 18 } },
   { code: "GF", name: "Guyane", lat: 4.0, lon: -53.0, color: "#22c55e" },
   { code: "RE", name: "Reunion", lat: -21.1151, lon: 55.5364, color: "#a855f7" },
   { code: "YT", name: "Mayotte", lat: -12.8275, lon: 45.1662, color: "#38bdf8" },
   { code: "SPM", name: "Saint-Pierre-et-Miquelon", lat: 46.8852, lon: -56.3159, color: "#0ea5e9" },
-  { code: "BL", name: "Saint-Barthelemy", lat: 17.9, lon: -62.85, color: "#ec4899" },
-  { code: "MF", name: "Saint-Martin", lat: 18.0708, lon: -63.0501, color: "#10b981" },
+  { code: "BL", name: "Saint-Barthelemy", lat: 17.9, lon: -62.85, color: "#ec4899", offset: { x: -26, y: -8 } },
+  { code: "MF", name: "Saint-Martin", lat: 18.0708, lon: -63.0501, color: "#10b981", offset: { x: 12, y: 14 } },
 ];
 
 const formatMoney = (n: number | null | undefined) =>
@@ -130,12 +131,79 @@ export default function ControlTower() {
   const selected = variables.territory_code || hovered || "FR";
   const activeDest = DESTINATIONS.find((d) => d.code === selected) || DESTINATIONS[0];
 
-  const nodes = React.useMemo(() => DESTINATIONS.map((d) => ({ ...d, ...project(d.lat, d.lon) })), []);
+  const nodes = React.useMemo(
+    () =>
+      DESTINATIONS.map((d) => {
+        const base = project(d.lat, d.lon);
+        return {
+          ...d,
+          x: base.x + (d.offset?.x || 0),
+          y: base.y + (d.offset?.y || 0),
+        };
+      }),
+    []
+  );
   const metropole = nodes.find((n) => n.code === "FR")!;
 
-  const topList = totals.byTerritory.slice(0, 5);
+const topList = totals.byTerritory.slice(0, 5);
 
-  return (
+const REGIONS = [
+  // Rough simplified polygons (lat, lon) for a minimal world outline
+  {
+    name: "Americas North",
+    points: [
+      { lat: 72, lon: -168 },
+      { lat: 12, lon: -168 },
+      { lat: 12, lon: -52 },
+      { lat: 72, lon: -52 },
+    ],
+  },
+  {
+    name: "Americas South",
+    points: [
+      { lat: 12, lon: -82 },
+      { lat: -56, lon: -82 },
+      { lat: -56, lon: -34 },
+      { lat: 12, lon: -34 },
+    ],
+  },
+  {
+    name: "Europe Africa",
+    points: [
+      { lat: 72, lon: -25 },
+      { lat: 72, lon: 50 },
+      { lat: -36, lon: 50 },
+      { lat: -36, lon: -25 },
+    ],
+  },
+  {
+    name: "Asia",
+    points: [
+      { lat: 78, lon: 45 },
+      { lat: 78, lon: 180 },
+      { lat: -10, lon: 180 },
+      { lat: -10, lon: 45 },
+    ],
+  },
+  {
+    name: "Australia",
+    points: [
+      { lat: -8, lon: 110 },
+      { lat: -8, lon: 160 },
+      { lat: -45, lon: 160 },
+      { lat: -45, lon: 110 },
+    ],
+  },
+];
+
+const regionPath = (pts: { lat: number; lon: number }[]) => {
+  if (!pts.length) return "";
+  const first = project(pts[0].lat, pts[0].lon);
+  const rest = pts.slice(1).map((p) => project(p.lat, p.lon));
+  return `M ${first.x} ${first.y} ${rest.map((p) => `L ${p.x} ${p.y}`).join(" ")} Z`;
+};
+
+return (
     <MainLayout contentClassName="md:p-6">
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-4">
@@ -177,28 +245,48 @@ export default function ControlTower() {
                 <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
 
                 <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="w-full h-full relative z-10">
+                  <g className="opacity-30">
+                    {REGIONS.map((r) => (
+                      <path
+                        key={r.name}
+                        d={regionPath(r.points)}
+                        fill="url(#regionFill)"
+                        stroke="#38bdf8"
+                        strokeWidth={0.6}
+                        strokeOpacity={0.25}
+                      />
+                    ))}
+                    <defs>
+                      <linearGradient id="regionFill" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.18" />
+                        <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.08" />
+                      </linearGradient>
+                    </defs>
+                  </g>
+
                   {nodes.filter((n) => n.code !== "FR").map((node) => {
                     const path = buildArc(metropole, node);
                     const isActive = selected === node.code;
+                    const isHover = hovered === node.code;
                     return (
                       <g key={node.code}>
                         <path
                           d={path}
                           fill="none"
                           stroke={node.color}
-                          strokeWidth={isActive ? 2.4 : 1.4}
-                          strokeOpacity={isActive ? 0.8 : 0.35}
+                          strokeWidth={isActive || isHover ? 2.8 : 1.4}
+                          strokeOpacity={isActive || isHover ? 0.9 : 0.35}
                           className="transition-all duration-300 drop-shadow-[0_0_12px_rgba(56,189,248,0.3)]"
                         />
                         <motion.circle
                           cx={node.x}
                           cy={node.y}
-                          r={isActive ? 9 : 7}
+                          r={isActive || isHover ? 10 : 7}
                           fill={node.color}
                           initial={{ scale: 0.8, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
                           transition={{ duration: 0.4 }}
-                          className="cursor-pointer drop-shadow-[0_0_12px_rgba(56,189,248,0.55)]"
+                          className="cursor-pointer drop-shadow-[0_0_16px_rgba(56,189,248,0.65)]"
                           onMouseEnter={() => setHovered(node.code)}
                           onMouseLeave={() => setHovered(null)}
                           onClick={() => setVariable("territory_code", node.code)}
@@ -221,7 +309,7 @@ export default function ControlTower() {
                   <motion.circle
                     cx={metropole.x}
                     cy={metropole.y}
-                    r={14}
+                    r={hovered === "FR" || selected === "FR" ? 15 : 12}
                     fill="#0ea5e9"
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
