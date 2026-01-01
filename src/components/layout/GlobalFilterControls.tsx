@@ -80,7 +80,7 @@ export function TimeRangePicker() {
             value={timeRange.from ?? resolvedRange.from}
             onChange={(e) => setTimeRange({ ...timeRange, from: e.target.value })}
           />
-          <span className="text-muted-foreground text-xs">-></span>
+          <span className="text-muted-foreground text-xs">&rarr;</span>
           <Input
             type="date"
             className="h-8"
