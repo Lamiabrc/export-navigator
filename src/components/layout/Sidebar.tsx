@@ -38,23 +38,35 @@ const navigation: NavSection[] = [
     title: "Navigation",
     items: [
       {
-        name: "Check rapide",
-        href: "/hub",
-        icon: ShieldCheck,
-        badge: "HUB",
+        name: "Control Tower",
+        href: "/control-tower",
+        icon: Activity,
+        badge: "Live",
         featured: true,
-        aliases: ["/control-tower", "/dashboard"],
+        aliases: ["/dashboard", "/hub"],
+      },
+      {
+        name: "Explore (ventes)",
+        href: "/explore",
+        icon: TrendingUp,
+        aliases: ["/sales"],
+      },
+      {
+        name: "Concurrence",
+        href: "/competition",
+        icon: Target,
+        aliases: ["/watch/competitive", "/watch/commercial"],
       },
       {
         name: "Command Center",
         href: "/command-center",
-        icon: Activity,
-        aliases: ["/dashboard"],
+        icon: ShieldCheck,
       },
       {
-        name: "Sales (ventes)",
-        href: "/sales",
-        icon: TrendingUp,
+        name: "Hub (legacy)",
+        href: "/hub",
+        icon: ShieldCheck,
+        aliases: ["/welcome"],
       },
       {
         name: "Costs (charges)",
@@ -81,17 +93,7 @@ const navigation: NavSection[] = [
         href: "/simulator",
         icon: Calculator,
       },
-
-      // ✅ Renommé + route propre (alias géré dans App.tsx)
-      {
-        name: "Veille concurrentielle",
-        href: "/watch/competitive",
-        icon: Target,
-        aliases: ["/watch/commercial"], // garde la compatibilité
-      },
-
-      { name: "Veille réglementaire", href: "/watch/regulatory", icon: BookOpen },
-
+      { name: "Veille reglementaire", href: "/watch/regulatory", icon: BookOpen },
       { name: "Admin", href: "/admin", icon: Settings },
     ],
   },
@@ -166,7 +168,6 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
     <aside
       className={cn(
         "fixed inset-y-0 left-0 z-[70] flex w-64 flex-col",
-        // ✅ Thème clair (shadcn tokens)
         "bg-card/95 backdrop-blur-xl border-r border-border shadow-xl",
         className,
       )}
@@ -199,8 +200,8 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
             type="button"
             onClick={handleLogout}
             className="p-2 rounded-lg hover:bg-muted transition focus:outline-none focus:ring-2 focus:ring-primary/30"
-            aria-label="Déconnexion"
-            title="Déconnexion"
+            aria-label="Deconnexion"
+            title="Deconnexion"
           >
             <LogOut className="h-4 w-4 text-muted-foreground" />
           </button>
@@ -208,7 +209,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
 
         <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
           <Bot className="h-4 w-4" />
-          IA Export via Edge Function (clé côté serveur uniquement)
+          IA Export via Edge Function (cle cote serveur uniquement)
         </div>
       </div>
     </aside>

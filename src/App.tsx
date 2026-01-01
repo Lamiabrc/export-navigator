@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 
 import { AuthProvider } from "@/contexts/AuthContext";
+import { GlobalFiltersProvider } from "@/contexts/GlobalFiltersContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -30,6 +31,7 @@ import WatchCommercial from "@/pages/WatchCommercial";
 import WatchRegulatory from "@/pages/WatchRegulatory";
 
 import ReferenceLibrary from "@/pages/ReferenceLibrary";
+import ControlTower from "@/pages/ControlTower";
 
 import Admin from "@/pages/Admin";
 import Assistant from "@/pages/Assistant";
@@ -48,52 +50,57 @@ export default function App() {
             <Sonner />
 
             <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<Navigate to="/welcome" replace />} />
+              <GlobalFiltersProvider>
+                <Routes>
+                  <Route path="/" element={<Navigate to="/welcome" replace />} />
 
-                {/* Public */}
-                <Route path="/welcome" element={<Welcome />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/set-password" element={<SetPassword />} />
+                  {/* Public */}
+                  <Route path="/welcome" element={<Welcome />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/set-password" element={<SetPassword />} />
 
-                {/* Core */}
-                <Route path="/hub" element={<ProtectedRoute><Hub /></ProtectedRoute>} />
-                <Route path="/command-center" element={<ProtectedRoute><CommandCenter /></ProtectedRoute>} />
-                <Route path="/dashboard" element={<Navigate to="/command-center" replace />} />
-                <Route path="/simulator" element={<ProtectedRoute><Simulator /></ProtectedRoute>} />
-                <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
+                  {/* Core */}
+                  <Route path="/hub" element={<ProtectedRoute><Hub /></ProtectedRoute>} />
+                  <Route path="/command-center" element={<ProtectedRoute><CommandCenter /></ProtectedRoute>} />
+                  <Route path="/control-tower" element={<ProtectedRoute><ControlTower /></ProtectedRoute>} />
+                  <Route path="/dashboard" element={<Navigate to="/control-tower" replace />} />
+                  <Route path="/simulator" element={<ProtectedRoute><Simulator /></ProtectedRoute>} />
+                  <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
 
-                {/* Reference / Bible export */}
-                <Route path="/reference-library" element={<ProtectedRoute><ReferenceLibrary /></ProtectedRoute>} />
-                <Route path="/reference" element={<Navigate to="/reference-library" replace />} />
+                  {/* Reference / Bible export */}
+                  <Route path="/reference-library" element={<ProtectedRoute><ReferenceLibrary /></ProtectedRoute>} />
+                  <Route path="/reference" element={<Navigate to="/reference-library" replace />} />
 
-                {/* Contrôle documents (secondaire) */}
-                <Route path="/verifier" element={<ProtectedRoute><InvoiceVerification /></ProtectedRoute>} />
-                <Route path="/invoice-verification" element={<Navigate to="/verifier" replace />} />
+                  {/* Controle documents (secondaire) */}
+                  <Route path="/verifier" element={<ProtectedRoute><InvoiceVerification /></ProtectedRoute>} />
+                  <Route path="/invoice-verification" element={<Navigate to="/verifier" replace />} />
 
-                {/* Data */}
-                <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
-                <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+                  {/* Data */}
+                  <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+                  <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
 
-                <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
-                <Route path="/costs" element={<ProtectedRoute><Costs /></ProtectedRoute>} />
-                <Route path="/taxes-om" element={<ProtectedRoute><TaxesOM /></ProtectedRoute>} />
+                  <Route path="/explore" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
+                  <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
+                  <Route path="/costs" element={<ProtectedRoute><Costs /></ProtectedRoute>} />
+                  <Route path="/taxes-om" element={<ProtectedRoute><TaxesOM /></ProtectedRoute>} />
 
-                {/* Si tu avais /invoices avant, on le recycle => ventes */}
-                <Route path="/invoices" element={<Navigate to="/sales" replace />} />
+                  {/* Si tu avais /invoices avant, on le recycle => ventes */}
+                  <Route path="/invoices" element={<Navigate to="/explore" replace />} />
 
-                {/* Watch */}
-                <Route path="/watch/commercial" element={<ProtectedRoute><WatchCommercial /></ProtectedRoute>} />
-                <Route path="/watch/competitive" element={<Navigate to="/watch/commercial" replace />} />
-                <Route path="/watch/regulatory" element={<ProtectedRoute><WatchRegulatory /></ProtectedRoute>} />
+                  {/* Watch */}
+                  <Route path="/watch/commercial" element={<ProtectedRoute><WatchCommercial /></ProtectedRoute>} />
+                  <Route path="/watch/competitive" element={<ProtectedRoute><WatchCommercial /></ProtectedRoute>} />
+                  <Route path="/competition" element={<ProtectedRoute><WatchCommercial /></ProtectedRoute>} />
+                  <Route path="/watch/regulatory" element={<ProtectedRoute><WatchRegulatory /></ProtectedRoute>} />
 
-                {/* Admin */}
-                <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
-                <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                  {/* Admin */}
+                  <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
-                <Route path="*" element={<NotFound />} />
-              </Routes>
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </GlobalFiltersProvider>
             </BrowserRouter>
           </ThemeProvider>
         </AuthProvider>
