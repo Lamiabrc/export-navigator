@@ -22,6 +22,16 @@ type Destination = {
 
 type SalesRow = { id: string; sale_date: string; territory_code: string | null; amount_ht: number | null; amount_ttc: number | null };
 type CostRow = { id: string; date: string | null; destination: string | null; amount: number | null; cost_type: string | null };
+type CompetitionRow = {
+  sku: string;
+  label: string | null;
+  territory_code: string | null;
+  orliman: number | null;
+  bestCompetitor: number | null;
+  bestName: string | null;
+  gapPct: number | null;
+  status: "premium" | "aligned" | "underpriced" | "no_data";
+};
 
 const MAP_WIDTH = 1200;
 const MAP_HEIGHT = 680;
@@ -55,6 +65,7 @@ export default function ControlTower() {
 
   const [sales, setSales] = React.useState<SalesRow[]>([]);
   const [costs, setCosts] = React.useState<CostRow[]>([]);
+  const [competition, setCompetition] = React.useState<CompetitionRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -109,6 +120,62 @@ export default function ControlTower() {
       active = false;
     };
   }, [resolvedRange.from, resolvedRange.to, variables.territory_code, refreshToken]);
+
+  React.useEffect(() => {
+    let active = true;
+    const loadCompetition = async () => {
+      if (!SUPABASE_ENV_OK) return;
+      try {
+        const territory = variables.territory_code || "FR";
+        const { data, error: sbError } = await supabase
+          .from("v_export_pricing")
+          .select("sku,label,territory_code,plv_metropole_ttc,plv_om_ttc,thuasne_price_ttc,donjoy_price_ttc,gibaud_price_ttc")
+          .eq("territory_code", territory)
+          .limit(400);
+        if (!active) return;
+        if (sbError) throw sbError;
+
+        const rows: CompetitionRow[] = (data || []).map((row: any) => {
+          const orliman =
+            territory === "FR"
+              ? Number(row.plv_metropole_ttc) || null
+              : Number(row.plv_om_ttc) || Number(row.plv_metropole_ttc) || null;
+          const competitors = [
+            { name: "Thuasne", price: Number(row.thuasne_price_ttc) || null },
+            { name: "Donjoy", price: Number(row.donjoy_price_ttc) || null },
+            { name: "Gibaud", price: Number(row.gibaud_price_ttc) || null },
+          ].filter((c) => c.price !== null) as { name: string; price: number }[];
+          const best = competitors.length ? competitors.reduce((m, c) => (c.price < m.price ? c : m), competitors[0]) : null;
+          const gapPct = orliman && best ? ((orliman - best.price) / best.price) * 100 : null;
+          let status: CompetitionRow["status"] = "no_data";
+          if (gapPct !== null) {
+            if (gapPct > 5) status = "premium";
+            else if (gapPct < -5) status = "underpriced";
+            else status = "aligned";
+          }
+          return {
+            sku: row.sku,
+            label: row.label,
+            territory_code: row.territory_code,
+            orliman,
+            bestCompetitor: best?.price ?? null,
+            bestName: best?.name ?? null,
+            gapPct,
+            status,
+          };
+        });
+
+        setCompetition(rows);
+      } catch (err) {
+        console.error(err);
+        if (active) setCompetition([]);
+      }
+    };
+    void loadCompetition();
+    return () => {
+      active = false;
+    };
+  }, [variables.territory_code]);
 
   const totals = React.useMemo(() => {
     const totalSalesHt = sales.reduce((s, r) => s + (r.amount_ht || 0), 0);
@@ -202,6 +269,16 @@ const regionPath = (pts: { lat: number; lon: number }[]) => {
   const rest = pts.slice(1).map((p) => project(p.lat, p.lon));
   return `M ${first.x} ${first.y} ${rest.map((p) => `L ${p.x} ${p.y}`).join(" ")} Z`;
 };
+
+// Silhouette monde simplifiee pour un fond plus geographique (projection large)
+const WORLD_PATH =
+  "M146 52 L200 48 L260 70 L320 60 L340 90 L330 130 L290 140 L250 130 L210 150 L190 120 L160 110 L120 130 L110 160 L130 190 L170 200 L210 220 L220 250 L210 280 L170 270 L140 260 L110 280 L90 320 L70 330 L50 310 L40 280 L60 250 L80 220 L60 190 L50 150 L60 110 Z " +
+  "M420 110 L460 120 L500 140 L520 170 L540 210 L530 240 L500 250 L470 240 L440 220 L430 190 L410 160 L400 130 Z " +
+  "M600 90 L640 100 L680 120 L700 150 L710 190 L700 230 L670 240 L630 230 L600 210 L580 180 L570 140 Z " +
+  "M760 200 L800 210 L830 230 L850 260 L840 290 L810 300 L780 290 L760 260 Z " +
+  "M880 120 L930 130 L970 150 L990 180 L1000 220 L980 250 L950 260 L910 250 L880 230 L870 190 L860 150 Z " +
+  "M720 320 L760 330 L780 360 L770 400 L740 420 L700 410 L680 380 L690 340 Z " +
+  "M500 320 L540 330 L560 360 L550 390 L520 400 L490 380 L480 350 Z";
 
 return (
     <MainLayout contentClassName="md:p-6 bg-slate-950">
@@ -376,6 +453,7 @@ return (
                   data={totals.byTerritory.find((t) => t.code === activeDest.code)}
                   loading={isLoading}
                 />
+                <CompetitionBlock rows={competition} territory={activeDest.code} />
               </div>
             </CardContent>
           </Card>
@@ -421,6 +499,48 @@ function DetailBlock({ dest, data, loading }: { dest: Destination; data?: { sale
           <div className={cn("font-semibold", margin >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatMoney(margin)}</div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CompetitionBlock({ rows, territory }: { rows: CompetitionRow[]; territory: string }) {
+  const filtered = rows.filter((r) => (r.territory_code || "FR") === territory).slice(0, 3);
+  if (filtered.length === 0) return null;
+  return (
+    <div className="mt-3 rounded-xl border border-cyan-500/30 bg-slate-950/80 p-3 space-y-2 shadow-inner shadow-cyan-500/10">
+      <div className="flex items-center justify-between text-xs text-slate-300/80">
+        <span>Concurrence</span>
+        <Badge variant="outline" className="text-[10px] border-cyan-500/40 text-cyan-200">
+          {territory}
+        </Badge>
+      </div>
+      {filtered.map((row) => (
+        <div key={row.sku} className="rounded-lg border border-cyan-500/20 bg-slate-900/80 px-3 py-2">
+          <div className="text-sm font-semibold text-cyan-100 truncate">{row.label || row.sku}</div>
+          <div className="text-[11px] text-slate-400">SKU {row.sku}</div>
+          <div className="mt-1 grid grid-cols-3 gap-2 text-[11px] text-slate-300/80">
+            <div>
+              <div className="text-slate-400">Orliman</div>
+              <div className="font-semibold text-cyan-200">{row.orliman ? formatMoney(row.orliman) : "?"}</div>
+            </div>
+            <div>
+              <div className="text-slate-400">Best</div>
+              <div className="font-semibold text-emerald-200">
+                {row.bestCompetitor ? formatMoney(row.bestCompetitor) : "?"} {row.bestName ? `(${row.bestName})` : ""}
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-400">Gap</div>
+              <div className={cn("font-semibold", row.gapPct !== null && row.gapPct > 5 ? "text-amber-300" : row.gapPct !== null && row.gapPct < -5 ? "text-emerald-300" : "text-slate-200")}>
+                {row.gapPct !== null ? `${row.gapPct.toFixed(1)}%` : "n/a"}
+              </div>
+            </div>
+          </div>
+          <div className="mt-1 text-[11px] text-slate-400">
+            Statut: <span className={cn("font-semibold", row.status === "premium" ? "text-amber-300" : row.status === "underpriced" ? "text-emerald-300" : "text-cyan-200")}>{row.status}</span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
