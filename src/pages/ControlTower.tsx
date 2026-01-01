@@ -140,9 +140,9 @@ export default function ControlTower() {
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm text-muted-foreground">Tour de controle export</p>
-            <h1 className="text-2xl font-bold">Flux DOM-TOM en temps reel</h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-cyan-300/90 uppercase tracking-[0.2em]">Tour de controle export</p>
+            <h1 className="text-2xl font-bold text-cyan-50">Flux DOM-TOM en temps reel</h1>
+            <p className="text-sm text-slate-300/80">
               Carte geographique fidele: clic = filtre territoire, double clic = Explore prefiltre.
             </p>
           </div>
@@ -153,28 +153,28 @@ export default function ControlTower() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[320px,1fr,320px]">
-          <Card className="bg-card/80 border-border/70 backdrop-blur">
+          <Card className="bg-slate-900/80 border-cyan-500/30 shadow-[0_10px_60px_rgba(14,116,144,0.25)] backdrop-blur">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-cyan-100">
                 KPIs globaux
-                <Badge variant="secondary" className="rounded-full">Live</Badge>
+                <Badge variant="secondary" className="rounded-full bg-cyan-500/20 text-cyan-200 border-cyan-500/40">Live</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Kpi label="Ventes HT" value={formatMoney(totals.totalSalesHt)} accent="text-sky-500" loading={isLoading} />
-              <Kpi label="Ventes TTC" value={formatMoney(totals.totalSalesTtc)} accent="text-slate-500" loading={isLoading} />
-              <Kpi label="Couts" value={formatMoney(totals.totalCosts)} accent="text-amber-500" loading={isLoading} />
-              <Separator />
-              <Kpi label="Marge estimee" value={formatMoney(totals.margin)} accent="text-emerald-500" loading={isLoading} />
-              {error ? <div className="text-xs text-destructive">{error}</div> : null}
+              <Kpi label="Ventes HT" value={formatMoney(totals.totalSalesHt)} accent="text-sky-400" loading={isLoading} />
+              <Kpi label="Ventes TTC" value={formatMoney(totals.totalSalesTtc)} accent="text-slate-400" loading={isLoading} />
+              <Kpi label="Couts" value={formatMoney(totals.totalCosts)} accent="text-amber-400" loading={isLoading} />
+              <Separator className="bg-cyan-500/30" />
+              <Kpi label="Marge estimee" value={formatMoney(totals.margin)} accent="text-emerald-400" loading={isLoading} />
+              {error ? <div className="text-xs text-rose-400">{error}</div> : null}
             </CardContent>
           </Card>
 
-          <Card className="relative overflow-hidden border-border/70 bg-background">
+          <Card className="relative overflow-hidden border-cyan-500/30 bg-slate-950">
             <CardContent className="p-0">
-              <div className="relative w-full h-[640px] bg-gradient-to-b from-slate-50 to-slate-100">
-                <div className="absolute inset-0 opacity-60" style={{ backgroundImage: "radial-gradient(circle at 10% 20%, rgba(56,189,248,0.08) 0, transparent 40%), radial-gradient(circle at 80% 10%, rgba(168,85,247,0.08) 0, transparent 35%), radial-gradient(circle at 30% 80%, rgba(34,197,94,0.06) 0, transparent 35%)" }} />
-                <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
+              <div className="relative w-full h-[640px] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+                <div className="absolute inset-0 opacity-60" style={{ backgroundImage: "radial-gradient(circle at 10% 20%, rgba(56,189,248,0.14) 0, transparent 40%), radial-gradient(circle at 80% 10%, rgba(168,85,247,0.16) 0, transparent 35%), radial-gradient(circle at 30% 80%, rgba(34,197,94,0.1) 0, transparent 35%)" }} />
+                <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
 
                 <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="w-full h-full relative z-10">
                   {nodes.filter((n) => n.code !== "FR").map((node) => {
@@ -187,8 +187,8 @@ export default function ControlTower() {
                           fill="none"
                           stroke={node.color}
                           strokeWidth={isActive ? 2.4 : 1.4}
-                          strokeOpacity={isActive ? 0.7 : 0.35}
-                          className="transition-all duration-300"
+                          strokeOpacity={isActive ? 0.8 : 0.35}
+                          className="transition-all duration-300 drop-shadow-[0_0_12px_rgba(56,189,248,0.3)]"
                         />
                         <motion.circle
                           cx={node.x}
@@ -198,7 +198,7 @@ export default function ControlTower() {
                           initial={{ scale: 0.8, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
                           transition={{ duration: 0.4 }}
-                          className="cursor-pointer"
+                          className="cursor-pointer drop-shadow-[0_0_12px_rgba(56,189,248,0.55)]"
                           onMouseEnter={() => setHovered(node.code)}
                           onMouseLeave={() => setHovered(null)}
                           onClick={() => setVariable("territory_code", node.code)}
@@ -210,7 +210,7 @@ export default function ControlTower() {
                         <text
                           x={node.x + 14}
                           y={node.y + 4}
-                          className="text-xs font-semibold fill-slate-700"
+                          className="text-xs font-semibold fill-cyan-100 drop-shadow"
                         >
                           {node.name}
                         </text>
@@ -226,7 +226,7 @@ export default function ControlTower() {
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.4 }}
-                    className="cursor-pointer"
+                    className="cursor-pointer drop-shadow-[0_0_16px_rgba(14,165,233,0.55)]"
                     onMouseEnter={() => setHovered("FR")}
                     onMouseLeave={() => setHovered(null)}
                     onClick={() => setVariable("territory_code", "FR")}
@@ -238,7 +238,7 @@ export default function ControlTower() {
                   <text
                     x={metropole.x + 18}
                     y={metropole.y + 4}
-                    className="text-sm font-bold fill-slate-800"
+                    className="text-sm font-bold fill-cyan-100 drop-shadow"
                   >
                     Metropole
                   </text>
@@ -251,9 +251,9 @@ export default function ControlTower() {
             </CardContent>
           </Card>
 
-          <Card className="bg-card/80 border-border/70 backdrop-blur">
+          <Card className="bg-slate-900/80 border-cyan-500/30 shadow-[0_10px_60px_rgba(14,116,144,0.25)] backdrop-blur">
             <CardHeader>
-              <CardTitle>Top destinations</CardTitle>
+              <CardTitle className="text-cyan-100">Top destinations</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {isLoading ? (
@@ -266,22 +266,22 @@ export default function ControlTower() {
                     key={t.code}
                     className={cn(
                       "w-full rounded-xl border px-3 py-2 text-left transition",
-                      selected === t.code ? "border-primary/40 bg-primary/5" : "border-border hover:bg-muted"
+                      selected === t.code ? "border-cyan-400/50 bg-cyan-500/10" : "border-cyan-500/20 hover:bg-slate-800"
                     )}
                     onClick={() => setVariable("territory_code", t.code)}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="font-semibold">{t.name}</div>
+                      <div className="font-semibold text-cyan-100">{t.name}</div>
                       <Badge variant="outline">{t.code}</Badge>
                     </div>
-                    <div className="text-xs text-muted-foreground">Ventes: {formatMoney(t.salesHt)}</div>
+                    <div className="text-xs text-slate-300/80">Ventes: {formatMoney(t.salesHt)}</div>
                   </button>
                 ))
               )}
 
-              <Separator />
+              <Separator className="bg-cyan-500/30" />
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Detail selection</p>
+                <p className="text-xs text-slate-300/80 mb-1">Detail selection</p>
                 <DetailBlock
                   dest={activeDest}
                   data={totals.byTerritory.find((t) => t.code === activeDest.code)}
@@ -299,8 +299,8 @@ export default function ControlTower() {
 function Kpi({ label, value, accent, loading }: { label: string; value: string; accent?: string; loading?: boolean }) {
   if (loading) return <Skeleton className="h-12 w-full" />;
   return (
-    <div className="rounded-xl border border-border/70 bg-card px-3 py-2">
-      <div className="text-xs text-muted-foreground">{label}</div>
+    <div className="rounded-xl border border-cyan-500/30 bg-slate-950/80 px-3 py-2 shadow-inner shadow-cyan-500/10">
+      <div className="text-xs text-slate-300/80">{label}</div>
       <div className={cn("text-xl font-bold", accent)}>{value}</div>
     </div>
   );
@@ -310,25 +310,25 @@ function DetailBlock({ dest, data, loading }: { dest: Destination; data?: { sale
   if (loading) return <Skeleton className="h-24 w-full" />;
   const margin = data ? data.margin : 0;
   return (
-    <div className="rounded-xl border border-border/70 bg-card px-3 py-3 space-y-2">
+    <div className="rounded-xl border border-cyan-500/30 bg-slate-950/80 px-3 py-3 space-y-2 shadow-inner shadow-cyan-500/10">
       <div className="flex items-center gap-2">
         <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ background: dest.color }} />
         <div>
-          <div className="text-sm font-semibold">{dest.name}</div>
-          <div className="text-[11px] text-muted-foreground">{dest.code}</div>
+          <div className="text-sm font-semibold text-cyan-100">{dest.name}</div>
+          <div className="text-[11px] text-slate-400">{dest.code}</div>
         </div>
       </div>
       <div className="grid grid-cols-3 gap-2 text-xs">
-        <div className="rounded-lg bg-muted px-2 py-2">
-          <div className="text-[11px] text-muted-foreground">Ventes HT</div>
+        <div className="rounded-lg bg-slate-900 px-2 py-2 border border-cyan-500/20">
+          <div className="text-[11px] text-slate-400">Ventes HT</div>
           <div className="font-semibold">{formatMoney(data?.salesHt || 0)}</div>
         </div>
-        <div className="rounded-lg bg-muted px-2 py-2">
-          <div className="text-[11px] text-muted-foreground">Couts</div>
+        <div className="rounded-lg bg-slate-900 px-2 py-2 border border-cyan-500/20">
+          <div className="text-[11px] text-slate-400">Couts</div>
           <div className="font-semibold">{formatMoney(data?.costs || 0)}</div>
         </div>
-        <div className="rounded-lg bg-muted px-2 py-2">
-          <div className="text-[11px] text-muted-foreground">Marge</div>
+        <div className="rounded-lg bg-slate-900 px-2 py-2 border border-cyan-500/20">
+          <div className="text-[11px] text-slate-400">Marge</div>
           <div className={cn("font-semibold", margin >= 0 ? "text-emerald-600" : "text-rose-600")}>{formatMoney(margin)}</div>
         </div>
       </div>
