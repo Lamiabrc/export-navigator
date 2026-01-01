@@ -253,14 +253,14 @@ export function VariablesBar() {
       </div>
       <div className="grid gap-2 md:grid-cols-4 lg:grid-cols-5">
         <Select
-          value={variables.territory_code ?? ""}
-          onValueChange={(v) => setVariable("territory_code", v || null)}
+          value={variables.territory_code ?? "all"}
+          onValueChange={(v) => setVariable("territory_code", v === "all" ? null : v)}
         >
           <SelectTrigger className="h-9">
             <SelectValue placeholder="Territoire" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Tous territoires</SelectItem>
+            <SelectItem value="all">Tous territoires</SelectItem>
             {lookups.territories.map((t) => (
               <SelectItem key={t.code} value={t.code}>
                 {t.label || t.code} ({t.code})
@@ -270,14 +270,14 @@ export function VariablesBar() {
         </Select>
 
         <Select
-          value={variables.client_id ?? ""}
-          onValueChange={(v) => setVariable("client_id", v || null)}
+          value={variables.client_id ?? "all"}
+          onValueChange={(v) => setVariable("client_id", v === "all" ? null : v)}
         >
           <SelectTrigger className="h-9">
             <SelectValue placeholder="Client" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Tous clients</SelectItem>
+            <SelectItem value="all">Tous clients</SelectItem>
             {lookups.clients.map((c) => (
               <SelectItem key={c.id} value={c.id}>
                 {c.name || c.id}
@@ -287,14 +287,14 @@ export function VariablesBar() {
         </Select>
 
         <Select
-          value={variables.product_id ?? ""}
-          onValueChange={(v) => setVariable("product_id", v || null)}
+          value={variables.product_id ?? "all"}
+          onValueChange={(v) => setVariable("product_id", v === "all" ? null : v)}
         >
           <SelectTrigger className="h-9">
             <SelectValue placeholder="Produit" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Tous produits</SelectItem>
+            <SelectItem value="all">Tous produits</SelectItem>
             {lookups.products.map((p) => (
               <SelectItem key={p.id} value={p.id}>
                 {p.label || p.id}
