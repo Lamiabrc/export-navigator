@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { RefreshCw, Download, TrendingUp, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/integrations/supabase/client";
 import { useSales } from "@/hooks/useSales";
 
 function toCsv(rows: Record<string, any>[]) {
@@ -48,6 +48,7 @@ function money(n: any) {
 type Territory = { code: string; label: string | null };
 type Client = { id: string; name: string | null };
 type Product = { id: string; libelle_article: string | null };
+type Destination = { id: string; name: string | null };
 
 export default function Sales() {
   const { rows, isLoading, error, warning, refresh, createSale, deleteSale } = useSales();
@@ -58,26 +59,30 @@ export default function Sales() {
   const [territories, setTerritories] = React.useState<Territory[]>([]);
   const [clients, setClients] = React.useState<Client[]>([]);
   const [products, setProducts] = React.useState<Product[]>([]);
+  const [destinations, setDestinations] = React.useState<Destination[]>([]);
 
   // form
   const [saleDate, setSaleDate] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [territoryCode, setTerritoryCode] = React.useState<string>("FR");
   const [clientId, setClientId] = React.useState<string>("none");
   const [productId, setProductId] = React.useState<string>("none");
+  const [destinationId, setDestinationId] = React.useState<string>("none");
   const [qty, setQty] = React.useState<string>("1");
   const [unitPrice, setUnitPrice] = React.useState<string>("0");
   const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
     (async () => {
-      const [tRes, cRes, pRes] = await Promise.all([
+      const [tRes, cRes, pRes, dRes] = await Promise.all([
         supabase.from("territories").select("code,label").order("label", { ascending: true }),
         supabase.from("clients").select("id,name").order("name", { ascending: true }).limit(500),
         supabase.from("products").select("id,libelle_article").order("libelle_article", { ascending: true }).limit(500),
+        supabase.from("export_destinations").select("id,name").order("name", { ascending: true }).limit(1000),
       ]);
       if (tRes.data) setTerritories(tRes.data as any);
       if (cRes.data) setClients(cRes.data as any);
       if (pRes.data) setProducts(pRes.data as any);
+      if (dRes.data) setDestinations(dRes.data as any);
     })().catch(console.error);
   }, []);
 
@@ -92,6 +97,7 @@ export default function Sales() {
         r.client_name,
         r.product_name,
         r.vat_category,
+        r.destination_name,
         String(r.amount_ht ?? ""),
         String(r.amount_ttc ?? ""),
       ]
@@ -121,6 +127,7 @@ export default function Sales() {
         vat_rate: r.vat_rate ?? 0,
         vat_amount: r.vat_amount ?? 0,
         amount_ttc: r.amount_ttc ?? 0,
+        destination_name: r.destination_name ?? "",
       })),
     );
     downloadText(csv, `sales_${new Date().toISOString().slice(0, 10)}.csv`);
@@ -143,6 +150,7 @@ export default function Sales() {
         territory_code: territoryCode,
         client_id: clientId === "none" ? null : clientId,
         product_id: productId,
+        destination_id: destinationId === "none" ? null : destinationId,
         quantity: qNum,
         unit_price_ht: pNum,
       });
@@ -259,6 +267,20 @@ export default function Sales() {
               </p>
             </div>
 
+            <div className="space-y-2 md:col-span-2">
+              <Label>Destination (optionnel)</Label>
+              <Select value={destinationId} onValueChange={setDestinationId}>
+                <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">—</SelectItem>
+                  {destinations.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name ?? d.id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Requis pour estimer le transport DHL.</p>
+            </div>
+
             <div className="space-y-2 md:col-span-1">
               <Label>Quantité</Label>
               <Input value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal" />
@@ -300,6 +322,7 @@ export default function Sales() {
                 <tr className="border-b text-muted-foreground">
                   <th className="py-2 text-left font-medium">Date</th>
                   <th className="py-2 text-left font-medium">Territoire</th>
+                  <th className="py-2 text-left font-medium">Destination</th>
                   <th className="py-2 text-left font-medium">Client</th>
                   <th className="py-2 text-left font-medium">Produit</th>
                   <th className="py-2 text-right font-medium">Qty</th>
@@ -313,14 +336,15 @@ export default function Sales() {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td className="py-3 text-muted-foreground" colSpan={11}>Chargement…</td></tr>
+                  <tr><td className="py-3 text-muted-foreground" colSpan={12}>Chargement…</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td className="py-3 text-muted-foreground" colSpan={11}>Aucune donnée.</td></tr>
+                  <tr><td className="py-3 text-muted-foreground" colSpan={12}>Aucune donnée.</td></tr>
                 ) : (
                   filtered.slice(0, 200).map((r) => (
                     <tr key={r.id} className="border-b">
                       <td className="py-2">{r.sale_date ?? "—"}</td>
                       <td className="py-2">{r.territory_label ?? r.territory_code ?? "—"}</td>
+                      <td className="py-2">{r.destination_name ?? "—"}</td>
                       <td className="py-2">{r.client_name ?? "—"}</td>
                       <td className="py-2">{r.product_name ?? "—"}</td>
                       <td className="py-2 text-right">{Number(r.quantity ?? 0).toLocaleString("fr-FR")}</td>

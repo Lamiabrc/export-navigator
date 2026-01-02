@@ -1,5 +1,5 @@
 import * as React from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/integrations/supabase/client";
 
 export type SaleRowUI = {
   id: string;
@@ -10,6 +10,8 @@ export type SaleRowUI = {
   client_name: string | null;
   product_id: string | null;
   product_name: string | null;
+  destination_id: string | null;
+  destination_name: string | null;
 
   quantity: number;
   unit_price_ht: number;
@@ -26,6 +28,7 @@ export type SaleRowUI = {
 type Territory = { code: string; label: string | null };
 type Client = { id: string; name: string | null };
 type Product = { id: string; libelle_article: string | null };
+type Destination = { id: string; name: string | null };
 
 export function useSales() {
   const [rows, setRows] = React.useState<SaleRowUI[]>([]);
@@ -39,14 +42,15 @@ export function useSales() {
     setWarning(null);
 
     try {
-      const [tRes, cRes, pRes, sRes] = await Promise.all([
+      const [tRes, cRes, pRes, dRes, sRes] = await Promise.all([
         supabase.from("territories").select("code,label"),
         supabase.from("clients").select("id,name").limit(1000),
         supabase.from("products").select("id,libelle_article").limit(1000),
+        supabase.from("export_destinations").select("id,name").order("name", { ascending: true }).limit(1000),
         supabase
           .from("sales")
           .select(
-            "id,sale_date,territory_code,client_id,product_id,quantity,unit_price_ht,amount_ht,vat_category,vat_rate,vat_amount,amount_ttc,created_at"
+            "id,sale_date,territory_code,client_id,product_id,destination_id,quantity,unit_price_ht,amount_ht,vat_category,vat_rate,vat_amount,amount_ttc,created_at"
           )
           .order("sale_date", { ascending: false })
           .order("created_at", { ascending: false })
@@ -56,15 +60,18 @@ export function useSales() {
       if (tRes.error) throw tRes.error;
       if (cRes.error) throw cRes.error;
       if (pRes.error) throw pRes.error;
+      if (dRes.error) throw dRes.error;
       if (sRes.error) throw sRes.error;
 
       const territories = (tRes.data ?? []) as Territory[];
       const clients = (cRes.data ?? []) as Client[];
       const products = (pRes.data ?? []) as Product[];
+      const destinations = (dRes.data ?? []) as Destination[];
 
       const territoryByCode = new Map(territories.map((t) => [t.code, t.label ?? t.code]));
       const clientById = new Map(clients.map((c) => [c.id, c.name ?? c.id]));
       const productById = new Map(products.map((p) => [p.id, p.libelle_article ?? p.id]));
+      const destinationById = new Map(destinations.map((d) => [d.id, d.name ?? d.id]));
 
       const mapped: SaleRowUI[] = (sRes.data ?? []).map((s: any) => ({
         id: s.id,
@@ -75,6 +82,8 @@ export function useSales() {
         client_name: s.client_id ? (clientById.get(s.client_id) ?? s.client_id) : null,
         product_id: s.product_id ?? null,
         product_name: s.product_id ? (productById.get(s.product_id) ?? s.product_id) : null,
+        destination_id: s.destination_id ?? null,
+        destination_name: s.destination_id ? (destinationById.get(s.destination_id) ?? s.destination_id) : null,
 
         quantity: Number(s.quantity ?? 0),
         unit_price_ht: Number(s.unit_price_ht ?? 0),
@@ -113,6 +122,7 @@ export function useSales() {
     territory_code: string;
     client_id?: string | null;
     product_id: string;
+    destination_id?: string | null;
     quantity: number;
     unit_price_ht: number;
   }) => {
@@ -121,6 +131,7 @@ export function useSales() {
       territory_code: payload.territory_code,
       client_id: payload.client_id ?? null,
       product_id: payload.product_id,
+      destination_id: payload.destination_id ?? null,
       quantity: payload.quantity,
       unit_price_ht: payload.unit_price_ht,
     });
