@@ -3,44 +3,138 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { cn } from "@/lib/utils";
+
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 
 type PricingRow = {
   sku: string;
   label: string | null;
   territory_code: string | null;
+
   plv_metropole_ttc: number | null;
   plv_om_ttc: number | null;
+
   thuasne_price_ttc: number | null;
   donjoy_price_ttc: number | null;
   gibaud_price_ttc: number | null;
 };
 
+type CompetitorPrice = { name: string; price: number };
+
 type PositionRow = {
   sku: string;
   label: string | null;
-  ourPrice: number | null;
-  bestCompetitor: { name: string; price: number } | null;
-  gapPct: number | null;
-  status: "premium" | "aligned" | "underpriced" | "no_data";
   territory: string;
+
+  ourPrice: number | null;
+  competitors: CompetitorPrice[];
+  bestCompetitor: CompetitorPrice | null;
+
+  gapPct: number | null; // vs best competitor
+  status: "premium" | "aligned" | "underpriced" | "no_data";
+
+  rank: number | null; // position Orliman (1 = moins cher)
+  competitorCount: number; // nb concurrents avec prix
 };
 
-const money = (n: number | null | undefined) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
+const money = (n: number | null | undefined) => {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(Number(n));
+};
 
-export default function WatchCommercial() {
+function computeRank(our: number, comps: CompetitorPrice[]) {
+  // Rang = 1 + nombre de prix strictement inférieurs au prix Orliman
+  const lower = comps.filter((c) => c.price < our).length;
+  return 1 + lower;
+}
+
+function computePosition(row: PricingRow, territory: string): PositionRow {
+  const ourPrice =
+    territory === "FR"
+      ? (Number(row.plv_metropole_ttc) || null)
+      : (Number(row.plv_om_ttc) || Number(row.plv_metropole_ttc) || null);
+
+  const competitorsAll = [
+    { name: "Thuasne", price: Number(row.thuasne_price_ttc) || null },
+    { name: "Donjoy", price: Number(row.donjoy_price_ttc) || null },
+    { name: "Gibaud", price: Number(row.gibaud_price_ttc) || null },
+  ];
+
+  const competitors = competitorsAll
+    .filter((c) => c.price !== null)
+    .map((c) => ({ name: c.name, price: c.price as number }));
+
+  const bestCompetitor =
+    competitors.length > 0
+      ? competitors.reduce((m, c) => (c.price < m.price ? c : m), competitors[0])
+      : null;
+
+  const gapPct =
+    ourPrice !== null && bestCompetitor
+      ? ((ourPrice - bestCompetitor.price) / bestCompetitor.price) * 100
+      : null;
+
+  let status: PositionRow["status"] = "no_data";
+  if (gapPct !== null) {
+    if (gapPct > 5) status = "premium";
+    else if (gapPct < -5) status = "underpriced";
+    else status = "aligned";
+  }
+
+  const rank =
+    ourPrice !== null && competitors.length > 0 ? computeRank(ourPrice, competitors) : null;
+
+  return {
+    sku: row.sku,
+    label: row.label,
+    territory: row.territory_code || territory,
+
+    ourPrice,
+    competitors,
+    bestCompetitor,
+
+    gapPct,
+    status,
+
+    rank,
+    competitorCount: competitors.length,
+  };
+}
+
+function pct(part: number, total: number) {
+  if (!total) return "0%";
+  return `${Math.round((part / total) * 100)}%`;
+}
+
+export default function CompetitionPage() {
   const { variables } = useGlobalFilters();
+
   const [rows, setRows] = React.useState<PositionRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
   const [search, setSearch] = React.useState("");
   const [territory, setTerritory] = React.useState(variables.territory_code || "FR");
+
+  const [selectedSku, setSelectedSku] = React.useState<string>("");
 
   React.useEffect(() => {
     if (variables.territory_code) setTerritory(variables.territory_code);
@@ -48,66 +142,96 @@ export default function WatchCommercial() {
 
   React.useEffect(() => {
     let active = true;
+
     const load = async () => {
-      if (!SUPABASE_ENV_OK) return;
+      if (!SUPABASE_ENV_OK) {
+        setError("Supabase n’est pas configuré (SUPABASE_ENV_OK=false).");
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
+
       try {
         const { data, error: sbError } = await supabase
           .from("v_export_pricing")
-          .select("sku,label,territory_code,plv_metropole_ttc,plv_om_ttc,thuasne_price_ttc,donjoy_price_ttc,gibaud_price_ttc")
+          .select(
+            "sku,label,territory_code,plv_metropole_ttc,plv_om_ttc,thuasne_price_ttc,donjoy_price_ttc,gibaud_price_ttc"
+          )
           .eq("territory_code", territory)
-          .limit(1000);
+          .limit(5000);
+
         if (!active) return;
         if (sbError) throw sbError;
 
-        const mapped: PositionRow[] = (data || []).map((row: PricingRow) => {
-          const ourPrice =
-            territory === "FR"
-              ? Number(row.plv_metropole_ttc) || null
-              : Number(row.plv_om_ttc) || Number(row.plv_metropole_ttc) || null;
-          const competitors = [
-            { name: "Thuasne", price: Number(row.thuasne_price_ttc) || null },
-            { name: "Donjoy", price: Number(row.donjoy_price_ttc) || null },
-            { name: "Gibaud", price: Number(row.gibaud_price_ttc) || null },
-          ].filter((c) => c.price !== null) as { name: string; price: number }[];
-          const best = competitors.length ? competitors.reduce((m, c) => (c.price < m.price ? c : m), competitors[0]) : null;
-          const gapPct = ourPrice && best ? ((ourPrice - best.price) / best.price) * 100 : null;
-          let status: PositionRow["status"] = "no_data";
-          if (gapPct !== null) {
-            if (gapPct > 5) status = "premium";
-            else if (gapPct < -5) status = "underpriced";
-            else status = "aligned";
-          }
-          return {
-            sku: row.sku,
-            label: row.label,
-            ourPrice,
-            bestCompetitor: best,
-            gapPct,
-            status,
-            territory: row.territory_code || territory,
-          };
-        });
+        const mapped: PositionRow[] = (data || []).map((r: PricingRow) => computePosition(r, territory));
         setRows(mapped);
+
+        // si le SKU sélectionné n’existe plus dans ce territoire, on reset
+        if (selectedSku && !mapped.some((m) => m.sku === selectedSku)) setSelectedSku("");
       } catch (err: any) {
         console.error(err);
+        if (!active) return;
         setError(err?.message || "Erreur chargement pricing");
       } finally {
         if (active) setIsLoading(false);
       }
     };
+
     void load();
     return () => {
       active = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [territory]);
 
-  const filtered = rows.filter((r) => {
+  const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return (r.sku + " " + (r.label || "")).toLowerCase().includes(q);
-  });
+    if (!q) return rows;
+    return rows.filter((r) => (r.sku + " " + (r.label || "")).toLowerCase().includes(q));
+  }, [rows, search]);
+
+  const selected = React.useMemo(() => {
+    if (!selectedSku) return null;
+    return rows.find((r) => r.sku === selectedSku) || null;
+  }, [rows, selectedSku]);
+
+  const summary = React.useMemo(() => {
+    const base = filtered;
+    const total = base.length;
+
+    const premium = base.filter((r) => r.status === "premium").length;
+    const aligned = base.filter((r) => r.status === "aligned").length;
+    const underpriced = base.filter((r) => r.status === "underpriced").length;
+    const noData = base.filter((r) => r.status === "no_data").length;
+
+    const withGap = base.filter((r) => r.gapPct !== null).map((r) => r.gapPct as number);
+    const avgGap = withGap.length ? withGap.reduce((a, b) => a + b, 0) / withGap.length : null;
+
+    const ranks = base.filter((r) => r.rank !== null).map((r) => r.rank as number);
+    const rankCounts = [1, 2, 3, 4].map((rk) => ({
+      rank: `#${rk}`,
+      count: ranks.filter((x) => x === rk).length,
+    }));
+
+    return {
+      total,
+      premium,
+      aligned,
+      underpriced,
+      noData,
+      avgGap,
+      rankCounts,
+    };
+  }, [filtered]);
+
+  const priceBarsForSelected = React.useMemo(() => {
+    if (!selected) return [];
+    const bars: { name: string; price: number }[] = [];
+    if (selected.ourPrice !== null) bars.push({ name: "Orliman", price: selected.ourPrice });
+    selected.competitors.forEach((c) => bars.push({ name: c.name, price: c.price }));
+    return bars;
+  }, [selected]);
 
   return (
     <MainLayout contentClassName="md:p-6">
@@ -115,12 +239,15 @@ export default function WatchCommercial() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.35em] text-cyan-300/90">Concurrence & positionnement</p>
-            <h1 className="text-3xl font-bold text-slate-900">Tableau de bord prix concurrents</h1>
-            <p className="text-sm text-slate-600">Source: v_export_pricing (Supabase) · Filtré par territoire et recherche SKU/label.</p>
+            <h1 className="text-3xl font-bold text-slate-900">Dashboard concurrence</h1>
+            <p className="text-sm text-slate-600">
+              Source: <span className="font-mono">v_export_pricing</span> (Supabase) · Territoire + sélection produit + recap.
+            </p>
           </div>
-          <div className="flex gap-2">
+
+          <div className="flex flex-wrap gap-2 justify-end">
             <Select value={territory} onValueChange={setTerritory}>
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Territoire" />
               </SelectTrigger>
               <SelectContent>
@@ -135,24 +262,234 @@ export default function WatchCommercial() {
                 <SelectItem value="MF">Saint-Martin (MF)</SelectItem>
               </SelectContent>
             </Select>
+
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Recherche SKU ou label"
-              className="w-[240px]"
+              placeholder="Filtre (SKU ou label)"
+              className="w-[260px]"
             />
+
+            <Select value={selectedSku} onValueChange={setSelectedSku}>
+              <SelectTrigger className="w-[280px]">
+                <SelectValue placeholder="Choisir un produit (SKU)" />
+              </SelectTrigger>
+              <SelectContent>
+                {filtered.slice(0, 800).map((r) => (
+                  <SelectItem key={r.sku} value={r.sku}>
+                    {r.sku} — {(r.label || "Produit").slice(0, 42)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
+        {error ? (
+          <Card className="border-red-200">
+            <CardContent className="pt-6">
+              <div className="text-sm text-red-600">{error}</div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {/* KPI */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <Card className="border-slate-200 shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-slate-600">Produits (filtrés)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{summary.total}</div>
+              <div className="text-xs text-muted-foreground">Territoire: {territory}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-slate-600">Premium</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{summary.premium}</div>
+              <div className="text-xs text-muted-foreground">{pct(summary.premium, summary.total)}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-slate-600">Aligné</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{summary.aligned}</div>
+              <div className="text-xs text-muted-foreground">{pct(summary.aligned, summary.total)}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-slate-600">Sous-pricé</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{summary.underpriced}</div>
+              <div className="text-xs text-muted-foreground">{pct(summary.underpriced, summary.total)}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-slate-600">Gap moyen vs best</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">
+                {summary.avgGap === null ? "—" : `${summary.avgGap.toFixed(1)}%`}
+              </div>
+              <div className="text-xs text-muted-foreground">Sur produits avec données</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Detail + Rank distribution */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <Card className="border-slate-200 shadow lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Produit sélectionné</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!selectedSku ? (
+                <div className="text-sm text-muted-foreground">
+                  Sélectionne un SKU pour voir la position Orliman (rang, écarts, comparaison).
+                </div>
+              ) : !selected ? (
+                <div className="text-sm text-muted-foreground">SKU introuvable dans ce territoire.</div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="font-mono text-xs text-muted-foreground">{selected.sku}</div>
+                      <div className="text-lg font-semibold">{selected.label || "Produit"}</div>
+                      <div className="text-sm text-muted-foreground">Territoire: {selected.territory}</div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "capitalize",
+                          selected.status === "premium"
+                            ? "text-amber-600 border-amber-300"
+                            : selected.status === "underpriced"
+                            ? "text-emerald-600 border-emerald-300"
+                            : selected.status === "aligned"
+                            ? "text-blue-600 border-blue-300"
+                            : "text-slate-500 border-slate-300"
+                        )}
+                      >
+                        {selected.status}
+                      </Badge>
+
+                      <Badge variant="outline" className="text-slate-700 border-slate-300">
+                        Rang Orliman: {selected.rank ?? "—"}
+                      </Badge>
+
+                      <Badge variant="outline" className="text-slate-700 border-slate-300">
+                        Gap vs best: {selected.gapPct === null ? "—" : `${selected.gapPct.toFixed(1)}%`}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Card className="border-slate-200">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Prix</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="font-medium">Orliman</div>
+                          <div className="font-semibold">{money(selected.ourPrice)}</div>
+                        </div>
+
+                        {selected.competitors.length ? (
+                          selected.competitors
+                            .slice()
+                            .sort((a, b) => a.price - b.price)
+                            .map((c) => (
+                              <div key={c.name} className="flex items-center justify-between">
+                                <div className="text-sm text-slate-700">{c.name}</div>
+                                <div className="text-sm font-medium">{money(c.price)}</div>
+                              </div>
+                            ))
+                        ) : (
+                          <div className="text-sm text-muted-foreground">Aucun prix concurrent disponible.</div>
+                        )}
+
+                        <div className="pt-2 text-xs text-muted-foreground">
+                          Rang = 1 + nb de concurrents moins chers (tie = même rang).
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-slate-200">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Comparatif visuel</CardTitle>
+                      </CardHeader>
+                      <CardContent className="h-[220px]">
+                        {priceBarsForSelected.length ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={priceBarsForSelected} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="name" />
+                              <YAxis />
+                              <Tooltip />
+                              <Bar dataKey="price" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="text-sm text-muted-foreground">Pas assez de données pour afficher un graphe.</div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 shadow">
+            <CardHeader>
+              <CardTitle>Distribution rang Orliman</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[320px]">
+              {isLoading ? (
+                <Skeleton className="h-full w-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={summary.rankCounts} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="rank" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Bar dataKey="count" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+              <div className="pt-2 text-xs text-muted-foreground">
+                Basé sur produits avec prix Orliman + ≥1 prix concurrent.
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Table */}
         <Card className="border-slate-200 shadow">
           <CardHeader>
-            <CardTitle>Positionnement</CardTitle>
+            <CardTitle>Positionnement (liste)</CardTitle>
           </CardHeader>
           <CardContent>
-            {error ? <div className="text-sm text-red-500 mb-3">{error}</div> : null}
             {isLoading ? (
               <div className="space-y-2">
-                {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                {[...Array(6)].map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
               </div>
             ) : (
               <Table>
@@ -160,40 +497,72 @@ export default function WatchCommercial() {
                   <TableRow>
                     <TableHead>SKU</TableHead>
                     <TableHead>Produit</TableHead>
-                    <TableHead>Prix Orliman</TableHead>
+                    <TableHead className="text-right">Prix Orliman</TableHead>
                     <TableHead>Best concurrent</TableHead>
-                    <TableHead>Gap %</TableHead>
+                    <TableHead className="text-right">Gap %</TableHead>
+                    <TableHead className="text-right">Rang</TableHead>
+                    <TableHead className="text-right"># conc.</TableHead>
                     <TableHead>Statut</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.slice(0, 300).map((row) => (
-                    <TableRow key={row.sku}>
+                  {filtered.slice(0, 400).map((row) => (
+                    <TableRow
+                      key={row.sku}
+                      className={cn(selectedSku === row.sku ? "bg-slate-50" : "")}
+                      onClick={() => setSelectedSku(row.sku)}
+                      style={{ cursor: "pointer" }}
+                    >
                       <TableCell className="font-mono text-xs">{row.sku}</TableCell>
-                      <TableCell className="font-medium">{row.label || "?"}</TableCell>
-                      <TableCell>{row.ourPrice ? money(row.ourPrice) : "?"}</TableCell>
+                      <TableCell className="font-medium">{row.label || "—"}</TableCell>
+                      <TableCell className="text-right">{money(row.ourPrice)}</TableCell>
                       <TableCell>
                         {row.bestCompetitor ? (
                           <div>
-                            {money(row.bestCompetitor.price)} <span className="text-xs text-muted-foreground">({row.bestCompetitor.name})</span>
+                            {money(row.bestCompetitor.price)}{" "}
+                            <span className="text-xs text-muted-foreground">({row.bestCompetitor.name})</span>
                           </div>
                         ) : (
-                          "?"
+                          "—"
                         )}
                       </TableCell>
-                      <TableCell className={cn(row.gapPct !== null && row.gapPct > 5 ? "text-amber-500" : row.gapPct !== null && row.gapPct < -5 ? "text-emerald-600" : "text-slate-700")}>
-                        {row.gapPct !== null ? `${row.gapPct.toFixed(1)}%` : "n/a"}
+                      <TableCell
+                        className={cn(
+                          "text-right",
+                          row.gapPct !== null && row.gapPct > 5
+                            ? "text-amber-600"
+                            : row.gapPct !== null && row.gapPct < -5
+                            ? "text-emerald-700"
+                            : "text-slate-700"
+                        )}
+                      >
+                        {row.gapPct !== null ? `${row.gapPct.toFixed(1)}%` : "—"}
                       </TableCell>
+                      <TableCell className="text-right">{row.rank ?? "—"}</TableCell>
+                      <TableCell className="text-right">{row.competitorCount}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={cn("capitalize", row.status === "premium" ? "text-amber-600 border-amber-300" : row.status === "underpriced" ? "text-emerald-600 border-emerald-300" : row.status === "aligned" ? "text-blue-600 border-blue-300" : "text-slate-500 border-slate-300")}>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "capitalize",
+                            row.status === "premium"
+                              ? "text-amber-600 border-amber-300"
+                              : row.status === "underpriced"
+                              ? "text-emerald-600 border-emerald-300"
+                              : row.status === "aligned"
+                              ? "text-blue-600 border-blue-300"
+                              : "text-slate-500 border-slate-300"
+                          )}
+                        >
                           {row.status}
                         </Badge>
                       </TableCell>
                     </TableRow>
                   ))}
+
                   {filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
                         Aucun produit trouvé.
                       </TableCell>
                     </TableRow>
@@ -201,6 +570,10 @@ export default function WatchCommercial() {
                 </TableBody>
               </Table>
             )}
+
+            <div className="pt-2 text-xs text-muted-foreground">
+              Astuce : clique une ligne pour sélectionner le produit et voir le détail en haut.
+            </div>
           </CardContent>
         </Card>
       </div>
