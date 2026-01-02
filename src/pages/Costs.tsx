@@ -4,9 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Download, Receipt, Truck } from "lucide-react";
+import { RefreshCw, Download, Receipt, Truck, Plane } from "lucide-react";
 import { useCosts } from "@/hooks/useCosts";
 import { supabase } from "@/integrations/supabase/client";
+import { useDhlSalesQuotes } from "@/hooks/useDhlSalesQuotes";
 
 function toCsv(rows: Record<string, any>[], delimiter = ";") {
   if (!rows.length) return "";
@@ -77,6 +78,12 @@ async function fetchAllPricingRows(territoryCode: string) {
 // -------------------- PAGE --------------------
 export default function Costs() {
   const { rows, isLoading, error, warning, refresh } = useCosts();
+  const [destinations, setDestinations] = React.useState<{ id: string; name: string | null }[]>([]);
+  const [dhlDestinationId, setDhlDestinationId] = React.useState<string>("all");
+
+  const { data: dhlQuotes, loading: dhlLoading, error: dhlError, refetch: refetchDhl } = useDhlSalesQuotes({
+    destinationId: dhlDestinationId === "all" ? undefined : dhlDestinationId,
+  });
 
   // Recherche charges
   const [q, setQ] = React.useState("");
@@ -127,6 +134,39 @@ export default function Costs() {
     );
 
     downloadText(csv, `costs_${new Date().toISOString().slice(0, 10)}.csv`);
+  }
+
+  React.useEffect(() => {
+    supabase
+      .from("export_destinations")
+      .select("id,name")
+      .order("name", { ascending: true })
+      .limit(1000)
+      .then(({ data, error: destError }) => {
+        if (!destError && data) setDestinations(data as any);
+      })
+      .catch(console.error);
+  }, []);
+
+  const dhlTotal = React.useMemo(
+    () => dhlQuotes.reduce((s, q) => s + (Number(q.dhl_transport_eur) || 0), 0),
+    [dhlQuotes]
+  );
+
+  function exportDhlCsv() {
+    if (!dhlQuotes.length) return;
+    const csv = toCsv(
+      dhlQuotes.map((q) => ({
+        sale_id: q.sale_id ?? "",
+        sale_date: q.sale_date ?? "",
+        destination_name: q.destination_name ?? "",
+        dhl_zone: q.dhl_zone ?? "",
+        quantity: q.quantity ?? "",
+        total_actual_weight_kg: q.total_actual_weight_kg ?? "",
+        dhl_transport_eur: q.dhl_transport_eur ?? "",
+      }))
+    );
+    downloadText(csv, `dhl_quotes_${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
   // -------------------- FORM: TRANSPORT + DOSSIER (par commande) --------------------
@@ -279,6 +319,100 @@ export default function Costs() {
             <CardContent className="pt-6 text-sm text-foreground">{error || warning}</CardContent>
           </Card>
         ) : null}
+
+        {/* DHL ESTIMATION */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Plane className="h-5 w-5" />
+              Estimation DHL (Economy Select • Export)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col md:flex-row md:items-end gap-3">
+              <div className="flex-1">
+                <p className="text-xs text-muted-foreground mb-1">Destination</p>
+                <select
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  value={dhlDestinationId}
+                  onChange={(e) => setDhlDestinationId(e.target.value)}
+                >
+                  <option value="all">Toutes</option>
+                  {destinations.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name ?? d.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={refetchDhl} disabled={dhlLoading} className="gap-2">
+                  <RefreshCw className={`h-4 w-4 ${dhlLoading ? "animate-spin" : ""}`} />
+                  Actualiser DHL
+                </Button>
+                <Button variant="outline" onClick={exportDhlCsv} disabled={dhlLoading || dhlQuotes.length === 0} className="gap-2">
+                  <Download className="h-4 w-4" />
+                  Export DHL (CSV)
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 text-xs">
+              <Badge variant="secondary">Lignes: {dhlQuotes.length}</Badge>
+              <Badge variant="secondary">Total estimé: {Math.round(dhlTotal).toLocaleString("fr-FR")} €</Badge>
+            </div>
+
+            {dhlError ? (
+              <Card className="border-red-200 bg-red-50">
+                <CardContent className="pt-4 text-sm text-foreground">{dhlError}</CardContent>
+              </Card>
+            ) : null}
+
+            <div className="overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-background">
+                  <tr className="border-b text-muted-foreground">
+                    <th className="py-2 text-left font-medium">Vente</th>
+                    <th className="py-2 text-left font-medium">Date</th>
+                    <th className="py-2 text-left font-medium">Destination</th>
+                    <th className="py-2 text-left font-medium">Zone DHL</th>
+                    <th className="py-2 text-right font-medium">Qté</th>
+                    <th className="py-2 text-right font-medium">Poids (kg)</th>
+                    <th className="py-2 text-right font-medium">Transport (€)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dhlLoading ? (
+                    <tr>
+                      <td colSpan={7} className="py-4 text-center text-muted-foreground">
+                        Chargement…
+                      </td>
+                    </tr>
+                  ) : dhlQuotes.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-4 text-center text-muted-foreground">
+                        Pas de devis DHL : vérifier destination_id, mapping zone, poids produit.
+                      </td>
+                    </tr>
+                  ) : (
+                    dhlQuotes.map((q) => (
+                      <tr key={q.sale_id} className="border-b last:border-0">
+                        <td className="py-2">{q.sale_id ?? "—"}</td>
+                        <td className="py-2">{q.sale_date ?? "—"}</td>
+                        <td className="py-2">{q.destination_name ?? "—"}</td>
+                        <td className="py-2">{q.dhl_zone ?? "—"}</td>
+                        <td className="py-2 text-right tabular-nums">{q.quantity ?? "—"}</td>
+                        <td className="py-2 text-right tabular-nums">{q.total_actual_weight_kg ?? "—"}</td>
+                        <td className="py-2 text-right tabular-nums">{(q.dhl_transport_eur ?? 0).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* 1) PRIX (v_export_pricing) */}
         <Card>
