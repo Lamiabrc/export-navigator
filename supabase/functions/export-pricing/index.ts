@@ -6,23 +6,20 @@ function toCsv(rows: any[]) {
   if (!rows || rows.length === 0) return "no_data\n";
   const headers = Object.keys(rows[0]);
   const escape = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-
   const lines = [
     headers.join(","),
     ...rows.map((r) => headers.map((h) => escape(r[h])).join(",")),
   ];
-
   return lines.join("\n");
 }
 
 Deno.serve(async (req) => {
-  // CORS preflight (obligatoire navigateur)
+  // ✅ CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // 1) Auth (Verify JWT ON côté Supabase)
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response("Missing Authorization header", {
@@ -31,20 +28,36 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2) Params
+    // Params
     const { territory_code } = await req.json().catch(() => ({ territory_code: "FR" }));
     const territory = String(territory_code ?? "FR").toUpperCase();
 
-    // 3) Service role (jamais dans le front)
+    // Env
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+    // ✅ 1) Valider le JWT avec ANON KEY (sinon n’importe qui peut appeler le service role)
+    const supabaseAuth = createClient(supabaseUrl, anonKey, {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: userData, error: userErr } = await supabaseAuth.auth.getUser();
+    if (userErr || !userData?.user) {
+      return new Response("Invalid or expired JWT", {
+        status: 401,
+        headers: corsHeaders,
+      });
+    }
+
+    // ✅ 2) Client admin (service role) après auth OK
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
       global: { headers: { Authorization: authHeader } },
     });
 
-    // 4) Pagination
+    // Pagination
     const pageSize = 5000;
     let from = 0;
     const all: any[] = [];
@@ -67,7 +80,6 @@ Deno.serve(async (req) => {
       from += pageSize;
     }
 
-    // 5) CSV
     const csv = toCsv(all);
 
     return new Response(csv, {
@@ -79,7 +91,7 @@ Deno.serve(async (req) => {
       },
     });
   } catch (e) {
-    return new Response(`Error: ${String(e?.message ?? e)}`, {
+    return new Response(`Error: ${String((e as any)?.message ?? e)}`, {
       status: 500,
       headers: corsHeaders,
     });
