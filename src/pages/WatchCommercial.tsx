@@ -20,18 +20,7 @@ import {
   CartesianGrid,
 } from "recharts";
 
-type PricingRow = {
-  sku: string;
-  label: string | null;
-  territory_code: string | null;
-
-  plv_metropole_ttc: number | null;
-  plv_om_ttc: number | null;
-
-  thuasne_price_ttc: number | null;
-  donjoy_price_ttc: number | null;
-  gibaud_price_ttc: number | null;
-};
+type CsvRow = Record<string, string>;
 
 type CompetitorPrice = { name: string; price: number };
 
@@ -51,6 +40,59 @@ type PositionRow = {
   competitorCount: number; // nb concurrents avec prix
 };
 
+function parseCsvLine(line: string): string[] {
+  // parser CSV simple mais robuste pour guillemets doubles
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+
+    if (ch === '"') {
+      // "" -> "
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (ch === "," && !inQuotes) {
+      out.push(cur);
+      cur = "";
+      continue;
+    }
+
+    cur += ch;
+  }
+
+  out.push(cur);
+  return out;
+}
+
+function parseCsv(csv: string): CsvRow[] {
+  const trimmed = (csv || "").trim();
+  if (!trimmed || trimmed.startsWith("no_data")) return [];
+
+  const lines = trimmed.split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+
+  const headers = parseCsvLine(lines[0]).map((h) => h.trim());
+  const rows: CsvRow[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const fields = parseCsvLine(lines[i]);
+    const row: CsvRow = {};
+    headers.forEach((h, idx) => (row[h] = fields[idx] ?? ""));
+    rows.push(row);
+  }
+
+  return rows;
+}
+
 const money = (n: number | null | undefined) => {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
   return new Intl.NumberFormat("fr-FR", {
@@ -60,22 +102,28 @@ const money = (n: number | null | undefined) => {
   }).format(Number(n));
 };
 
+function num(v: any): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 function computeRank(our: number, comps: CompetitorPrice[]) {
-  // Rang = 1 + nombre de prix strictement inférieurs au prix Orliman
   const lower = comps.filter((c) => c.price < our).length;
   return 1 + lower;
 }
 
-function computePosition(row: PricingRow, territory: string): PositionRow {
+function computePosition(row: CsvRow, territoryFallback: string): PositionRow {
+  const territory = (row["territory_code"] || territoryFallback || "FR").toUpperCase();
+
   const ourPrice =
     territory === "FR"
-      ? (Number(row.plv_metropole_ttc) || null)
-      : (Number(row.plv_om_ttc) || Number(row.plv_metropole_ttc) || null);
+      ? num(row["plv_metropole_ttc"])
+      : (num(row["plv_om_ttc"]) ?? num(row["plv_metropole_ttc"]));
 
   const competitorsAll = [
-    { name: "Thuasne", price: Number(row.thuasne_price_ttc) || null },
-    { name: "Donjoy", price: Number(row.donjoy_price_ttc) || null },
-    { name: "Gibaud", price: Number(row.gibaud_price_ttc) || null },
+    { name: "Thuasne", price: num(row["thuasne_price_ttc"]) },
+    { name: "Donjoy", price: num(row["donjoy_price_ttc"]) },
+    { name: "Gibaud", price: num(row["gibaud_price_ttc"]) },
   ];
 
   const competitors = competitorsAll
@@ -103,9 +151,9 @@ function computePosition(row: PricingRow, territory: string): PositionRow {
     ourPrice !== null && competitors.length > 0 ? computeRank(ourPrice, competitors) : null;
 
   return {
-    sku: row.sku,
-    label: row.label,
-    territory: row.territory_code || territory,
+    sku: row["sku"],
+    label: row["label"] || null,
+    territory,
 
     ourPrice,
     competitors,
@@ -153,26 +201,29 @@ export default function CompetitionPage() {
       setError(null);
 
       try {
-        const { data, error: sbError } = await supabase
-          .from("v_export_pricing")
-          .select(
-            "sku,label,territory_code,plv_metropole_ttc,plv_om_ttc,thuasne_price_ttc,donjoy_price_ttc,gibaud_price_ttc"
-          )
-          .eq("territory_code", territory)
-          .limit(5000);
+        // ✅ Appel Edge Function (service role côté serveur)
+        const { data, error: fnError } = await supabase.functions.invoke("export-pricing", {
+          body: { territory_code: territory },
+        });
 
         if (!active) return;
-        if (sbError) throw sbError;
+        if (fnError) throw fnError;
 
-        const mapped: PositionRow[] = (data || []).map((r: PricingRow) => computePosition(r, territory));
+        // data = texte CSV (Content-Type text/csv -> parsé en text par défaut) :contentReference[oaicite:3]{index=3}
+        const csvText = String(data ?? "");
+        const rawRows = parseCsv(csvText);
+
+        const mapped = rawRows
+          .filter((r) => r["sku"]) // sécurité
+          .map((r) => computePosition(r, territory));
+
         setRows(mapped);
 
-        // si le SKU sélectionné n’existe plus dans ce territoire, on reset
         if (selectedSku && !mapped.some((m) => m.sku === selectedSku)) setSelectedSku("");
       } catch (err: any) {
         console.error(err);
         if (!active) return;
-        setError(err?.message || "Erreur chargement pricing");
+        setError(err?.message || "Erreur chargement concurrence");
       } finally {
         if (active) setIsLoading(false);
       }
@@ -214,15 +265,7 @@ export default function CompetitionPage() {
       count: ranks.filter((x) => x === rk).length,
     }));
 
-    return {
-      total,
-      premium,
-      aligned,
-      underpriced,
-      noData,
-      avgGap,
-      rankCounts,
-    };
+    return { total, premium, aligned, underpriced, noData, avgGap, rankCounts };
   }, [filtered]);
 
   const priceBarsForSelected = React.useMemo(() => {
@@ -241,7 +284,7 @@ export default function CompetitionPage() {
             <p className="text-xs uppercase tracking-[0.35em] text-cyan-300/90">Concurrence & positionnement</p>
             <h1 className="text-3xl font-bold text-slate-900">Dashboard concurrence</h1>
             <p className="text-sm text-slate-600">
-              Source: <span className="font-mono">v_export_pricing</span> (Supabase) · Territoire + sélection produit + recap.
+              Données via Edge Function <span className="font-mono">export-pricing</span> → CSV → dashboard.
             </p>
           </div>
 
@@ -293,7 +336,6 @@ export default function CompetitionPage() {
           </Card>
         ) : null}
 
-        {/* KPI */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           <Card className="border-slate-200 shadow">
             <CardHeader className="pb-2">
@@ -348,7 +390,6 @@ export default function CompetitionPage() {
           </Card>
         </div>
 
-        {/* Detail + Rank distribution */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <Card className="border-slate-200 shadow lg:col-span-2">
             <CardHeader>
@@ -421,10 +462,6 @@ export default function CompetitionPage() {
                         ) : (
                           <div className="text-sm text-muted-foreground">Aucun prix concurrent disponible.</div>
                         )}
-
-                        <div className="pt-2 text-xs text-muted-foreground">
-                          Rang = 1 + nb de concurrents moins chers (tie = même rang).
-                        </div>
                       </CardContent>
                     </Card>
 
@@ -479,7 +516,6 @@ export default function CompetitionPage() {
           </Card>
         </div>
 
-        {/* Table */}
         <Card className="border-slate-200 shadow">
           <CardHeader>
             <CardTitle>Positionnement (liste)</CardTitle>
