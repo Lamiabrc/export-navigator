@@ -52,9 +52,13 @@ const DESTINATIONS: Destination[] = [
 const formatMoney = (n: number | null | undefined) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
 
+// Apply small manual offsets to better align plotted points with the world map background.
+const LON_OFFSET = -15; // shift west to place Metropole on France
+const LAT_OFFSET = 3; // shift a bit north
+
 const project = (lat: number, lon: number) => {
-  const x = ((lon + 180) / 360) * MAP_WIDTH;
-  const y = ((90 - lat) / 180) * MAP_HEIGHT;
+  const x = ((lon + 180 + LON_OFFSET) / 360) * MAP_WIDTH;
+  const y = ((90 - (lat + LAT_OFFSET)) / 180) * MAP_HEIGHT;
   return { x, y };
 };
 
