@@ -193,7 +193,7 @@ export default function CompetitionPage() {
 
     const load = async () => {
       if (!SUPABASE_ENV_OK) {
-        setError("Supabase n’est pas configuré (SUPABASE_ENV_OK=false).");
+        setError("Supabase non configure (SUPABASE_ENV_OK=false).");
         return;
       }
 
@@ -201,7 +201,6 @@ export default function CompetitionPage() {
       setError(null);
 
       try {
-        // ✅ Appel Edge Function (service role côté serveur)
         const { data, error: fnError } = await supabase.functions.invoke("export-pricing", {
           body: { territory_code: territory },
         });
@@ -209,21 +208,51 @@ export default function CompetitionPage() {
         if (!active) return;
         if (fnError) throw fnError;
 
-        // data = texte CSV (Content-Type text/csv -> parsé en text par défaut) :contentReference[oaicite:3]{index=3}
         const csvText = String(data ?? "");
         const rawRows = parseCsv(csvText);
 
         const mapped = rawRows
-          .filter((r) => r["sku"]) // sécurité
+          .filter((r) => r["sku"])
           .map((r) => computePosition(r, territory));
 
         setRows(mapped);
-
         if (selectedSku && !mapped.some((m) => m.sku === selectedSku)) setSelectedSku("");
       } catch (err: any) {
-        console.error(err);
-        if (!active) return;
-        setError(err?.message || "Erreur chargement concurrence");
+        console.error("Edge function export-pricing echouee, fallback v_export_pricing", err);
+        try {
+          const { data: viewData, error: viewError } = await supabase
+            .from("v_export_pricing")
+            .select("*")
+            .eq("territory_code", territory)
+            .limit(3000);
+          if (viewError) throw viewError;
+
+          const mapped = (viewData || [])
+            .filter((r: any) => r.sku)
+            .map((r: any) =>
+              computePosition(
+                {
+                  sku: r.sku,
+                  label: r.label,
+                  territory_code: r.territory_code,
+                  plv_metropole_ttc: r.plv_metropole_ttc,
+                  plv_om_ttc: r.plv_om_ttc,
+                  thuasne_price_ttc: r.thuasne_price_ttc,
+                  donjoy_price_ttc: r.donjoy_price_ttc,
+                  gibaud_price_ttc: r.gibaud_price_ttc,
+                } as CsvRow,
+                territory,
+              ),
+            );
+
+          setRows(mapped);
+          if (selectedSku && !mapped.some((m) => m.sku === selectedSku)) setSelectedSku("");
+          setError("Edge Function indisponible (500). Donnees fallback v_export_pricing.");
+        } catch (viewErr: any) {
+          console.error("Fallback v_export_pricing echoue", viewErr);
+          if (!active) return;
+          setError(viewErr?.message || err?.message || "Erreur chargement concurrence");
+        }
       } finally {
         if (active) setIsLoading(false);
       }
