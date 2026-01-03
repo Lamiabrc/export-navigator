@@ -39,14 +39,14 @@ const MAP_HEIGHT = 680;
 
 const DESTINATIONS: Destination[] = [
   { code: "FR", name: "Metropole", lat: 46.6, lon: 2.3, color: "#38bdf8" },
-  { code: "GP", name: "Guadeloupe", lat: 16.265, lon: -61.551, color: "#fb7185", offset: { x: 32, y: -20 } },
-  { code: "MQ", name: "Martinique", lat: 14.6415, lon: -61.0242, color: "#f59e0b", offset: { x: 6, y: 28 } },
-  { code: "GF", name: "Guyane", lat: 4.0, lon: -53.0, color: "#22c55e" },
-  { code: "RE", name: "Reunion", lat: -21.1151, lon: 55.5364, color: "#a855f7" },
-  { code: "YT", name: "Mayotte", lat: -12.8275, lon: 45.1662, color: "#38bdf8" },
-  { code: "SPM", name: "Saint-Pierre-et-Miquelon", lat: 46.8852, lon: -56.3159, color: "#0ea5e9" },
-  { code: "BL", name: "Saint-Barthelemy", lat: 17.9, lon: -62.85, color: "#ec4899", offset: { x: -24, y: -18 } },
-  { code: "MF", name: "Saint-Martin", lat: 18.0708, lon: -63.0501, color: "#10b981", offset: { x: 20, y: 8 } },
+  { code: "GP", name: "Guadeloupe", lat: 16.265, lon: -61.551, color: "#fb7185", offset: { x: 18, y: -12 } },
+  { code: "MQ", name: "Martinique", lat: 14.6415, lon: -61.0242, color: "#f59e0b", offset: { x: -6, y: 22 } },
+  { code: "GF", name: "Guyane", lat: 4.0, lon: -53.0, color: "#22c55e", offset: { x: -12, y: 18 } },
+  { code: "RE", name: "Reunion", lat: -21.1151, lon: 55.5364, color: "#a855f7", offset: { x: -10, y: -8 } },
+  { code: "YT", name: "Mayotte", lat: -12.8275, lon: 45.1662, color: "#38bdf8", offset: { x: -16, y: 6 } },
+  { code: "SPM", name: "Saint-Pierre-et-Miquelon", lat: 46.8852, lon: -56.3159, color: "#0ea5e9", offset: { x: 12, y: -8 } },
+  { code: "BL", name: "Saint-Barthelemy", lat: 17.9, lon: -62.85, color: "#ec4899", offset: { x: -28, y: -10 } },
+  { code: "MF", name: "Saint-Martin", lat: 18.0708, lon: -63.0501, color: "#10b981", offset: { x: 16, y: 6 } },
 ];
 
 const formatMoney = (n: number | null | undefined) =>
@@ -323,8 +323,8 @@ return (
                 <img
                   src={worldMap}
                   alt="Fond carte monde"
-                  className="absolute inset-0 h-full w-full object-cover opacity-45 pointer-events-none"
-                  style={{ filter: "saturate(1.2) brightness(1.1)" }}
+                  className="absolute inset-0 h-full w-full object-cover opacity-70 pointer-events-none"
+                  style={{ filter: "saturate(1.3) brightness(1.05)" }}
                 />
                 <div className="absolute inset-6 rounded-xl border border-cyan-500/10" />
                 <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />

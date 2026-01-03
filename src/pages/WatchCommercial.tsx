@@ -183,6 +183,7 @@ export default function CompetitionPage() {
   const [territory, setTerritory] = React.useState(variables.territory_code || "FR");
 
   const [selectedSku, setSelectedSku] = React.useState<string>("");
+  const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
 
   React.useEffect(() => {
     if (variables.territory_code) setTerritory(variables.territory_code);
@@ -270,6 +271,35 @@ export default function CompetitionPage() {
     if (!q) return rows;
     return rows.filter((r) => (r.sku + " " + (r.label || "")).toLowerCase().includes(q));
   }, [rows, search]);
+
+  const gapSummary = React.useMemo(() => {
+    const total = rows.length;
+    const premium = rows.filter((r) => r.status === "premium").length;
+    const aligned = rows.filter((r) => r.status === "aligned").length;
+    const under = rows.filter((r) => r.status === "underpriced").length;
+    const noData = rows.filter((r) => r.status === "no_data").length;
+    return { total, premium, aligned, under, noData };
+  }, [rows]);
+
+  const dromSummary = React.useMemo(() => {
+    return DROM_CODES.map((code) => {
+      const terrRows = rows.filter((r) => (r.territory || "").toUpperCase() === code);
+      const count = terrRows.length;
+      const avgGap =
+        terrRows.filter((r) => r.gapPct !== null).reduce((s, r) => s + (r.gapPct as number), 0) /
+        Math.max(1, terrRows.filter((r) => r.gapPct !== null).length);
+      const best = terrRows
+        .filter((r) => r.gapPct !== null)
+        .sort((a, b) => (a.gapPct as number) - (b.gapPct as number))[0];
+      return {
+        territory: code,
+        count,
+        avgGap: Number.isFinite(avgGap) ? avgGap : null,
+        bestLabel: best?.label || best?.sku || null,
+        bestGap: best?.gapPct ?? null,
+      };
+    });
+  }, [rows]);
 
   const selected = React.useMemo(() => {
     if (!selectedSku) return null;
@@ -520,12 +550,12 @@ export default function CompetitionPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 shadow">
-            <CardHeader>
-              <CardTitle>Distribution rang Orliman</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[320px]">
-              {isLoading ? (
+        <Card className="border-slate-200 shadow">
+          <CardHeader>
+            <CardTitle>Distribution rang Orliman</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[320px]">
+            {isLoading ? (
                 <Skeleton className="h-full w-full" />
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -544,6 +574,29 @@ export default function CompetitionPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card className="border-slate-200 shadow">
+          <CardHeader>
+            <CardTitle className="text-lg">Résumé DROM</CardTitle>
+            <CardDescription>Position prix Orliman vs concurrents sur les DOM-TOM.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-3">
+            {dromSummary.map((d) => (
+              <div key={d.territory} className="rounded-lg border p-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-semibold">{d.territory}</span>
+                  <Badge variant="outline">{d.count} SKU</Badge>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Gap moyen: {d.avgGap !== null ? `${d.avgGap.toFixed(1)}%` : "n/a"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Meilleur: {d.bestLabel || "n/a"} {d.bestGap !== null ? `(${d.bestGap.toFixed(1)}%)` : ""}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
 
         <Card className="border-slate-200 shadow">
           <CardHeader>

@@ -18,6 +18,7 @@ import {
   Package,
   Calculator,
 } from "lucide-react";
+import { Bot } from "lucide-react";
 
 type NavItem = {
   name: string;
@@ -26,6 +27,7 @@ type NavItem = {
   badge?: string;
   featured?: boolean;
   aliases?: string[];
+  adminOnly?: boolean;
 };
 
 type NavSection = {
@@ -46,12 +48,6 @@ const navigation: NavSection[] = [
         aliases: ["/dashboard", "/hub"],
       },
       {
-        name: "Explore (ventes)",
-        href: "/explore",
-        icon: TrendingUp,
-        aliases: ["/sales"],
-      },
-      {
         name: "Concurrence",
         href: "/competition",
         icon: Target,
@@ -63,25 +59,9 @@ const navigation: NavSection[] = [
         icon: ShieldCheck,
       },
       {
-        name: "Hub (legacy)",
-        href: "/hub",
-        icon: ShieldCheck,
-        aliases: ["/welcome"],
-      },
-      {
         name: "Costs (charges)",
         href: "/costs",
         icon: Receipt,
-      },
-      {
-        name: "Taxes & OM",
-        href: "/taxes-om",
-        icon: Scale,
-      },
-      {
-        name: "Clients",
-        href: "/clients",
-        icon: Users,
       },
       {
         name: "Produits",
@@ -93,8 +73,9 @@ const navigation: NavSection[] = [
         href: "/simulator",
         icon: Calculator,
       },
+      { name: "Assistant", href: "/assistant", icon: Bot },
       { name: "Veille reglementaire", href: "/watch/regulatory", icon: BookOpen },
-      { name: "Admin", href: "/admin", icon: Settings },
+      { name: "Admin", href: "/admin", icon: Settings, adminOnly: true },
     ],
   },
 ];
@@ -175,14 +156,20 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
     >
       {/* Nav */}
       <nav className="flex-1 space-y-4 px-3 py-4 overflow-y-auto">
-        {navigation.map((section) => (
-          <div key={section.title}>
-            <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {section.title}
+        {navigation.map((section) => {
+          const visibleItems = section.items.filter((it) => {
+            if (it.adminOnly && user?.email !== "lamia.brechetighil@orliman.fr") return false;
+            return true;
+          });
+          return (
+            <div key={section.title}>
+              <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {section.title}
+              </div>
+              <div className="space-y-1.5">{visibleItems.map(renderLink)}</div>
             </div>
-            <div className="space-y-1.5">{section.items.map(renderLink)}</div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* Footer */}
