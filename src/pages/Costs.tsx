@@ -8,6 +8,7 @@ import { RefreshCw, Download, Receipt, Truck, Plane } from "lucide-react";
 import { useCosts } from "@/hooks/useCosts";
 import { supabase } from "@/integrations/supabase/client";
 import { useDhlSalesQuotes } from "@/hooks/useDhlSalesQuotes";
+import { useExportSettings } from "@/hooks/useExportSettings";
 
 function toCsv(rows: Record<string, any>[], delimiter = ";") {
   if (!rows.length) return "";
@@ -80,6 +81,7 @@ export default function Costs() {
   const { rows, isLoading, error, warning, refresh } = useCosts();
   const [destinations, setDestinations] = React.useState<{ id: string; name: string | null }[]>([]);
   const [dhlDestinationId, setDhlDestinationId] = React.useState<string>("all");
+  const { settings, warning: settingsWarning } = useExportSettings();
 
   const { data: dhlQuotes, loading: dhlLoading, error: dhlError, refetch: refetchDhl } = useDhlSalesQuotes({
     destinationId: dhlDestinationId === "all" ? undefined : dhlDestinationId,
@@ -319,6 +321,19 @@ export default function Costs() {
             <CardContent className="pt-6 text-sm text-foreground">{error || warning}</CardContent>
           </Card>
         ) : null}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Config couts / alertes</CardTitle>
+            <CardDescription>Issu de export_settings (fallback local si manquant).</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 md:grid-cols-3 text-sm">
+            <div>Frais transport fixe: {settings.fees.transport_per_order_eur} €</div>
+            <div>Frais dossier: {settings.fees.dossier_per_order_eur} €</div>
+            <div>Seuil marge min: {settings.thresholds.marge_min_pct}%</div>
+            {settingsWarning ? <div className="text-xs text-amber-600 md:col-span-3">Mode dégradé: {settingsWarning}</div> : null}
+          </CardContent>
+        </Card>
 
         {/* DHL ESTIMATION */}
         <Card>
