@@ -1,28 +1,22 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useProducts } from "@/hooks/useProducts";
 import { getZoneFromDestination } from "@/data/referenceRates";
 import { fetchAllWithPagination } from "@/utils/supabasePagination";
-import {
-  BreakdownFilters,
-  computeExportBreakdown,
-  CostLine,
-  ExportBreakdown,
-  isMissingTableError,
-  SalesLine,
-  summarizeWarning,
-  VatRateRow,
-  OmRateRow,
-} from "@/domain/calc";
+import { BreakdownFilters, isMissingTableError } from "@/domain/calc";
 
 import {
   Activity,
@@ -30,14 +24,21 @@ import {
   Calculator,
   Users,
   Package,
-  BookOpen,
   Settings2,
   RefreshCw,
   ArrowRight,
   Globe,
-  Filter,
   AlertTriangle,
+  Landmark,
 } from "lucide-react";
+import { BenchmarkTable } from "@/components/competition/BenchmarkTable";
+import { DromCompetitionCards } from "@/components/competition/DromCompetitionCards";
+import { EventsFeed } from "@/components/competition/EventsFeed";
+import { CompetitionAlerts } from "@/components/competition/CompetitionAlerts";
+import { CsvImport } from "@/components/competition/CsvImport";
+import { useCompetitors } from "@/hooks/useCompetitors";
+import { useCompetitorSnapshots } from "@/hooks/useCompetitorSnapshots";
+import { useCompetitorEvents } from "@/hooks/useCompetitorEvents";
 
 type Zone = "UE" | "DROM" | "Hors UE";
 
@@ -76,6 +77,66 @@ type ClientResult = {
   warning?: string;
 };
 
+type CompetitionSettings = {
+  priceGapAlertPct: number;
+  priceDropAlertPct: number;
+  promoImpactScoreMin: number;
+};
+
+const COMPETITION_SQL = `-- Tables concurrence (idempotent)
+create table if not exists public.competitors (
+  id uuid default gen_random_uuid() primary key,
+  name text not null,
+  brand text,
+  notes text,
+  active bool default true,
+  created_at timestamp with time zone default now()
+);
+
+create table if not exists public.competitor_presence (
+  id uuid default gen_random_uuid() primary key,
+  competitor_id uuid references public.competitors(id) on delete cascade,
+  territory_code text,
+  channel text,
+  distributor text,
+  active bool default true
+);
+
+create table if not exists public.competitor_snapshots (
+  id uuid default gen_random_uuid() primary key,
+  snapshot_date date default current_date,
+  competitor_id uuid references public.competitors(id) on delete set null,
+  territory_code text,
+  product_ref text,
+  product_name text,
+  list_price numeric,
+  net_price_est numeric,
+  currency text,
+  incoterm text,
+  promo_flag bool,
+  promo_details text,
+  availability text,
+  source text,
+  confidence int default 50,
+  created_at timestamp with time zone default now()
+);
+
+create table if not exists public.competitor_events (
+  id uuid default gen_random_uuid() primary key,
+  event_date date default current_date,
+  competitor_id uuid references public.competitors(id) on delete set null,
+  territory_code text,
+  kind text,
+  title text,
+  details text,
+  source text,
+  impact_score int default 0,
+  created_at timestamp with time zone default now()
+);
+
+create index if not exists idx_comp_snapshots_prod_territory on public.competitor_snapshots(product_ref, territory_code);
+create index if not exists idx_comp_events_date on public.competitor_events(event_date desc);`;
+
 function safeText(v: any): string {
   if (v === null || v === undefined) return "";
   return String(v);
@@ -98,7 +159,22 @@ function zoneBadge(z: Zone) {
 }
 
 export default function CommandCenter() {
+  const [activeTab, setActiveTab] = React.useState<"overview" | "competitors">("overview");
   const [filters, setFilters] = React.useState<BreakdownFilters>({});
+  const [competitionFilters, setCompetitionFilters] = React.useState({
+    from: "",
+    to: "",
+    territory: "",
+    productQuery: "",
+    dromOnly: true,
+  });
+  const [competitionSettings, setCompetitionSettings] = React.useState<CompetitionSettings>({
+    priceGapAlertPct: 10,
+    priceDropAlertPct: 8,
+    promoImpactScoreMin: 7,
+  });
+  const [showSql, setShowSql] = React.useState(false);
+  const [simulateRow, setSimulateRow] = React.useState<{ product_ref: string; territory: string; ourPrice: number | null; bestPrice: number | null; gapPct: number | null } | null>(null);
 
   const {
     stats: productStats,
@@ -132,7 +208,7 @@ export default function CommandCenter() {
         .limit(40);
 
       if (error) {
-        if (isMissingTableError(error)) return { rows: [], warning: "Table flows manquante c√¥t√© Supabase." };
+        if (isMissingTableError(error)) return { rows: [], warning: "Table flows manquante cÙtÈ Supabase." };
         throw error;
       }
 
@@ -199,140 +275,52 @@ export default function CommandCenter() {
             unknownChannel,
           },
         };
-      } catch (e: any) {
-        if (isMissingTableError(e)) {
-          return { stats: emptyStats, warning: "Table clients manquante c√¥t√© Supabase." };
-        }
-        throw e;
+      } catch (err: any) {
+        return { stats: emptyStats, warning: err?.message || "Erreur chargement clients" };
       }
     },
     staleTime: 30_000,
   });
 
-  const salesQuery = useQuery<QueryResult<SalesLine>>({
-    queryKey: ["command-center", "sales-lines"],
-    queryFn: async () => {
-      if (!SUPABASE_ENV_OK) {
-        return { rows: [], warning: "Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)." };
-      }
-
+  const flowsByZone: Record<Zone, number> = { UE: 0, DROM: 0, "Hors UE": 0 };
+  const recentFlows = flowsQuery.data?.rows ?? [];
+  for (const f of recentFlows) {
+    const dest = extractDestination(f.data);
+    let z: Zone = "Hors UE";
+    if (dest) {
       try {
-        const pageSize = 1000;
-        const rows = await fetchAllWithPagination<SalesLine>(
-          (from, to) =>
-            supabase
-              .from("sales_lines")
-              .select("id,date,client_id,product_id,qty,net_sales_ht,currency,market_zone,incoterm,destination")
-              .order("date", { ascending: false })
-              .range(from, to),
-          pageSize,
-        );
-        return { rows };
-      } catch (e: any) {
-        if (isMissingTableError(e)) {
-          return { rows: [], warning: "Table sales_lines manquante c√¥t√© Supabase." };
-        }
-        throw e;
+        z = (getZoneFromDestination(dest as any) as Zone) || "Hors UE";
+      } catch {
+        z = "Hors UE";
       }
-    },
-    staleTime: 60_000,
+    }
+    flowsByZone[z] = (flowsByZone[z] ?? 0) + 1;
+  }
+
+  const clientStats = clientsQuery.data?.stats ?? emptyStats;
+  const number = (n: number) => new Intl.NumberFormat("fr-FR").format(n);
+  const warning = productsError || clientsQuery.data?.warning || flowsQuery.data?.warning;
+  const filteredFlows = recentFlows.filter((f) => {
+    const dest = extractDestination(f.data);
+    if (filters.destination && dest !== filters.destination) return false;
+    return true;
   });
 
-  const costsQuery = useQuery<QueryResult<CostLine>>({
-    queryKey: ["command-center", "cost-lines"],
-    queryFn: async () => {
-      if (!SUPABASE_ENV_OK) {
-        return { rows: [], warning: "Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)." };
-      }
-
-      try {
-        const pageSize = 1000;
-        const rows = await fetchAllWithPagination<CostLine>(
-          (from, to) =>
-            supabase
-              .from("cost_lines")
-              .select("id,date,cost_type,amount,currency,market_zone,incoterm,client_id,product_id,destination")
-              .order("date", { ascending: false })
-              .range(from, to),
-          pageSize,
-        );
-        return { rows };
-      } catch (e: any) {
-        if (isMissingTableError(e)) {
-          return { rows: [], warning: "Table cost_lines manquante c√¥t√© Supabase." };
-        }
-        throw e;
-      }
-    },
-    staleTime: 60_000,
-  });
-
-  const vatRatesQuery = useQuery<QueryResult<VatRateRow>>({
-    queryKey: ["command-center", "vat-rates"],
-    queryFn: async () => {
-      if (!SUPABASE_ENV_OK) {
-        return { rows: [], warning: "Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)." };
-      }
-
-      const { data, error } = await supabase
-        .from("vat_rates")
-        .select("id,territory_code,rate_percent,start_date,end_date")
-        .order("territory_code", { ascending: true });
-
-      if (error) {
-        if (isMissingTableError(error)) return { rows: [], warning: "Table vat_rates manquante c√¥t√© Supabase." };
-        throw error;
-      }
-
-      return { rows: (data ?? []) as VatRateRow[] };
-    },
-    staleTime: 120_000,
-  });
-
-  const omRatesQuery = useQuery<QueryResult<OmRateRow>>({
-    queryKey: ["command-center", "om-rates"],
-    queryFn: async () => {
-      if (!SUPABASE_ENV_OK) {
-        return { rows: [], warning: "Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)." };
-      }
-
-      const { data, error } = await supabase
-        .from("om_rates")
-        .select("id,territory_code,hs_code,om_rate,omr_rate,start_date,end_date")
-        .order("territory_code", { ascending: true });
-
-      if (error) {
-        if (isMissingTableError(error)) return { rows: [], warning: "Table om_rates manquante c√¥t√© Supabase." };
-        throw error;
-      }
-
-      return { rows: (data ?? []) as OmRateRow[] };
-    },
-    staleTime: 120_000,
-  });
-
-  const breakdown: ExportBreakdown = React.useMemo(
-    () =>
-      computeExportBreakdown({
-        salesLines: salesQuery.data?.rows ?? [],
-        costLines: costsQuery.data?.rows ?? [],
-        vatRates: vatRatesQuery.data?.rows ?? [],
-        omRates: omRatesQuery.data?.rows ?? [],
-        filters,
-      }),
-    [
-      salesQuery.data?.rows,
-      costsQuery.data?.rows,
-      vatRatesQuery.data?.rows,
-      omRatesQuery.data?.rows,
-      filters,
-    ],
+  const destinationEntries = Object.entries(
+    filteredFlows.reduce<Record<string, { caHt: number; costs: number; margin: number }>>((acc, flow) => {
+      const dest = extractDestination(flow.data) || "NA";
+      const values = acc[dest] || { caHt: 0, costs: 0, margin: 0 };
+      values.caHt += Number(flow.data?.ca_ht || flow.data?.amount_ht || 0);
+      values.costs += Number(flow.data?.costs || 0);
+      values.margin += Number(flow.data?.margin || 0);
+      acc[dest] = values;
+      return acc;
+    }, {}),
   );
 
-  const flowsByZone = React.useMemo(() => {
-    const base: Record<Zone, number> = { UE: 0, DROM: 0, "Hors UE": 0 };
-    for (const r of flowsQuery.data?.rows ?? []) {
-      const dest = extractDestination(r.data);
+  const zoneEntries = Object.entries(
+    filteredFlows.reduce<Record<string, { caHt: number; costs: number; margin: number }>>((acc, flow) => {
+      const dest = extractDestination(flow.data);
       let z: Zone = "Hors UE";
       if (dest) {
         try {
@@ -341,428 +329,478 @@ export default function CommandCenter() {
           z = "Hors UE";
         }
       }
-      base[z] = (base[z] ?? 0) + 1;
-    }
-    return base;
-  }, [flowsQuery.data?.rows]);
+      const values = acc[z] || { caHt: 0, costs: 0, margin: 0 };
+      values.caHt += Number(flow.data?.ca_ht || flow.data?.amount_ht || 0);
+      values.costs += Number(flow.data?.costs || 0);
+      values.margin += Number(flow.data?.margin || 0);
+      acc[z] = values;
+      return acc;
+    }, {}),
+  );
 
-  const recentFlows = React.useMemo(() => (flowsQuery.data?.rows ?? []).slice(0, 16), [flowsQuery.data?.rows]);
+  const { competitors, presence, competitorsById } = useCompetitors();
 
-  const allWarnings = React.useMemo(() => {
-    const list = [
-      salesQuery.data?.warning,
-      costsQuery.data?.warning,
-      vatRatesQuery.data?.warning,
-      omRatesQuery.data?.warning,
-      flowsQuery.data?.warning,
-      clientsQuery.data?.warning,
-      ...breakdown.warnings,
-    ];
-    return (list.filter(Boolean) as string[]).map((w, idx) => summarizeWarning(`Alerte ${idx + 1}`, w));
-  }, [
-    breakdown.warnings,
-    clientsQuery.data?.warning,
-    costsQuery.data?.warning,
-    flowsQuery.data?.warning,
-    omRatesQuery.data?.warning,
-    salesQuery.data?.warning,
-    vatRatesQuery.data?.warning,
-  ]);
+  const { state: snapshotsState, bulkInsert } = useCompetitorSnapshots({
+    from: competitionFilters.from || undefined,
+    to: competitionFilters.to || undefined,
+    territories: competitionFilters.dromOnly ? ["GP", "MQ", "GF", "RE", "YT"] : competitionFilters.territory ? [competitionFilters.territory] : undefined,
+    productQuery: competitionFilters.productQuery || undefined,
+  });
+  const { state: eventsState } = useCompetitorEvents({
+    from: competitionFilters.from || undefined,
+    to: competitionFilters.to || undefined,
+    territories: competitionFilters.dromOnly ? ["GP", "MQ", "GF", "RE", "YT"] : competitionFilters.territory ? [competitionFilters.territory] : undefined,
+  });
 
-  const firstError =
-    salesQuery.error ||
-    costsQuery.error ||
-    vatRatesQuery.error ||
-    omRatesQuery.error ||
-    flowsQuery.error ||
-    clientsQuery.error;
+  const [ourPriceMap, setOurPriceMap] = React.useState<Map<string, number>>(new Map());
+  React.useEffect(() => {
+    let active = true;
+    const load = async () => {
+      if (!SUPABASE_ENV_OK) return;
+      const map = new Map<string, number>();
+      try {
+        const { data, error } = await supabase
+          .from("sales")
+          .select("product_ref, territory_code, amount_ttc, sale_date")
+          .order("sale_date", { ascending: false })
+          .limit(400);
+        if (error) return;
+        (data || []).forEach((row: any) => {
+          const key = `${row.product_ref || ""}::${row.territory_code || ""}`;
+          if (!map.has(key)) map.set(key, Number(row.amount_ttc || 0));
+          const terrKey = `${row.territory_code || ""}::latest`;
+          if (!map.has(terrKey)) map.set(terrKey, Number(row.amount_ttc || 0));
+        });
+        if (active) setOurPriceMap(map);
+      } catch {
+        if (active) setOurPriceMap(map);
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [competitionFilters.dromOnly, competitionFilters.territory]);
 
-  const clientStats = clientsQuery.data?.stats ?? emptyStats;
+  React.useEffect(() => {
+    const loadSettings = async () => {
+      if (!SUPABASE_ENV_OK) return;
+      const { data } = await supabase.from("export_settings").select("key,data").eq("key", "competition").maybeSingle();
+      const payload = (data?.data || {}) as any;
+      setCompetitionSettings((prev) => ({
+        priceGapAlertPct: Number(payload?.price_gap_alert_pct ?? payload?.priceGapAlertPct ?? prev.priceGapAlertPct),
+        priceDropAlertPct: Number(payload?.price_drop_alert_pct ?? payload?.priceDropAlertPct ?? prev.priceDropAlertPct),
+        promoImpactScoreMin: Number(payload?.promo_impact_score_min ?? payload?.promoImpactScoreMin ?? prev.promoImpactScoreMin),
+      }));
+    };
+    void loadSettings();
+  }, []);
 
-  const number = (v: number, options: Intl.NumberFormatOptions = {}) =>
-    Number.isFinite(v) ? v.toLocaleString("fr-FR", options) : "‚Äî";
+  const competitionWarning = snapshotsState.warning || eventsState.warning || competitors.warning || presence.warning;
 
-  const handleFilterChange = (key: keyof BreakdownFilters, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value || undefined }));
+  const dromPressure = React.useMemo(() => {
+    const dromRows = snapshotsState.data.filter((s) => ["GP", "MQ", "GF", "RE", "YT"].includes((s.territory_code || "").toUpperCase()));
+    let risky = 0;
+    let base = 0;
+    dromRows.forEach((r) => {
+      if (r.list_price && r.net_price_est) {
+        base += 1;
+        if (r.list_price > r.net_price_est * (1 + competitionSettings.priceGapAlertPct / 100)) risky += 1;
+      }
+    });
+    return base === 0 ? 0 : Math.round((risky / base) * 100);
+  }, [snapshotsState.data, competitionSettings.priceGapAlertPct]);
+
+  const alertCount = React.useMemo(() => {
+    const eventsStrong = eventsState.data.filter((e) => (e.impact_score || 0) >= competitionSettings.promoImpactScoreMin).length;
+    return eventsStrong;
+  }, [eventsState.data, competitionSettings.promoImpactScoreMin]);
+
+  const handleSimulate = (row: { product_ref: string; territory: string; ourPrice: number | null; bestPrice: number | null; gapPct: number | null }) => {
+    setSimulateRow(row);
   };
-
-  const resetFilters = () => setFilters({});
-
-  const kpiLoading =
-    salesQuery.isLoading || costsQuery.isLoading || vatRatesQuery.isLoading || omRatesQuery.isLoading;
-  const fmtPercent = (v: number) => `${v.toFixed(1)}%`;
-  const zoneEntries = Object.entries(breakdown.byZone);
-  const destinationEntries = Object.entries(breakdown.byDestination);
 
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Activity className="h-6 w-6 text-accent" />
-              Dashboard principal Export
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Pilotage des donn√©es (ventes/charges/OM/TVA) + raccourcis vers les r√©f√©rentiels Supabase.
-            </p>
+            <p className="text-sm text-muted-foreground">Tour de contrÙle Export / Facturation</p>
+            <h1 className="text-2xl font-bold">Command Center</h1>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button asChild className="gap-2">
-              <Link to="/verifier">
-                <FileCheck2 className="h-4 w-4" />
-                Contr√¥le documents
-              </Link>
-            </Button>
-
-            <Button asChild variant="outline" className="gap-2">
+          <div className="flex gap-2">
+            <Button variant="outline" asChild>
               <Link to="/simulator">
-                <Calculator className="h-4 w-4" />
-                Simulation export
+                <Calculator className="h-4 w-4 mr-2" />
+                Simulateur
               </Link>
             </Button>
-
-            <Button asChild variant="outline" className="gap-2">
-              <Link to="/sales">
-                <BookOpen className="h-4 w-4" />
-                Ventes (source)
-              </Link>
-            </Button>
-
-            <Button asChild variant="ghost" className="gap-2">
-              <Link to="/settings">
-                <Settings2 className="h-4 w-4" />
-                R√©glages
+            <Button variant="outline" asChild>
+              <Link to="/verifier">
+                <FileCheck2 className="h-4 w-4 mr-2" />
+                VÈrifier facture
               </Link>
             </Button>
           </div>
         </div>
 
-        {firstError ? (
-          <Card className="border-red-300 bg-red-50">
-            <CardContent className="pt-4 text-sm text-red-700">
-              Erreur Supabase : {firstError instanceof Error ? firstError.message : String(firstError)}
-            </CardContent>
-          </Card>
+        {warning ? (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 mt-0.5" />
+            <div>
+              <div className="font-semibold">Mode dÈgradÈ</div>
+              <p>{warning}</p>
+            </div>
+          </div>
         ) : null}
 
-        {allWarnings.length ? (
-          <Card className="border-amber-300 bg-amber-50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                Connecte les tables pour activer 100% des KPI
-              </CardTitle>
-              <CardDescription>Les donn√©es manquantes sont affich√©es en mode placeholder.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-1 text-sm text-foreground">
-              {allWarnings.map((w) => (
-                <div key={w}>‚Ä¢ {w}</div>
-              ))}
-            </CardContent>
-          </Card>
-        ) : null}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="competitors">Concurrents</TabsTrigger>
+          </TabsList>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              Filtres KPI
-            </CardTitle>
-            <CardDescription>Filtre les calculs (source computeExportBreakdown + Supabase).</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
-              <Input type="date" value={filters.startDate ?? ""} onChange={(e) => handleFilterChange("startDate", e.target.value)} placeholder="D√©but" />
-              <Input type="date" value={filters.endDate ?? ""} onChange={(e) => handleFilterChange("endDate", e.target.value)} placeholder="Fin" />
-              <Input value={filters.zone ?? ""} onChange={(e) => handleFilterChange("zone", e.target.value)} placeholder="Zone (UE / DROM / Hors UE)" />
-              <Input value={filters.destination ?? ""} onChange={(e) => handleFilterChange("destination", e.target.value)} placeholder="Destination (texte libre)" />
-              <Input value={filters.incoterm ?? ""} onChange={(e) => handleFilterChange("incoterm", e.target.value)} placeholder="Incoterm" />
-              <Input value={filters.clientId ?? ""} onChange={(e) => handleFilterChange("clientId", e.target.value)} placeholder="Client" />
-              <Input value={filters.productId ?? ""} onChange={(e) => handleFilterChange("productId", e.target.value)} placeholder="Produit" />
-              <div className="flex items-center justify-end">
-                <Button variant="outline" onClick={resetFilters} size="sm">
-                  R√©initialiser
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          <TabsContent value="overview" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <Activity className="h-4 w-4" />
+                    Flux rÈcents
+                  </CardTitle>
+                  <CardDescription>Table flows</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex items-center gap-2 text-xs">
+                    <Badge variant="outline">UE: {flowsByZone.UE}</Badge>
+                    <Badge variant="outline">DROM: {flowsByZone.DROM}</Badge>
+                    <Badge variant="outline">Hors UE: {flowsByZone["Hors UE"]}</Badge>
+                  </div>
+                  <div className="pt-1">
+                    <Button asChild size="sm" variant="outline" className="w-full justify-between">
+                      <Link to="/flows">
+                        Ouvrir <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">CA HT (ventes)</CardTitle>
-              <CardDescription>Source: sales_lines</CardDescription>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">
-              {kpiLoading ? "‚Ä¶" : `${number(Math.round(breakdown.totals.caHt))} ‚Ç¨`}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Charges</CardTitle>
-              <CardDescription>Source: cost_lines</CardDescription>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">
-              {kpiLoading ? "‚Ä¶" : `${number(Math.round(breakdown.totals.costs))} ‚Ç¨`}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">TVA estim√©e</CardTitle>
-              <CardDescription>Source: vat_rates</CardDescription>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">
-              {kpiLoading ? "‚Ä¶" : `${number(Math.round(breakdown.totals.vat))} ‚Ç¨`}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">OM + OMR estim√©s</CardTitle>
-              <CardDescription>Source: om_rates</CardDescription>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">
-              {kpiLoading ? "‚Ä¶" : `${number(Math.round(breakdown.totals.om))} ‚Ç¨`}
-            </CardContent>
-          </Card>
-          <Card className="border-primary/30 bg-primary/5">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Marge nette</CardTitle>
-              <CardDescription>CA - charges - TVA - OM</CardDescription>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">
-              {kpiLoading ? "‚Ä¶" : `${number(Math.round(breakdown.totals.margin))} ‚Ç¨`}
-              <div className="text-sm text-muted-foreground">{kpiLoading ? "‚Ä¶" : fmtPercent(breakdown.totals.marginRate)}</div>
-            </CardContent>
-          </Card>
-        </div>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    Produits
+                  </CardTitle>
+                  <CardDescription>RÈfÈrentiel Supabase products</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {productsError ? <p className="text-sm text-red-600">{productsError}</p> : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Breakdown standard (zone / destination / incoterm)</CardTitle>
-            <CardDescription>Alimente la navigation drilldown (clients, produits, flows).</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr className="text-left">
-                    <th className="py-2 px-2">Zone</th>
-                    <th className="py-2 px-2 text-right">CA</th>
-                    <th className="py-2 px-2 text-right">Charges</th>
-                    <th className="py-2 px-2 text-right">Marge</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {zoneEntries.length === 0 ? (
-                    <tr>
-                      <td className="py-3 px-2 text-muted-foreground" colSpan={4}>
-                        Aucune donn√©e filtr√©e.
-                      </td>
-                    </tr>
-                  ) : (
-                    zoneEntries.map(([zone, values]) => (
-                      <tr key={zone} className="border-b">
-                        <td className="py-2 px-2 font-medium">{zone}</td>
-                        <td className="py-2 px-2 text-right">{number(Math.round(values.caHt))}</td>
-                        <td className="py-2 px-2 text-right">{number(Math.round(values.costs))}</td>
-                        <td className="py-2 px-2 text-right">{number(Math.round(values.margin))}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-2xl font-bold">{productsLoading ? "Ö" : productStats.total}</div>
+                    <Button variant="outline" size="sm" onClick={refreshProducts} disabled={productsLoading}>
+                      <RefreshCw className={`h-4 w-4 ${productsLoading ? "animate-spin" : ""}`} />
+                    </Button>
+                  </div>
 
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr className="text-left">
-                    <th className="py-2 px-2">Destination</th>
-                    <th className="py-2 px-2 text-right">CA</th>
-                    <th className="py-2 px-2 text-right">Charges</th>
-                    <th className="py-2 px-2 text-right">Marge</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {destinationEntries.length === 0 ? (
-                    <tr>
-                      <td className="py-3 px-2 text-muted-foreground" colSpan={4}>
-                        Aucune donn√©e filtr√©e.
-                      </td>
-                    </tr>
-                  ) : (
-                    destinationEntries.map(([destination, values]) => (
-                      <tr key={destination} className="border-b">
-                        <td className="py-2 px-2 font-medium">{destination}</td>
-                        <td className="py-2 px-2 text-right">{number(Math.round(values.caHt))}</td>
-                        <td className="py-2 px-2 text-right">{number(Math.round(values.costs))}</td>
-                        <td className="py-2 px-2 text-right">{number(Math.round(values.margin))}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <Badge variant="secondary">NouveautÈs: {productStats.nouveautes}</Badge>
+                    <Badge variant="secondary">LPPR: {productStats.lppr}</Badge>
+                    <Badge variant="secondary">TVA OK: {productStats.withTva}</Badge>
+                  </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Package className="h-4 w-4" />
-                Produits
-              </CardTitle>
-              <CardDescription>R√©f√©rentiel Supabase products</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {productsError ? <p className="text-sm text-red-600">{productsError}</p> : null}
+                  <div className="pt-1">
+                    <Button asChild size="sm" variant="outline" className="w-full justify-between">
+                      <Link to={`/products${filters.productId ? `?q=${encodeURIComponent(filters.productId)}` : ""}`}>
+                        Ouvrir rÈfÈrentiel produits <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
 
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold">{productsLoading ? "‚Ä¶" : productStats.total}</div>
-                <Button variant="outline" size="sm" onClick={refreshProducts} disabled={productsLoading}>
-                  <RefreshCw className={`h-4 w-4 ${productsLoading ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
-
-              <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="secondary">Nouveaut√©s: {productStats.nouveautes}</Badge>
-                <Badge variant="secondary">LPPR: {productStats.lppr}</Badge>
-                <Badge variant="secondary">TVA OK: {productStats.withTva}</Badge>
-              </div>
-
-              <div className="pt-1">
-                <Button asChild size="sm" variant="outline" className="w-full justify-between">
-                  <Link to={`/products${filters.productId ? `?q=${encodeURIComponent(filters.productId)}` : ""}`}>
-                    Ouvrir r√©f√©rentiel produits <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Clients export
-              </CardTitle>
-              <CardDescription>R√©f√©rentiel Supabase clients</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold">
-                  {clientsQuery.isLoading ? "‚Ä¶" : clientStats.total}
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => clientsQuery.refetch()}
-                  disabled={clientsQuery.isLoading}
-                >
-                  <RefreshCw className={`h-4 w-4 ${clientsQuery.isLoading ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
-
-              <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="outline">UE: {clientStats.UE}</Badge>
-                <Badge variant="outline">DROM: {clientStats.DROM}</Badge>
-                <Badge variant="outline">Hors UE: {clientStats["Hors UE"]}</Badge>
-              </div>
-
-              <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="secondary">Direct: {clientStats.direct}</Badge>
-                <Badge variant="secondary">Indirect: {clientStats.indirect}</Badge>
-                <Badge variant="secondary">D√©positaire: {clientStats.depositaire}</Badge>
-              </div>
-
-              <div className="pt-1">
-                <Button asChild size="sm" variant="outline" className="w-full justify-between">
-                  <Link to={`/clients${filters.clientId ? `?q=${encodeURIComponent(filters.clientId)}` : ""}`}>
-                    Ouvrir base clients <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Globe className="h-5 w-5" />
-              Derniers flux
-            </CardTitle>
-            <CardDescription>Lecture rapide par destination / zone (flows)</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <Badge variant="outline">UE: {flowsByZone.UE}</Badge>
-              <Badge variant="outline">DROM: {flowsByZone.DROM}</Badge>
-              <Badge variant="outline">Hors UE: {flowsByZone["Hors UE"]}</Badge>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => flowsQuery.refetch()}
-                disabled={flowsQuery.isLoading}
-                className="ml-auto"
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${flowsQuery.isLoading ? "animate-spin" : ""}`} />
-                Actualiser
-              </Button>
-            </div>
-
-            {flowsQuery.isLoading ? (
-              <p className="text-sm text-muted-foreground">Chargement‚Ä¶</p>
-            ) : recentFlows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aucun flux √† afficher.</p>
-            ) : (
-              <div className="space-y-2">
-                {recentFlows.map((f) => {
-                  const dest = extractDestination(f.data);
-                  let z: Zone = "Hors UE";
-                  if (dest) {
-                    try {
-                      z = (getZoneFromDestination(dest as any) as Zone) || "Hors UE";
-                    } catch {
-                      z = "Hors UE";
-                    }
-                  }
-
-                  return (
-                    <div
-                      key={f.id}
-                      className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 rounded-lg border p-3"
-                    >
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold truncate">{f.flow_code}</div>
-                        <div className="text-xs text-muted-foreground truncate">
-                          Destination: {dest || "‚Äî"}{" "}
-                          <span className="ml-2 inline-flex items-center gap-2">{zoneBadge(z)}</span>
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(f.created_at).toLocaleString("fr-FR")}
-                      </div>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Clients export
+                  </CardTitle>
+                  <CardDescription>RÈfÈrentiel Supabase clients</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="text-2xl font-bold">
+                      {clientsQuery.isLoading ? "Ö" : clientStats.total}
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => clientsQuery.refetch()}
+                      disabled={clientsQuery.isLoading}
+                    >
+                      <RefreshCw className={`h-4 w-4 ${clientsQuery.isLoading ? "animate-spin" : ""}`} />
+                    </Button>
+                  </div>
 
-            <div className="pt-2">
-              <Button asChild variant="outline" className="w-full justify-between">
-                <Link to="/flows">
-                  Ouvrir la liste des flux <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <Badge variant="outline">UE: {clientStats.UE}</Badge>
+                    <Badge variant="outline">DROM: {clientStats.DROM}</Badge>
+                    <Badge variant="outline">Hors UE: {clientStats["Hors UE"]}</Badge>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <Badge variant="secondary">Direct: {clientStats.direct}</Badge>
+                    <Badge variant="secondary">Indirect: {clientStats.indirect}</Badge>
+                    <Badge variant="secondary">DÈpositaire: {clientStats.depositaire}</Badge>
+                  </div>
+
+                  <div className="pt-1">
+                    <Button asChild size="sm" variant="outline" className="w-full justify-between">
+                      <Link to={`/clients${filters.clientId ? `?q=${encodeURIComponent(filters.clientId)}` : ""}`}>
+                        Ouvrir base clients <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Landmark className="h-4 w-4" />
+                    Pression concurrentielle
+                  </CardTitle>
+                  <CardDescription>DROM uniquement</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="text-2xl font-bold">{dromPressure}% produits > seuil</div>
+                  <div className="text-sm text-muted-foreground">{alertCount} alertes fortes</div>
+                  <Button asChild size="sm" variant="outline" className="w-full justify-between">
+                    <Link to="/command-center#competitors">
+                      Voir onglet Concurrents <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Globe className="h-5 w-5" />
+                  Derniers flux
+                </CardTitle>
+                <CardDescription>Lecture rapide par destination / zone (flows)</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <Badge variant="outline">UE: {flowsByZone.UE}</Badge>
+                  <Badge variant="outline">DROM: {flowsByZone.DROM}</Badge>
+                  <Badge variant="outline">Hors UE: {flowsByZone["Hors UE"]}</Badge>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => flowsQuery.refetch()}
+                    disabled={flowsQuery.isLoading}
+                    className="ml-auto"
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${flowsQuery.isLoading ? "animate-spin" : ""}`} />
+                    Actualiser
+                  </Button>
+                </div>
+
+                {flowsQuery.isLoading ? (
+                  <p className="text-sm text-muted-foreground">ChargementÖ</p>
+                ) : recentFlows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucun flux ‡ afficher.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {recentFlows.map((f) => {
+                      const dest = extractDestination(f.data);
+                      let z: Zone = "Hors UE";
+                      if (dest) {
+                        try {
+                          z = (getZoneFromDestination(dest as any) as Zone) || "Hors UE";
+                        } catch {
+                          z = "Hors UE";
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={f.id}
+                          className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 rounded-lg border p-3"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold truncate">{f.flow_code}</div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              Destination: {dest || "ñ"}{" "}
+                              <span className="ml-2 inline-flex items-center gap-2">{zoneBadge(z)}</span>
+                            </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(f.created_at).toLocaleString("fr-FR")}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="pt-2">
+                  <Button asChild variant="outline" className="w-full justify-between">
+                    <Link to="/flows">
+                      Ouvrir la liste des flux <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="competitors" className="space-y-4" id="competitors">
+            <Card>
+              <CardHeader className="flex flex-col gap-2">
+                <CardTitle className="text-lg">Market & Concurrents</CardTitle>
+                <CardDescription>Benchmark prix, veille ÈvÈnements, alertes.</CardDescription>
+                {competitionWarning ? (
+                  <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 mt-0.5" />
+                    <div>
+                      <div className="font-semibold">Veille concurrence non configurÈe</div>
+                      <p>{competitionWarning}</p>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="grid gap-3 md:grid-cols-5">
+                  <div className="col-span-2">
+                    <Label className="text-xs">PÈriode</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="date"
+                        value={competitionFilters.from}
+                        onChange={(e) => setCompetitionFilters((f) => ({ ...f, from: e.target.value }))}
+                      />
+                      <Input
+                        type="date"
+                        value={competitionFilters.to}
+                        onChange={(e) => setCompetitionFilters((f) => ({ ...f, to: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Territoire</Label>
+                    <Input
+                      placeholder="FR / GP / MQ..."
+                      value={competitionFilters.territory}
+                      onChange={(e) => setCompetitionFilters((f) => ({ ...f, territory: e.target.value.toUpperCase() }))}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Produit</Label>
+                    <Input
+                      placeholder="RÈf produit"
+                      value={competitionFilters.productQuery}
+                      onChange={(e) => setCompetitionFilters((f) => ({ ...f, productQuery: e.target.value }))}
+                    />
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <Switch
+                      checked={competitionFilters.dromOnly}
+                      onCheckedChange={(checked) => setCompetitionFilters((f) => ({ ...f, dromOnly: checked }))}
+                    />
+                    <Label className="text-xs">DROM only</Label>
+                  </div>
+                </div>
+              </CardHeader>
+            </Card>
+
+            <BenchmarkTable
+              snapshots={snapshotsState.data}
+              competitorsById={competitorsById}
+              ourPrices={ourPriceMap}
+              thresholds={{
+                priceGapAlertPct: competitionSettings.priceGapAlertPct,
+                priceDropAlertPct: competitionSettings.priceDropAlertPct,
+              }}
+              onSimulate={handleSimulate}
+            />
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="lg:col-span-2 space-y-4">
+                <DromCompetitionCards
+                  snapshots={snapshotsState.data}
+                  events={eventsState.data}
+                  ourPrices={ourPriceMap}
+                  thresholds={{
+                    priceGapAlertPct: competitionSettings.priceGapAlertPct,
+                    promoImpactScoreMin: competitionSettings.promoImpactScoreMin,
+                  }}
+                />
+                <EventsFeed events={eventsState.data} competitorsById={competitorsById} />
+              </div>
+              <div className="space-y-4">
+                <CompetitionAlerts
+                  snapshots={snapshotsState.data}
+                  events={eventsState.data}
+                  competitorsById={competitorsById}
+                  thresholds={{
+                    priceGapAlertPct: competitionSettings.priceGapAlertPct,
+                    priceDropAlertPct: competitionSettings.priceDropAlertPct,
+                    promoImpactScoreMin: competitionSettings.promoImpactScoreMin,
+                  }}
+                />
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Simulateur alignement</CardTitle>
+                    <CardDescription>Impact rapide si on s'aligne sur le meilleur prix.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {simulateRow ? (
+                      <>
+                        <div className="text-sm font-semibold">{simulateRow.product_ref} / {simulateRow.territory}</div>
+                        <div className="text-sm text-muted-foreground">Notre prix: {simulateRow.ourPrice ?? "?"}</div>
+                        <div className="text-sm text-muted-foreground">Best concurrent: {simulateRow.bestPrice ?? "?"}</div>
+                        <div className="text-sm">
+                          …cart: {simulateRow.gapPct !== null ? `${simulateRow.gapPct.toFixed(1)}%` : "n/a"}
+                        </div>
+                        {simulateRow.bestPrice && simulateRow.ourPrice ? (
+                          <div className="rounded-lg bg-muted/50 p-2 text-sm">
+                            Baisse nÈcessaire: {(simulateRow.ourPrice - simulateRow.bestPrice).toFixed(2)}.
+                            Impact marge unitaire: {(simulateRow.bestPrice - simulateRow.ourPrice).toFixed(2)}.
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">SÈlectionner "Simuler alignement" dans la table.</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <CsvImport loading={snapshotsState.loading} onImport={async (rows) => { await bulkInsert(rows); }} />
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Settings2 className="h-4 w-4" />
+                      SQL tables concurrence
+                    </CardTitle>
+                    <CardDescription>Si tables absentes, copier ce SQL.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <Button variant="outline" size="sm" onClick={() => setShowSql((v) => !v)}>
+                      {showSql ? "Masquer" : "Afficher"} SQL
+                    </Button>
+                    {showSql ? <Textarea className="text-xs" value={COMPETITION_SQL} readOnly /> : null}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </MainLayout>
   );
