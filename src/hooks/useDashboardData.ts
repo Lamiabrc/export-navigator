@@ -43,9 +43,10 @@ export function useDashboardData(filters: {
         return;
       }
       try {
+        // Sélection minimale (certaines colonnes peuvent ne pas exister côté DB)
         const query = supabase
           .from("sales")
-          .select("id,sale_date,territory_code,client_id,product_ref,amount_ht,amount_ttc,transport_cost,taxes,margin")
+          .select("id,sale_date,territory_code,client_id,product_ref,amount_ht,amount_ttc,transport_cost,taxes,margin", { head: false })
           .order("sale_date", { ascending: false })
           .limit(1500);
         if (filters.from) query.gte("sale_date", filters.from);
@@ -64,7 +65,20 @@ export function useDashboardData(filters: {
           }
           return;
         }
-        setState({ rows: (data ?? []) as DashboardRow[], loading: false, demo: false });
+        // Normalise pour les colonnes optionnelles (transport_cost/taxes/margin peuvent être absentes)
+        const normalized = (data ?? []).map((r: any) => ({
+          id: r.id,
+          sale_date: r.sale_date,
+          territory_code: r.territory_code,
+          client_id: r.client_id,
+          product_ref: r.product_ref,
+          amount_ht: r.amount_ht,
+          amount_ttc: r.amount_ttc,
+          transport_cost: r.transport_cost ?? 0,
+          taxes: r.taxes ?? 0,
+          margin: r.margin ?? null,
+        })) as DashboardRow[];
+        setState({ rows: normalized, loading: false, demo: false });
       } catch (err: any) {
         if (!active) return;
         setState({ rows: demoRows(), loading: false, warning: err?.message || "Erreur chargement ventes (mode demo).", demo: true });
@@ -82,7 +96,7 @@ export function useDashboardData(filters: {
     const totalTtc = rows.reduce((s, r) => s + (r.amount_ttc || 0), 0);
     const totalTransport = rows.reduce((s, r) => s + (r.transport_cost || 0), 0);
     const totalTaxes = rows.reduce((s, r) => s + (r.taxes || 0), 0);
-    const totalMargin = rows.reduce((s, r) => s + (r.margin || ((r.amount_ht || 0) - (r.transport_cost || 0) - (r.taxes || 0))), 0);
+    const totalMargin = rows.reduce((s, r) => s + (r.margin !== null && r.margin !== undefined ? r.margin : ((r.amount_ht || 0) - (r.transport_cost || 0) - (r.taxes || 0))), 0);
     const orders = rows.length;
     const avgBasket = orders ? totalHt / orders : 0;
     const marginPct = totalHt ? (totalMargin / totalHt) * 100 : 0;
