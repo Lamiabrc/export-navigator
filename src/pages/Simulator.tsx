@@ -101,6 +101,17 @@ export default function Simulator() {
       // ignore
     }
   }, []);
+  // fallback: si mode produits mais aucune ligne, repasse en manuel pour éviter blocage
+  useEffect(() => {
+    if (goodsValueMode === "products" && lines.length === 0) {
+      setGoodsValueMode("manual");
+      if (goodsValue <= 0) setGoodsValue(1000);
+    }
+    if (weightMode === "products" && lines.length === 0) {
+      setWeightMode("manual");
+      if (weight <= 0) setWeight(10);
+    }
+  }, [goodsValueMode, weightMode, lines.length, goodsValue, weight]);
 
   // persist
   useEffect(() => {
@@ -724,7 +735,9 @@ export default function Simulator() {
               <Card className="flex items-center justify-center h-64">
                 <CardContent className="text-center">
                   <Calculator className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">Entrez une valeur marchandise pour voir l’estimation</p>
+                  <p className="text-muted-foreground">Saisis une valeur marchandise ou passe en mode “manuel”.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Astuce: désactive “calculée depuis produits” si aucun article.</p>
+                  <Button className="mt-3" onClick={() => { setGoodsValueMode("manual"); if (goodsValue <= 0) setGoodsValue(1000); }}>Passer en manuel</Button>
                 </CardContent>
               </Card>
             )}
