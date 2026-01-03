@@ -39,14 +39,14 @@ const MAP_HEIGHT = 680;
 
 const DESTINATIONS: Destination[] = [
   { code: "FR", name: "Metropole", lat: 46.6, lon: 2.3, color: "#38bdf8" },
-  { code: "GP", name: "Guadeloupe", lat: 16.265, lon: -61.551, color: "#fb7185", offset: { x: 18, y: -12 } },
-  { code: "MQ", name: "Martinique", lat: 14.6415, lon: -61.0242, color: "#f59e0b", offset: { x: -6, y: 22 } },
-  { code: "GF", name: "Guyane", lat: 4.0, lon: -53.0, color: "#22c55e", offset: { x: -12, y: 18 } },
-  { code: "RE", name: "Reunion", lat: -21.1151, lon: 55.5364, color: "#a855f7", offset: { x: -10, y: -8 } },
-  { code: "YT", name: "Mayotte", lat: -12.8275, lon: 45.1662, color: "#38bdf8", offset: { x: -16, y: 6 } },
-  { code: "SPM", name: "Saint-Pierre-et-Miquelon", lat: 46.8852, lon: -56.3159, color: "#0ea5e9", offset: { x: 12, y: -8 } },
-  { code: "BL", name: "Saint-Barthelemy", lat: 17.9, lon: -62.85, color: "#ec4899", offset: { x: -28, y: -10 } },
-  { code: "MF", name: "Saint-Martin", lat: 18.0708, lon: -63.0501, color: "#10b981", offset: { x: 16, y: 6 } },
+  { code: "GP", name: "Guadeloupe", lat: 16.265, lon: -61.551, color: "#fb7185", offset: { x: 24, y: -6 } },
+  { code: "MQ", name: "Martinique", lat: 14.6415, lon: -61.0242, color: "#f59e0b", offset: { x: -10, y: 26 } },
+  { code: "GF", name: "Guyane", lat: 4.0, lon: -53.0, color: "#22c55e", offset: { x: -14, y: 34 } },
+  { code: "RE", name: "Reunion", lat: -21.1151, lon: 55.5364, color: "#a855f7", offset: { x: -10, y: -12 } },
+  { code: "YT", name: "Mayotte", lat: -12.8275, lon: 45.1662, color: "#38bdf8", offset: { x: -18, y: 10 } },
+  { code: "SPM", name: "Saint-Pierre-et-Miquelon", lat: 46.8852, lon: -56.3159, color: "#0ea5e9", offset: { x: 12, y: -10 } },
+  { code: "BL", name: "Saint-Barthelemy", lat: 17.9, lon: -62.85, color: "#ec4899", offset: { x: -32, y: -14 } },
+  { code: "MF", name: "Saint-Martin", lat: 18.0708, lon: -63.0501, color: "#10b981", offset: { x: 18, y: 12 } },
 ];
 
 const formatMoney = (n: number | null | undefined) =>
@@ -382,8 +382,9 @@ return (
                         />
                         <text
                           x={node.x + 14}
-                          y={node.y + 4}
+                          y={node.y - 6}
                           className="text-xs font-semibold fill-cyan-100 drop-shadow"
+                          textAnchor="start"
                         >
                           {node.name}
                         </text>
