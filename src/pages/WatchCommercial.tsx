@@ -202,58 +202,39 @@ export default function CompetitionPage() {
       setError(null);
 
       try {
-        const { data, error: fnError } = await supabase.functions.invoke("export-pricing", {
-          body: { territory_code: territory },
-        });
-
+        const { data: viewData, error: viewError } = await supabase
+          .from("v_export_pricing")
+          .select("*")
+          .eq("territory_code", territory)
+          .limit(3000);
         if (!active) return;
-        if (fnError) throw fnError;
+        if (viewError) throw viewError;
 
-        const csvText = String(data ?? "");
-        const rawRows = parseCsv(csvText);
-
-        const mapped = rawRows
-          .filter((r) => r["sku"])
-          .map((r) => computePosition(r, territory));
+        const mapped = (viewData || [])
+          .filter((r: any) => r.sku)
+          .map((r: any) =>
+            computePosition(
+              {
+                sku: r.sku,
+                label: r.label,
+                territory_code: r.territory_code,
+                plv_metropole_ttc: r.plv_metropole_ttc,
+                plv_om_ttc: r.plv_om_ttc,
+                thuasne_price_ttc: r.thuasne_price_ttc,
+                donjoy_price_ttc: r.donjoy_price_ttc,
+                gibaud_price_ttc: r.gibaud_price_ttc,
+              } as CsvRow,
+              territory,
+            ),
+          );
 
         setRows(mapped);
         if (selectedSku && !mapped.some((m) => m.sku === selectedSku)) setSelectedSku("");
       } catch (err: any) {
-        console.error("Edge function export-pricing echouee, fallback v_export_pricing", err);
-        try {
-          const { data: viewData, error: viewError } = await supabase
-            .from("v_export_pricing")
-            .select("*")
-            .eq("territory_code", territory)
-            .limit(3000);
-          if (viewError) throw viewError;
-
-          const mapped = (viewData || [])
-            .filter((r: any) => r.sku)
-            .map((r: any) =>
-              computePosition(
-                {
-                  sku: r.sku,
-                  label: r.label,
-                  territory_code: r.territory_code,
-                  plv_metropole_ttc: r.plv_metropole_ttc,
-                  plv_om_ttc: r.plv_om_ttc,
-                  thuasne_price_ttc: r.thuasne_price_ttc,
-                  donjoy_price_ttc: r.donjoy_price_ttc,
-                  gibaud_price_ttc: r.gibaud_price_ttc,
-                } as CsvRow,
-                territory,
-              ),
-            );
-
-          setRows(mapped);
-          if (selectedSku && !mapped.some((m) => m.sku === selectedSku)) setSelectedSku("");
-          setError("Edge Function indisponible (500). Donnees fallback v_export_pricing.");
-        } catch (viewErr: any) {
-          console.error("Fallback v_export_pricing echoue", viewErr);
-          if (!active) return;
-          setError(viewErr?.message || err?.message || "Erreur chargement concurrence");
-        }
+        console.error("Chargement v_export_pricing echoue", err);
+        if (!active) return;
+        setError(err?.message || "Erreur chargement concurrence (v_export_pricing)");
+        setRows([]);
       } finally {
         if (active) setIsLoading(false);
       }
@@ -343,7 +324,7 @@ export default function CompetitionPage() {
             <p className="text-xs uppercase tracking-[0.35em] text-cyan-300/90">Concurrence & positionnement</p>
             <h1 className="text-3xl font-bold text-slate-900">Dashboard concurrence</h1>
             <p className="text-sm text-slate-600">
-              Données via Edge Function <span className="font-mono">export-pricing</span> → CSV → dashboard.
+              Données via la vue Supabase <span className="font-mono">v_export_pricing</span> → dashboard (fallback si Edge Function).
             </p>
           </div>
 
@@ -698,3 +679,4 @@ export default function CompetitionPage() {
     </MainLayout>
   );
 }
+
