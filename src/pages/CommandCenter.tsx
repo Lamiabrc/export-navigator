@@ -200,6 +200,7 @@ export default function CommandCenter() {
             <div>
               <div className="font-semibold">Mode dégradé</div>
               <p>{settingsWarning || salesState.warning}</p>
+              {salesState.demo ? <p className="text-xs text-muted-foreground">Données demo affichées faute de table sales.</p> : null}
             </div>
           </div>
         ) : null}

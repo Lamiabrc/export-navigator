@@ -20,6 +20,7 @@ type State = {
   rows: DashboardRow[];
   warning?: string;
   loading: boolean;
+  demo?: boolean;
 };
 
 export function useDashboardData(filters: {
@@ -54,18 +55,19 @@ export function useDashboardData(filters: {
         if (filters.product) query.ilike("product_ref", `%${filters.product}%`);
         const { data, error } = await query;
         if (!active) return;
-        if (error) {
-          if (isMissingTableError(error)) {
-            setState({ rows: [], loading: false, warning: "Table sales absente." });
+        if (error || !data) {
+          if (isMissingTableError(error as any)) {
+            // Mode demo si table manquante
+            setState({ rows: demoRows(), loading: false, warning: "Table sales absente (mode dégradé demo).", demo: true });
           } else {
-            setState({ rows: [], loading: false, warning: error.message });
+            setState({ rows: [], loading: false, warning: error?.message || "Erreur chargement ventes." });
           }
           return;
         }
-        setState({ rows: (data ?? []) as DashboardRow[], loading: false });
+        setState({ rows: (data ?? []) as DashboardRow[], loading: false, demo: false });
       } catch (err: any) {
         if (!active) return;
-        setState({ rows: [], loading: false, warning: err?.message || "Erreur chargement ventes." });
+        setState({ rows: demoRows(), loading: false, warning: err?.message || "Erreur chargement ventes (mode demo).", demo: true });
       }
     };
     void load();
@@ -107,4 +109,15 @@ export function useDashboardData(filters: {
   }, [state.rows, settings.thresholds.marge_min_pct]);
 
   return { state, aggregates };
+}
+
+function demoRows(): DashboardRow[] {
+  const baseDate = new Date().toISOString().slice(0, 10);
+  return [
+    { id: "demo1", sale_date: baseDate, territory_code: "FR", client_id: "CLT-FR", product_ref: "PROD-FR-1", amount_ht: 120000, amount_ttc: 144000, transport_cost: 8000, taxes: 6000, margin: 96000 },
+    { id: "demo2", sale_date: baseDate, territory_code: "GP", client_id: "CLT-GP", product_ref: "PROD-GP-1", amount_ht: 18000, amount_ttc: 19500, transport_cost: 4200, taxes: 1500, margin: 12300 },
+    { id: "demo3", sale_date: baseDate, territory_code: "MQ", client_id: "CLT-MQ", product_ref: "PROD-MQ-1", amount_ht: 15000, amount_ttc: 16500, transport_cost: 3800, taxes: 1400, margin: 9800 },
+    { id: "demo4", sale_date: baseDate, territory_code: "RE", client_id: "CLT-RE", product_ref: "PROD-RE-1", amount_ht: 22000, amount_ttc: 24200, transport_cost: 5200, taxes: 1800, margin: 15000 },
+    { id: "demo5", sale_date: baseDate, territory_code: "YT", client_id: "CLT-YT", product_ref: "PROD-YT-1", amount_ht: 9000, amount_ttc: 9900, transport_cost: 3000, taxes: 900, margin: 6000 },
+  ];
 }
