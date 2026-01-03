@@ -320,16 +320,20 @@ return (
             <CardContent className="p-0">
               <div className="relative w-full h-[680px] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-xl">
                 <div className="absolute inset-0 opacity-70" style={{ backgroundImage: "radial-gradient(circle at 10% 20%, rgba(56,189,248,0.18) 0, transparent 40%), radial-gradient(circle at 80% 10%, rgba(168,85,247,0.2) 0, transparent 35%), radial-gradient(circle at 30% 80%, rgba(34,197,94,0.14) 0, transparent 35%)" }} />
-                <img
-                  src={worldMap}
-                  alt="Fond carte monde"
-                  className="absolute inset-0 h-full w-full object-cover opacity-70 pointer-events-none"
-                  style={{ filter: "saturate(1.3) brightness(1.05)" }}
-                />
                 <div className="absolute inset-6 rounded-xl border border-cyan-500/10" />
                 <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
 
                 <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="w-full h-full relative z-10">
+                  <image
+                    href={worldMap}
+                    x={0}
+                    y={0}
+                    width={MAP_WIDTH}
+                    height={MAP_HEIGHT}
+                    preserveAspectRatio="xMidYMid slice"
+                    opacity={0.68}
+                    style={{ filter: "saturate(1.25) brightness(1.05)" }}
+                  />
                   <g className="opacity-30">
                     {REGIONS.map((r) => (
                       <path
