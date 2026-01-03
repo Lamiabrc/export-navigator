@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/BrandLogo";
+import worldMap from "@/assets/world-map.svg";
 
 export default function Welcome() {
   const navigate = useNavigate();
@@ -18,6 +19,11 @@ export default function Welcome() {
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/55 to-slate-950/85" />
+        <img
+          src={worldMap}
+          alt="Carte du monde"
+          className="absolute inset-0 h-full w-full object-cover opacity-25 mix-blend-screen pointer-events-none"
+        />
       </div>
 
       <div className="absolute top-6 inset-x-0 flex justify-center">
