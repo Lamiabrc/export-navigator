@@ -19,8 +19,19 @@ import { AlertsPanel, AlertItem } from "@/components/dashboard/AlertsPanel";
 import { MarginWaterfall } from "@/components/dashboard/MarginWaterfall";
 import { TopFlop } from "@/components/dashboard/TopFlop";
 import { RiskySales } from "@/components/dashboard/RiskySales";
+import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
 const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
+
+type CompetitorRow = {
+  sku: string;
+  label: string | null;
+  territory: string;
+  ourPrice: number | null;
+  bestPrice: number | null;
+  bestName: string | null;
+  gapPct: number | null;
+};
 
 const SQL_FIX_ACL7 = `-- Corrige les vues pour éviter l'erreur acl7_norm
 -- Exemple : remplacer toute référence à acl7_norm par acl_norm ou valeur par défaut
@@ -32,7 +43,7 @@ function formatMoney(n: number, digits = 0) {
 }
 
 export default function CommandCenter() {
-  const [activeTab, setActiveTab] = React.useState<"overview" | "drom" | "lab" | "settings">("overview");
+  const [activeTab, setActiveTab] = React.useState<"overview" | "drom" | "lab" | "concurrents" | "settings">("overview");
   const [filters, setFilters] = React.useState<DashboardFilters>({
     from: "",
     to: "",
@@ -61,6 +72,9 @@ export default function CommandCenter() {
     },
     settings,
   );
+  const [competitionRows, setCompetitionRows] = React.useState<CompetitorRow[]>([]);
+  const [competitionError, setCompetitionError] = React.useState<string | null>(null);
+  const [competitionLoading, setCompetitionLoading] = React.useState(false);
 
   const kpis = [
     { label: "CA HT", value: formatMoney(aggregates.totalHt), delta: "", accent: "" },
@@ -92,6 +106,61 @@ export default function CommandCenter() {
     }
     return list;
   }, [aggregates.marginPct, aggregates.totalTransport, aggregates.totalHt, settings.thresholds]);
+
+  React.useEffect(() => {
+    let active = true;
+    const loadCompetition = async () => {
+      if (!SUPABASE_ENV_OK) {
+        setCompetitionError("Supabase non configuré (SUPABASE_ENV_OK=false)");
+        return;
+      }
+      setCompetitionLoading(true);
+      setCompetitionError(null);
+      try {
+        const { data, error } = await supabase
+          .from("v_export_pricing")
+          .select("sku,label,territory_code,plv_metropole_ttc,plv_om_ttc,thuasne_price_ttc,donjoy_price_ttc,gibaud_price_ttc")
+          .in("territory_code", DROM_CODES)
+          .limit(4000);
+        if (!active) return;
+        if (error) throw error;
+
+        const mapped: CompetitorRow[] = (data || []).map((r: any) => {
+          const our = Number(r.plv_om_ttc ?? r.plv_metropole_ttc ?? null);
+          const competitors = [
+            { name: "Thuasne", price: Number(r.thuasne_price_ttc ?? NaN) },
+            { name: "Donjoy", price: Number(r.donjoy_price_ttc ?? NaN) },
+            { name: "Gibaud", price: Number(r.gibaud_price_ttc ?? NaN) },
+          ].filter((c) => Number.isFinite(c.price)) as { name: string; price: number }[];
+          const best =
+            competitors.length > 0
+              ? competitors.reduce((m, c) => (c.price < m.price ? c : m), competitors[0])
+              : null;
+          const gapPct = our && best ? ((our - best.price) / best.price) * 100 : null;
+          return {
+            sku: r.sku,
+            label: r.label,
+            territory: r.territory_code,
+            ourPrice: our || null,
+            bestPrice: best?.price ?? null,
+            bestName: best?.name ?? null,
+            gapPct,
+          };
+        });
+        setCompetitionRows(mapped);
+      } catch (err: any) {
+        if (!active) return;
+        setCompetitionError(err?.message || "Erreur chargement v_export_pricing");
+        setCompetitionRows([]);
+      } finally {
+        if (active) setCompetitionLoading(false);
+      }
+    };
+    void loadCompetition();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const topClients = React.useMemo(() => {
     const map = new Map<string, { ca: number; margin: number }>();
@@ -129,6 +198,28 @@ export default function CommandCenter() {
     { label: "Taxes", value: -aggregates.totalTaxes },
     { label: "Marge", value: aggregates.totalMargin },
   ];
+
+  const competitorsByTerritory = React.useMemo(() => {
+    const map = new Map<string, { count: number; avgGap: number | null; premium: number; under: number }>();
+    DROM_CODES.forEach((code) => map.set(code, { count: 0, avgGap: null, premium: 0, under: 0 }));
+    competitionRows.forEach((row) => {
+      const entry = map.get(row.territory) || { count: 0, avgGap: null, premium: 0, under: 0 };
+      entry.count += 1;
+      if (row.gapPct !== null && Number.isFinite(row.gapPct)) {
+        entry.avgGap = entry.avgGap === null ? row.gapPct : entry.avgGap + row.gapPct;
+        if (row.gapPct > 5) entry.premium += 1;
+        if (row.gapPct < -5) entry.under += 1;
+      }
+      map.set(row.territory, entry);
+    });
+    return Array.from(map.entries()).map(([territory, v]) => ({
+      territory,
+      count: v.count,
+      avgGap: v.avgGap !== null && v.count > 0 ? v.avgGap / v.count : null,
+      premium: v.premium,
+      under: v.under,
+    }));
+  }, [competitionRows]);
 
   const riskyRows = aggregates.riskySales.map((r) => ({
     id: r.id,
@@ -210,6 +301,7 @@ export default function CommandCenter() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="drom">DROM Focus</TabsTrigger>
             <TabsTrigger value="lab">Scenario Lab</TabsTrigger>
+            <TabsTrigger value="concurrents">Concurrents</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
@@ -274,6 +366,68 @@ export default function CommandCenter() {
                 <Stat label="Transport" value={formatMoney(labEstimate.transport)} />
                 <Stat label="Frais fixes" value={formatMoney(labEstimate.fees)} />
                 <Stat label="Marge" value={`${formatMoney(labEstimate.margin)} (${labEstimate.marginPct.toFixed(1)}%)`} accent={labEstimate.margin >= 0 ? "text-emerald-600" : "text-rose-600"} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="concurrents" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Positionnement prix (DROM)</CardTitle>
+                <CardDescription>Données via v_export_pricing. Mode dégradé si vue absente.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {competitionLoading ? (
+                  <p className="text-sm text-muted-foreground">Chargement...</p>
+                ) : competitionError ? (
+                  <p className="text-sm text-rose-600">{competitionError}</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {competitorsByTerritory.map((c) => (
+                      <div key={c.territory} className="rounded-lg border p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="font-semibold">{c.territory}</div>
+                          <Badge variant="outline">{c.count} SKU</Badge>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Gap moyen: {c.avgGap === null ? "n/a" : `${c.avgGap.toFixed(1)}%`}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Premium: {c.premium} / Sous-prix: {c.under}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Top écarts (DROM)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {competitionRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucune donnée disponible.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {competitionRows
+                      .filter((r) => r.gapPct !== null)
+                      .sort((a, b) => (b.gapPct || 0) - (a.gapPct || 0))
+                      .slice(0, 12)
+                      .map((r) => (
+                        <div key={`${r.sku}-${r.territory}`} className="rounded border px-3 py-2 flex items-center justify-between">
+                          <div>
+                            <div className="font-mono text-xs text-muted-foreground">{r.sku}</div>
+                            <div className="text-sm font-semibold">{r.label || "Produit"}</div>
+                            <div className="text-xs text-muted-foreground">Territoire: {r.territory}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-semibold">{r.gapPct !== null ? `${r.gapPct.toFixed(1)}%` : "n/a"}</div>
+                            <div className="text-xs text-muted-foreground">Best: {r.bestName || "n/a"} {r.bestPrice ? formatMoney(r.bestPrice) : ""}</div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
