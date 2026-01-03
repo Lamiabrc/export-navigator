@@ -96,11 +96,10 @@ export default function Assistant() {
       include_sections: showDetails,
     };
 
-    const fallbackText =
-      "Assistant indisponible (Edge Function). Indique produit, valeur, incoterm, poids, destination. Vérifie TVA + OM/OMR + transport.";
+    const fallbackText = "Assistant indisponible. Indique produit, valeur, incoterm, poids, destination. Verifie TVA + OM/OMR + transport.";
 
     try {
-      if (!SUPABASE_ENV_OK) throw new Error("Supabase non configuré");
+      if (!SUPABASE_ENV_OK) throw new Error("Supabase non configure");
       const { data, error: fnError } = await supabase.functions.invoke<AssistantResponse>("export-assistant", { body });
       if (fnError || data?.error || data?.ok === false) {
         const msgErr = fnError?.message || data?.detail || data?.error || "Fonction indisponible";
@@ -143,14 +142,14 @@ export default function Assistant() {
       <div className="space-y-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">IA Export (mode dégradé si Edge Function HS)</p>
+            <p className="text-sm text-muted-foreground">IA Export (mode degrade si Edge Function HS)</p>
             <h1 className="text-2xl font-bold">Assistant DROM / UE / Hors UE</h1>
-            <p className="text-sm text-muted-foreground">Réponses courtes, actions suggérées, checklists si disponibles.</p>
+            <p className="text-sm text-muted-foreground">Reponses courtes, actions suggerees, checklists si dispo.</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="secondary" className="gap-2" onClick={() => setShowDetails((s) => !s)}>
               {showDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              {showDetails ? "Masquer détails" : "Afficher détails"}
+              {showDetails ? "Masquer details" : "Afficher details"}
             </Button>
             <Button variant="destructive" className="gap-2" onClick={clearChat}>
               <Trash2 className="h-4 w-4" />
@@ -162,7 +161,7 @@ export default function Assistant() {
         <Card>
           <CardHeader>
             <CardTitle>Contexte rapide</CardTitle>
-            <CardDescription>Optionnel : aide l'assistant à cibler le conseil.</CardDescription>
+            <CardDescription>Optionnel : aide l'assistant a cibler le conseil.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-2">
@@ -220,7 +219,7 @@ export default function Assistant() {
             <div className="border-t border-border p-4 space-y-3">
               {error ? <div className="text-sm text-rose-600">{error}</div> : null}
               <Textarea
-                placeholder="Écris ta question... (Entrée = envoyer, Shift+Entrée = nouvelle ligne)"
+                placeholder="Ecris ta question... (Entree = envoyer, Shift+Entree = nouvelle ligne)"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
@@ -233,7 +232,7 @@ export default function Assistant() {
               />
               <div className="flex items-center justify-between">
                 <div className="text-xs text-muted-foreground flex items-center gap-2">
-                  <RefreshCw className="h-3 w-3" /> Mode dégradé actif si l'Edge Function échoue.
+                  <RefreshCw className="h-3 w-3" /> Mode degrade actif si l'Edge Function echoue.
                 </div>
                 <Button onClick={() => void send()} disabled={loading} className="gap-2">
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Envoyer
@@ -246,8 +245,8 @@ export default function Assistant() {
         {showDetails && hasSections ? (
           <Card>
             <CardHeader>
-              <CardTitle>Détails / Checklists</CardTitle>
-              <CardDescription>Sections renvoyées par l'assistant.</CardDescription>
+              <CardTitle>Details / Checklists</CardTitle>
+              <CardDescription>Sections renvoyees par l'assistant.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {Object.entries(sections).map(([title, lines]) => (

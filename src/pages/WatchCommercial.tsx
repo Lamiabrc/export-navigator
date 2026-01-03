@@ -253,24 +253,14 @@ export default function CompetitionPage() {
     return rows.filter((r) => (r.sku + " " + (r.label || "")).toLowerCase().includes(q));
   }, [rows, search]);
 
-  const gapSummary = React.useMemo(() => {
-    const total = rows.length;
-    const premium = rows.filter((r) => r.status === "premium").length;
-    const aligned = rows.filter((r) => r.status === "aligned").length;
-    const under = rows.filter((r) => r.status === "underpriced").length;
-    const noData = rows.filter((r) => r.status === "no_data").length;
-    return { total, premium, aligned, under, noData };
-  }, [rows]);
-
   const dromSummary = React.useMemo(() => {
     return DROM_CODES.map((code) => {
       const terrRows = rows.filter((r) => (r.territory || "").toUpperCase() === code);
       const count = terrRows.length;
-      const avgGap =
-        terrRows.filter((r) => r.gapPct !== null).reduce((s, r) => s + (r.gapPct as number), 0) /
-        Math.max(1, terrRows.filter((r) => r.gapPct !== null).length);
+      const finiteGaps = terrRows.filter((r) => Number.isFinite(r.gapPct)).map((r) => r.gapPct as number);
+      const avgGap = finiteGaps.length ? finiteGaps.reduce((s, g) => s + g, 0) / finiteGaps.length : null;
       const best = terrRows
-        .filter((r) => r.gapPct !== null)
+        .filter((r) => Number.isFinite(r.gapPct))
         .sort((a, b) => (a.gapPct as number) - (b.gapPct as number))[0];
       return {
         territory: code,
@@ -296,7 +286,7 @@ export default function CompetitionPage() {
     const underpriced = base.filter((r) => r.status === "underpriced").length;
     const noData = base.filter((r) => r.status === "no_data").length;
 
-    const withGap = base.filter((r) => r.gapPct !== null).map((r) => r.gapPct as number);
+    const withGap = base.filter((r) => Number.isFinite(r.gapPct)).map((r) => r.gapPct as number);
     const avgGap = withGap.length ? withGap.reduce((a, b) => a + b, 0) / withGap.length : null;
 
     const ranks = base.filter((r) => r.rank !== null).map((r) => r.rank as number);
