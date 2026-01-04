@@ -18,6 +18,8 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  Cell,
+  LabelList,
 } from "recharts";
 
 type CsvRow = Record<string, string>;
