@@ -288,14 +288,17 @@ export default function CompetitionPage() {
                 thuasne_price_ttc: r.thuasne_price_ttc,
                 donjoy_price_ttc: r.donjoy_price_ttc,
                 gibaud_price_ttc: r.gibaud_price_ttc,
+                hs_code: r.hs_code,
               } as CsvRow,
               territory,
             ),
           )
           .map((m, idx) => {
             const vatRate = vatMap.get(m.territory) ?? null;
-            const omKey = `${m.territory}:${(viewData || [])[idx]?.hs_code || ""}`;
-            const omRate = omMap.get(omKey) ?? null;
+            const hs = (viewData || [])[idx]?.hs_code || "";
+            const omKeyExact = `${m.territory}:${hs}`;
+            const omKeyTerritoryOnly = `${m.territory}:`;
+            const omRate = omMap.get(omKeyExact) ?? omMap.get(omKeyTerritoryOnly) ?? null;
             const lpprBase = lpprMap.get(m.sku) ?? null;
             const coef = coefMap.get(m.territory) ?? 1;
             const lpprDrom = lpprBase !== null ? lpprBase * coef : null;
