@@ -34,9 +34,17 @@ type AssistantRequest = {
 function json(status: number, data: unknown) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8" },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      ...corsHeaders,
+    },
   });
 }
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 function normalizeDestination(raw?: string | null): DestinationKey {
   const x = (raw ?? "").toUpperCase().trim();
@@ -178,6 +186,7 @@ async function chatOpenAI(apiKey: string, model: string, system: string, user: s
 }
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { error: "Method not allowed" });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");

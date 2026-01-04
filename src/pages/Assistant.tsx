@@ -80,7 +80,11 @@ export default function Assistant() {
 
   const send = async () => {
     const msg = draft.trim();
-    if (!msg || loading) return;
+    if (loading) return;
+    if (!msg) {
+      setError("Merci de saisir une question (ex: obligations DAP Guadeloupe, OM/OMR, incoterm).");
+      return;
+    }
 
     const userMsg: ChatMessage = { id: uid(), role: "user", content: msg, createdAt: Date.now() };
     const next = [...messages, userMsg];
@@ -90,10 +94,12 @@ export default function Assistant() {
     setError(null);
 
     const body = {
-      message: msg,
-      history: next.slice(-6).map((m) => ({ role: m.role, content: m.content })),
-      context: { destination, incoterm, transport_mode: transportMode },
-      include_sections: showDetails,
+      question: msg,
+      destination: destination,
+      incoterm: incoterm,
+      transport_mode: transportMode,
+      strict_docs_only: false,
+      match_count: 8,
     };
 
     const fallbackText = "Assistant indisponible. Indique produit, valeur, incoterm, poids, destination. Verifie TVA + OM/OMR + transport.";
