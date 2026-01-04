@@ -236,10 +236,14 @@ export default function CompetitionPage() {
         const skus = Array.from(new Set((viewData || []).map((r: any) => r.sku).filter(Boolean)));
 
         // 2) LPPR + coefficients de majoration
-        const [{ data: productsData }, { data: lpprCoefData }] = await Promise.all([
+        const [prodRes, coefRes] = await Promise.all([
           supabase.from("products").select("code_article, tarif_lppr_eur").in("code_article", skus),
           supabase.from("lpp_majoration_coefficients").select("territory_code, coef"),
         ]);
+        const productsData = prodRes?.data || [];
+        const lpprCoefData = coefRes?.data || [];
+        if (prodRes?.error) console.warn("LPPR fetch error", prodRes.error);
+        if (coefRes?.error) console.warn("LPPR coef fetch error", coefRes.error);
         const lpprMap = new Map<string, number>();
         (productsData || []).forEach((p: any) => {
           if (p.code_article && Number.isFinite(Number(p.tarif_lppr_eur))) lpprMap.set(p.code_article, Number(p.tarif_lppr_eur));
@@ -250,10 +254,14 @@ export default function CompetitionPage() {
         });
 
         // 3) Taxes / OM
-        const [{ data: vatData }, { data: omData }] = await Promise.all([
+        const [vatRes, omRes] = await Promise.all([
           supabase.from("vat_rates").select("territory_code, rate"),
           supabase.from("om_rates").select("territory_code, hs_code, rate"),
         ]);
+        const vatData = vatRes?.data || [];
+        const omData = omRes?.data || [];
+        if (vatRes?.error) console.warn("VAT fetch error", vatRes.error);
+        if (omRes?.error) console.warn("OM fetch error", omRes.error);
         const vatMap = new Map<string, number>();
         (vatData || []).forEach((v: any) => {
           if (v.territory_code && Number.isFinite(Number(v.rate))) vatMap.set(v.territory_code, Number(v.rate));
