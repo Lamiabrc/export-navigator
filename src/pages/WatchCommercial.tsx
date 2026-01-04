@@ -640,7 +640,7 @@ export default function CompetitionPage() {
               </ResponsiveContainer>
             )}
             <div className="pt-2 text-xs text-muted-foreground">
-              Basé sur produits avec prix Orliman + >=1 prix concurrent.
+              Basé sur produits avec prix Orliman + &gt;=1 prix concurrent.
             </div>
           </CardContent>
         </Card>
