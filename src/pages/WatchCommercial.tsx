@@ -442,24 +442,24 @@ export default function CompetitionPage() {
           </Card>
         ) : null}
 
-        <Card className="border-transparent shadow bg-gradient-to-r from-orange-50 via-white to-amber-50">
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold text-amber-700">Frais supplémentaires par DROM (€/commande)</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            {DROM_CODES.map((code) => (
-              <div key={code} className="space-y-1">
-                <div className="text-xs text-muted-foreground font-medium">{code}</div>
-                <Input
-                  type="number"
-                  value={extraFees[code] ?? 0}
-                  onChange={(e) => handleExtraFeeChange(code, e.target.value)}
-                  className="h-9"
-                />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+          <Card className="border-transparent shadow bg-gradient-to-r from-orange-50 via-white to-amber-50">
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold text-amber-700">Frais supplémentaires par DROM (€/commande)</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              {DROM_CODES.map((code) => (
+                <div key={code} className="space-y-1">
+                  <div className="text-xs text-muted-foreground font-medium">{code}</div>
+                  <Input
+                    type="number"
+                    value={extraFees[code] ?? 0}
+                    onChange={(e) => handleExtraFeeChange(code, e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           <Card className="border-transparent shadow bg-gradient-to-br from-sky-50 via-white to-sky-100">
@@ -622,23 +622,28 @@ export default function CompetitionPage() {
           </CardHeader>
           <CardContent className="h-[320px]">
             {isLoading ? (
-                <Skeleton className="h-full w-full" />
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={summary.rankCounts} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="rank" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="count" fill={BAR_PALETTE[1]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-              <div className="pt-2 text-xs text-muted-foreground">
-                Basé sur produits avec prix Orliman + ≥1 prix concurrent.
-              </div>
-            </CardContent>
-          </Card>
+              <Skeleton className="h-full w-full" />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={summary.rankCounts} layout="vertical" margin={{ top: 12, right: 24, left: 24, bottom: 12 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" allowDecimals={false} />
+                  <YAxis type="category" dataKey="rank" width={32} />
+                  <Tooltip />
+                  <Bar dataKey="count" radius={[0, 8, 8, 0]}>
+                    {summary.rankCounts.map((_, idx) => (
+                      <Cell key={idx} fill={BAR_PALETTE[idx % BAR_PALETTE.length]} />
+                    ))}
+                  </Bar>
+                  <LabelList dataKey="count" position="right" offset={8} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+            <div className="pt-2 text-xs text-muted-foreground">
+              Basé sur produits avec prix Orliman + >=1 prix concurrent.
+            </div>
+          </CardContent>
+        </Card>
         </div>
 
         <Card className="border-slate-200 shadow">
