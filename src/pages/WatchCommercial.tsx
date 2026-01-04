@@ -172,6 +172,8 @@ function pct(part: number, total: number) {
   return `${Math.round((part / total) * 100)}%`;
 }
 
+const BAR_PALETTE = ["#0ea5e9", "#a855f7", "#f97316", "#22c55e", "#e11d48"];
+
 export default function CompetitionPage() {
   const { variables } = useGlobalFilters();
 
@@ -307,7 +309,7 @@ export default function CompetitionPage() {
   }, [selected]);
 
   return (
-    <MainLayout contentClassName="md:p-6">
+    <MainLayout contentClassName="md:p-6 bg-gradient-to-br from-slate-50 via-white to-sky-50">
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -367,9 +369,9 @@ export default function CompetitionPage() {
         ) : null}
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          <Card className="border-slate-200 shadow">
+          <Card className="border-transparent shadow bg-gradient-to-br from-sky-50 via-white to-sky-100">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-600">Produits (filtrés)</CardTitle>
+              <CardTitle className="text-sm text-slate-700">Produits (filtrés)</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold">{summary.total}</div>
@@ -377,42 +379,42 @@ export default function CompetitionPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 shadow">
+          <Card className="border-transparent shadow bg-gradient-to-br from-amber-50 via-white to-orange-100">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-600">Premium</CardTitle>
+              <CardTitle className="text-sm text-amber-700">Premium</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{summary.premium}</div>
+              <div className="text-3xl font-bold text-amber-700">{summary.premium}</div>
               <div className="text-xs text-muted-foreground">{pct(summary.premium, summary.total)}</div>
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 shadow">
+          <Card className="border-transparent shadow bg-gradient-to-br from-blue-50 via-white to-indigo-100">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-600">Aligné</CardTitle>
+              <CardTitle className="text-sm text-blue-700">Aligné</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{summary.aligned}</div>
+              <div className="text-3xl font-bold text-blue-700">{summary.aligned}</div>
               <div className="text-xs text-muted-foreground">{pct(summary.aligned, summary.total)}</div>
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 shadow">
+          <Card className="border-transparent shadow bg-gradient-to-br from-emerald-50 via-white to-green-100">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-600">Sous-pricé</CardTitle>
+              <CardTitle className="text-sm text-emerald-700">Sous-pricé</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{summary.underpriced}</div>
+              <div className="text-3xl font-bold text-emerald-700">{summary.underpriced}</div>
               <div className="text-xs text-muted-foreground">{pct(summary.underpriced, summary.total)}</div>
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 shadow">
+          <Card className="border-transparent shadow bg-gradient-to-br from-rose-50 via-white to-rose-100">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-600">Gap moyen vs best</CardTitle>
+              <CardTitle className="text-sm text-rose-700">Gap moyen vs best</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">
+              <div className="text-3xl font-bold text-rose-700">
                 {summary.avgGap === null ? "—" : `${summary.avgGap.toFixed(1)}%`}
               </div>
               <div className="text-xs text-muted-foreground">Sur produits avec données</div>
@@ -507,7 +509,7 @@ export default function CompetitionPage() {
                               <XAxis dataKey="name" />
                               <YAxis />
                               <Tooltip />
-                              <Bar dataKey="price" />
+                              <Bar dataKey="price" fill={BAR_PALETTE[0]} />
                             </BarChart>
                           </ResponsiveContainer>
                         ) : (
@@ -535,7 +537,7 @@ export default function CompetitionPage() {
                     <XAxis dataKey="rank" />
                     <YAxis allowDecimals={false} />
                     <Tooltip />
-                    <Bar dataKey="count" />
+                    <Bar dataKey="count" fill={BAR_PALETTE[1]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
