@@ -38,6 +38,13 @@ type PositionRow = {
 
   rank: number | null; // position Orliman (1 = moins cher)
   competitorCount: number; // nb concurrents avec prix
+
+  vatRate: number | null;
+  omRate: number | null;
+  lpprMetropole: number | null;
+  lpprDrom: number | null;
+  extraFee: number;
+  recommendedTtc: number | null;
 };
 
 function parseCsvLine(line: string): string[] {
@@ -187,6 +194,19 @@ export default function CompetitionPage() {
   const [selectedSku, setSelectedSku] = React.useState<string>("");
   const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
 
+  const [extraFees, setExtraFees] = React.useState<Record<string, number>>({
+    GP: 0,
+    MQ: 0,
+    GF: 0,
+    RE: 0,
+    YT: 0,
+  });
+
+  const handleExtraFeeChange = (code: string, value: string) => {
+    const n = Number(value);
+    setExtraFees((prev) => ({ ...prev, [code]: Number.isFinite(n) ? n : 0 }));
+  };
+
   React.useEffect(() => {
     if (variables.territory_code) setTerritory(variables.territory_code);
   }, [variables.territory_code]);
@@ -204,6 +224,7 @@ export default function CompetitionPage() {
       setError(null);
 
       try {
+        // 1) Vue pricing principale
         const { data: viewData, error: viewError } = await supabase
           .from("v_export_pricing")
           .select("*")
@@ -212,6 +233,38 @@ export default function CompetitionPage() {
         if (!active) return;
         if (viewError) throw viewError;
 
+        const skus = Array.from(new Set((viewData || []).map((r: any) => r.sku).filter(Boolean)));
+
+        // 2) LPPR + coefficients de majoration
+        const [{ data: productsData }, { data: lpprCoefData }] = await Promise.all([
+          supabase.from("products").select("code_article, tarif_lppr_eur").in("code_article", skus),
+          supabase.from("lpp_majoration_coefficients").select("territory_code, coef"),
+        ]);
+        const lpprMap = new Map<string, number>();
+        (productsData || []).forEach((p: any) => {
+          if (p.code_article && Number.isFinite(Number(p.tarif_lppr_eur))) lpprMap.set(p.code_article, Number(p.tarif_lppr_eur));
+        });
+        const coefMap = new Map<string, number>();
+        (lpprCoefData || []).forEach((c: any) => {
+          if (c.territory_code && Number.isFinite(Number(c.coef))) coefMap.set(c.territory_code, Number(c.coef));
+        });
+
+        // 3) Taxes / OM
+        const [{ data: vatData }, { data: omData }] = await Promise.all([
+          supabase.from("vat_rates").select("territory_code, rate"),
+          supabase.from("om_rates").select("territory_code, hs_code, rate"),
+        ]);
+        const vatMap = new Map<string, number>();
+        (vatData || []).forEach((v: any) => {
+          if (v.territory_code && Number.isFinite(Number(v.rate))) vatMap.set(v.territory_code, Number(v.rate));
+        });
+        const omMap = new Map<string, number>();
+        (omData || []).forEach((o: any) => {
+          const key = `${o.territory_code || ""}:${o.hs_code || ""}`;
+          if (o.territory_code && Number.isFinite(Number(o.rate))) omMap.set(key, Number(o.rate));
+        });
+
+        // 4) Mapping des lignes
         const mapped = (viewData || [])
           .filter((r: any) => r.sku)
           .map((r: any) =>
@@ -228,7 +281,20 @@ export default function CompetitionPage() {
               } as CsvRow,
               territory,
             ),
-          );
+          )
+          .map((m, idx) => {
+            const vatRate = vatMap.get(m.territory) ?? null;
+            const omKey = `${m.territory}:${(viewData || [])[idx]?.hs_code || ""}`;
+            const omRate = omMap.get(omKey) ?? null;
+            const lpprBase = lpprMap.get(m.sku) ?? null;
+            const coef = coefMap.get(m.territory) ?? 1;
+            const lpprDrom = lpprBase !== null ? lpprBase * coef : null;
+            const extraFee = extraFees[m.territory] ?? 0;
+            const tax = m.ourPrice !== null && vatRate !== null ? (m.ourPrice * vatRate) / 100 : 0;
+            const om = m.ourPrice !== null && omRate !== null ? (m.ourPrice * omRate) / 100 : 0;
+            const recommendedTtc = m.ourPrice !== null ? m.ourPrice + tax + om + extraFee : null;
+            return { ...m, vatRate, omRate, lpprMetropole: lpprBase, lpprDrom, extraFee, recommendedTtc };
+          });
 
         setRows(mapped);
         if (selectedSku && !mapped.some((m) => m.sku === selectedSku)) setSelectedSku("");
@@ -247,7 +313,7 @@ export default function CompetitionPage() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [territory]);
+  }, [territory, extraFees]);
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -367,6 +433,25 @@ export default function CompetitionPage() {
             </CardContent>
           </Card>
         ) : null}
+
+        <Card className="border-transparent shadow bg-gradient-to-r from-orange-50 via-white to-amber-50">
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold text-amber-700">Frais supplémentaires par DROM (€/commande)</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {DROM_CODES.map((code) => (
+              <div key={code} className="space-y-1">
+                <div className="text-xs text-muted-foreground font-medium">{code}</div>
+                <Input
+                  type="number"
+                  value={extraFees[code] ?? 0}
+                  onChange={(e) => handleExtraFeeChange(code, e.target.value)}
+                  className="h-9"
+                />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           <Card className="border-transparent shadow bg-gradient-to-br from-sky-50 via-white to-sky-100">
@@ -586,14 +671,17 @@ export default function CompetitionPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>SKU</TableHead>
-                    <TableHead>Produit</TableHead>
-                    <TableHead className="text-right">Prix Orliman</TableHead>
-                    <TableHead>Best concurrent</TableHead>
-                    <TableHead className="text-right">Gap %</TableHead>
-                    <TableHead className="text-right">Rang</TableHead>
-                    <TableHead className="text-right"># conc.</TableHead>
-                    <TableHead>Statut</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Produit</TableHead>
+                  <TableHead className="text-right">Prix Orliman</TableHead>
+                  <TableHead className="text-right">Reco TTC (taxes/OM/fees)</TableHead>
+                  <TableHead className="text-right">LPPR FR</TableHead>
+                  <TableHead className="text-right">LPPR DROM</TableHead>
+                  <TableHead>Best concurrent</TableHead>
+                  <TableHead className="text-right">Gap %</TableHead>
+                  <TableHead className="text-right">Rang</TableHead>
+                  <TableHead className="text-right"># conc.</TableHead>
+                  <TableHead>Statut</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -607,6 +695,14 @@ export default function CompetitionPage() {
                       <TableCell className="font-mono text-xs">{row.sku}</TableCell>
                       <TableCell className="font-medium">{row.label || "—"}</TableCell>
                       <TableCell className="text-right">{money(row.ourPrice)}</TableCell>
+                      <TableCell className="text-right">
+                        {row.recommendedTtc !== null ? money(row.recommendedTtc) : "—"}
+                        <div className="text-[10px] text-muted-foreground">
+                          TVA: {row.vatRate ?? "n/a"}% · OM: {row.omRate ?? "n/a"}% · Fees: {row.extraFee ?? 0}€
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">{row.lpprMetropole !== null ? money(row.lpprMetropole) : "—"}</TableCell>
+                      <TableCell className="text-right">{row.lpprDrom !== null ? money(row.lpprDrom) : "—"}</TableCell>
                       <TableCell>
                         {row.bestCompetitor ? (
                           <div>
