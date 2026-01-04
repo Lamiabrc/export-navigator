@@ -3,22 +3,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  ShieldCheck,
-  BookOpen,
-  Target,
-  Settings,
-  LogOut,
-  Bot,
-  Activity,
-  TrendingUp,
-  Receipt,
-  Scale,
-  Users,
-  Package,
-  Calculator,
-} from "lucide-react";
-import { Bot } from "lucide-react";
+import { Activity, BookOpen, Bot, Calculator, LogOut, Package, Receipt, Scale, Settings, ShieldCheck, Target, TrendingUp, Users } from "lucide-react";
 
 type NavItem = {
   name: string;
@@ -37,7 +22,7 @@ type NavSection = {
 
 const navigation: NavSection[] = [
   {
-    title: "Navigation",
+    title: "Pilotage & Ventes",
     items: [
       {
         name: "Control Tower",
@@ -45,13 +30,7 @@ const navigation: NavSection[] = [
         icon: Activity,
         badge: "Live",
         featured: true,
-        aliases: ["/dashboard", "/hub"],
-      },
-      {
-        name: "Concurrence",
-        href: "/competition",
-        icon: Target,
-        aliases: ["/watch/competitive", "/watch/commercial"],
+        aliases: ["/dashboard"],
       },
       {
         name: "Command Center",
@@ -59,24 +38,71 @@ const navigation: NavSection[] = [
         icon: ShieldCheck,
       },
       {
+        name: "Explore (ventes)",
+        href: "/explore",
+        icon: TrendingUp,
+        aliases: ["/sales"],
+      },
+    ],
+  },
+  {
+    title: "Concurrence",
+    items: [
+      {
+        name: "Concurrence",
+        href: "/concurrence",
+        icon: Target,
+        aliases: ["/competition", "/watch/commercial", "/watch/competitive"],
+      },
+    ],
+  },
+  {
+    title: "Couts & Pricing",
+    items: [
+      {
         name: "Costs (charges)",
         href: "/costs",
         icon: Receipt,
       },
+      {
+        name: "Simulator",
+        href: "/simulator",
+        icon: Calculator,
+      },
+      {
+        name: "Taxes/OM",
+        href: "/taxes-om",
+        icon: Scale,
+      },
+    ],
+  },
+  {
+    title: "Référentiels & Veille",
+    items: [
       {
         name: "Produits",
         href: "/products",
         icon: Package,
       },
       {
-        name: "Simulateur",
-        href: "/simulator",
-        icon: Calculator,
+        name: "Clients",
+        href: "/clients",
+        icon: Users,
       },
-      { name: "Assistant", href: "/assistant", icon: Bot },
-      { name: "Veille reglementaire", href: "/watch/regulatory", icon: BookOpen },
-      { name: "Admin", href: "/admin", icon: Settings, adminOnly: true },
+      {
+        name: "Veille reglementaire",
+        href: "/watch/regulatory",
+        icon: BookOpen,
+      },
     ],
+  },
+  {
+    title: "IA & Assistance",
+    items: [{ name: "Assistant", href: "/assistant", icon: Bot }],
+  },
+  {
+    title: "Admin",
+    items: [{ name: "Admin", href: "/admin", icon: Settings, adminOnly: true }],
   },
 ];
 
@@ -161,6 +187,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
             if (it.adminOnly && user?.email !== "lamia.brechetighil@orliman.fr") return false;
             return true;
           });
+          if (!visibleItems.length) return null;
           return (
             <div key={section.title}>
               <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">

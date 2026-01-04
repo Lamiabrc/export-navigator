@@ -15,7 +15,6 @@ import Login from "@/pages/Login";
 import ForgotPassword from "@/pages/ForgotPassword";
 import SetPassword from "@/pages/SetPassword";
 
-import Hub from "@/pages/Hub";
 import CommandCenter from "@/pages/CommandCenter";
 import Simulator from "@/pages/Simulator";
 import InvoiceVerification from "@/pages/InvoiceVerification";
@@ -30,7 +29,6 @@ import TaxesOM from "@/pages/TaxesOM";
 import WatchCommercial from "@/pages/WatchCommercial";
 import WatchRegulatory from "@/pages/WatchRegulatory";
 
-import ReferenceLibrary from "@/pages/ReferenceLibrary";
 import ControlTower from "@/pages/ControlTower";
 
 import Admin from "@/pages/Admin";
@@ -60,39 +58,35 @@ export default function App() {
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/set-password" element={<SetPassword />} />
 
-                  {/* Core */}
-                  <Route path="/hub" element={<ProtectedRoute><Hub /></ProtectedRoute>} />
-                  <Route path="/command-center" element={<ProtectedRoute><CommandCenter /></ProtectedRoute>} />
+                  {/* Pilotage */}
                   <Route path="/control-tower" element={<ProtectedRoute><ControlTower /></ProtectedRoute>} />
                   <Route path="/dashboard" element={<Navigate to="/control-tower" replace />} />
-                  <Route path="/simulator" element={<ProtectedRoute><Simulator /></ProtectedRoute>} />
-                  <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
+                  <Route path="/command-center" element={<ProtectedRoute><CommandCenter /></ProtectedRoute>} />
+                  <Route path="/explore" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
+                  <Route path="/sales" element={<Navigate to="/explore" replace />} />
 
-                  {/* Reference / Bible export */}
-                  <Route path="/reference-library" element={<ProtectedRoute><ReferenceLibrary /></ProtectedRoute>} />
-                  <Route path="/reference" element={<Navigate to="/reference-library" replace />} />
+                  {/* Costs & pricing */}
+                  <Route path="/costs" element={<ProtectedRoute><Costs /></ProtectedRoute>} />
+                  <Route path="/taxes-om" element={<ProtectedRoute><TaxesOM /></ProtectedRoute>} />
+                  <Route path="/simulator" element={<ProtectedRoute><Simulator /></ProtectedRoute>} />
+
+                  {/* Concurrence */}
+                  <Route path="/concurrence" element={<ProtectedRoute><WatchCommercial /></ProtectedRoute>} />
+                  <Route path="/watch/commercial" element={<Navigate to="/concurrence" replace />} />
+                  <Route path="/watch/competitive" element={<Navigate to="/concurrence" replace />} />
+                  <Route path="/competition" element={<Navigate to="/concurrence" replace />} />
+
+                  {/* Reference & veille */}
+                  <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+                  <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
+                  <Route path="/watch/regulatory" element={<ProtectedRoute><WatchRegulatory /></ProtectedRoute>} />
+
+                  {/* IA */}
+                  <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
 
                   {/* Controle documents (secondaire) */}
                   <Route path="/verifier" element={<ProtectedRoute><InvoiceVerification /></ProtectedRoute>} />
                   <Route path="/invoice-verification" element={<Navigate to="/verifier" replace />} />
-
-                  {/* Data */}
-                  <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
-                  <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-
-                  <Route path="/explore" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
-                  <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
-                  <Route path="/costs" element={<ProtectedRoute><Costs /></ProtectedRoute>} />
-                  <Route path="/taxes-om" element={<ProtectedRoute><TaxesOM /></ProtectedRoute>} />
-
-                  {/* Si tu avais /invoices avant, on le recycle => ventes */}
-                  <Route path="/invoices" element={<Navigate to="/explore" replace />} />
-
-                  {/* Watch */}
-                  <Route path="/watch/commercial" element={<ProtectedRoute><WatchCommercial /></ProtectedRoute>} />
-                  <Route path="/watch/competitive" element={<ProtectedRoute><WatchCommercial /></ProtectedRoute>} />
-                  <Route path="/competition" element={<ProtectedRoute><WatchCommercial /></ProtectedRoute>} />
-                  <Route path="/watch/regulatory" element={<ProtectedRoute><WatchRegulatory /></ProtectedRoute>} />
 
                   {/* Admin */}
                   <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
