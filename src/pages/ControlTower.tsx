@@ -9,9 +9,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { cn } from "@/lib/utils";
+import worldMap from "@/assets/world-map.svg";
 
-// Types
- type Destination = {
+type Destination = {
   code: string;
   name: string;
   lat: number;
@@ -50,7 +50,6 @@ const DESTINATIONS: Destination[] = [
 const formatMoney = (n: number | null | undefined) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
 
-// Projection equirectangulaire simple (alignement direct lat/lon sur la grille)
 const project = (lat: number, lon: number) => {
   const x = ((lon + 180) / 360) * MAP_WIDTH;
   const y = ((90 - lat) / 180) * MAP_HEIGHT;
@@ -76,7 +75,6 @@ export default function ControlTower() {
   const [error, setError] = React.useState<string | null>(null);
   const [hovered, setHovered] = React.useState<string | null>(null);
 
-  // Data fetch
   React.useEffect(() => {
     let active = true;
     const load = async () => {
@@ -118,7 +116,6 @@ export default function ControlTower() {
       } catch (err: any) {
         console.error(err);
         setError(err?.message || "Erreur chargement donnees");
-        // mode demo minimal pour ne pas afficher une page vide
         setSales([
           { id: "demo1", sale_date: resolvedRange.from, territory_code: "GP", amount_ht: 1200, amount_ttc: 1400 },
           { id: "demo2", sale_date: resolvedRange.from, territory_code: "MQ", amount_ht: 800, amount_ttc: 920 },
@@ -269,6 +266,12 @@ export default function ControlTower() {
                 <div className="absolute inset-0 opacity-50" style={{ backgroundImage: "radial-gradient(circle at 10% 20%, rgba(56,189,248,0.16) 0, transparent 40%), radial-gradient(circle at 80% 10%, rgba(168,85,247,0.18) 0, transparent 35%), radial-gradient(circle at 30% 80%, rgba(34,197,94,0.12) 0, transparent 35%)" }} />
                 <div className="absolute inset-6 rounded-xl border border-cyan-500/10" />
                 <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
+                <img
+                  src={worldMap}
+                  alt="Fond carte monde"
+                  className="absolute inset-0 h-full w-full object-cover opacity-55 pointer-events-none"
+                  style={{ mixBlendMode: "screen" }}
+                />
 
                 <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="w-full h-full relative z-10">
                   {nodes.filter((n) => n.code !== "FR").map((node) => {
