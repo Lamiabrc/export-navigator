@@ -350,6 +350,45 @@ export default function ControlTower() {
                   }
                 />
               </div>
+              <Kpi label="Ventes HT" value={formatMoney(totals.totalSalesHt)} accent="text-sky-400" loading={isLoading} />
+              <Kpi label="Ventes TTC" value={formatMoney(totals.totalSalesTtc)} accent="text-slate-400" loading={isLoading} />
+              <Kpi label="Couts" value={formatMoney(totals.totalCosts)} accent="text-amber-400" loading={isLoading} />
+              <Kpi label="Marge estimee" value={formatMoney(totals.margin)} accent="text-emerald-400" loading={isLoading} />
+              <Kpi
+                label="Taux de marge"
+                value={
+                  marginRate === null
+                    ? "—"
+                    : `${marginRate.toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 0 })}%`
+                }
+                accent={
+                  marginRate === null
+                    ? "text-slate-300/70"
+                    : marginRate >= 20
+                      ? "text-emerald-400"
+                      : marginRate >= 10
+                        ? "text-amber-300"
+                        : "text-rose-400"
+                }
+                loading={isLoading}
+                badge={
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[11px]",
+                      marginRate === null
+                        ? "text-slate-300 border-slate-500/40 bg-slate-700/30"
+                        : marginRate >= 20
+                          ? "text-emerald-200 border-emerald-400/40 bg-emerald-500/10"
+                          : marginRate >= 10
+                            ? "text-amber-200 border-amber-400/40 bg-amber-500/10"
+                            : "text-rose-200 border-rose-400/40 bg-rose-500/10"
+                    )}
+                  >
+                    {marginRate === null ? "N/A" : marginRate >= 20 ? "Solide" : marginRate >= 10 ? "À surveiller" : "À risque"}
+                  </Badge>
+                }
+              />
               {error ? <div className="text-xs text-rose-400">{error}</div> : null}
             </CardContent>
           </Card>
@@ -555,6 +594,9 @@ function Kpi({ label, value, accent, loading, badge }: { label: string; value: s
   if (loading) return <Skeleton className="h-10 w-full" />;
   return (
     <div className="rounded-xl border border-cyan-500/30 bg-slate-950/80 px-3 py-3 shadow-inner shadow-cyan-500/10">
+  if (loading) return <Skeleton className="h-12 w-full" />;
+  return (
+    <div className="rounded-xl border border-cyan-500/30 bg-slate-950/80 px-3 py-2 shadow-inner shadow-cyan-500/10">
       <div className="flex items-center justify-between gap-2">
         <div className="text-xs text-slate-300/80">{label}</div>
         {badge}
