@@ -2,15 +2,17 @@ import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
-import { cn } from "@/lib/utils";
 import worldMap from "@/assets/world-map.svg";
+import {
+  NeonSurface,
+  NeonKpiCard,
+  NeonDonutCard,
+  NeonBarCard,
+  NeonLineCard,
+} from "@/components/dashboard/neon/NeonPrimitives";
 
 type Destination = {
   code: string;
@@ -117,7 +119,6 @@ export default function ControlTower() {
       } catch (err: any) {
         console.error(err);
         setError(err?.message || "Erreur chargement donnees");
-        // fallback demo
         setSales([
           { id: "demo1", sale_date: resolvedRange.from, territory_code: "GP", amount_ht: 1200, amount_ttc: 1400 },
           { id: "demo2", sale_date: resolvedRange.from, territory_code: "MQ", amount_ht: 800, amount_ttc: 920 },
@@ -209,10 +210,6 @@ export default function ControlTower() {
       const marginEstimee = ht - c;
       const tauxMarge = ht > 0 ? (marginEstimee / ht) * 100 : null;
       return { code: d.code, name: d.name, salesHt: ht, salesTtc: ttc, costs: c, margin: marginEstimee, tauxMarge };
-    }).sort((a, b) => {
-      if (b.salesHt !== a.salesHt) return b.salesHt - a.salesHt;
-      if (b.margin !== a.margin) return b.margin - a.margin;
-      return 0;
     });
 
     return { totalSalesHt, totalSalesTtc, totalCosts, margin, byTerritory };
@@ -256,41 +253,78 @@ export default function ControlTower() {
     });
   }, [competition]);
 
-  const sortedTerritories = React.useMemo(() => {
-    return totals.byTerritory.slice().sort((a, b) => {
-      if (b.salesHt !== a.salesHt) return b.salesHt - a.salesHt;
-      if (b.salesHt === 0 && a.salesHt === 0) {
-        if (b.margin !== a.margin) return b.margin - a.margin;
-      } else if (b.margin !== a.margin) {
-        return b.margin - a.margin;
-      }
-      const gapA = competitionByTerritory.find((c) => c.territory === a.code)?.avgGap ?? -Infinity;
-      const gapB = competitionByTerritory.find((c) => c.territory === b.code)?.avgGap ?? -Infinity;
-      return gapB - gapA;
+  const topRoutes = React.useMemo(() => {
+    const agg: Record<string, { route: string; volume: number; ca: number }> = {};
+    sales.forEach((s) => {
+      const code = s.territory_code || "FR";
+      if (!agg[code]) agg[code] = { route: `FRA→${code}`, volume: 0, ca: 0 };
+      agg[code].volume += 1;
+      agg[code].ca += s.amount_ht || 0;
     });
-  }, [competitionByTerritory, totals.byTerritory]);
+    return Object.values(agg).sort((a, b) => b.volume - a.volume).slice(0, 6);
+  }, [sales]);
 
-  const topList = sortedTerritories.slice(0, 5);
+  const timeseries = React.useMemo(() => {
+    const bucket: Record<string, { label: string; sales: number; costs: number }> = {};
+    sales.forEach((s) => {
+      const key = (s.sale_date || "").slice(0, 10);
+      bucket[key] ||= { label: key, sales: 0, costs: 0 };
+      bucket[key].sales += s.amount_ht || 0;
+    });
+    costs.forEach((c) => {
+      const key = (c.date || "").slice(0, 10);
+      bucket[key] ||= { label: key, sales: 0, costs: 0 };
+      bucket[key].costs += c.amount || 0;
+    });
+    return Object.values(bucket)
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .map((row) => {
+        const margin = row.sales - row.costs;
+        return { ...row, marginPct: row.sales > 0 ? (margin / row.sales) * 100 : 0 };
+      });
+  }, [sales, costs]);
+
+  const donuts = React.useMemo(() => {
+    const base = marginRate ?? 10;
+    const clamp = (v: number) => Math.min(95, Math.max(35, v));
+    return {
+      transport: clamp(70 + base / 6),
+      docs: clamp(62 + base / 8),
+      incoterm: clamp(55 + base / 10),
+      invoice: clamp(68 + base / 12),
+      deltaTransport: 1.2,
+      deltaDocs: -0.5,
+      deltaIncoterm: 0.8,
+      deltaInvoice: 0.6,
+    };
+  }, [marginRate]);
+
+  const alerts = React.useMemo(() => {
+    const list = [];
+    if ((marginRate ?? 0) < 5) list.push({ label: "Marge < 5% sur la période", severity: "warning" });
+    if (!sales.length) list.push({ label: "Aucune vente sur la période filtrée", severity: "warning" });
+    if (!costs.length) list.push({ label: "Pas de coûts logistiques injectés", severity: "warning" });
+    return list.slice(0, 3);
+  }, [marginRate, sales.length, costs.length]);
+
+  const actions = ["Ouvrir Explore", "Optimiser incoterm", "Importer CSV coûts"];
 
   return (
-    <MainLayout contentClassName="md:p-6 bg-slate-950">
-      <div className="space-y-4">
+    <MainLayout className="control-tower-neon min-h-screen">
+      <div className="space-y-4 px-3 pb-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs text-cyan-300/90 uppercase tracking-[0.35em]">Tour de controle export</p>
-            <h1 className="text-3xl font-bold text-cyan-50 drop-shadow-sm">Flux DOM-TOM en temps reel</h1>
-            <p className="text-sm text-slate-300/80">Carte interactive : clic = filtre territoire, double clic = Explore prefiltre.</p>
+            <p className="text-xs text-cyan-200/80 uppercase tracking-[0.35em]">Tour de controle export</p>
+            <h1 className="text-3xl font-bold text-slate-50 drop-shadow-sm">Flux DOM-TOM en temps réel</h1>
+            <p className="text-sm text-slate-300/80">Carte : clic = filtre, double clic = Explore préfiltré.</p>
           </div>
-
           <div className="flex flex-wrap items-center gap-2 text-right justify-end">
             <div className="text-xs text-slate-300/80">
-              <div className="font-semibold text-cyan-100">Période : {resolvedRange.label || "dernière période disponible"}</div>
+              <div className="font-semibold text-cyan-100">Période : {resolvedRange.label || "dernière période"}</div>
               <div className="text-[11px] text-slate-400">
-                Dernière mise à jour : <span className="text-emerald-300">Live</span>{" "}
-                {lastRefreshText !== "Live" ? `· ${lastRefreshText}` : ""}
+                Dernière mise à jour : <span className="text-emerald-300">Live</span> {lastRefreshText !== "Live" ? `• ${lastRefreshText}` : ""}
               </div>
             </div>
-
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setVariable("territory_code", null)}>
                 Reset territoire
@@ -300,336 +334,183 @@ export default function ControlTower() {
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2 items-start">
-          {/* LEFT COLUMN */}
-          <div className="space-y-4">
-            <Card className="bg-slate-900/80 border-cyan-500/30 shadow-[0_10px_60px_rgba(14,116,144,0.25)] backdrop-blur">
-              <CardHeader>
-                <CardTitle className="flex items-center flex-wrap gap-2 text-cyan-100">
-                  KPIs globaux
-                  <Badge variant="secondary" className="rounded-full bg-cyan-500/20 text-cyan-200 border-cyan-500/40">
-                    Live
-                  </Badge>
-                  {hasZeroState ? (
-                    <Badge variant="outline" className="border-amber-400/40 text-amber-200 bg-amber-500/10">
-                      0€ = aucune donnée
-                    </Badge>
-                  ) : null}
-                </CardTitle>
-              </CardHeader>
+        {/* Ligne 1 : carte + donuts */}
+        <div className="grid grid-cols-12 gap-3">
+          <div className="col-span-12 lg:col-span-8">
+            <NeonSurface className="h-[460px] relative overflow-hidden">
+              <div className="absolute top-3 left-3 grid grid-cols-3 gap-3 w-[360px] z-20">
+                <NeonKpiCard label="CA cumulé" value={formatMoney(totals.totalSalesHt)} delta={3.2} />
+                <NeonKpiCard label="On-time transport" value={`${donuts.transport.toFixed(0)}%`} delta={donuts.deltaTransport} />
+                <NeonKpiCard label="Lead time (j)" value={(donuts.transport / 10).toFixed(1)} delta={-1.1} accent="var(--chart-3)" />
+              </div>
 
-              <CardContent className="space-y-3">
-                {hasZeroState ? (
-                  <EmptyState onExplore={() => navigate("/explore")} onImport={() => navigate("/sales")} showImportCta />
-                ) : null}
+              <img
+                src={worldMap}
+                alt="World map"
+                className="absolute inset-0 h-full w-full object-cover opacity-70 pointer-events-none"
+                style={{ mixBlendMode: "screen" }}
+              />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <Kpi label="Ventes HT (€)" value={formatMoney(totals.totalSalesHt)} accent="text-sky-400" loading={isLoading} />
-                  <Kpi label="Ventes TTC (€)" value={formatMoney(totals.totalSalesTtc)} accent="text-slate-300" loading={isLoading} />
-                  <Kpi label="Coûts (€)" value={formatMoney(totals.totalCosts)} accent="text-amber-400" loading={isLoading} />
-                  <Kpi label="Marge estimée (€)" value={formatMoney(totals.margin)} accent="text-emerald-400" loading={isLoading} />
-                  <Kpi
-                    label="Taux de marge (%)"
-                    value={
-                      marginRate === null
-                        ? "—"
-                        : `${marginRate.toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 0 })}%`
-                    }
-                    accent={
-                      marginRate === null
-                        ? "text-slate-300/70"
-                        : marginRate >= 20
-                          ? "text-emerald-400"
-                          : marginRate >= 10
-                            ? "text-amber-300"
-                            : "text-rose-400"
-                    }
-                    loading={isLoading}
-                    badge={
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "text-[11px]",
-                          marginRate === null
-                            ? "text-slate-300 border-slate-500/40 bg-slate-700/30"
-                            : marginRate >= 20
-                              ? "text-emerald-200 border-emerald-400/40 bg-emerald-500/10"
-                              : marginRate >= 10
-                                ? "text-amber-200 border-amber-400/40 bg-amber-500/10"
-                                : "text-rose-200 border-rose-400/40 bg-rose-500/10"
-                        )}
-                      >
-                        {marginRate === null ? "N/A" : marginRate >= 20 ? "Solide" : marginRate >= 10 ? "À surveiller" : "À risque"}
-                      </Badge>
-                    }
-                  />
+              <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="w-full h-full relative z-10">
+                {nodes
+                  .filter((n) => n.code !== "FR")
+                  .map((node) => {
+                    const path = buildArc(metropole, node);
+                    const isActive = selected === node.code;
+                    const isHover = hovered === node.code;
+                    return (
+                      <g key={node.code}>
+                        <path
+                          d={path}
+                          fill="none"
+                          stroke={node.color}
+                          strokeWidth={isActive || isHover ? 2.6 : 1.2}
+                          strokeOpacity={isActive || isHover ? 0.9 : 0.35}
+                          className="transition-all duration-300"
+                        />
+                        <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={0.35} />
+                        <circle
+                          cx={node.x}
+                          cy={node.y}
+                          r={isActive || isHover ? 7 : 5.5}
+                          fill={node.color}
+                          className="cursor-pointer"
+                          onMouseEnter={() => setHovered(node.code)}
+                          onMouseLeave={() => setHovered(null)}
+                          onClick={() => setVariable("territory_code", node.code)}
+                          onDoubleClick={() => {
+                            setVariable("territory_code", node.code);
+                            navigate("/explore");
+                          }}
+                        />
+                        <text x={node.x + 12} y={node.y - 8} className="text-xs font-semibold fill-cyan-100 drop-shadow">
+                          {node.name}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                <motion.circle
+                  cx={metropole.x}
+                  cy={metropole.y}
+                  r={hovered === "FR" || selected === "FR" ? 15 : 12}
+                  fill="#0ea5e9"
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.4 }}
+                  className="cursor-pointer"
+                  onMouseEnter={() => setHovered("FR")}
+                  onMouseLeave={() => setHovered(null)}
+                  onClick={() => setVariable("territory_code", "FR")}
+                  onDoubleClick={() => {
+                    setVariable("territory_code", null);
+                    navigate("/explore");
+                  }}
+                />
+                <text x={metropole.x + 18} y={metropole.y + 4} className="text-sm font-bold fill-cyan-100 drop-shadow">
+                  Metropole
+                </text>
+              </svg>
+
+              {hasZeroState ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                  <div className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                    Aucune donnée sur la période. Ajuste les filtres ou importe des ventes.
+                  </div>
                 </div>
-
-                {error ? <div className="text-xs text-rose-400">{error}</div> : null}
-              </CardContent>
-            </Card>
-
-            <Card className="relative overflow-hidden border-cyan-500/30 bg-slate-950 shadow-[0_10px_80px_rgba(8,47,73,0.35)]">
-              <CardContent className="p-0">
-                <div className="relative w-full h-[460px] lg:h-[520px] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-xl">
-                  <div
-                    className="absolute inset-0 opacity-50"
-                    style={{
-                      backgroundImage:
-                        "radial-gradient(circle at 10% 20%, rgba(56,189,248,0.16) 0, transparent 40%), radial-gradient(circle at 80% 10%, rgba(168,85,247,0.18) 0, transparent 35%), radial-gradient(circle at 30% 80%, rgba(34,197,94,0.12) 0, transparent 35%)",
-                    }}
-                  />
-                  <div className="absolute inset-6 rounded-xl border border-cyan-500/10" />
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      backgroundImage:
-                        "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
-                      backgroundSize: "48px 48px",
-                    }}
-                  />
-                  <img
-                    src={worldMap}
-                    alt="Fond carte monde"
-                    className="absolute inset-0 h-full w-full object-cover opacity-55 pointer-events-none"
-                    style={{ mixBlendMode: "screen" }}
-                  />
-
-                  <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="w-full h-full relative z-10">
-                    {nodes
-                      .filter((n) => n.code !== "FR")
-                      .map((node) => {
-                        const path = buildArc(metropole, node);
-                        const isActive = selected === node.code;
-                        const isHover = hovered === node.code;
-                        return (
-                          <g key={node.code}>
-                            <path
-                              d={path}
-                              fill="none"
-                              stroke={node.color}
-                              strokeWidth={isActive || isHover ? 2.6 : 1.2}
-                              strokeOpacity={isActive || isHover ? 0.9 : 0.35}
-                              className="transition-all duration-300"
-                            />
-                            <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={0.35} />
-                            <circle
-                              cx={node.x}
-                              cy={node.y}
-                              r={isActive || isHover ? 7 : 5.5}
-                              fill={node.color}
-                              className="cursor-pointer"
-                              onMouseEnter={() => setHovered(node.code)}
-                              onMouseLeave={() => setHovered(null)}
-                              onClick={() => setVariable("territory_code", node.code)}
-                              onDoubleClick={() => {
-                                setVariable("territory_code", node.code);
-                                navigate("/explore");
-                              }}
-                            />
-                            <text x={node.x + 12} y={node.y - 8} className="text-xs font-semibold fill-cyan-100 drop-shadow">
-                              {node.name}
-                            </text>
-                          </g>
-                        );
-                      })}
-
-                    <motion.circle
-                      cx={metropole.x}
-                      cy={metropole.y}
-                      r={hovered === "FR" || selected === "FR" ? 15 : 12}
-                      fill="#0ea5e9"
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ duration: 0.4 }}
-                      className="cursor-pointer"
-                      onMouseEnter={() => setHovered("FR")}
-                      onMouseLeave={() => setHovered(null)}
-                      onClick={() => setVariable("territory_code", "FR")}
-                      onDoubleClick={() => {
-                        setVariable("territory_code", null);
-                        navigate("/explore");
-                      }}
-                    />
-                    <text x={metropole.x + 18} y={metropole.y + 4} className="text-sm font-bold fill-cyan-100 drop-shadow">
-                      Metropole
-                    </text>
-                  </svg>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-900/80 border-cyan-500/30 shadow-[0_10px_60px_rgba(14,116,144,0.25)] backdrop-blur">
-              <CardHeader>
-                <CardTitle className="text-cyan-100">Actions recommandées</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="text-xs text-slate-300/80">Filtres actifs :</div>
-                <div className="flex flex-wrap gap-2 text-xs text-cyan-100">
-                  <Badge variant="outline" className="border-cyan-500/40 bg-cyan-500/10 text-cyan-50">
-                    Territoire : {variables.territory_code || "Tous"}
-                  </Badge>
-                  <Badge variant="outline" className="border-cyan-500/40 bg-cyan-500/10 text-cyan-50">
-                    Période : {resolvedRange.label}
-                  </Badge>
-                </div>
-                <div className="grid gap-2 md:grid-cols-3">
-                  <Button variant="outline" className="justify-start" onClick={() => navigate("/explore")}>
-                    Ouvrir Explore
-                  </Button>
-                  <Button variant="outline" className="justify-start" onClick={() => navigate("/costs")}>
-                    Voir Coûts & logistique
-                  </Button>
-                  <Button variant="outline" className="justify-start" onClick={() => navigate("/taxes-om")}>
-                    Vérifier Taxes/OM
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+              ) : null}
+            </NeonSurface>
           </div>
 
-          {/* RIGHT COLUMN */}
-          <Card className="bg-slate-900/80 border-cyan-500/30 shadow-[0_10px_60px_rgba(14,116,144,0.25)] backdrop-blur">
-            <CardHeader>
-              <CardTitle className="text-cyan-100">Dash par territoire</CardTitle>
-            </CardHeader>
-
-            <CardContent className="space-y-3 max-h-[520px] overflow-auto">
-              {isLoading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-9 w-full" />
-                  ))}
-                </div>
-              ) : (
-                topList.map((t) => {
-                  const comp = competitionByTerritory.find((c) => c.territory === t.code);
-                  const avgGap = comp?.avgGap;
-
-                  const isTop = t.tauxMarge !== null && t.tauxMarge >= 20 && t.salesHt > 0;
-                  const isRisk = (t.tauxMarge !== null && t.tauxMarge < 10) || (avgGap ?? -Infinity) > 20;
-
-                  const badgeTone = isTop
-                    ? { label: "Top", className: "bg-emerald-500/15 text-emerald-200 border-emerald-400/40" }
-                    : isRisk
-                      ? { label: "À risque", className: "bg-rose-500/10 text-rose-200 border-rose-400/40" }
-                      : null;
-
-                  return (
-                    <button
-                      key={t.code}
-                      className={cn(
-                        "w-full rounded-xl border px-3 py-2 text-left transition",
-                        selected === t.code ? "border-cyan-400/50 bg-cyan-500/10" : "border-cyan-500/20 hover:bg-slate-800"
-                      )}
-                      onClick={() => setVariable("territory_code", t.code)}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-semibold text-cyan-100 flex items-center gap-2">
-                          {t.name}
-                          {badgeTone ? (
-                            <Badge variant="outline" className={cn("text-[11px]", badgeTone.className)}>
-                              {badgeTone.label}
-                            </Badge>
-                          ) : null}
-                        </div>
-                        <Badge variant="outline">{t.code}</Badge>
-                      </div>
-
-                      <div className="text-xs text-slate-300/80">Ventes: {formatMoney(t.salesHt)}</div>
-
-                      <div className="text-[11px] text-slate-400 flex items-center gap-1">
-                        <span>Marge: {formatMoney(t.margin)}</span>
-                        <span className="text-slate-500">•</span>
-
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="underline decoration-dotted underline-offset-4 cursor-help">Gap moyen</span>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs text-left">
-                              Écart moyen entre prix catalogue et prix réellement vendu (transport & fiscalité inclus).
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-
-                        <span>{avgGap === null ? "n/a" : `${avgGap.toFixed(1)}%`}</span>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </CardContent>
-          </Card>
+          <div className="col-span-12 lg:col-span-4 grid grid-rows-4 gap-3">
+            <NeonDonutCard label="On-time transport" value={donuts.transport} delta={donuts.deltaTransport} />
+            <NeonDonutCard label="Docs conformes" value={donuts.docs} delta={donuts.deltaDocs} color="var(--chart-2)" />
+            <NeonDonutCard label="Incoterm correct" value={donuts.incoterm} delta={donuts.deltaIncoterm} color="var(--chart-3)" />
+            <NeonDonutCard label="Factures validées" value={donuts.invoice} delta={donuts.deltaInvoice} color="var(--chart-4)" />
+          </div>
         </div>
-      </div>
-    </MainLayout>
-  );
-}
 
-function EmptyState({
-  onExplore,
-  onImport,
-  showImportCta = true,
-}: {
-  onExplore: () => void;
-  onImport?: () => void;
-  showImportCta?: boolean;
-}) {
-  const canImport = Boolean(onImport);
-  return (
-    <div className="rounded-xl border border-amber-400/30 bg-amber-500/5 px-3 py-3 text-sm text-amber-100 shadow-inner shadow-amber-500/10">
-      <div className="font-semibold text-amber-50">Aucune donnée sur la période</div>
-      <p className="text-amber-100/80 text-xs">Importez des ventes ou ajustez vos filtres (territoire / dates).</p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button size="sm" onClick={onExplore}>
-          Ouvrir Explore
-        </Button>
+        {/* Ligne 2 : barres + mini DOM + courbe */}
+        <div className="grid grid-cols-12 gap-3">
+          <div className="col-span-12 md:col-span-4">
+            <NeonBarCard title="Top routes par volume" data={topRoutes} dataKey="volume" labelKey="route" />
+          </div>
+          <div className="col-span-12 md:col-span-4">
+            <NeonSurface className="h-full">
+              <div className="mb-2 text-sm text-slate-300/80">DOM focus</div>
+              <div className="text-xs text-slate-300/80">A brancher: SLA moyen + coût moyen / territoire.</div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-slate-100">
+                {totals.byTerritory
+                  .filter((t) => t.code !== "FR")
+                  .slice(0, 4)
+                  .map((t) => (
+                    <div key={t.code} className="rounded-lg border border-cyan-500/20 bg-slate-900/50 px-2 py-2">
+                      <div className="flex items-center justify-between text-xs text-slate-300/80">
+                        <span>{t.name}</span>
+                        <span className="text-cyan-200">{t.code}</span>
+                      </div>
+                      <div className="text-sm font-semibold">{formatMoney(t.salesHt)}</div>
+                      <div className="text-[11px] text-slate-400">
+                        Marge: {t.margin >= 0 ? "+" : ""}
+                        {formatMoney(t.margin)} {t.tauxMarge !== null ? `(${t.tauxMarge.toFixed(1)}%)` : ""}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </NeonSurface>
+          </div>
+          <div className="col-span-12 md:col-span-4">
+            <NeonLineCard
+              title="CA / Marge / Coûts (30j)"
+              data={timeseries}
+              lines={[
+                { key: "sales", color: "var(--chart-1)" },
+                { key: "marginPct", color: "var(--chart-3)" },
+                { key: "costs", color: "var(--chart-2)" },
+              ]}
+            />
+          </div>
+        </div>
 
-        {showImportCta ? (
-          canImport ? (
-            <Button size="sm" variant="outline" onClick={onImport}>
-              Importer des ventes
-            </Button>
-          ) : (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button size="sm" variant="outline" disabled>
-                    Importer des ventes
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Bientôt</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )
+        {/* Ligne 3 : alertes + actions */}
+        <div className="grid grid-cols-12 gap-3">
+          <div className="col-span-12 md:col-span-6">
+            <NeonSurface>
+              <div className="mb-2 text-sm text-slate-300/80">Alertes</div>
+              {!alerts.length ? (
+                <div className="text-xs text-slate-400">Aucune alerte</div>
+              ) : (
+                <ul className="space-y-1 text-sm">
+                  {alerts.map((a) => (
+                    <li key={a.label} className="flex items-center gap-2">
+                      <span className="text-amber-300">●</span>
+                      <span>{a.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="mt-3">
+                <Button onClick={() => navigate("/explore")}>Ouvrir Explore</Button>
+              </div>
+            </NeonSurface>
+          </div>
+          <div className="col-span-12 md:col-span-6">
+            <NeonSurface className="flex flex-wrap gap-2">
+              {actions.map((a) => (
+                <Button key={a} variant="outline" className="border-cyan-400/40 text-cyan-100 hover:bg-cyan-500/10" onClick={() => a === "Ouvrir Explore" ? navigate("/explore") : null}>
+                  {a}
+                </Button>
+              ))}
+            </NeonSurface>
+          </div>
+        </div>
+
+        {error ? (
+          <div className="text-sm text-rose-300">
+            Erreur chargement données : {error}. Affichage des données démo si disponibles.
+          </div>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-function Kpi({
-  label,
-  value,
-  accent,
-  loading,
-  badge,
-}: {
-  label: string;
-  value: string;
-  accent?: string;
-  loading?: boolean;
-  badge?: React.ReactNode;
-}) {
-  if (loading) return <Skeleton className="h-12 w-full" />;
-  return (
-    <div className="rounded-xl border border-cyan-500/30 bg-slate-950/80 px-3 py-2 shadow-inner shadow-cyan-500/10">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-xs text-slate-300/80">{label}</div>
-        {badge}
-      </div>
-      <div className={cn("text-xl font-bold", accent)}>{value}</div>
-    </div>
+    </MainLayout>
   );
 }

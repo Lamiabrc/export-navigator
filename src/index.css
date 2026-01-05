@@ -119,6 +119,35 @@
   }
 }
 
+/* Control Tower neon */
+.control-tower-neon {
+  --background: 225 45% 6%;
+  --foreground: 220 30% 95%;
+  --card: 225 38% 10%;
+  --card-foreground: 220 30% 95%;
+  --border: 223 36% 20%;
+  --accent: 200 88% 60%;
+  --primary: 195 90% 62%;
+  --primary-foreground: 223 40% 10%;
+  --secondary: 268 72% 70%;
+  --muted: 223 26% 24%;
+  --muted-foreground: 220 18% 76%;
+  --chart-1: 195 90% 62%;
+  --chart-2: 268 72% 70%;
+  --chart-3: 160 78% 68%;
+  --chart-4: 32 100% 65%;
+  --chart-5: 340 82% 66%;
+  background: radial-gradient(circle at 20% 20%, rgba(60, 193, 255, 0.12), transparent 32%),
+    radial-gradient(circle at 80% 10%, rgba(155, 107, 255, 0.16), transparent 35%),
+    #0f1528;
+}
+
+.control-tower-neon .neon-card {
+  border: 1px solid rgba(60, 193, 255, 0.14);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.32);
+  background: linear-gradient(140deg, #111b35, #0d1328);
+}
+
 @layer base {
   * {
     @apply border-border;
