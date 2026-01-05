@@ -1,769 +1,485 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-
-import { MainLayout } from "@/components/layout/MainLayout";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { AlertTriangle, Calculator, FileCheck2, RefreshCw } from "lucide-react";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { useExportSettings } from "@/hooks/useExportSettings";
+import { useDashboardData } from "@/hooks/useDashboardData";
+import { KpiBar } from "@/components/dashboard/KpiBar";
+import { FiltersBar, DashboardFilters } from "@/components/dashboard/FiltersBar";
+import { DromTable } from "@/components/dashboard/DromTable";
+import { AlertsPanel, AlertItem } from "@/components/dashboard/AlertsPanel";
+import { MarginWaterfall } from "@/components/dashboard/MarginWaterfall";
+import { TopFlop } from "@/components/dashboard/TopFlop";
+import { RiskySales } from "@/components/dashboard/RiskySales";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
-import { useProducts } from "@/hooks/useProducts";
-import { getZoneFromDestination } from "@/data/referenceRates";
-import { fetchAllWithPagination } from "@/utils/supabasePagination";
-import {
-  BreakdownFilters,
-  computeExportBreakdown,
-  CostLine,
-  ExportBreakdown,
-  isMissingTableError,
-  SalesLine,
-  summarizeWarning,
-  VatRateRow,
-  OmRateRow,
-} from "@/domain/calc";
 
-import {
-  Activity,
-  FileCheck2,
-  Calculator,
-  Users,
-  Package,
-  BookOpen,
-  Settings2,
-  RefreshCw,
-  ArrowRight,
-  Globe,
-  Filter,
-  AlertTriangle,
-} from "lucide-react";
+const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
 
-type Zone = "UE" | "DROM" | "Hors UE";
-
-type FlowRow = {
-  id: string;
-  flow_code: string;
-  data: any;
-  created_at: string;
+type CompetitorRow = {
+  sku: string;
+  label: string | null;
+  territory: string;
+  ourPrice: number | null;
+  bestPrice: number | null;
+  bestName: string | null;
+  gapPct: number | null;
 };
 
-type ClientMini = {
-  id: string;
-  export_zone: string | null;
-  drom_code: string | null;
-  canal: string | null;
-};
+const SQL_FIX_ACL7 = `-- Corrige les vues pour éviter l'erreur acl7_norm
+-- Exemple : remplacer toute référence à acl7_norm par acl_norm ou valeur par défaut
+-- Adapter selon votre schéma :
+-- alter view public.v_export_pricing rename column acl7_norm to acl_norm;`;
 
-type ClientStats = {
-  total: number;
-  UE: number;
-  DROM: number;
-  "Hors UE": number;
-  direct: number;
-  indirect: number;
-  depositaire: number;
-  unknownChannel: number;
-};
-
-type QueryResult<T> = {
-  rows: T[];
-  warning?: string;
-};
-
-type ClientResult = {
-  stats: ClientStats;
-  warning?: string;
-};
-
-function safeText(v: any): string {
-  if (v === null || v === undefined) return "";
-  return String(v);
-}
-
-function extractDestination(data: any): string {
-  return (
-    safeText(data?.destination) ||
-    safeText(data?.destination_name) ||
-    safeText(data?.shipping?.destination) ||
-    safeText(data?.meta?.destination) ||
-    ""
-  );
-}
-
-function zoneBadge(z: Zone) {
-  if (z === "DROM") return <Badge variant="secondary">DROM</Badge>;
-  if (z === "UE") return <Badge variant="outline">UE</Badge>;
-  return <Badge variant="outline">Hors UE</Badge>;
+function formatMoney(n: number, digits = 0) {
+  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: digits }).format(n);
 }
 
 export default function CommandCenter() {
-  const [filters, setFilters] = React.useState<BreakdownFilters>({});
-
-  const {
-    stats: productStats,
-    isLoading: productsLoading,
-    error: productsError,
-    refresh: refreshProducts,
-  } = useProducts({ pageSize: 2000 });
-
-  const emptyStats: ClientStats = {
-    total: 0,
-    UE: 0,
-    DROM: 0,
-    "Hors UE": 0,
-    direct: 0,
-    indirect: 0,
-    depositaire: 0,
-    unknownChannel: 0,
-  };
-
-  const flowsQuery = useQuery<QueryResult<FlowRow>>({
-    queryKey: ["command-center", "flows"],
-    queryFn: async () => {
-      if (!SUPABASE_ENV_OK) {
-        return { rows: [], warning: "Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)." };
-      }
-
-      const { data, error } = await supabase
-        .from("flows")
-        .select("id, flow_code, data, created_at")
-        .order("created_at", { ascending: false })
-        .limit(40);
-
-      if (error) {
-        if (isMissingTableError(error)) return { rows: [], warning: "Table flows manquante côté Supabase." };
-        throw error;
-      }
-
-      return { rows: (data ?? []) as FlowRow[] };
-    },
-    staleTime: 30_000,
+  const [activeTab, setActiveTab] = React.useState<"overview" | "drom" | "lab" | "concurrents" | "settings">("overview");
+  const [filters, setFilters] = React.useState<DashboardFilters>({
+    from: "",
+    to: "",
+    territories: "",
+    channel: "",
+    incoterm: "",
+    client: "",
+    product: "",
+    dromOnly: true,
   });
 
-  const clientsQuery = useQuery<ClientResult>({
-    queryKey: ["command-center", "clients"],
-    queryFn: async () => {
-      if (!SUPABASE_ENV_OK) {
-        return { stats: emptyStats, warning: "Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)." };
-      }
+  const { settings, loading: settingsLoading, warning: settingsWarning, save, DEFAULT_SETTINGS } = useExportSettings();
+  const territories = React.useMemo(() => {
+    if (filters.dromOnly) return DROM_CODES;
+    if (!filters.territories.trim()) return undefined;
+    return filters.territories.split(",").map((t) => t.trim().toUpperCase()).filter(Boolean);
+  }, [filters.dromOnly, filters.territories]);
 
-      try {
-        const pageSize = 1000;
-
-        const rows = await fetchAllWithPagination<ClientMini>(
-          (from, to) =>
-            supabase
-              .from("clients")
-              .select("id, export_zone, drom_code, canal")
-              .order("id", { ascending: true })
-              .range(from, to),
-          pageSize,
-        );
-
-        const total = rows.length;
-
-        const byZone: Record<Zone, number> = { UE: 0, DROM: 0, "Hors UE": 0 };
-        let direct = 0;
-        let indirect = 0;
-        let depositaire = 0;
-        let unknownChannel = 0;
-
-        for (const c of rows) {
-          const zRaw = (c.export_zone || "").toUpperCase().trim();
-          let z: Zone = "Hors UE";
-          if (zRaw.includes("DROM")) z = "DROM";
-          else if (zRaw === "UE" || zRaw.includes("EU")) z = "UE";
-          else if (zRaw.includes("HORS")) z = "Hors UE";
-
-          if (c.drom_code && safeText(c.drom_code).trim() !== "") z = "DROM";
-
-          byZone[z] = (byZone[z] ?? 0) + 1;
-
-          const canal = (c.canal || "").toLowerCase().trim();
-          if (canal.includes("direct")) direct += 1;
-          else if (canal.includes("indirect")) indirect += 1;
-          else if (canal.includes("depos")) depositaire += 1;
-          else unknownChannel += 1;
-        }
-
-        return {
-          stats: {
-            total,
-            UE: byZone.UE,
-            DROM: byZone.DROM,
-            "Hors UE": byZone["Hors UE"],
-            direct,
-            indirect,
-            depositaire,
-            unknownChannel,
-          },
-        };
-      } catch (e: any) {
-        if (isMissingTableError(e)) {
-          return { stats: emptyStats, warning: "Table clients manquante côté Supabase." };
-        }
-        throw e;
-      }
+  const { state: salesState, aggregates } = useDashboardData(
+    {
+      from: filters.from || undefined,
+      to: filters.to || undefined,
+      territories,
+      client: filters.client || undefined,
+      product: filters.product || undefined,
     },
-    staleTime: 30_000,
-  });
-
-  const salesQuery = useQuery<QueryResult<SalesLine>>({
-    queryKey: ["command-center", "sales-lines"],
-    queryFn: async () => {
-      if (!SUPABASE_ENV_OK) {
-        return { rows: [], warning: "Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)." };
-      }
-
-      try {
-        const pageSize = 1000;
-        const rows = await fetchAllWithPagination<SalesLine>(
-          (from, to) =>
-            supabase
-              .from("sales_lines")
-              .select("id,date,client_id,product_id,qty,net_sales_ht,currency,market_zone,incoterm,destination")
-              .order("date", { ascending: false })
-              .range(from, to),
-          pageSize,
-        );
-        return { rows };
-      } catch (e: any) {
-        if (isMissingTableError(e)) {
-          return { rows: [], warning: "Table sales_lines manquante côté Supabase." };
-        }
-        throw e;
-      }
-    },
-    staleTime: 60_000,
-  });
-
-  const costsQuery = useQuery<QueryResult<CostLine>>({
-    queryKey: ["command-center", "cost-lines"],
-    queryFn: async () => {
-      if (!SUPABASE_ENV_OK) {
-        return { rows: [], warning: "Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)." };
-      }
-
-      try {
-        const pageSize = 1000;
-        const rows = await fetchAllWithPagination<CostLine>(
-          (from, to) =>
-            supabase
-              .from("cost_lines")
-              .select("id,date,cost_type,amount,currency,market_zone,incoterm,client_id,product_id,destination")
-              .order("date", { ascending: false })
-              .range(from, to),
-          pageSize,
-        );
-        return { rows };
-      } catch (e: any) {
-        if (isMissingTableError(e)) {
-          return { rows: [], warning: "Table cost_lines manquante côté Supabase." };
-        }
-        throw e;
-      }
-    },
-    staleTime: 60_000,
-  });
-
-  const vatRatesQuery = useQuery<QueryResult<VatRateRow>>({
-    queryKey: ["command-center", "vat-rates"],
-    queryFn: async () => {
-      if (!SUPABASE_ENV_OK) {
-        return { rows: [], warning: "Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)." };
-      }
-
-      const { data, error } = await supabase
-        .from("vat_rates")
-        .select("id,territory_code,rate_percent,start_date,end_date")
-        .order("territory_code", { ascending: true });
-
-      if (error) {
-        if (isMissingTableError(error)) return { rows: [], warning: "Table vat_rates manquante côté Supabase." };
-        throw error;
-      }
-
-      return { rows: (data ?? []) as VatRateRow[] };
-    },
-    staleTime: 120_000,
-  });
-
-  const omRatesQuery = useQuery<QueryResult<OmRateRow>>({
-    queryKey: ["command-center", "om-rates"],
-    queryFn: async () => {
-      if (!SUPABASE_ENV_OK) {
-        return { rows: [], warning: "Supabase env manquantes (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)." };
-      }
-
-      const { data, error } = await supabase
-        .from("om_rates")
-        .select("id,territory_code,hs_code,om_rate,omr_rate,start_date,end_date")
-        .order("territory_code", { ascending: true });
-
-      if (error) {
-        if (isMissingTableError(error)) return { rows: [], warning: "Table om_rates manquante côté Supabase." };
-        throw error;
-      }
-
-      return { rows: (data ?? []) as OmRateRow[] };
-    },
-    staleTime: 120_000,
-  });
-
-  const breakdown: ExportBreakdown = React.useMemo(
-    () =>
-      computeExportBreakdown({
-        salesLines: salesQuery.data?.rows ?? [],
-        costLines: costsQuery.data?.rows ?? [],
-        vatRates: vatRatesQuery.data?.rows ?? [],
-        omRates: omRatesQuery.data?.rows ?? [],
-        filters,
-      }),
-    [
-      salesQuery.data?.rows,
-      costsQuery.data?.rows,
-      vatRatesQuery.data?.rows,
-      omRatesQuery.data?.rows,
-      filters,
-    ],
+    settings,
   );
+  const [competitionRows, setCompetitionRows] = React.useState<CompetitorRow[]>([]);
+  const [competitionError, setCompetitionError] = React.useState<string | null>(null);
+  const [competitionLoading, setCompetitionLoading] = React.useState(false);
 
-  const flowsByZone = React.useMemo(() => {
-    const base: Record<Zone, number> = { UE: 0, DROM: 0, "Hors UE": 0 };
-    for (const r of flowsQuery.data?.rows ?? []) {
-      const dest = extractDestination(r.data);
-      let z: Zone = "Hors UE";
-      if (dest) {
-        try {
-          z = (getZoneFromDestination(dest as any) as Zone) || "Hors UE";
-        } catch {
-          z = "Hors UE";
-        }
-      }
-      base[z] = (base[z] ?? 0) + 1;
+  const kpis = [
+    { label: "CA HT", value: formatMoney(aggregates.totalHt), delta: "", accent: "" },
+    { label: "CA TTC", value: formatMoney(aggregates.totalTtc), delta: "", accent: "" },
+    { label: "Marge €", value: formatMoney(aggregates.totalMargin), delta: `Marge % ${aggregates.marginPct.toFixed(1)}%`, accent: "text-emerald-600" },
+    { label: "# Commandes", value: `${aggregates.orders}`, delta: `Panier moyen ${formatMoney(aggregates.avgBasket)}` },
+    { label: "Transport", value: formatMoney(aggregates.totalTransport), delta: "" },
+    { label: "Taxes", value: formatMoney(aggregates.totalTaxes), delta: "" },
+  ];
+
+  const dromRows = Array.from(aggregates.byTerritory.entries())
+    .filter(([code]) => DROM_CODES.includes(code))
+    .map(([code, v]) => ({
+      territory: code,
+      ca: v.ca,
+      margin: v.margin,
+      transport: v.transport,
+      taxes: v.taxes,
+      contribution: aggregates.totalHt ? (v.ca / aggregates.totalHt) * 100 : 0,
+    }));
+
+  const alerts: AlertItem[] = React.useMemo(() => {
+    const list: AlertItem[] = [];
+    if (aggregates.marginPct < settings.thresholds.marge_min_pct) {
+      list.push({ id: "marge", severity: "danger", title: "Marge globale sous seuil", description: `Marge ${aggregates.marginPct.toFixed(1)}% < ${settings.thresholds.marge_min_pct}%`, action: "Revoir remises/transport" });
     }
-    return base;
-  }, [flowsQuery.data?.rows]);
+    if (aggregates.totalTransport / Math.max(1, aggregates.totalHt) * 100 > settings.thresholds.transport_max_pct_du_ca) {
+      list.push({ id: "transport", severity: "warning", title: "Transport élevé", description: "Transport/CA dépasse le seuil", action: "Optimiser poids/incoterm" });
+    }
+    return list;
+  }, [aggregates.marginPct, aggregates.totalTransport, aggregates.totalHt, settings.thresholds]);
 
-  const recentFlows = React.useMemo(() => (flowsQuery.data?.rows ?? []).slice(0, 16), [flowsQuery.data?.rows]);
+  React.useEffect(() => {
+    let active = true;
+    const loadCompetition = async () => {
+      if (!SUPABASE_ENV_OK) {
+        setCompetitionError("Supabase non configuré (SUPABASE_ENV_OK=false)");
+        return;
+      }
+      setCompetitionLoading(true);
+      setCompetitionError(null);
+      try {
+        const { data, error } = await supabase
+          .from("v_export_pricing")
+          .select("sku,label,territory_code,plv_metropole_ttc,plv_om_ttc,thuasne_price_ttc,donjoy_price_ttc,gibaud_price_ttc")
+          .in("territory_code", DROM_CODES)
+          .limit(4000);
+        if (!active) return;
+        if (error) throw error;
 
-  const allWarnings = React.useMemo(() => {
-    const list = [
-      salesQuery.data?.warning,
-      costsQuery.data?.warning,
-      vatRatesQuery.data?.warning,
-      omRatesQuery.data?.warning,
-      flowsQuery.data?.warning,
-      clientsQuery.data?.warning,
-      ...breakdown.warnings,
-    ];
-    return (list.filter(Boolean) as string[]).map((w, idx) => summarizeWarning(`Alerte ${idx + 1}`, w));
-  }, [
-    breakdown.warnings,
-    clientsQuery.data?.warning,
-    costsQuery.data?.warning,
-    flowsQuery.data?.warning,
-    omRatesQuery.data?.warning,
-    salesQuery.data?.warning,
-    vatRatesQuery.data?.warning,
-  ]);
+        const mapped: CompetitorRow[] = (data || []).map((r: any) => {
+          const our = Number(r.plv_om_ttc ?? r.plv_metropole_ttc ?? null);
+          const competitors = [
+            { name: "Thuasne", price: Number(r.thuasne_price_ttc ?? NaN) },
+            { name: "Donjoy", price: Number(r.donjoy_price_ttc ?? NaN) },
+            { name: "Gibaud", price: Number(r.gibaud_price_ttc ?? NaN) },
+          ].filter((c) => Number.isFinite(c.price)) as { name: string; price: number }[];
+          const best =
+            competitors.length > 0
+              ? competitors.reduce((m, c) => (c.price < m.price ? c : m), competitors[0])
+              : null;
+          const gapPct = our && best ? ((our - best.price) / best.price) * 100 : null;
+          return {
+            sku: r.sku,
+            label: r.label,
+            territory: r.territory_code,
+            ourPrice: our || null,
+            bestPrice: best?.price ?? null,
+            bestName: best?.name ?? null,
+            gapPct,
+          };
+        });
+        setCompetitionRows(mapped);
+      } catch (err: any) {
+        if (!active) return;
+        setCompetitionError(err?.message || "Erreur chargement v_export_pricing");
+        setCompetitionRows([]);
+      } finally {
+        if (active) setCompetitionLoading(false);
+      }
+    };
+    void loadCompetition();
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  const firstError =
-    salesQuery.error ||
-    costsQuery.error ||
-    vatRatesQuery.error ||
-    omRatesQuery.error ||
-    flowsQuery.error ||
-    clientsQuery.error;
+  const topClients = React.useMemo(() => {
+    const map = new Map<string, { ca: number; margin: number }>();
+    salesState.rows.forEach((r) => {
+      const key = r.client_id || "n/a";
+      const cur = map.get(key) || { ca: 0, margin: 0 };
+      cur.ca += r.amount_ht || 0;
+      cur.margin += r.margin || 0;
+      map.set(key, cur);
+    });
+    return Array.from(map.entries())
+      .map(([label, v]) => ({ label, value: v.margin, pct: v.ca ? (v.margin / v.ca) * 100 : 0 }))
+      .sort((a, b) => b.value - a.value);
+  }, [salesState.rows]);
 
-  const clientStats = clientsQuery.data?.stats ?? emptyStats;
+  const flopClients = [...topClients].sort((a, b) => a.pct - b.pct);
 
-  const number = (v: number, options: Intl.NumberFormatOptions = {}) =>
-    Number.isFinite(v) ? v.toLocaleString("fr-FR", options) : "—";
+  const topProducts = React.useMemo(() => {
+    const map = new Map<string, { ca: number; margin: number }>();
+    salesState.rows.forEach((r) => {
+      const key = r.product_ref || "n/a";
+      const cur = map.get(key) || { ca: 0, margin: 0 };
+      cur.ca += r.amount_ht || 0;
+      cur.margin += r.margin || 0;
+      map.set(key, cur);
+    });
+    return Array.from(map.entries())
+      .map(([label, v]) => ({ label, value: v.margin, pct: v.ca ? (v.margin / v.ca) * 100 : 0 }))
+      .sort((a, b) => b.value - a.value);
+  }, [salesState.rows]);
 
-  const handleFilterChange = (key: keyof BreakdownFilters, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value || undefined }));
-  };
+  const waterfallSteps = [
+    { label: "Prix", value: aggregates.totalHt },
+    { label: "Transport", value: -aggregates.totalTransport },
+    { label: "Taxes", value: -aggregates.totalTaxes },
+    { label: "Marge", value: aggregates.totalMargin },
+  ];
 
-  const resetFilters = () => setFilters({});
+  const competitorsByTerritory = React.useMemo(() => {
+    const map = new Map<string, { count: number; avgGap: number | null; premium: number; under: number }>();
+    DROM_CODES.forEach((code) => map.set(code, { count: 0, avgGap: null, premium: 0, under: 0 }));
+    competitionRows.forEach((row) => {
+      const entry = map.get(row.territory) || { count: 0, avgGap: null, premium: 0, under: 0 };
+      entry.count += 1;
+      if (row.gapPct !== null && Number.isFinite(row.gapPct)) {
+        entry.avgGap = entry.avgGap === null ? row.gapPct : entry.avgGap + row.gapPct;
+        if (row.gapPct > 5) entry.premium += 1;
+        if (row.gapPct < -5) entry.under += 1;
+      }
+      map.set(row.territory, entry);
+    });
+    return Array.from(map.entries()).map(([territory, v]) => ({
+      territory,
+      count: v.count,
+      avgGap: v.avgGap !== null && v.count > 0 ? v.avgGap / v.count : null,
+      premium: v.premium,
+      under: v.under,
+    }));
+  }, [competitionRows]);
 
-  const kpiLoading =
-    salesQuery.isLoading || costsQuery.isLoading || vatRatesQuery.isLoading || omRatesQuery.isLoading;
-  const fmtPercent = (v: number) => `${v.toFixed(1)}%`;
-  const zoneEntries = Object.entries(breakdown.byZone);
-  const destinationEntries = Object.entries(breakdown.byDestination);
+  const riskyRows = aggregates.riskySales.map((r) => ({
+    id: r.id,
+    client_id: r.client_id,
+    product_ref: r.product_ref,
+    amount_ht: r.amount_ht,
+    margin: r.margin || ((r.amount_ht || 0) - (r.transport_cost || 0) - (r.taxes || 0)),
+    sale_date: r.sale_date,
+  }));
+
+  const [labInput, setLabInput] = React.useState({
+    territory: "GP",
+    product: "",
+    qty: 1,
+    price: 100,
+    discountPct: 0,
+    weightKg: 1,
+    incoterm: "DAP",
+    channel: "direct",
+  });
+
+  const labEstimate = React.useMemo(() => {
+    const net = labInput.price * (1 - labInput.discountPct / 100) * labInput.qty;
+    const tva = net * ((settings.vat[labInput.territory] ?? 0) / 100);
+    const localTax = net * ((settings.localTaxes[labInput.territory] ?? 0) / 100);
+    const zoneKey = DROM_CODES.includes(labInput.territory) ? "DROM" : "UE";
+    const transportConf = settings.transport_estimation?.zones[zoneKey] || { base: 30, perKg: 2 };
+    const transport = transportConf.base + transportConf.perKg * labInput.weightKg;
+    const fees = settings.fees.transport_per_order_eur + settings.fees.dossier_per_order_eur;
+    const totalCost = transport + fees + localTax + tva;
+    const margin = net - totalCost;
+    return { net, tva, localTax, transport, fees, totalCost, margin, marginPct: net ? (margin / net) * 100 : 0 };
+  }, [labInput, settings]);
+
+  const [settingsDraft, setSettingsDraft] = React.useState(JSON.stringify(settings, null, 2));
+  React.useEffect(() => {
+    setSettingsDraft(JSON.stringify(settings, null, 2));
+  }, [settings]);
+
+  const [saveError, setSaveError] = React.useState<string | null>(null);
 
   return (
     <MainLayout>
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Activity className="h-6 w-6 text-accent" />
-              Dashboard principal Export
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Pilotage des données (ventes/charges/OM/TVA) + raccourcis vers les référentiels Supabase.
-            </p>
+            <p className="text-sm text-muted-foreground">Cockpit dirigeant Export</p>
+            <h1 className="text-2xl font-bold">Command Center</h1>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button asChild className="gap-2">
-              <Link to="/verifier">
-                <FileCheck2 className="h-4 w-4" />
-                Contrôle documents
-              </Link>
-            </Button>
-
-            <Button asChild variant="outline" className="gap-2">
+          <div className="flex gap-2">
+            <Button variant="outline" asChild>
               <Link to="/simulator">
-                <Calculator className="h-4 w-4" />
-                Simulation export
+                <Calculator className="h-4 w-4 mr-2" />
+                Simulateur
               </Link>
             </Button>
-
-            <Button asChild variant="outline" className="gap-2">
-              <Link to="/sales">
-                <BookOpen className="h-4 w-4" />
-                Ventes (source)
-              </Link>
-            </Button>
-
-            <Button asChild variant="ghost" className="gap-2">
-              <Link to="/settings">
-                <Settings2 className="h-4 w-4" />
-                Réglages
+            <Button variant="outline" asChild>
+              <Link to="/verifier">
+                <FileCheck2 className="h-4 w-4 mr-2" />
+                Vérifier facture
               </Link>
             </Button>
           </div>
         </div>
 
-        {firstError ? (
-          <Card className="border-red-300 bg-red-50">
-            <CardContent className="pt-4 text-sm text-red-700">
-              Erreur Supabase : {firstError instanceof Error ? firstError.message : String(firstError)}
-            </CardContent>
-          </Card>
+        {settingsWarning || salesState.warning ? (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 mt-0.5" />
+            <div>
+              <div className="font-semibold">Mode dégradé</div>
+              <p>{settingsWarning || salesState.warning}</p>
+              {salesState.demo ? <p className="text-xs text-muted-foreground">Données demo affichées faute de table sales.</p> : null}
+            </div>
+          </div>
         ) : null}
 
-        {allWarnings.length ? (
-          <Card className="border-amber-300 bg-amber-50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                Connecte les tables pour activer 100% des KPI
-              </CardTitle>
-              <CardDescription>Les données manquantes sont affichées en mode placeholder.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-1 text-sm text-foreground">
-              {allWarnings.map((w) => (
-                <div key={w}>• {w}</div>
-              ))}
-            </CardContent>
-          </Card>
-        ) : null}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="drom">DROM Focus</TabsTrigger>
+            <TabsTrigger value="lab">Scenario Lab</TabsTrigger>
+            <TabsTrigger value="concurrents">Concurrents</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+          </TabsList>
 
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              Filtres KPI
-            </CardTitle>
-            <CardDescription>Filtre les calculs (source computeExportBreakdown + Supabase).</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
-              <Input type="date" value={filters.startDate ?? ""} onChange={(e) => handleFilterChange("startDate", e.target.value)} placeholder="Début" />
-              <Input type="date" value={filters.endDate ?? ""} onChange={(e) => handleFilterChange("endDate", e.target.value)} placeholder="Fin" />
-              <Input value={filters.zone ?? ""} onChange={(e) => handleFilterChange("zone", e.target.value)} placeholder="Zone (UE / DROM / Hors UE)" />
-              <Input value={filters.destination ?? ""} onChange={(e) => handleFilterChange("destination", e.target.value)} placeholder="Destination (texte libre)" />
-              <Input value={filters.incoterm ?? ""} onChange={(e) => handleFilterChange("incoterm", e.target.value)} placeholder="Incoterm" />
-              <Input value={filters.clientId ?? ""} onChange={(e) => handleFilterChange("clientId", e.target.value)} placeholder="Client" />
-              <Input value={filters.productId ?? ""} onChange={(e) => handleFilterChange("productId", e.target.value)} placeholder="Produit" />
-              <div className="flex items-center justify-end">
-                <Button variant="outline" onClick={resetFilters} size="sm">
-                  Réinitialiser
-                </Button>
-              </div>
+          <TabsContent value="overview" className="space-y-4">
+            <FiltersBar value={filters} onChange={setFilters} onRefresh={() => null} />
+            <KpiBar items={kpis} />
+            <div className="grid gap-4 md:grid-cols-3">
+              <MarginWaterfall steps={waterfallSteps} />
+              <AlertsPanel alerts={alerts} />
+              <RiskySales rows={riskyRows} />
             </div>
-          </CardContent>
-        </Card>
+            <TopFlop top={topClients} flop={flopClients} />
+            <TopFlop top={topProducts} flop={flopClients} />
+          </TabsContent>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">CA HT (ventes)</CardTitle>
-              <CardDescription>Source: sales_lines</CardDescription>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">
-              {kpiLoading ? "…" : `${number(Math.round(breakdown.totals.caHt))} €`}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Charges</CardTitle>
-              <CardDescription>Source: cost_lines</CardDescription>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">
-              {kpiLoading ? "…" : `${number(Math.round(breakdown.totals.costs))} €`}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">TVA estimée</CardTitle>
-              <CardDescription>Source: vat_rates</CardDescription>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">
-              {kpiLoading ? "…" : `${number(Math.round(breakdown.totals.vat))} €`}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">OM + OMR estimés</CardTitle>
-              <CardDescription>Source: om_rates</CardDescription>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">
-              {kpiLoading ? "…" : `${number(Math.round(breakdown.totals.om))} €`}
-            </CardContent>
-          </Card>
-          <Card className="border-primary/30 bg-primary/5">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Marge nette</CardTitle>
-              <CardDescription>CA - charges - TVA - OM</CardDescription>
-            </CardHeader>
-            <CardContent className="text-2xl font-bold">
-              {kpiLoading ? "…" : `${number(Math.round(breakdown.totals.margin))} €`}
-              <div className="text-sm text-muted-foreground">{kpiLoading ? "…" : fmtPercent(breakdown.totals.marginRate)}</div>
-            </CardContent>
-          </Card>
-        </div>
+          <TabsContent value="drom" className="space-y-4">
+            <DromTable rows={dromRows} />
+            <TopFlop top={topProducts.filter((p) => DROM_CODES.includes((p.label || "").slice(0, 2)))} flop={flopClients} />
+          </TabsContent>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Breakdown standard (zone / destination / incoterm)</CardTitle>
-            <CardDescription>Alimente la navigation drilldown (clients, produits, flows).</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr className="text-left">
-                    <th className="py-2 px-2">Zone</th>
-                    <th className="py-2 px-2 text-right">CA</th>
-                    <th className="py-2 px-2 text-right">Charges</th>
-                    <th className="py-2 px-2 text-right">Marge</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {zoneEntries.length === 0 ? (
-                    <tr>
-                      <td className="py-3 px-2 text-muted-foreground" colSpan={4}>
-                        Aucune donnée filtrée.
-                      </td>
-                    </tr>
-                  ) : (
-                    zoneEntries.map(([zone, values]) => (
-                      <tr key={zone} className="border-b">
-                        <td className="py-2 px-2 font-medium">{zone}</td>
-                        <td className="py-2 px-2 text-right">{number(Math.round(values.caHt))}</td>
-                        <td className="py-2 px-2 text-right">{number(Math.round(values.costs))}</td>
-                        <td className="py-2 px-2 text-right">{number(Math.round(values.margin))}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr className="text-left">
-                    <th className="py-2 px-2">Destination</th>
-                    <th className="py-2 px-2 text-right">CA</th>
-                    <th className="py-2 px-2 text-right">Charges</th>
-                    <th className="py-2 px-2 text-right">Marge</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {destinationEntries.length === 0 ? (
-                    <tr>
-                      <td className="py-3 px-2 text-muted-foreground" colSpan={4}>
-                        Aucune donnée filtrée.
-                      </td>
-                    </tr>
-                  ) : (
-                    destinationEntries.map(([destination, values]) => (
-                      <tr key={destination} className="border-b">
-                        <td className="py-2 px-2 font-medium">{destination}</td>
-                        <td className="py-2 px-2 text-right">{number(Math.round(values.caHt))}</td>
-                        <td className="py-2 px-2 text-right">{number(Math.round(values.costs))}</td>
-                        <td className="py-2 px-2 text-right">{number(Math.round(values.margin))}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Package className="h-4 w-4" />
-                Produits
-              </CardTitle>
-              <CardDescription>Référentiel Supabase products</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {productsError ? <p className="text-sm text-red-600">{productsError}</p> : null}
-
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold">{productsLoading ? "…" : productStats.total}</div>
-                <Button variant="outline" size="sm" onClick={refreshProducts} disabled={productsLoading}>
-                  <RefreshCw className={`h-4 w-4 ${productsLoading ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
-
-              <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="secondary">Nouveautés: {productStats.nouveautes}</Badge>
-                <Badge variant="secondary">LPPR: {productStats.lppr}</Badge>
-                <Badge variant="secondary">TVA OK: {productStats.withTva}</Badge>
-              </div>
-
-              <div className="pt-1">
-                <Button asChild size="sm" variant="outline" className="w-full justify-between">
-                  <Link to={`/products${filters.productId ? `?q=${encodeURIComponent(filters.productId)}` : ""}`}>
-                    Ouvrir référentiel produits <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Clients export
-              </CardTitle>
-              <CardDescription>Référentiel Supabase clients</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold">
-                  {clientsQuery.isLoading ? "…" : clientStats.total}
+          <TabsContent value="lab" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Scenario Lab</CardTitle>
+                <CardDescription>Simuler alignement prix / marge</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-3">
+                <div>
+                  <Label className="text-xs">Territoire</Label>
+                  <Input value={labInput.territory} onChange={(e) => setLabInput((v) => ({ ...v, territory: e.target.value.toUpperCase() }))} />
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => clientsQuery.refetch()}
-                  disabled={clientsQuery.isLoading}
-                >
-                  <RefreshCw className={`h-4 w-4 ${clientsQuery.isLoading ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
+                <div>
+                  <Label className="text-xs">Produit</Label>
+                  <Input value={labInput.product} onChange={(e) => setLabInput((v) => ({ ...v, product: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Prix</Label>
+                  <Input type="number" value={labInput.price} onChange={(e) => setLabInput((v) => ({ ...v, price: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Remise %</Label>
+                  <Input type="number" value={labInput.discountPct} onChange={(e) => setLabInput((v) => ({ ...v, discountPct: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Quantité</Label>
+                  <Input type="number" value={labInput.qty} onChange={(e) => setLabInput((v) => ({ ...v, qty: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Poids (kg)</Label>
+                  <Input type="number" value={labInput.weightKg} onChange={(e) => setLabInput((v) => ({ ...v, weightKg: Number(e.target.value) }))} />
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Résultats</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-2 md:grid-cols-3">
+                <Stat label="Net" value={formatMoney(labEstimate.net)} />
+                <Stat label="TVA" value={formatMoney(labEstimate.tva)} />
+                <Stat label="Taxes locales" value={formatMoney(labEstimate.localTax)} />
+                <Stat label="Transport" value={formatMoney(labEstimate.transport)} />
+                <Stat label="Frais fixes" value={formatMoney(labEstimate.fees)} />
+                <Stat label="Marge" value={`${formatMoney(labEstimate.margin)} (${labEstimate.marginPct.toFixed(1)}%)`} accent={labEstimate.margin >= 0 ? "text-emerald-600" : "text-rose-600"} />
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="outline">UE: {clientStats.UE}</Badge>
-                <Badge variant="outline">DROM: {clientStats.DROM}</Badge>
-                <Badge variant="outline">Hors UE: {clientStats["Hors UE"]}</Badge>
-              </div>
-
-              <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="secondary">Direct: {clientStats.direct}</Badge>
-                <Badge variant="secondary">Indirect: {clientStats.indirect}</Badge>
-                <Badge variant="secondary">Dépositaire: {clientStats.depositaire}</Badge>
-              </div>
-
-              <div className="pt-1">
-                <Button asChild size="sm" variant="outline" className="w-full justify-between">
-                  <Link to={`/clients${filters.clientId ? `?q=${encodeURIComponent(filters.clientId)}` : ""}`}>
-                    Ouvrir base clients <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Globe className="h-5 w-5" />
-              Derniers flux
-            </CardTitle>
-            <CardDescription>Lecture rapide par destination / zone (flows)</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <Badge variant="outline">UE: {flowsByZone.UE}</Badge>
-              <Badge variant="outline">DROM: {flowsByZone.DROM}</Badge>
-              <Badge variant="outline">Hors UE: {flowsByZone["Hors UE"]}</Badge>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => flowsQuery.refetch()}
-                disabled={flowsQuery.isLoading}
-                className="ml-auto"
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${flowsQuery.isLoading ? "animate-spin" : ""}`} />
-                Actualiser
-              </Button>
-            </div>
-
-            {flowsQuery.isLoading ? (
-              <p className="text-sm text-muted-foreground">Chargement…</p>
-            ) : recentFlows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aucun flux à afficher.</p>
-            ) : (
-              <div className="space-y-2">
-                {recentFlows.map((f) => {
-                  const dest = extractDestination(f.data);
-                  let z: Zone = "Hors UE";
-                  if (dest) {
-                    try {
-                      z = (getZoneFromDestination(dest as any) as Zone) || "Hors UE";
-                    } catch {
-                      z = "Hors UE";
-                    }
-                  }
-
-                  return (
-                    <div
-                      key={f.id}
-                      className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 rounded-lg border p-3"
-                    >
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold truncate">{f.flow_code}</div>
-                        <div className="text-xs text-muted-foreground truncate">
-                          Destination: {dest || "—"}{" "}
-                          <span className="ml-2 inline-flex items-center gap-2">{zoneBadge(z)}</span>
+          <TabsContent value="concurrents" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Positionnement prix (DROM)</CardTitle>
+                <CardDescription>Données via v_export_pricing. Mode dégradé si vue absente.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {competitionLoading ? (
+                  <p className="text-sm text-muted-foreground">Chargement...</p>
+                ) : competitionError ? (
+                  <p className="text-sm text-rose-600">{competitionError}</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {competitorsByTerritory.map((c) => (
+                      <div key={c.territory} className="rounded-lg border p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="font-semibold">{c.territory}</div>
+                          <Badge variant="outline">{c.count} SKU</Badge>
                         </div>
+                        <div className="text-xs text-muted-foreground">
+                          Gap moyen: {c.avgGap === null ? "n/a" : `${c.avgGap.toFixed(1)}%`}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Premium: {c.premium} / Sous-prix: {c.under}</div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(f.created_at).toLocaleString("fr-FR")}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-            <div className="pt-2">
-              <Button asChild variant="outline" className="w-full justify-between">
-                <Link to="/flows">
-                  Ouvrir la liste des flux <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Top écarts (DROM)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {competitionRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucune donnée disponible.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {competitionRows
+                      .filter((r) => r.gapPct !== null)
+                      .sort((a, b) => (b.gapPct || 0) - (a.gapPct || 0))
+                      .slice(0, 12)
+                      .map((r) => (
+                        <div key={`${r.sku}-${r.territory}`} className="rounded border px-3 py-2 flex items-center justify-between">
+                          <div>
+                            <div className="font-mono text-xs text-muted-foreground">{r.sku}</div>
+                            <div className="text-sm font-semibold">{r.label || "Produit"}</div>
+                            <div className="text-xs text-muted-foreground">Territoire: {r.territory}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm font-semibold">{r.gapPct !== null ? `${r.gapPct.toFixed(1)}%` : "n/a"}</div>
+                            <div className="text-xs text-muted-foreground">Best: {r.bestName || "n/a"} {r.bestPrice ? formatMoney(r.bestPrice) : ""}</div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="settings" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Settings export</CardTitle>
+                <CardDescription>Stockés dans export_settings (clé reference_rates:1)</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Textarea value={settingsDraft} onChange={(e) => setSettingsDraft(e.target.value)} className="font-mono min-h-[260px]" />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={async () => {
+                      try {
+                        const parsed = JSON.parse(settingsDraft);
+                        await save(parsed);
+                        setSaveError(null);
+                      } catch (err: any) {
+                        setSaveError(err?.message || "Erreur sauvegarde");
+                      }
+                    }}
+                    disabled={settingsLoading}
+                  >
+                    Sauvegarder
+                  </Button>
+                  <Button variant="outline" onClick={() => setSettingsDraft(JSON.stringify(DEFAULT_SETTINGS, null, 2))}>Reset défaut</Button>
+                </div>
+                {saveError ? <p className="text-sm text-rose-600">{saveError}</p> : null}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">SQL correctifs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Textarea className="font-mono text-xs min-h-[120px]" value={SQL_FIX_ACL7} readOnly />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </MainLayout>
+  );
+}
+
+function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className={`text-sm font-semibold ${accent || ""}`}>{value}</div>
+    </div>
   );
 }

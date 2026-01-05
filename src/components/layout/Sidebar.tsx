@@ -3,21 +3,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  ShieldCheck,
-  BookOpen,
-  Target,
-  Settings,
-  LogOut,
-  Bot,
-  Activity,
-  TrendingUp,
-  Receipt,
-  Scale,
-  Users,
-  Package,
-  Calculator,
-} from "lucide-react";
+import { Activity, BookOpen, Bot, Calculator, LogOut, Package, Receipt, Scale, Settings, ShieldCheck, Target, TrendingUp, Users } from "lucide-react";
 
 type NavItem = {
   name: string;
@@ -26,6 +12,7 @@ type NavItem = {
   badge?: string;
   featured?: boolean;
   aliases?: string[];
+  adminOnly?: boolean;
 };
 
 type NavSection = {
@@ -35,7 +22,7 @@ type NavSection = {
 
 const navigation: NavSection[] = [
   {
-    title: "Navigation",
+    title: "Pilotage & Ventes",
     items: [
       {
         name: "Control Tower",
@@ -43,19 +30,7 @@ const navigation: NavSection[] = [
         icon: Activity,
         badge: "Live",
         featured: true,
-        aliases: ["/dashboard", "/hub"],
-      },
-      {
-        name: "Explore (ventes)",
-        href: "/explore",
-        icon: TrendingUp,
-        aliases: ["/sales"],
-      },
-      {
-        name: "Concurrence",
-        href: "/competition",
-        icon: Target,
-        aliases: ["/watch/competitive", "/watch/commercial"],
+        aliases: ["/dashboard"],
       },
       {
         name: "Command Center",
@@ -63,20 +38,51 @@ const navigation: NavSection[] = [
         icon: ShieldCheck,
       },
       {
-        name: "Hub (legacy)",
-        href: "/hub",
-        icon: ShieldCheck,
-        aliases: ["/welcome"],
+        name: "Explore (ventes)",
+        href: "/explore",
+        icon: TrendingUp,
+        aliases: ["/sales"],
       },
+    ],
+  },
+  {
+    title: "Concurrence",
+    items: [
+      {
+        name: "Concurrence",
+        href: "/concurrence",
+        icon: Target,
+        aliases: ["/competition", "/watch/commercial", "/watch/competitive"],
+      },
+    ],
+  },
+  {
+    title: "Couts & Pricing",
+    items: [
       {
         name: "Costs (charges)",
         href: "/costs",
         icon: Receipt,
       },
       {
-        name: "Taxes & OM",
+        name: "Simulator",
+        href: "/simulator",
+        icon: Calculator,
+      },
+      {
+        name: "Taxes/OM",
         href: "/taxes-om",
         icon: Scale,
+      },
+    ],
+  },
+  {
+    title: "Référentiels & Veille",
+    items: [
+      {
+        name: "Produits",
+        href: "/products",
+        icon: Package,
       },
       {
         name: "Clients",
@@ -84,18 +90,19 @@ const navigation: NavSection[] = [
         icon: Users,
       },
       {
-        name: "Produits",
-        href: "/products",
-        icon: Package,
+        name: "Veille reglementaire",
+        href: "/watch/regulatory",
+        icon: BookOpen,
       },
-      {
-        name: "Simulateur",
-        href: "/simulator",
-        icon: Calculator,
-      },
-      { name: "Veille reglementaire", href: "/watch/regulatory", icon: BookOpen },
-      { name: "Admin", href: "/admin", icon: Settings },
     ],
+  },
+  {
+    title: "IA & Assistance",
+    items: [{ name: "Assistant", href: "/assistant", icon: Bot }],
+  },
+  {
+    title: "Admin",
+    items: [{ name: "Admin", href: "/admin", icon: Settings, adminOnly: true }],
   },
 ];
 
@@ -175,14 +182,21 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
     >
       {/* Nav */}
       <nav className="flex-1 space-y-4 px-3 py-4 overflow-y-auto">
-        {navigation.map((section) => (
-          <div key={section.title}>
-            <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {section.title}
+        {navigation.map((section) => {
+          const visibleItems = section.items.filter((it) => {
+            if (it.adminOnly && user?.email !== "lamia.brechetighil@orliman.fr") return false;
+            return true;
+          });
+          if (!visibleItems.length) return null;
+          return (
+            <div key={section.title}>
+              <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {section.title}
+              </div>
+              <div className="space-y-1.5">{visibleItems.map(renderLink)}</div>
             </div>
-            <div className="space-y-1.5">{section.items.map(renderLink)}</div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* Footer */}

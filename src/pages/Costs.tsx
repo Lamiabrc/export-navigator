@@ -1,6 +1,6 @@
 import * as React from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -9,73 +9,21 @@ import { useCosts } from "@/hooks/useCosts";
 import { supabase } from "@/integrations/supabase/client";
 import { useDhlSalesQuotes } from "@/hooks/useDhlSalesQuotes";
 
-function toCsv(rows: Record<string, any>[], delimiter = ";") {
-  if (!rows.length) return "";
-  const headers = Object.keys(rows[0]);
+type PricingSummary = { territory: string; skuCount: number; avgPlv: number };
 
-  const escape = (v: any) => {
-    const s = String(v ?? "");
-    const needsQuotes = s.includes(delimiter) || s.includes("\n") || s.includes('"');
-    const escaped = s.replace(/"/g, '""');
-    return needsQuotes ? `"${escaped}"` : escaped;
-  };
+const DROM = ["GP", "MQ", "GF", "RE", "YT"];
 
-  const lines = [
-    headers.join(delimiter),
-    ...rows.map((r) => headers.map((h) => escape(r[h])).join(delimiter)),
-  ];
-  return lines.join("\n");
+function formatMoney(n: number, digits = 0) {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: digits }).format(Number.isFinite(n) ? n : 0);
 }
 
-function downloadText(content: string, filename: string) {
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
+function zoneForDestination(dest: string) {
+  const up = dest.toUpperCase();
+  if (DROM.includes(up)) return "DROM";
+  if (up === "FR") return "FR";
+  return "UE";
 }
 
-// -------------------- PRICING EXPORT (v_export_pricing) --------------------
-const TERRITORIES = [
-  { code: "FR", label: "Métropole" },
-  { code: "GP", label: "Guadeloupe" },
-  { code: "MQ", label: "Martinique" },
-  { code: "GF", label: "Guyane" },
-  { code: "RE", label: "Réunion" },
-  { code: "YT", label: "Mayotte" },
-  { code: "SPM", label: "Saint-Pierre-et-Miquelon" },
-  { code: "BL", label: "Saint-Barthélemy" },
-  { code: "MF", label: "Saint-Martin" },
-];
-
-async function fetchAllPricingRows(territoryCode: string) {
-  const pageSize = 5000;
-  let from = 0;
-  const all: any[] = [];
-
-  while (true) {
-    const to = from + pageSize - 1;
-    const { data, error } = await supabase
-      .from("v_export_pricing")
-      .select("*")
-      .eq("territory_code", territoryCode)
-      .order("sku", { ascending: true })
-      .range(from, to);
-
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-
-    all.push(...data);
-    if (data.length < pageSize) break;
-    from += pageSize;
-  }
-
-  return all;
-}
-
-// -------------------- PAGE --------------------
 export default function Costs() {
   const { rows, isLoading, error, warning, refresh } = useCosts();
   const [destinations, setDestinations] = React.useState<{ id: string; name: string | null }[]>([]);
@@ -185,131 +133,43 @@ export default function Costs() {
       alert("Merci de renseigner un ID de commande.");
       return;
     }
-
-    const t = transportAmount === "" ? 0 : Number(transportAmount);
-    const d = dossierAmount === "" ? 0 : Number(dossierAmount);
-
-    if ((t || 0) <= 0 && (d || 0) <= 0) {
-      alert("Renseigne au moins un montant (transport ou dossier).");
-      return;
-    }
-
-    const today = new Date().toISOString().slice(0, 10);
-    const rowsToInsert: any[] = [];
-
-    if (t > 0) {
-      rowsToInsert.push({
-        date: today,
-        cost_type: "TRANSPORT_COMMANDE",
-        amount: t,
-        currency,
-        market_zone: marketZone || null,
-        destination: destination || null,
-        incoterm: incoterm || null,
-        order_id: oid,
-      });
-    }
-
-    if (d > 0) {
-      rowsToInsert.push({
-        date: today,
-        cost_type: "FRAIS_DOSSIER",
-        amount: d,
-        currency,
-        market_zone: marketZone || null,
-        destination: destination || null,
-        incoterm: incoterm || null,
-        order_id: oid,
-      });
-    }
-
-    setIsSavingOrderCharges(true);
-    try {
-      const { error } = await supabase.from("cost_lines").insert(rowsToInsert);
-      if (error) throw error;
-
-      setTransportAmount("");
-      setDossierAmount("");
-      await refresh();
-
-      alert("Charges ajoutées à la commande ✅");
-    } catch (e: any) {
-      console.error(e);
-      alert(`Erreur: ${e?.message ?? e}`);
-    } finally {
-      setIsSavingOrderCharges(false);
-    }
-  }
-
-  // -------------------- PRICING EXPORT UI --------------------
-  const [pricingTerritory, setPricingTerritory] = React.useState("FR");
-  const [isExportPricing, setIsExportPricing] = React.useState(false);
-
-  async function exportPricingCsv() {
-    setIsExportPricing(true);
-    try {
-      const data = await fetchAllPricingRows(pricingTerritory);
-
-      const csv = toCsv(
-        data.map((r: any) => ({
-          sku: r.sku ?? "",
-          label: r.label ?? "",
-          hs_code: r.hs_code ?? "",
-          hs4: r.hs4 ?? "",
-          tax_level: r.tax_level ?? "",
-          lpp_generic: r.lpp_generic ?? "",
-          lpp_individual: r.lpp_individual ?? "",
-          competitor_family: r.competitor_family ?? "",
-          territory_code: r.territory_code ?? "",
-          territory_name: r.territory_name ?? "",
-          vat_rate: r.vat_rate ?? "",
-          om_rate: r.om_rate ?? "",
-          omr_rate: r.omr_rate ?? "",
-          tr_metropole_ttc: r.tr_metropole_ttc ?? "",
-          plv_metropole_ttc: r.plv_metropole_ttc ?? "",
-          lppr_majoration_coef_t2_ch1_orth: r.lppr_majoration_coef_t2_ch1_orth ?? "",
-          tr_om_ttc: r.tr_om_ttc ?? "",
-          plv_om_ttc: r.plv_om_ttc ?? "",
-          thuasne_price_ttc: r.thuasne_price_ttc ?? "",
-          donjoy_price_ttc: r.donjoy_price_ttc ?? "",
-          gibaud_price_ttc: r.gibaud_price_ttc ?? "",
-        }))
-      );
-
-      downloadText(csv, `pricing_${pricingTerritory}_${new Date().toISOString().slice(0, 10)}.csv`);
-    } catch (e: any) {
-      console.error(e);
-      alert(`Erreur export pricing: ${e?.message ?? e}`);
-    } finally {
-      setIsExportPricing(false);
-    }
-  }
+    const load = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("v_export_pricing")
+          .select("territory_code,plv_metropole_ttc,plv_om_ttc,sku")
+          .limit(5000);
+        if (error) throw error;
+        const agg = new Map<string, { sum: number; count: number }>();
+        (data || []).forEach((r: any) => {
+          const terr = r.territory_code || "FR";
+          const val = Number(r.plv_om_ttc ?? r.plv_metropole_ttc ?? 0) || 0;
+          const cur = agg.get(terr) || { sum: 0, count: 0 };
+          cur.sum += val;
+          cur.count += 1;
+          agg.set(terr, cur);
+        });
+        const res: PricingSummary[] = Array.from(agg.entries()).map(([territory, v]) => ({
+          territory,
+          skuCount: v.count,
+          avgPlv: v.count ? v.sum / v.count : 0,
+        }));
+        setPricingDashboard(res);
+      } catch (err: any) {
+        setPricingWarning(err?.message || "Erreur lecture v_export_pricing");
+      }
+    };
+    void load();
+  }, []);
 
   return (
     <MainLayout contentClassName="md:p-8">
       <div className="space-y-5">
-        {/* HEADER */}
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm text-muted-foreground">Données</p>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Receipt className="h-6 w-6" />
-              Coûts & export
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Charges: <code className="text-xs">cost_lines</code> — Prix: <code className="text-xs">v_export_pricing</code>
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={exportChargesCsv} disabled={isLoading || filtered.length === 0}>
-              <Download className="h-4 w-4 mr-2" />
-              Export charges (CSV)
-            </Button>
-            <Button variant="outline" onClick={refresh} disabled={isLoading} className="gap-2">
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-              Actualiser charges
-            </Button>
+            <p className="text-sm text-muted-foreground">Coûts export</p>
+            <h1 className="text-2xl font-bold">Calcul coût par destination</h1>
+            <p className="text-sm text-muted-foreground">Choisis un produit, une destination, et vois le détail des dépenses.</p>
           </div>
         </div>
 
@@ -471,124 +331,123 @@ export default function Costs() {
               </div>
 
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Incoterm</p>
-                <Input value={incoterm} onChange={(e) => setIncoterm(e.target.value)} placeholder="EXW / DAP / ..." />
+                <div className="font-semibold">Mode dégradé</div>
+                <p>{productsError || settingsWarning}</p>
               </div>
+            </CardContent>
+          </Card>
+        )}
 
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Zone</p>
-                <Input value={marketZone} onChange={(e) => setMarketZone(e.target.value)} placeholder="DOM / UE / ..." />
+        <div className="grid gap-4 lg:grid-cols-[1.2fr,1fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle>Paramètres</CardTitle>
+              <CardDescription>Produit catalogue + destination + incoterm.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Recherche produit (catalogue)</p>
+                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Réf / libellé..." />
+                  <div className="border rounded-md max-h-40 overflow-auto mt-2">
+                    {productsLoading ? (
+                      <p className="text-xs text-muted-foreground p-2">Chargement catalogue...</p>
+                    ) : filteredProducts.length === 0 ? (
+                      <p className="text-xs text-muted-foreground p-2">Aucun produit.</p>
+                    ) : (
+                      filteredProducts.map((p) => (
+                        <button
+                          key={p.id}
+                          className={`w-full text-left px-3 py-2 text-sm border-b last:border-0 hover:bg-muted ${selectedSku === p.id ? "bg-muted" : ""}`}
+                          onClick={() => setSelectedSku(p.id)}
+                        >
+                          <div className="font-semibold">{p.code_article}</div>
+                          <div className="text-xs text-muted-foreground truncate">{p.libelle_article}</div>
+                          <div className="text-xs text-muted-foreground">Prix: {formatMoney(safeNumber(p.tarif_catalogue_2025) || safeNumber(p.tarif_lppr_eur) || 0)}</div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Destination</p>
+                    <select className="w-full h-10 rounded-md border px-3 text-sm" value={destination} onChange={(e) => setDestination(e.target.value)}>
+                      {["FR", ...DROM, "UE"].map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                    <div className="text-[11px] text-muted-foreground mt-1">Zone: {zoneForDestination(destination)}</div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Incoterm</p>
+                    <select className="w-full h-10 rounded-md border px-3 text-sm" value={incoterm} onChange={(e) => setIncoterm(e.target.value)}>
+                      {["EXW", "FCA", "DAP", "DDP"].map((i) => <option key={i}>{i}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Quantité</p>
+                    <Input type="number" value={qty} onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))} />
+                  </div>
+                </div>
               </div>
+            </CardContent>
+          </Card>
 
-              <div className="md:col-span-2">
-                <p className="text-xs text-muted-foreground mb-1">Destination</p>
-                <Input value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="Guadeloupe / Client / Ville..." />
+          <Card>
+            <CardHeader>
+              <CardTitle>Résultat détaillé</CardTitle>
+              <CardDescription>Coût total expédier vers {destination}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Stat label="Valeur marchandise" value={formatMoney(estimator.goodsValue)} />
+                <Stat label="Poids estimé" value={`${(estimator.weightKg || 0).toFixed(2)} kg`} />
+                <Stat label="Transport estimé" value={formatMoney(estimator.transport)} />
+                <Stat label="Taxes (TVA + locales)" value={`${formatMoney(estimator.taxes)} (${estimator.vatRate + estimator.localTaxRate}% )`} />
+                <Stat label="Frais fixes" value={formatMoney(estimator.fees)} />
+                <Stat label="Coût total" value={formatMoney(estimator.totalCost)} accent />
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Charge transport</p>
-                <Input
-                  type="number"
-                  value={transportAmount}
-                  onChange={(e) => setTransportAmount(e.target.value === "" ? "" : Number(e.target.value))}
-                  placeholder="0"
-                />
-              </div>
-
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Frais dossier</p>
-                <Input
-                  type="number"
-                  value={dossierAmount}
-                  onChange={(e) => setDossierAmount(e.target.value === "" ? "" : Number(e.target.value))}
-                  placeholder="0"
-                />
-              </div>
-
-              <div className="flex items-end">
-                <Button onClick={addOrderCharges} disabled={isSavingOrderCharges} className="w-full">
-                  {isSavingOrderCharges ? "Enregistrement..." : "Ajouter à la commande"}
-                </Button>
-              </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Ceci crée 1 ou 2 lignes dans <code className="text-xs">cost_lines</code> (TRANSPORT_COMMANDE / FRAIS_DOSSIER) avec le même{" "}
-              <code className="text-xs">order_id</code>.
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* 3) LISTE CHARGES */}
-        <div className="flex flex-col md:flex-row md:items-center gap-3">
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Recherche (type, zone, incoterm, commande, client…)" />
-          <div className="flex flex-wrap gap-2 text-xs">
-            <Badge variant="secondary">Lignes: {filtered.length}</Badge>
-            <Badge variant="secondary">Total: {Math.round(total).toLocaleString("fr-FR")}</Badge>
-          </div>
+              <p className="text-xs text-muted-foreground">Basé sur settings: transport zones, TVA/localTaxes, frais fixes.</p>
+            </CardContent>
+          </Card>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Dernières charges</CardTitle>
+            <CardTitle>Dashboard charges (catalogue export)</CardTitle>
+            <CardDescription>Depuis v_export_pricing (fallback si Edge Function HS).</CardDescription>
           </CardHeader>
-          <CardContent className="overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-background">
-                <tr className="border-b text-muted-foreground">
-                  <th className="py-2 text-left font-medium">Date</th>
-                  <th className="py-2 text-left font-medium">Type</th>
-                  <th className="py-2 text-left font-medium">Zone</th>
-                  <th className="py-2 text-left font-medium">Incoterm</th>
-                  <th className="py-2 text-left font-medium">Commande</th>
-                  <th className="py-2 text-left font-medium">Client</th>
-                  <th className="py-2 text-left font-medium">Produit</th>
-                  <th className="py-2 text-right font-medium">Montant</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={8} className="py-6 text-center text-muted-foreground">
-                      Chargement…
-                    </td>
-                  </tr>
-                ) : filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-6 text-center text-muted-foreground">
-                      Aucune donnée.
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.slice(0, 250).map((r: any) => (
-                    <tr key={r.id} className="border-b last:border-0">
-                      <td className="py-2">{r.date ?? "—"}</td>
-                      <td className="py-2">{r.cost_type ?? "—"}</td>
-                      <td className="py-2">{r.market_zone ?? "—"}</td>
-                      <td className="py-2">{r.incoterm ?? "—"}</td>
-                      <td className="py-2">{r.order_id ?? "—"}</td>
-                      <td className="py-2">{r.client_id ?? "—"}</td>
-                      <td className="py-2">{r.product_id ?? "—"}</td>
-                      <td className="py-2 text-right tabular-nums">
-                        {(Number(r.amount) || 0).toLocaleString("fr-FR")} {r.currency ?? ""}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-
-            {filtered.length > 250 ? (
-              <p className="text-xs text-muted-foreground mt-3">
-                Affichage limité aux 250 premières lignes (utilise la recherche ou export CSV).
-              </p>
-            ) : null}
+          <CardContent className="space-y-2">
+            {pricingWarning ? <p className="text-sm text-amber-600">{pricingWarning}</p> : null}
+            <div className="grid gap-3 md:grid-cols-3">
+              {pricingDashboard.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Aucune donnée.</p>
+              ) : (
+                pricingDashboard.map((row) => (
+                  <div key={row.territory} className="rounded-lg border p-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-semibold">{row.territory}</span>
+                      <Badge variant="outline">{row.skuCount} SKU</Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground">PLV moyenne: {formatMoney(row.avgPlv)}</div>
+                  </div>
+                ))
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
     </MainLayout>
+  );
+}
+
+function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className={`rounded-lg border p-3 ${accent ? "bg-primary/5 border-primary/40" : "bg-muted/30"}`}>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-sm font-semibold">{value}</div>
+    </div>
   );
 }
