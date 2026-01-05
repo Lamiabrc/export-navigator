@@ -38,7 +38,7 @@ const navigation: NavSection[] = [
         icon: ShieldCheck,
       },
       {
-        name: "Explore (ventes)",
+        name: "Analyse des ventes",
         href: "/explore",
         icon: TrendingUp,
         aliases: ["/sales"],
