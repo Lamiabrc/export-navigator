@@ -52,6 +52,9 @@ export default function App() {
                 <Routes>
                   <Route path="/" element={<Navigate to="/welcome" replace />} />
 
+                  {/* Alias legacy / bookmarks */}
+                  <Route path="/hub" element={<Navigate to="/control-tower" replace />} />
+
                   {/* Public */}
                   <Route path="/welcome" element={<Welcome />} />
                   <Route path="/login" element={<Login />} />
@@ -59,38 +62,136 @@ export default function App() {
                   <Route path="/set-password" element={<SetPassword />} />
 
                   {/* Pilotage */}
-                  <Route path="/control-tower" element={<ProtectedRoute><ControlTower /></ProtectedRoute>} />
+                  <Route
+                    path="/control-tower"
+                    element={
+                      <ProtectedRoute>
+                        <ControlTower />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route path="/dashboard" element={<Navigate to="/control-tower" replace />} />
-                  <Route path="/command-center" element={<ProtectedRoute><CommandCenter /></ProtectedRoute>} />
-                  <Route path="/explore" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
+                  <Route
+                    path="/command-center"
+                    element={
+                      <ProtectedRoute>
+                        <CommandCenter />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/explore"
+                    element={
+                      <ProtectedRoute>
+                        <Sales />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route path="/sales" element={<Navigate to="/explore" replace />} />
 
                   {/* Costs & pricing */}
-                  <Route path="/costs" element={<ProtectedRoute><Costs /></ProtectedRoute>} />
-                  <Route path="/taxes-om" element={<ProtectedRoute><TaxesOM /></ProtectedRoute>} />
-                  <Route path="/simulator" element={<ProtectedRoute><Simulator /></ProtectedRoute>} />
+                  <Route
+                    path="/costs"
+                    element={
+                      <ProtectedRoute>
+                        <Costs />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/taxes-om"
+                    element={
+                      <ProtectedRoute>
+                        <TaxesOM />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/simulator"
+                    element={
+                      <ProtectedRoute>
+                        <Simulator />
+                      </ProtectedRoute>
+                    }
+                  />
 
                   {/* Concurrence */}
-                  <Route path="/concurrence" element={<ProtectedRoute><WatchCommercial /></ProtectedRoute>} />
+                  <Route
+                    path="/concurrence"
+                    element={
+                      <ProtectedRoute>
+                        <WatchCommercial />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route path="/watch/commercial" element={<Navigate to="/concurrence" replace />} />
                   <Route path="/watch/competitive" element={<Navigate to="/concurrence" replace />} />
                   <Route path="/competition" element={<Navigate to="/concurrence" replace />} />
 
                   {/* Reference & veille */}
-                  <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-                  <Route path="/clients" element={<ProtectedRoute><Clients /></ProtectedRoute>} />
-                  <Route path="/watch/regulatory" element={<ProtectedRoute><WatchRegulatory /></ProtectedRoute>} />
+                  <Route
+                    path="/products"
+                    element={
+                      <ProtectedRoute>
+                        <Products />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/clients"
+                    element={
+                      <ProtectedRoute>
+                        <Clients />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/watch/regulatory"
+                    element={
+                      <ProtectedRoute>
+                        <WatchRegulatory />
+                      </ProtectedRoute>
+                    }
+                  />
 
                   {/* IA */}
-                  <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
+                  <Route
+                    path="/assistant"
+                    element={
+                      <ProtectedRoute>
+                        <Assistant />
+                      </ProtectedRoute>
+                    }
+                  />
 
                   {/* Controle documents (secondaire) */}
-                  <Route path="/verifier" element={<ProtectedRoute><InvoiceVerification /></ProtectedRoute>} />
+                  <Route
+                    path="/verifier"
+                    element={
+                      <ProtectedRoute>
+                        <InvoiceVerification />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route path="/invoice-verification" element={<Navigate to="/verifier" replace />} />
 
                   {/* Admin */}
-                  <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
-                  <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                  <Route
+                    path="/admin"
+                    element={
+                      <ProtectedRoute>
+                        <Admin />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <ProtectedRoute>
+                        <Settings />
+                      </ProtectedRoute>
+                    }
+                  />
 
                   <Route path="*" element={<NotFound />} />
                 </Routes>
