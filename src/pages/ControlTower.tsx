@@ -289,8 +289,9 @@ export default function ControlTower() {
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[360px,1fr,360px]">
-          <Card className="bg-slate-900/80 border-cyan-500/30 shadow-[0_10px_60px_rgba(14,116,144,0.25)] backdrop-blur">
+        <div className="grid gap-4 lg:grid-cols-2 items-start">
+          <div className="space-y-4">
+            <Card className="bg-slate-900/80 border-cyan-500/30 shadow-[0_10px_60px_rgba(14,116,144,0.25)] backdrop-blur">
             <CardHeader>
               <CardTitle className="flex items-center flex-wrap gap-2 text-cyan-100">
                 KPIs globaux
@@ -308,6 +309,47 @@ export default function ControlTower() {
                   showImportCta
                 />
               ) : null}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <Kpi label="Ventes HT (€)" value={formatMoney(totals.totalSalesHt)} accent="text-sky-400" loading={isLoading} />
+                <Kpi label="Ventes TTC (€)" value={formatMoney(totals.totalSalesTtc)} accent="text-slate-400" loading={isLoading} />
+                <Kpi label="Coûts (€)" value={formatMoney(totals.totalCosts)} accent="text-amber-400" loading={isLoading} />
+                <Kpi label="Marge estimée (€)" value={formatMoney(totals.margin)} accent="text-emerald-400" loading={isLoading} />
+                <Kpi
+                  label="Taux de marge (%)"
+                  value={
+                    marginRate === null
+                      ? "—"
+                      : `${marginRate.toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 0 })}%`
+                  }
+                  accent={
+                    marginRate === null
+                      ? "text-slate-300/70"
+                      : marginRate >= 20
+                        ? "text-emerald-400"
+                        : marginRate >= 10
+                          ? "text-amber-300"
+                          : "text-rose-400"
+                  }
+                  loading={isLoading}
+                  badge={
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[11px]",
+                        marginRate === null
+                          ? "text-slate-300 border-slate-500/40 bg-slate-700/30"
+                          : marginRate >= 20
+                            ? "text-emerald-200 border-emerald-400/40 bg-emerald-500/10"
+                            : marginRate >= 10
+                              ? "text-amber-200 border-amber-400/40 bg-amber-500/10"
+                              : "text-rose-200 border-rose-400/40 bg-rose-500/10"
+                      )}
+                    >
+                      {marginRate === null ? "N/A" : marginRate >= 20 ? "Solide" : marginRate >= 10 ? "À surveiller" : "À risque"}
+                    </Badge>
+                  }
+                />
+              </div>
               <Kpi label="Ventes HT" value={formatMoney(totals.totalSalesHt)} accent="text-sky-400" loading={isLoading} />
               <Kpi label="Ventes TTC" value={formatMoney(totals.totalSalesTtc)} accent="text-slate-400" loading={isLoading} />
               <Kpi label="Couts" value={formatMoney(totals.totalCosts)} accent="text-amber-400" loading={isLoading} />
@@ -351,9 +393,9 @@ export default function ControlTower() {
             </CardContent>
           </Card>
 
-          <Card className="relative overflow-hidden border-cyan-500/30 bg-slate-950 shadow-[0_10px_80px_rgba(8,47,73,0.35)]">
+            <Card className="relative overflow-hidden border-cyan-500/30 bg-slate-950 shadow-[0_10px_80px_rgba(8,47,73,0.35)]">
             <CardContent className="p-0">
-              <div className="relative w-full h-[640px] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-xl">
+              <div className="relative w-full h-[460px] lg:h-[520px] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 rounded-xl">
                 <div className="absolute inset-0 opacity-50" style={{ backgroundImage: "radial-gradient(circle at 10% 20%, rgba(56,189,248,0.16) 0, transparent 40%), radial-gradient(circle at 80% 10%, rgba(168,85,247,0.18) 0, transparent 35%), radial-gradient(circle at 30% 80%, rgba(34,197,94,0.12) 0, transparent 35%)" }} />
                 <div className="absolute inset-6 rounded-xl border border-cyan-500/10" />
                 <div className="absolute inset-0" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
@@ -426,14 +468,43 @@ export default function ControlTower() {
             </CardContent>
           </Card>
 
+            <Card className="bg-slate-900/80 border-cyan-500/30 shadow-[0_10px_60px_rgba(14,116,144,0.25)] backdrop-blur">
+              <CardHeader>
+                <CardTitle className="text-cyan-100">Actions recommandées</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="text-xs text-slate-300/80">Filtres actifs :</div>
+                <div className="flex flex-wrap gap-2 text-xs text-cyan-100">
+                  <Badge variant="outline" className="border-cyan-500/40 bg-cyan-500/10 text-cyan-50">
+                    Territoire : {variables.territory_code || "Tous"}
+                  </Badge>
+                  <Badge variant="outline" className="border-cyan-500/40 bg-cyan-500/10 text-cyan-50">
+                    Période : {resolvedRange.label}
+                  </Badge>
+                </div>
+                <div className="grid gap-2 md:grid-cols-3">
+                  <Button variant="outline" className="justify-start" onClick={() => navigate("/explore")}>
+                    Ouvrir Explore
+                  </Button>
+                  <Button variant="outline" className="justify-start" onClick={() => navigate("/costs")}>
+                    Voir Coûts & logistique
+                  </Button>
+                  <Button variant="outline" className="justify-start" onClick={() => navigate("/taxes-om")}>
+                    Vérifier Taxes/OM
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           <Card className="bg-slate-900/80 border-cyan-500/30 shadow-[0_10px_60px_rgba(14,116,144,0.25)] backdrop-blur">
             <CardHeader>
               <CardTitle className="text-cyan-100">Dash par territoire</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 max-h-[520px] overflow-auto">
               {isLoading ? (
                 <div className="space-y-2">
-                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-9 w-full" />)}
                 </div>
               ) : (
                 topList.map((t) => {
@@ -520,6 +591,9 @@ function EmptyState({ onExplore, onImport, showImportCta = true }: { onExplore: 
 }
 
 function Kpi({ label, value, accent, loading, badge }: { label: string; value: string; accent?: string; loading?: boolean; badge?: React.ReactNode }) {
+  if (loading) return <Skeleton className="h-10 w-full" />;
+  return (
+    <div className="rounded-xl border border-cyan-500/30 bg-slate-950/80 px-3 py-3 shadow-inner shadow-cyan-500/10">
   if (loading) return <Skeleton className="h-12 w-full" />;
   return (
     <div className="rounded-xl border border-cyan-500/30 bg-slate-950/80 px-3 py-2 shadow-inner shadow-cyan-500/10">
