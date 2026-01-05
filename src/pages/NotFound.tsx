@@ -1,13 +1,19 @@
-import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { BrandLogo } from "@/components/BrandLogo";
 
 const NotFound = () => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
+    if (location.pathname === "/hub") {
+      navigate("/control-tower", { replace: true });
+      return;
+    }
+
     console.error("404 Error: User attempted to access non-existent route:", location.pathname);
-  }, [location.pathname]);
+  }, [location.pathname, navigate]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted">
