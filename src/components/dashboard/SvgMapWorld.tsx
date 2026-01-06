@@ -1,6 +1,6 @@
 import * as React from "react";
 import svgMap from "svgmap";
-import "svgmap/dist/svg-map.css";
+import "svgmap/dist/svgMap.css";
 import worldMap from "@/assets/world-map.svg";
 import { TERRITORY_PCT } from "@/domain/geo/territoryPct";
 
