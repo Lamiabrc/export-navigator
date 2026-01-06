@@ -17,6 +17,7 @@ import {
 } from "./types";
 
 const INVOICE_SOURCES = ["v_sales_invoices_enriched", "sales_invoices"] as const;
+const DATE_COLUMNS = ["invoice_date", "date", "created_at"] as const;
 const MAX_ROWS = 2000;
 const DEFAULT_PAGE_SIZE = 50;
 const TRANSIT_ALERT_PCT = 0.35; // alert when transit fee represents more than 35% of invoice HT
@@ -182,11 +183,11 @@ function mapInvoiceRow(row: any, source: string, ctx: RatesContext): Invoice {
   };
 }
 
-function buildInvoiceQuery(source: string, filters: ExportFilters, pagination?: Pagination) {
+function buildInvoiceQuery(source: string, filters: ExportFilters, pagination: Pagination | undefined, dateColumn: string) {
   const query = supabase.from(source).select("*", { count: "exact" });
 
-  if (filters.from) query.gte("invoice_date", filters.from);
-  if (filters.to) query.lte("invoice_date", filters.to);
+  if (filters.from) query.gte(dateColumn, filters.from);
+  if (filters.to) query.lte(dateColumn, filters.to);
   if (filters.territory) query.ilike("territory_code", `%${filters.territory}%`);
   if (filters.clientId) query.ilike("client_id", `%${filters.clientId}%`);
   if (filters.invoiceNumber) query.ilike("invoice_number", `%${filters.invoiceNumber}%`);
@@ -195,7 +196,7 @@ function buildInvoiceQuery(source: string, filters: ExportFilters, pagination?: 
     query.or(`invoice_number.ilike.${pattern},client_id.ilike.${pattern},territory_code.ilike.${pattern}`);
   }
 
-  query.order("invoice_date", { ascending: false });
+  query.order(dateColumn, { ascending: false });
   const size = pagination?.pageSize ?? DEFAULT_PAGE_SIZE;
   const page = Math.max(1, pagination?.page ?? 1);
   const fromIdx = (page - 1) * size;
@@ -219,28 +220,38 @@ export async function fetchInvoices(filters: ExportFilters = {}, pagination: Pag
   const missingSources: string[] = [];
 
   for (const source of INVOICE_SOURCES) {
-    const query = buildInvoiceQuery(source, filters, pagination);
-    const { data, error, count } = await query;
+    let usedDateColumn = "invoice_date";
+    let attemptError: any = null;
+    for (const dateCol of DATE_COLUMNS) {
+      usedDateColumn = dateCol;
+      const query = buildInvoiceQuery(source, filters, pagination, dateCol);
+      const { data, error, count } = await query;
 
-    if (error) {
-      if (shouldFallbackToNextSource(error)) {
-        missingSources.push(source);
-        continue;
+      if (error) {
+        attemptError = error;
+        if (shouldFallbackToNextSource(error)) {
+          continue; // try next date column or next source
+        }
+        lastError = error;
+        break;
       }
-      lastError = error;
-      continue;
+
+      const mapped = (data || []).map((row: any) => mapInvoiceRow(row, source, context));
+      return {
+        data: mapped,
+        total: count ?? mapped.length,
+        warning: combineWarnings(
+          rateWarning,
+          missingSources.length ? `Fallback sur ${source} (vue manquante)` : undefined,
+        ),
+        source,
+      };
     }
 
-    const mapped = (data || []).map((row: any) => mapInvoiceRow(row, source, context));
-    return {
-      data: mapped,
-      total: count ?? mapped.length,
-      warning: combineWarnings(
-        rateWarning,
-        missingSources.length ? `Fallback sur ${source} (vue manquante)` : undefined,
-      ),
-      source,
-    };
+    if (attemptError && shouldFallbackToNextSource(attemptError)) {
+      missingSources.push(source);
+      continue;
+    }
   }
 
   if (missingSources.length === INVOICE_SOURCES.length) {
@@ -260,11 +271,7 @@ export async function fetchInvoiceByNumber(invoiceNumber: string): Promise<Invoi
   const missingSources: string[] = [];
 
   for (const source of INVOICE_SOURCES) {
-    const { data, error } = await supabase
-      .from(source)
-      .select("*")
-      .eq("invoice_number", invoiceNumber)
-      .limit(1);
+    const { data, error } = await supabase.from(source).select("*").eq("invoice_number", invoiceNumber).limit(1);
 
     if (error) {
       if (shouldFallbackToNextSource(error)) {
