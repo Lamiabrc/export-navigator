@@ -37,12 +37,6 @@ type CompetitionRow = {
 
 const MAP_WIDTH = 1010; // matches svg width
 const MAP_HEIGHT = 666; // matches svg height
-const GEO_BOUNDS = {
-  minLon: -169.110266,
-  maxLon: 190.486279,
-  maxLat: 83.600842,
-  minLat: -58.508473,
-};
 
 const DESTINATIONS: Destination[] = [
   { code: "FR", name: "Metropole", lat: 46.6, lon: 2.3, color: "#38bdf8" },
@@ -60,8 +54,8 @@ const formatMoney = (n: number | null | undefined) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
 
 const project = (lat: number, lon: number) => {
-  const x = ((lon - GEO_BOUNDS.minLon) / (GEO_BOUNDS.maxLon - GEO_BOUNDS.minLon)) * MAP_WIDTH;
-  const y = ((GEO_BOUNDS.maxLat - lat) / (GEO_BOUNDS.maxLat - GEO_BOUNDS.minLat)) * MAP_HEIGHT;
+  const x = ((lon + 180) / 360) * MAP_WIDTH;
+  const y = ((90 - lat) / 180) * MAP_HEIGHT;
   return { x, y };
 };
 
@@ -83,6 +77,7 @@ export default function ControlTower() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [hovered, setHovered] = React.useState<string | null>(null);
+  const [zoomTarget, setZoomTarget] = React.useState<"none" | "antilles">("none");
 
   React.useEffect(() => {
     let active = true;
@@ -250,6 +245,24 @@ export default function ControlTower() {
     []
   );
   const metropole = nodes.find((n) => n.code === "FR")!;
+  const zoomTransform = React.useMemo(() => {
+    if (zoomTarget === "none") return { scale: 1, tx: 0, ty: 0 };
+    const codes = ["GP", "MQ", "BL", "MF", "GF"];
+    const subset = nodes.filter((n) => codes.includes(n.code));
+    if (!subset.length) return { scale: 1, tx: 0, ty: 0 };
+    const minX = Math.min(...subset.map((n) => n.x));
+    const maxX = Math.max(...subset.map((n) => n.x));
+    const minY = Math.min(...subset.map((n) => n.y));
+    const maxY = Math.max(...subset.map((n) => n.y));
+    const bboxW = maxX - minX || 1;
+    const bboxH = maxY - minY || 1;
+    const scale = Math.min(3, Math.min(MAP_WIDTH / (bboxW * 2.4), MAP_HEIGHT / (bboxH * 2.4)));
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const tx = MAP_WIDTH / 2 - centerX * scale;
+    const ty = MAP_HEIGHT / 2 - centerY * scale;
+    return { scale, tx, ty };
+  }, [nodes, zoomTarget]);
 
   const competitionByTerritory = React.useMemo(() => {
     return DESTINATIONS.map((d) => {
@@ -339,19 +352,22 @@ export default function ControlTower() {
             <h1 className="text-3xl font-bold text-slate-50 drop-shadow-sm">Flux DOM-TOM en temps réel</h1>
             <p className="text-sm text-slate-300/80">Carte : clic = filtre, double clic = Explore préfiltré.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-right justify-end">
-            <div className="text-xs text-slate-300/80">
-              <div className="font-semibold text-cyan-100">Période : {resolvedRange.label || "dernière période"}</div>
-              <div className="text-[11px] text-slate-400">
-                Dernière mise à jour : <span className="text-emerald-300">Live</span> {lastRefreshText !== "Live" ? `• ${lastRefreshText}` : ""}
+            <div className="flex flex-wrap items-center gap-2 text-right justify-end">
+              <div className="text-xs text-slate-300/80">
+                <div className="font-semibold text-cyan-100">Période : {resolvedRange.label || "dernière période"}</div>
+                <div className="text-[11px] text-slate-400">
+                  Dernière mise à jour : <span className="text-emerald-300">Live</span> {lastRefreshText !== "Live" ? `• ${lastRefreshText}` : ""}
+                </div>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setVariable("territory_code", null)}>
-                Reset territoire
-              </Button>
-              <Button onClick={() => navigate("/explore")}>Ouvrir Explore</Button>
-            </div>
+              <div className="flex gap-2">
+                <Button variant={zoomTarget === "antilles" ? "secondary" : "outline"} onClick={() => setZoomTarget(zoomTarget === "antilles" ? "none" : "antilles")}>
+                  {zoomTarget === "antilles" ? "Vue globale" : "Zoom Antilles"}
+                </Button>
+                <Button variant="outline" onClick={() => setVariable("territory_code", null)}>
+                  Reset territoire
+                </Button>
+                <Button onClick={() => navigate("/explore")}>Ouvrir Explore</Button>
+              </div>
           </div>
         </div>
 
@@ -383,64 +399,67 @@ export default function ControlTower() {
               />
 
               <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="w-full h-full relative z-10">
-                {nodes
-                  .filter((n) => n.code !== "FR")
-                  .map((node) => {
-                    const path = buildArc(metropole, node);
-                    const isActive = selected === node.code;
-                    const isHover = hovered === node.code;
-                    return (
-                      <g key={node.code}>
-                        <path
-                          d={path}
-                          fill="none"
-                          stroke={node.color}
-                          strokeWidth={isActive || isHover ? 2.6 : 1.2}
-                          strokeOpacity={isActive || isHover ? 0.9 : 0.35}
-                          className="transition-all duration-300"
-                        />
-                        <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={0.35} />
-                        <circle
-                          cx={node.x}
-                          cy={node.y}
-                          r={isActive || isHover ? 7 : 5.5}
-                          fill={node.color}
-                          className="cursor-pointer"
-                          onMouseEnter={() => setHovered(node.code)}
-                          onMouseLeave={() => setHovered(null)}
-                          onClick={() => setVariable("territory_code", node.code)}
-                          onDoubleClick={() => {
-                            setVariable("territory_code", node.code);
-                            navigate("/explore");
-                          }}
-                        />
-                        <text x={node.x + 12} y={node.y - 8} className="text-xs font-semibold fill-cyan-100 drop-shadow">
-                          {node.name}
-                        </text>
-                      </g>
-                    );
-                  })}
+                <g transform={`translate(${zoomTransform.tx},${zoomTransform.ty}) scale(${zoomTransform.scale})`}>
+                  {nodes
+                    .filter((n) => n.code !== "FR")
+                    .map((node) => {
+                      const path = buildArc(metropole, node);
+                      const isActive = selected === node.code;
+                      const isHover = hovered === node.code;
+                      const strokeWidth = isActive || isHover ? 2.6 : 1.2;
+                      return (
+                        <g key={node.code}>
+                          <path
+                            d={path}
+                            fill="none"
+                            stroke={node.color}
+                            strokeWidth={strokeWidth}
+                            strokeOpacity={isActive || isHover ? 0.9 : 0.35}
+                            className="transition-all duration-300"
+                          />
+                          <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={0.35} />
+                          <circle
+                            cx={node.x}
+                            cy={node.y}
+                            r={isActive || isHover ? 7 : 5.5}
+                            fill={node.color}
+                            className="cursor-pointer"
+                            onMouseEnter={() => setHovered(node.code)}
+                            onMouseLeave={() => setHovered(null)}
+                            onClick={() => setVariable("territory_code", node.code)}
+                            onDoubleClick={() => {
+                              setVariable("territory_code", node.code);
+                              navigate("/explore");
+                            }}
+                          />
+                          <text x={node.x + 12} y={node.y - 8} className="text-xs font-semibold fill-cyan-100 drop-shadow">
+                            {node.name}
+                          </text>
+                        </g>
+                      );
+                    })}
 
-                <motion.circle
-                  cx={metropole.x}
-                  cy={metropole.y}
-                  r={hovered === "FR" || selected === "FR" ? 15 : 12}
-                  fill="#0ea5e9"
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ duration: 0.4 }}
-                  className="cursor-pointer"
-                  onMouseEnter={() => setHovered("FR")}
-                  onMouseLeave={() => setHovered(null)}
-                  onClick={() => setVariable("territory_code", "FR")}
-                  onDoubleClick={() => {
-                    setVariable("territory_code", null);
-                    navigate("/explore");
-                  }}
-                />
-                <text x={metropole.x + 18} y={metropole.y + 4} className="text-sm font-bold fill-cyan-100 drop-shadow">
-                  Metropole
-                </text>
+                  <motion.circle
+                    cx={metropole.x}
+                    cy={metropole.y}
+                    r={hovered === "FR" || selected === "FR" ? 15 : 12}
+                    fill="#0ea5e9"
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.4 }}
+                    className="cursor-pointer"
+                    onMouseEnter={() => setHovered("FR")}
+                    onMouseLeave={() => setHovered(null)}
+                    onClick={() => setVariable("territory_code", "FR")}
+                    onDoubleClick={() => {
+                      setVariable("territory_code", null);
+                      navigate("/explore");
+                    }}
+                  />
+                  <text x={metropole.x + 18} y={metropole.y + 4} className="text-sm font-bold fill-cyan-100 drop-shadow">
+                    Metropole
+                  </text>
+                </g>
               </svg>
 
               {hasZeroState ? (
