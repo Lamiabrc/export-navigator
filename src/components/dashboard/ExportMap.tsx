@@ -1,4 +1,5 @@
 import * as React from "react";
+import { geoEquirectangular, GeoProjection } from "d3-geo";
 import worldMap from "@/assets/world-map.svg";
 import { TERRITORY_COORDS, getCoord } from "@/domain/geo/territoryCoords";
 
@@ -57,6 +58,15 @@ const pulseStyle = `
 }
 `;
 
+// Offsets pour limiter les chevauchements (Antilles principalement)
+const LABEL_OFFSETS: Record<string, { dx: number; dy: number }> = {
+  GP: { dx: 8, dy: -10 },
+  MQ: { dx: -4, dy: 6 },
+  BL: { dx: -10, dy: -10 },
+  MF: { dx: 8, dy: 12 },
+  GF: { dx: 6, dy: 12 },
+};
+
 export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritory, dateRangeLabel, mode = "overview" }: Props) {
   const svgRef = React.useRef<SVGSVGElement | null>(null);
   const [size, setSize] = React.useState({ w: VIEW_W, h: VIEW_H });
@@ -65,45 +75,40 @@ export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritor
   const [drag, setDrag] = React.useState<{ startX: number; startY: number; ox: number; oy: number } | null>(null);
   const [hover, setHover] = React.useState<{ code: string; x: number; y: number } | null>(null);
 
-  // ResizeObserver pour garder un SVG responsive
+  // Responsive : ajuste les dimensions via ResizeObserver
   React.useEffect(() => {
     const el = svgRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
     const obs = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const cr = entry.contentRect;
-        setSize({ w: cr.width, h: cr.height });
+        setSize({ w: cr.width || VIEW_W, h: cr.height || VIEW_H });
       }
     });
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
 
-  const projection = React.useCallback(
-    (lng: number, lat: number) => {
-      const paddingX = 20;
-      const paddingY = 10;
-      const x = ((lng + 180) / 360) * (VIEW_W - 2 * paddingX) + paddingX;
-      const y = ((90 - lat) / 180) * (VIEW_H - 2 * paddingY) + paddingY;
-      return { x, y };
-    },
-    []
+  const projection: GeoProjection = React.useMemo(
+    () => geoEquirectangular().fitSize([VIEW_W, VIEW_H], { type: "Sphere" }),
+    [size.w, size.h],
   );
 
   const points: Point[] = React.useMemo(() => {
     const res: Point[] = [];
     Object.values(TERRITORY_COORDS).forEach((c) => {
       if (c.code === "HUB") return;
-      const { x, y } = projection(c.lng, c.lat);
-      res.push({ code: c.code, name: c.name, x, y, data: dataByTerritory[c.code] });
+      const projected = projection([c.lng, c.lat]);
+      if (!projected) return;
+      res.push({ code: c.code, name: c.name, x: projected[0], y: projected[1], data: dataByTerritory[c.code] });
     });
     return res;
   }, [dataByTerritory, projection]);
 
   const hub = React.useMemo(() => {
     const c = TERRITORY_COORDS.HUB;
-    const { x, y } = projection(c.lng, c.lat);
-    return { ...c, x, y };
+    const projected = projection([c.lng, c.lat]);
+    return projected ? { ...c, x: projected[0], y: projected[1] } : { ...c, x: VIEW_W / 2, y: VIEW_H / 2 };
   }, [projection]);
 
   const topTerritories = React.useMemo(() => {
@@ -116,6 +121,8 @@ export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritor
   }, [points, scale]);
 
   const maxCa = React.useMemo(() => Math.max(0, ...Object.values(dataByTerritory).map((d) => d.ca_ht)), [dataByTerritory]);
+  const totalLines = React.useMemo(() => Object.values(dataByTerritory).reduce((s, d) => s + (d.lines || 0), 0), [dataByTerritory]);
+  const hasData = totalLines > 0;
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -125,9 +132,7 @@ export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritor
     setScale(next);
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setDrag({ startX: e.clientX, startY: e.clientY, ox: offset.x, oy: offset.y });
-  };
+  const handleMouseDown = (e: React.MouseEvent) => setDrag({ startX: e.clientX, startY: e.clientY, ox: offset.x, oy: offset.y });
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!drag) return;
     const dx = e.clientX - drag.startX;
@@ -164,65 +169,68 @@ export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritor
         <g transform={transform}>
           <image href={worldMap} x={0} y={0} width={VIEW_W} height={VIEW_H} opacity={0.45} style={{ filter: "invert(1) saturate(1.2) contrast(1.05)" }} />
 
-          {points
-            .filter((p) => (mode === "drom" ? DROM_CODES.includes(p.code) : true))
-            .map((p) => {
-              const ca = p.data?.ca_ht || 0;
-              if (ca <= 0) return null;
-              const width = scaleStroke(ca, maxCa);
-              return (
-                <path
-                  key={`arc-${p.code}`}
-                  d={buildArc(hub.x, hub.y, p.x, p.y)}
-                  stroke={p.data ? pickColor(p.code) : "#60a5fa"}
-                  strokeWidth={width}
-                  fill="none"
-                  className="arc-animate"
-                  strokeOpacity={0.6}
-                  vectorEffect="non-scaling-stroke"
-                />
-              );
-            })}
+          {hasData &&
+            points
+              .filter((p) => (mode === "drom" ? DROM_CODES.includes(p.code) : true))
+              .map((p) => {
+                const ca = p.data?.ca_ht || 0;
+                if (ca <= 0) return null;
+                const width = scaleStroke(ca, maxCa);
+                return (
+                  <path
+                    key={`arc-${p.code}`}
+                    d={buildArc(hub.x, hub.y, p.x, p.y)}
+                    stroke={p.data ? pickColor(p.code) : "#60a5fa"}
+                    strokeWidth={width}
+                    fill="none"
+                    className="arc-animate"
+                    strokeOpacity={0.6}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                );
+              })}
 
-          {points
-            .filter((p) => (mode === "drom" ? DROM_CODES.includes(p.code) : true))
-            .map((p) => {
-              const ca = p.data?.ca_ht || 0;
-              const size = markerSize(ca);
-              const isSelected = selectedTerritory === p.code;
-              const isTop = topTerritories.has(p.code);
-              const showLabel = isTop || scale > 1.3;
-              const label = scale > 1.3 || !["GP", "MQ", "BL"].includes(p.code) ? p.name : p.code;
-              return (
-                <g key={p.code} className="transition-all duration-300">
-                  <g
-                    onMouseEnter={(e) => setHover({ code: p.code, x: e.clientX, y: e.clientY })}
-                    onMouseLeave={() => setHover(null)}
-                    onClick={() => onSelectTerritory(p.code)}
-                    onDoubleClick={() => onSelectTerritory(null)}
-                    className="cursor-pointer"
-                  >
-                    <circle cx={p.x} cy={p.y} r={size + 4} fill="#0f172a" opacity={0.4} />
-                    <circle
-                      cx={p.x}
-                      cy={p.y}
-                      r={size}
-                      className={ca > 0 ? "map-pulse" : ""}
-                      fill={isSelected ? "#38bdf8" : pickColor(p.code)}
-                      opacity={isSelected ? 0.95 : 0.75}
-                    />
-                  </g>
-                  {showLabel ? (
-                    <g transform={`translate(${p.x + 10},${p.y - 8})`}>
-                      <rect x={-4} y={-12} width={label.length * 7 + 12} height={20} rx={6} fill="#0f172a" opacity={0.7} />
-                      <text className="text-[11px] font-semibold fill-slate-100" x={4} y={4}>
-                        {label}
-                      </text>
+          {hasData &&
+            points
+              .filter((p) => (mode === "drom" ? DROM_CODES.includes(p.code) : true))
+              .map((p) => {
+                const ca = p.data?.ca_ht || 0;
+                const size = markerSize(ca);
+                const isSelected = selectedTerritory === p.code;
+                const isTop = topTerritories.has(p.code);
+                const showLabel = isTop || scale > 1.3;
+                const label = scale > 1.3 || !["GP", "MQ", "BL"].includes(p.code) ? p.name : p.code;
+                const offsetLabel = LABEL_OFFSETS[p.code] || { dx: 10, dy: -8 };
+                return (
+                  <g key={p.code} className="transition-all duration-300">
+                    <g
+                      onMouseEnter={(e) => setHover({ code: p.code, x: e.clientX, y: e.clientY })}
+                      onMouseLeave={() => setHover(null)}
+                      onClick={() => onSelectTerritory(p.code)}
+                      onDoubleClick={() => onSelectTerritory(null)}
+                      className="cursor-pointer"
+                    >
+                      <circle cx={p.x} cy={p.y} r={size + 4} fill="#0f172a" opacity={0.4} />
+                      <circle
+                        cx={p.x}
+                        cy={p.y}
+                        r={size}
+                        className={ca > 0 ? "map-pulse" : ""}
+                        fill={isSelected ? "#38bdf8" : pickColor(p.code)}
+                        opacity={isSelected ? 0.95 : 0.75}
+                      />
                     </g>
-                  ) : null}
-                </g>
-              );
-            })}
+                    {showLabel ? (
+                      <g transform={`translate(${p.x + offsetLabel.dx},${p.y + offsetLabel.dy})`}>
+                        <rect x={-4} y={-12} width={label.length * 7 + 12} height={20} rx={6} fill="#0f172a" opacity={0.7} />
+                        <text className="text-[11px] font-semibold fill-slate-100" x={4} y={4}>
+                          {label}
+                        </text>
+                      </g>
+                    ) : null}
+                  </g>
+                );
+              })}
 
           {/* Hub */}
           <g
@@ -257,7 +265,7 @@ export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritor
         </div>
       ) : null}
 
-      {!hasData(dataByTerritory) ? (
+      {!hasData ? (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 shadow-lg shadow-amber-500/15">
             Aucune donnée sur la période. Ajuste les filtres ou importe des ventes.
@@ -270,14 +278,6 @@ export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritor
 
 function formatMoney(n: number) {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n);
-}
-
-function project(lng: number, lat: number, width: number, height: number) {
-  const paddingX = 20;
-  const paddingY = 10;
-  const x = ((lng + 180) / 360) * (width - 2 * paddingX) + paddingX;
-  const y = ((90 - lat) / 180) * (height - 2 * paddingY) + paddingY;
-  return { x, y };
 }
 
 function buildArc(x0: number, y0: number, x1: number, y1: number) {
