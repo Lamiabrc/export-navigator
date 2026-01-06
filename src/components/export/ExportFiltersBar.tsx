@@ -48,15 +48,15 @@ export function ExportFiltersBar({ value, onChange, onRefresh, loading, showInvo
         <div className="space-y-1">
           <Label className="text-xs">Territoire / ile</Label>
           <Select
-            value={value.territory || ""}
-            onValueChange={(v) => handleChange("territory", v || undefined)}
+            value={value.territory || "all"}
+            onValueChange={(v) => handleChange("territory", v === "all" ? undefined : (v as string))}
             disabled={lookupsLoading}
           >
             <SelectTrigger>
               <SelectValue placeholder="Tous" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Tous</SelectItem>
+              <SelectItem value="all">Tous</SelectItem>
               {lookups.territories.map((t) => (
                 <SelectItem key={t.code} value={t.code}>
                   {t.code} {t.label ? `- ${t.label}` : ""}
@@ -68,15 +68,15 @@ export function ExportFiltersBar({ value, onChange, onRefresh, loading, showInvo
         <div className="space-y-1">
           <Label className="text-xs">Client</Label>
           <Select
-            value={value.clientId || ""}
-            onValueChange={(v) => handleChange("clientId", v || undefined)}
+            value={value.clientId || "all"}
+            onValueChange={(v) => handleChange("clientId", v === "all" ? undefined : (v as string))}
             disabled={lookupsLoading}
           >
             <SelectTrigger>
               <SelectValue placeholder="Tous" />
             </SelectTrigger>
             <SelectContent className="max-h-72">
-              <SelectItem value="">Tous</SelectItem>
+              <SelectItem value="all">Tous</SelectItem>
               {lookups.clients.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name || c.id}

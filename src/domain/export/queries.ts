@@ -89,6 +89,15 @@ function estimateExportCosts(base: number, territory: string | null | undefined,
   };
 }
 
+function shouldFallbackToNextSource(error: any): boolean {
+  if (!error) return false;
+  if (isMissingTableError(error)) return true;
+  const status = (error as any)?.status;
+  // PostgREST returns status 400 on unknown column filters or bad casts; treat as recoverable to allow fallback.
+  if (status === 400) return true;
+  return false;
+}
+
 async function loadRatesContext(): Promise<{ context: RatesContext; warning?: string }> {
   if (cachedRates) return { context: cachedRates, warning: cachedRatesWarning };
 
@@ -214,7 +223,7 @@ export async function fetchInvoices(filters: ExportFilters = {}, pagination: Pag
     const { data, error, count } = await query;
 
     if (error) {
-      if (isMissingTableError(error)) {
+      if (shouldFallbackToNextSource(error)) {
         missingSources.push(source);
         continue;
       }
@@ -258,7 +267,7 @@ export async function fetchInvoiceByNumber(invoiceNumber: string): Promise<Invoi
       .limit(1);
 
     if (error) {
-      if (isMissingTableError(error)) {
+      if (shouldFallbackToNextSource(error)) {
         missingSources.push(source);
         continue;
       }
