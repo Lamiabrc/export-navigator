@@ -17,15 +17,22 @@ import {
 interface MainLayoutProps {
   children: React.ReactNode;
   contentClassName?: string;
+  wrapperClassName?: string;
+  variant?: "default" | "bare";
 }
 
-export function MainLayout({ children, contentClassName }: MainLayoutProps) {
+export function MainLayout({ children, contentClassName, wrapperClassName, variant = "default" }: MainLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const { signOut } = useAuth();
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))] relative overflow-hidden">
+    <div
+      className={cn(
+        "min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))] relative overflow-hidden",
+        wrapperClassName
+      )}
+    >
       <div
         className="pointer-events-none absolute inset-0 opacity-30"
         style={{
@@ -141,9 +148,13 @@ export function MainLayout({ children, contentClassName }: MainLayoutProps) {
         </header>
 
         <div className={cn("p-4 md:p-10", contentClassName)}>
-          <div className="rounded-2xl bg-card/95 border border-border shadow-xl shadow-black/10">
-            <div className="p-4 md:p-8 space-y-4">{children}</div>
-          </div>
+          {variant === "bare" ? (
+            <div className="space-y-4">{children}</div>
+          ) : (
+            <div className="rounded-2xl bg-card/95 border border-border shadow-xl shadow-black/10">
+              <div className="p-4 md:p-8 space-y-4">{children}</div>
+            </div>
+          )}
         </div>
       </main>
     </div>

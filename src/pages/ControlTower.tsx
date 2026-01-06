@@ -310,7 +310,7 @@ export default function ControlTower() {
   const actions = ["Ouvrir Explore", "Optimiser incoterm", "Importer CSV coûts"];
 
   return (
-    <MainLayout className="control-tower-neon min-h-screen">
+    <MainLayout wrapperClassName="control-tower-neon" variant="bare">
       <div className="space-y-4 px-3 pb-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
