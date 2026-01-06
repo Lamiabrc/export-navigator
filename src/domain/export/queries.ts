@@ -91,7 +91,7 @@ function estimateExportCosts(base: number, territory: string | null | undefined,
 
 function shouldFallbackToNextSource(error: any): boolean {
   if (!error) return false;
-  if (isMissingTableError(error)) return true;
+  if (isMissingTableError(error) || isMissingColumnError(error)) return true;
   const status = (error as any)?.status;
   // PostgREST returns status 400 on unknown column filters or bad casts; treat as recoverable to allow fallback.
   if (status === 400) return true;
