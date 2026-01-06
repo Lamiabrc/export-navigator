@@ -57,6 +57,14 @@ export default function CommandCenter() {
   });
 
   const { settings, loading: settingsLoading, warning: settingsWarning, save, DEFAULT_SETTINGS } = useExportSettings();
+  const todayIso = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const defaultFrom = React.useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  }, []);
+  const effectiveFrom = filters.from || defaultFrom;
+  const effectiveTo = filters.to || todayIso;
   const territories = React.useMemo(() => {
     if (filters.dromOnly) return DROM_CODES;
     if (!filters.territories.trim()) return undefined;
@@ -65,8 +73,8 @@ export default function CommandCenter() {
 
   const { state: salesState, aggregates } = useDashboardData(
     {
-      from: filters.from || undefined,
-      to: filters.to || undefined,
+      from: effectiveFrom,
+      to: effectiveTo,
       territories,
       client: filters.client || undefined,
       product: filters.product || undefined,
@@ -336,7 +344,7 @@ export default function CommandCenter() {
               dataByTerritory={mapData}
               selectedTerritory={selectedTerritory}
               onSelectTerritory={handleSelectTerritory}
-              dateRangeLabel={filters.from || filters.to ? `${filters.from || "?"} → ${filters.to || "?"}` : "30 jours"}
+              dateRangeLabel={`${effectiveFrom} → ${effectiveTo}`}
             />
             <KpiBar items={kpis} />
             <div className="grid gap-4 md:grid-cols-3">
