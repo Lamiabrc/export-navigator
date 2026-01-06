@@ -39,7 +39,7 @@ const MAP_WIDTH = 1010; // matches svg width
 const MAP_HEIGHT = 666; // matches svg height
 
 const DESTINATIONS: Destination[] = [
-  { code: "FR", name: "Metropole", lat: 46.6, lon: 2.3, color: "#38bdf8" },
+  { code: "FR", name: "Metropole", lat: 48.8566, lon: 2.3522, color: "#38bdf8" },
   { code: "GP", name: "Guadeloupe", lat: 16.265, lon: -61.551, color: "#fb7185" },
   { code: "MQ", name: "Martinique", lat: 14.6415, lon: -61.0242, color: "#f59e0b" },
   { code: "GF", name: "Guyane", lat: 4.0, lon: -53.0, color: "#22c55e" },
@@ -54,8 +54,10 @@ const formatMoney = (n: number | null | undefined) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
 
 const project = (lat: number, lon: number) => {
-  const x = ((lon + 180) / 360) * MAP_WIDTH;
-  const y = ((90 - lat) / 180) * MAP_HEIGHT;
+  const paddingX = 20;
+  const paddingY = 10;
+  const x = ((lon + 180) / 360) * (MAP_WIDTH - 2 * paddingX) + paddingX;
+  const y = ((90 - lat) / 180) * (MAP_HEIGHT - 2 * paddingY) + paddingY;
   return { x, y };
 };
 
