@@ -30,7 +30,13 @@ const OFFSETS: Record<string, { dx: number; dy: number }> = {
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-export function SvgMapWorld({ dataByTerritory, selectedTerritory, onSelectTerritory, dateRangeLabel }: Props) {
+export function SvgMapWorld({
+  dataByTerritory,
+  selectedTerritory,
+  onSelectTerritory,
+  dateRangeLabel,
+  mode = "overview",
+}: Props) {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [svgEl, setSvgEl] = React.useState<SVGSVGElement | null>(null);
   const [size, setSize] = React.useState({ w: 1000, h: 520 });
