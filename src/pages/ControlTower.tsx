@@ -5,6 +5,7 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
+import { isMissingTableError } from "@/domain/calc";
 import worldMap from "@/assets/world-map.svg";
 import {
   NeonSurface,
@@ -78,6 +79,7 @@ export default function ControlTower() {
   const [competition, setCompetition] = React.useState<CompetitionRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [warning, setWarning] = React.useState<string | null>(null);
   const [hovered, setHovered] = React.useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = React.useState<{ x: number; y: number } | null>(null);
   const [zoomTarget, setZoomTarget] = React.useState<"none" | "antilles">("none");
@@ -89,6 +91,7 @@ export default function ControlTower() {
     const load = async () => {
       setIsLoading(true);
       setError(null);
+      setWarning(null);
       try {
         if (!SUPABASE_ENV_OK) throw new Error("Supabase non configure");
 
@@ -111,12 +114,29 @@ export default function ControlTower() {
         const [salesRes, costRes] = await Promise.all([salesQuery, costQuery]);
         if (!active) return;
         if (salesRes.error) throw salesRes.error;
-        if (costRes.error) throw costRes.error;
+        let costData = costRes.data || [];
+        if (costRes.error) {
+          if (isMissingTableError(costRes.error)) {
+            // fallback on "costs" table if cost_lines missing
+            const fallback = await supabase
+              .from("costs")
+              .select("id,date,destination,amount,cost_type")
+              .gte("date", resolvedRange.from)
+              .lte("date", resolvedRange.to)
+              .order("date", { ascending: false })
+              .limit(5000);
+            if (fallback.error) throw fallback.error;
+            costData = fallback.data || [];
+            setWarning("Table cost_lines absente, fallback sur costs.");
+          } else {
+            throw costRes.error;
+          }
+        }
 
         const filteredSales = (salesRes.data || []).filter((row) =>
           variables.territory_code ? row.territory_code === variables.territory_code : true
         );
-        const filteredCosts = (costRes.data || []).filter((row) =>
+        const filteredCosts = (costData || []).filter((row: any) =>
           variables.territory_code ? row.destination === variables.territory_code : true
         );
 
@@ -427,7 +447,7 @@ export default function ControlTower() {
               </div>
 
               <div
-                className="absolute inset-0"
+                className="absolute inset-0 bg-gradient-to-br from-slate-900/60 via-slate-900/40 to-cyan-900/20 rounded-xl border border-cyan-500/20 shadow-[0_0_40px_rgba(34,211,238,0.15)]"
                 style={zoomCss}
                 onWheel={(e) => {
                   e.preventDefault();
@@ -469,6 +489,15 @@ export default function ControlTower() {
                 />
 
                 <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="absolute inset-0 w-full h-full">
+                  <defs>
+                    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur stdDeviation="6" result="coloredBlur" />
+                      <feMerge>
+                        <feMergeNode in="coloredBlur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
                   {nodes
                     .filter((n) => n.code !== "FR")
                     .map((node) => {
@@ -487,9 +516,10 @@ export default function ControlTower() {
                               fill="none"
                               stroke={node.color}
                               strokeWidth={strokeWidth}
-                              strokeOpacity={isActive || isHover ? 0.9 : 0.35}
+                              strokeOpacity={isActive || isHover ? 0.9 : 0.25}
                               className="transition-all duration-300"
                               vectorEffect="non-scaling-stroke"
+                              filter="url(#glow)"
                             />
                           ) : null}
                           <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={hasFlow ? 0.35 : 0.15} />
@@ -552,6 +582,18 @@ export default function ControlTower() {
                     Metropole
                   </text>
                 </svg>
+
+                <div className="absolute bottom-3 left-3 z-30 rounded-lg border border-cyan-500/30 bg-slate-900/70 px-3 py-2 text-xs text-cyan-50 shadow-lg">
+                  <div className="font-semibold text-cyan-100 mb-1">Légende DOM-TOM</div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                    {DESTINATIONS.filter((d) => d.code !== "FR").map((d) => (
+                      <div key={d.code} className="flex items-center gap-2">
+                        <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: d.color }} />
+                        <span className="text-[11px] text-slate-200">{d.code} — {d.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {hasZeroState ? (
@@ -666,6 +708,11 @@ export default function ControlTower() {
         {error ? (
           <div className="text-sm text-rose-300">
             Erreur chargement données : {error}. Affichage des données démo si disponibles.
+          </div>
+        ) : null}
+        {warning ? (
+          <div className="text-sm text-amber-200">
+            {warning}
           </div>
         ) : null}
       </div>
