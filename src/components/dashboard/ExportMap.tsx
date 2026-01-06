@@ -26,7 +26,7 @@ type Point = {
   data: TerritoryData | undefined;
 };
 
-// Dimensions natives de la carte SVG
+// Dimensions natives de la carte SVG (valeurs de base, ajustées via ResizeObserver)
 const VIEW_W = 1010;
 const VIEW_H = 520;
 const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT", "BL", "MF"];
@@ -90,7 +90,7 @@ export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritor
   }, []);
 
   const projection: GeoProjection = React.useMemo(
-    () => geoEquirectangular().fitSize([VIEW_W, VIEW_H], { type: "Sphere" }),
+    () => geoEquirectangular().fitSize([size.w || VIEW_W, size.h || VIEW_H], { type: "Sphere" }),
     [size.w, size.h],
   );
 
@@ -108,8 +108,8 @@ export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritor
   const hub = React.useMemo(() => {
     const c = TERRITORY_COORDS.HUB;
     const projected = projection([c.lng, c.lat]);
-    return projected ? { ...c, x: projected[0], y: projected[1] } : { ...c, x: VIEW_W / 2, y: VIEW_H / 2 };
-  }, [projection]);
+    return projected ? { ...c, x: projected[0], y: projected[1] } : { ...c, x: (size.w || VIEW_W) / 2, y: (size.h || VIEW_H) / 2 };
+  }, [projection, size.w, size.h]);
 
   const topTerritories = React.useMemo(() => {
     const sorted = points
@@ -145,7 +145,7 @@ export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritor
   const hoveredData = hover ? dataByTerritory[hover.code] : undefined;
   const hoveredCoord = hover ? getCoord(hover.code) : undefined;
 
-  const viewBox = `0 0 ${VIEW_W} ${VIEW_H}`;
+  const viewBox = `0 0 ${size.w || VIEW_W} ${size.h || VIEW_H}`;
   const transform = `translate(${offset.x},${offset.y}) scale(${scale})`;
 
   return (
@@ -167,7 +167,7 @@ export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritor
         preserveAspectRatio="xMidYMid meet"
       >
         <g transform={transform}>
-          <image href={worldMap} x={0} y={0} width={VIEW_W} height={VIEW_H} opacity={0.45} style={{ filter: "invert(1) saturate(1.2) contrast(1.05)" }} />
+          <image href={worldMap} x={0} y={0} width={size.w || VIEW_W} height={size.h || VIEW_H} opacity={0.45} style={{ filter: "invert(1) saturate(1.2) contrast(1.05)" }} />
 
           {hasData &&
             points
