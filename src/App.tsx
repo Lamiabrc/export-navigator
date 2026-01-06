@@ -16,6 +16,7 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import SetPassword from "@/pages/SetPassword";
 
 import CommandCenter from "@/pages/CommandCenter";
+import ControlTower from "@/pages/ControlTower";
 import Simulator from "@/pages/Simulator";
 import InvoiceVerification from "@/pages/InvoiceVerification";
 
@@ -64,7 +65,7 @@ export default function App() {
                     path="/control-tower"
                     element={
                       <ProtectedRoute>
-                        <CommandCenter />
+                        <ControlTower />
                       </ProtectedRoute>
                     }
                   />
