@@ -25,12 +25,45 @@ export default function InvoiceDetailPage() {
   const { invoiceNumber } = useParams<{ invoiceNumber: string }>();
   const [note, setNote] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+  const [notesAvailable, setNotesAvailable] = React.useState<boolean | null>(null);
+  const [notesWarning, setNotesWarning] = React.useState<string>("");
 
   const detailQuery = useQuery({
     queryKey: ["invoice-detail", invoiceNumber],
     queryFn: () => fetchInvoiceByNumber(invoiceNumber || ""),
     enabled: Boolean(invoiceNumber),
   });
+
+  // Detect presence of table notes to avoid misleading CTA
+  React.useEffect(() => {
+    let mounted = true;
+    supabase
+      .from("notes")
+      .select("id", { head: true, count: "exact" })
+      .limit(1)
+      .then(({ error }) => {
+        if (!mounted) return;
+        if (error) {
+          if (isMissingTableError(error)) {
+            setNotesAvailable(false);
+            setNotesWarning("Table notes absente : validation/notes non persistées.");
+          } else {
+            setNotesAvailable(false);
+            setNotesWarning(error.message || "Notes indisponibles.");
+          }
+        } else {
+          setNotesAvailable(true);
+        }
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setNotesAvailable(false);
+        setNotesWarning(err?.message || "Notes indisponibles.");
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const invoice = detailQuery.data;
 
@@ -40,6 +73,10 @@ export default function InvoiceDetailPage() {
 
   const handleValidate = async () => {
     if (!invoice) return;
+    if (notesAvailable === false) {
+      toast.info("Table notes absente : action non enregistrée côté base.");
+      return;
+    }
     setSaving(true);
     try {
       const { error } = await supabase.from("notes").insert({
@@ -76,7 +113,7 @@ export default function InvoiceDetailPage() {
       });
       if (error) {
         if (isMissingTableError(error)) {
-          toast.info("Table notes absente : note non persistee mais affichee ici.");
+          toast.info("Table notes absente : note non persistee.");
         } else {
           throw error;
         }
@@ -246,10 +283,13 @@ export default function InvoiceDetailPage() {
                 <CardDescription>Marquer comme valide ou ajouter une note</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
+                {notesWarning ? (
+                  <div className="text-sm text-muted-foreground">{notesWarning}</div>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
-                  <Button className="gap-2" onClick={handleValidate} disabled={saving}>
+                  <Button className="gap-2" onClick={handleValidate} disabled={saving || notesAvailable === false}>
                     <CheckCircle className="h-4 w-4" />
-                    Marquer comme valide
+                    {notesAvailable === false ? "Validation non dispo" : "Marquer comme valide"}
                   </Button>
                 </div>
                 <div className="space-y-2">
@@ -259,9 +299,9 @@ export default function InvoiceDetailPage() {
                     onChange={(e) => setNote(e.target.value)}
                     placeholder="Ajouter une note (table notes si presente, sinon memo local)"
                   />
-                  <Button variant="outline" onClick={handleAddNote} disabled={saving || !note.trim()}>
+                  <Button variant="outline" onClick={handleAddNote} disabled={saving || !note.trim() || notesAvailable === false}>
                     <NotebookPen className="h-4 w-4 mr-2" />
-                    Ajouter note
+                    {notesAvailable === false ? "Notes non dispo" : "Ajouter note"}
                   </Button>
                 </div>
               </CardContent>

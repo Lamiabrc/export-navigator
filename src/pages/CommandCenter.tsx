@@ -12,6 +12,7 @@ import { fetchAlerts, fetchInvoices, fetchKpis, fetchTopClients } from "@/domain
 import { ExportFilters, Invoice } from "@/domain/export/types";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 
 function money(n: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
@@ -184,6 +185,9 @@ export default function CommandCenter() {
                           ) : null}
                         </div>
                         <div className="text-xs text-muted-foreground">{c.territory_code || "?"}</div>
+                        {c.client_label && looksLikeUuid(c.client_label) ? (
+                          <Link to="/clients" className="text-[11px] text-primary hover:underline">Ouvrir Clients</Link>
+                        ) : null}
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold">{money(c.margin_estimee)}</div>
