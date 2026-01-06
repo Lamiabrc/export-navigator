@@ -226,10 +226,11 @@ export default function ControlTower() {
     return (totals.margin / totals.totalSalesHt) * 100;
   }, [totals.margin, totals.totalSalesHt]);
 
+  const hasData = sales.length > 0;
   const hasZeroState = React.useMemo(() => {
     const allZero = totals.totalSalesHt === 0 && totals.totalSalesTtc === 0 && totals.totalCosts === 0 && totals.margin === 0;
-    return allZero && sales.length === 0;
-  }, [totals.totalSalesHt, totals.totalSalesTtc, totals.totalCosts, totals.margin, sales.length]);
+    return allZero && !hasData;
+  }, [totals.totalSalesHt, totals.totalSalesTtc, totals.totalCosts, totals.margin, hasData]);
 
   const lastRefreshText = React.useMemo(() => {
     if (!lastRefreshAt) return "Live";
@@ -310,13 +311,12 @@ export default function ControlTower() {
   }, [salesByTerritory]);
 
   const topLabels = React.useMemo(() => {
-    return new Set(
-      Object.entries(salesByTerritory)
-        .filter(([code]) => code !== "FR")
-        .sort((a, b) => b[1].ca - a[1].ca)
-        .slice(0, 5)
-        .map(([code]) => code),
-    );
+    const ordered = Object.entries(salesByTerritory)
+      .filter(([code]) => code !== "FR")
+      .sort((a, b) => b[1].ca - a[1].ca || b[1].volume - a[1].volume);
+    const base = ordered.slice(0, 5).map(([code]) => code);
+    if (!base.length) return new Set(["GP", "MQ", "GF", "RE", "YT"]);
+    return new Set(base);
   }, [salesByTerritory]);
 
   const timeseries = React.useMemo(() => {
@@ -384,7 +384,18 @@ export default function ControlTower() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant={zoomTarget === "antilles" ? "secondary" : "outline"} onClick={() => setZoomTarget(zoomTarget === "antilles" ? "none" : "antilles")}>
+                <Button
+                  variant={zoomTarget === "antilles" ? "secondary" : "outline"}
+                  onClick={() => {
+                    if (zoomTarget === "antilles") {
+                      setZoomTarget("none");
+                      setViewport({ scale: 1, tx: 0, ty: 0 });
+                    } else {
+                      setZoomTarget("antilles");
+                      setViewport(computeZoomForSubset(["GP", "MQ", "BL", "MF", "GF"]));
+                    }
+                  }}
+                >
                   {zoomTarget === "antilles" ? "Vue globale" : "Zoom Antilles"}
                 </Button>
                 <Button variant="outline" onClick={() => setVariable("territory_code", null)}>
@@ -466,26 +477,28 @@ export default function ControlTower() {
                       const isHover = hovered === node.code;
                       const strokeWidth = isActive || isHover ? 2.6 : 1.2;
                       const territoryData = salesByTerritory[node.code];
-                      const hasFlow = territoryData?.ca > 0;
+                      const hasFlow = (territoryData?.ca || 0) > 0;
                       const showLabel = topLabels.has(node.code);
-                      if (!hasFlow) return null;
                       return (
                         <g key={node.code}>
-                          <path
-                            d={path}
-                            fill="none"
-                            stroke={node.color}
-                            strokeWidth={strokeWidth}
-                            strokeOpacity={isActive || isHover ? 0.9 : 0.35}
-                            className="transition-all duration-300"
-                            vectorEffect="non-scaling-stroke"
-                          />
-                          <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={0.35} />
+                          {hasFlow ? (
+                            <path
+                              d={path}
+                              fill="none"
+                              stroke={node.color}
+                              strokeWidth={strokeWidth}
+                              strokeOpacity={isActive || isHover ? 0.9 : 0.35}
+                              className="transition-all duration-300"
+                              vectorEffect="non-scaling-stroke"
+                            />
+                          ) : null}
+                          <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={hasFlow ? 0.35 : 0.15} />
                           <circle
                             cx={node.x}
                             cy={node.y}
                             r={isActive || isHover ? 7 : 5.5}
                             fill={node.color}
+                            opacity={hasFlow ? 0.9 : 0.35}
                             className="cursor-pointer"
                             onMouseEnter={(evt) => {
                               setHovered(node.code);
