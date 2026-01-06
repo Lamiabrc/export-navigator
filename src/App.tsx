@@ -29,8 +29,6 @@ import TaxesOM from "@/pages/TaxesOM";
 import WatchCommercial from "@/pages/WatchCommercial";
 import WatchRegulatory from "@/pages/WatchRegulatory";
 
-import ControlTower from "@/pages/ControlTower";
-
 import Admin from "@/pages/Admin";
 import Assistant from "@/pages/Assistant";
 import Settings from "@/pages/Settings";
@@ -66,19 +64,12 @@ export default function App() {
                     path="/control-tower"
                     element={
                       <ProtectedRoute>
-                        <ControlTower />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route path="/dashboard" element={<Navigate to="/control-tower" replace />} />
-                  <Route
-                    path="/command-center"
-                    element={
-                      <ProtectedRoute>
                         <CommandCenter />
                       </ProtectedRoute>
                     }
                   />
+                  <Route path="/dashboard" element={<Navigate to="/control-tower" replace />} />
+                  <Route path="/command-center" element={<Navigate to="/control-tower" replace />} />
                   <Route
                     path="/explore"
                     element={

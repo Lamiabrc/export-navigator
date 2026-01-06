@@ -3,7 +3,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { Activity, BookOpen, Bot, Calculator, LogOut, Package, Receipt, Scale, Settings, ShieldCheck, Target, TrendingUp, Users } from "lucide-react";
+import { Activity, BookOpen, Bot, Calculator, LogOut, Package, Receipt, Scale, Settings, Target, TrendingUp, Users } from "lucide-react";
 
 type NavItem = {
   name: string;
@@ -30,12 +30,7 @@ const navigation: NavSection[] = [
         icon: Activity,
         badge: "Live",
         featured: true,
-        aliases: ["/dashboard"],
-      },
-      {
-        name: "Command Center",
-        href: "/command-center",
-        icon: ShieldCheck,
+        aliases: ["/dashboard", "/command-center"],
       },
       {
         name: "Analyse des ventes",
