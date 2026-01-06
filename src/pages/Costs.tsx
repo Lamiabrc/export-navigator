@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,11 @@ import { RefreshCw, Download, Truck, Plane, Plus } from "lucide-react";
 import { useCosts } from "@/hooks/useCosts";
 import { supabase } from "@/integrations/supabase/client";
 import { useDhlSalesQuotes } from "@/hooks/useDhlSalesQuotes";
+import { ExportFiltersBar } from "@/components/export/ExportFiltersBar";
+import { fetchKpis } from "@/domain/export/queries";
+import { ExportFilters } from "@/domain/export/types";
+import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
+import { toast } from "sonner";
 
 type PricingSummary = { territory: string; skuCount: number; avgPlv: number };
 
@@ -79,7 +85,43 @@ function downloadText(content: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+function SummaryTile({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border p-3 bg-card/50">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-xl font-semibold">{formatMoney(value, 0)}</div>
+    </div>
+  );
+}
+
 export default function Costs() {
+  const { resolvedRange, variables } = useGlobalFilters();
+  const [filters, setFilters] = React.useState<ExportFilters>({
+    from: resolvedRange.from,
+    to: resolvedRange.to,
+    territory: variables.territory_code || undefined,
+    clientId: variables.client_id || undefined,
+  });
+
+  React.useEffect(() => {
+    setFilters((prev) => ({
+      ...prev,
+      from: resolvedRange.from,
+      to: resolvedRange.to,
+      territory: variables.territory_code || prev.territory,
+      clientId: variables.client_id || prev.clientId,
+    }));
+  }, [resolvedRange.from, resolvedRange.to, variables.territory_code, variables.client_id]);
+
+  const kpisQuery = useQuery({
+    queryKey: ["export-costs-kpis", filters],
+    queryFn: () => fetchKpis(filters),
+  });
+
+  React.useEffect(() => {
+    if (kpisQuery.error) toast.error((kpisQuery.error as Error).message);
+  }, [kpisQuery.error]);
+
   // -------------------- Charges (table costs via hook) --------------------
   const { rows, isLoading, error, warning, refresh } = useCosts();
 
@@ -338,6 +380,9 @@ export default function Costs() {
     void load();
   }, []);
 
+  const estimatedCosts = kpisQuery.data?.estimatedExportCosts;
+  const transitGap = (kpisQuery.data?.totalTransit ?? 0) - (estimatedCosts?.total ?? 0);
+
   // -------------------- UI --------------------
   return (
     <MainLayout contentClassName="md:p-8">
@@ -360,6 +405,35 @@ export default function Costs() {
             </Button>
           </div>
         </div>
+
+        <ExportFiltersBar value={filters} onChange={setFilters} onRefresh={() => { kpisQuery.refetch(); refresh(); }} loading={kpisQuery.isLoading} />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Coûts export estimés (factures)</CardTitle>
+            <CardDescription>Basé sur OM / octroi / TVA des tables Supabase, filtre période + territoire + client.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <SummaryTile label="OM" value={estimatedCosts?.om ?? 0} />
+            <SummaryTile label="Octroi" value={estimatedCosts?.octroi ?? 0} />
+            <SummaryTile label="TVA" value={estimatedCosts?.vat ?? 0} />
+            <SummaryTile label="Autres règles" value={estimatedCosts?.extraRules ?? 0} />
+            <SummaryTile label="Total coûts export" value={estimatedCosts?.total ?? 0} />
+            <div className="md:col-span-5 rounded-lg border p-3 bg-muted/30 flex items-center justify-between">
+              <div>
+                <div className="text-xs text-muted-foreground">Écart transit vs coûts export estimés</div>
+                <div className="text-sm text-muted-foreground">Transit inclut dans invoice_ht, pas dans transport_cost_eur.</div>
+              </div>
+              <div className="text-xl font-semibold">{formatMoney(transitGap, 0)}</div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {kpisQuery.data?.warning ? (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="pt-4 text-sm text-amber-800">{kpisQuery.data.warning}</CardContent>
+          </Card>
+        ) : null}
 
         {/* ERRORS */}
         {error || warning ? (

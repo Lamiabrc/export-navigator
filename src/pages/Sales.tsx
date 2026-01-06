@@ -1,373 +1,268 @@
-import * as React from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import React from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { RefreshCw, Download, TrendingUp, Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
+import { MainLayout } from "@/components/layout/MainLayout";
+import { ExportFiltersBar } from "@/components/export/ExportFiltersBar";
+import { fetchInvoices, fetchSalesLines } from "@/domain/export/queries";
+import { ExportFilters, Invoice, SaleLine } from "@/domain/export/types";
+import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { useSales } from "@/hooks/useSales";
 
-function toCsv(rows: Record<string, any>[]) {
-  if (!rows.length) return "";
-  const headers = Object.keys(rows[0]);
-  const escape = (v: any) => {
-    const s = String(v ?? "");
-    const needsQuotes = s.includes(";") || s.includes("\n") || s.includes('"');
-    const escaped = s.replace(/"/g, '""');
-    return needsQuotes ? `"${escaped}"` : escaped;
-  };
-  const lines = [headers.join(";"), ...rows.map((r) => headers.map((h) => escape(r[h])).join(";"))];
-  return lines.join("\n");
+type SortKey = "invoice_date" | "client" | "territory" | "products" | "transit" | "invoice_ht" | "transport" | "margin";
+
+function money(n: number | null | undefined) {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
 }
-
-function downloadText(content: string, filename: string) {
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function money(n: any) {
-  const v = typeof n === "number" ? n : Number(n ?? 0);
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(v);
-}
-
-type Territory = { code: string; label: string | null };
-type Client = { id: string; name: string | null };
-type Product = { id: string; libelle_article: string | null };
-type Destination = { id: string; name: string | null };
 
 export default function Sales() {
-  const { rows, isLoading, error, warning, refresh, createSale, deleteSale } = useSales();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { resolvedRange, variables } = useGlobalFilters();
 
-  const [q, setQ] = React.useState("");
+  const [activeTab, setActiveTab] = React.useState<"invoices" | "lines">(
+    (searchParams.get("tab") as "invoices" | "lines") || "invoices",
+  );
 
-  // lookups pour la saisie
-  const [territories, setTerritories] = React.useState<Territory[]>([]);
-  const [clients, setClients] = React.useState<Client[]>([]);
-  const [products, setProducts] = React.useState<Product[]>([]);
-  const [destinations, setDestinations] = React.useState<Destination[]>([]);
+  const [filters, setFilters] = React.useState<ExportFilters>({
+    from: resolvedRange.from,
+    to: resolvedRange.to,
+    territory: variables.territory_code || undefined,
+    clientId: variables.client_id || undefined,
+    invoiceNumber: undefined,
+  });
 
-  // form
-  const [saleDate, setSaleDate] = React.useState(() => new Date().toISOString().slice(0, 10));
-  const [territoryCode, setTerritoryCode] = React.useState<string>("FR");
-  const [clientId, setClientId] = React.useState<string>("none");
-  const [productId, setProductId] = React.useState<string>("none");
-  const [destinationId, setDestinationId] = React.useState<string>("none");
-  const [qty, setQty] = React.useState<string>("1");
-  const [unitPrice, setUnitPrice] = React.useState<string>("0");
-  const [saving, setSaving] = React.useState(false);
+  const [sort, setSort] = React.useState<{ key: SortKey; dir: "asc" | "desc" }>({
+    key: searchParams.get("kpi") === "margin" ? "margin" : "invoice_date",
+    dir: "desc",
+  });
 
   React.useEffect(() => {
-    (async () => {
-      const [tRes, cRes, pRes, dRes] = await Promise.all([
-        supabase.from("territories").select("code,label").order("label", { ascending: true }),
-        supabase.from("clients").select("id,name").order("name", { ascending: true }).limit(500),
-        supabase.from("products").select("id,libelle_article").order("libelle_article", { ascending: true }).limit(500),
-        supabase.from("export_destinations").select("id,name").order("name", { ascending: true }).limit(1000),
-      ]);
-      if (tRes.data) setTerritories(tRes.data as any);
-      if (cRes.data) setClients(cRes.data as any);
-      if (pRes.data) setProducts(pRes.data as any);
-      if (dRes.data) setDestinations(dRes.data as any);
-    })().catch(console.error);
-  }, []);
+    setFilters((prev) => ({
+      ...prev,
+      from: resolvedRange.from,
+      to: resolvedRange.to,
+      territory: variables.territory_code || prev.territory,
+      clientId: variables.client_id || prev.clientId,
+    }));
+  }, [resolvedRange.from, resolvedRange.to, variables.territory_code, variables.client_id]);
 
-  const filtered = React.useMemo(() => {
-    const query = q.trim().toLowerCase();
-    if (!query) return rows;
-    return rows.filter((r) => {
-      const hay = [
-        r.sale_date,
-        r.territory_code,
-        r.territory_label,
-        r.client_name,
-        r.product_name,
-        r.vat_category,
-        r.destination_name,
-        String(r.amount_ht ?? ""),
-        String(r.amount_ttc ?? ""),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(query);
+  const invoicesQuery = useQuery({
+    queryKey: ["export-sales-invoices", filters],
+    queryFn: () => fetchInvoices(filters, { page: 1, pageSize: 200 }),
+  });
+
+  const salesLinesQuery = useQuery({
+    queryKey: ["export-sales-lines", filters],
+    queryFn: () => fetchSalesLines(filters, { page: 1, pageSize: 200 }),
+  });
+
+  React.useEffect(() => {
+    if (invoicesQuery.error) toast.error((invoicesQuery.error as Error).message);
+    if (salesLinesQuery.error) toast.error((salesLinesQuery.error as Error).message);
+  }, [invoicesQuery.error, salesLinesQuery.error]);
+
+  const sortedInvoices = React.useMemo(() => {
+    const data = invoicesQuery.data?.data ? [...invoicesQuery.data.data] : [];
+    const dir = sort.dir === "asc" ? 1 : -1;
+
+    const value = (inv: Invoice) => {
+      switch (sort.key) {
+        case "client":
+          return (inv.client_name || inv.client_id || "").toLowerCase();
+        case "territory":
+          return (inv.territory_code || inv.ile || "").toLowerCase();
+        case "products":
+          return Number(inv.products_ht_eur || 0);
+        case "transit":
+          return Number(inv.transit_fee_eur || 0);
+        case "invoice_ht":
+          return Number(inv.invoice_ht_eur || 0);
+        case "transport":
+          return Number(inv.transport_cost_eur || 0);
+        case "margin":
+          return Number(inv.marge_estimee || 0);
+        case "invoice_date":
+        default:
+          return inv.invoice_date || "";
+      }
+    };
+
+    data.sort((a, b) => {
+      const va = value(a);
+      const vb = value(b);
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+      return String(va).localeCompare(String(vb)) * dir;
     });
-  }, [rows, q]);
+    return data;
+  }, [invoicesQuery.data?.data, sort]);
 
-  const totalHt = React.useMemo(() => filtered.reduce((s, r) => s + (r.amount_ht ?? 0), 0), [filtered]);
-  const totalVat = React.useMemo(() => filtered.reduce((s, r) => s + (r.vat_amount ?? 0), 0), [filtered]);
-  const totalTtc = React.useMemo(() => filtered.reduce((s, r) => s + (r.amount_ttc ?? 0), 0), [filtered]);
+  const lines = salesLinesQuery.data?.data ?? [];
 
-  function exportCsv() {
-    const csv = toCsv(
-      filtered.map((r) => ({
-        sale_date: r.sale_date,
-        territory: r.territory_code ?? "",
-        territory_label: r.territory_label ?? "",
-        client: r.client_name ?? "",
-        product: r.product_name ?? "",
-        qty: r.quantity ?? 0,
-        unit_price_ht: r.unit_price_ht ?? 0,
-        amount_ht: r.amount_ht ?? 0,
-        vat_category: r.vat_category ?? "",
-        vat_rate: r.vat_rate ?? 0,
-        vat_amount: r.vat_amount ?? 0,
-        amount_ttc: r.amount_ttc ?? 0,
-        destination_name: r.destination_name ?? "",
-      })),
-    );
-    downloadText(csv, `sales_${new Date().toISOString().slice(0, 10)}.csv`);
-  }
+  const handleSort = (key: SortKey) => {
+    setSort((prev) => ({ key, dir: prev.key === key && prev.dir === "desc" ? "asc" : "desc" }));
+  };
 
-  async function submit() {
-    if (productId === "none") {
-      toast.error("Choisis un produit");
-      return;
-    }
-    const qNum = Number(qty);
-    const pNum = Number(unitPrice);
-    if (!Number.isFinite(qNum) || qNum <= 0) return toast.error("Quantité invalide");
-    if (!Number.isFinite(pNum) || pNum < 0) return toast.error("Prix invalide");
-
-    setSaving(true);
-    try {
-      await createSale({
-        sale_date: saleDate,
-        territory_code: territoryCode,
-        client_id: clientId === "none" ? null : clientId,
-        product_id: productId,
-        destination_id: destinationId === "none" ? null : destinationId,
-        quantity: qNum,
-        unit_price_ht: pNum,
-      });
-      toast.success("Vente ajoutée");
-      setQty("1");
-      setUnitPrice("0");
-      await refresh();
-    } catch (e: any) {
-      console.error(e);
-      toast.error(e?.message || "Erreur ajout vente");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function remove(id: string) {
-    if (!confirm("Supprimer cette vente ?")) return;
-    try {
-      await deleteSale(id);
-      toast.success("Vente supprimée");
-      await refresh();
-    } catch (e: any) {
-      console.error(e);
-      toast.error(e?.message || "Erreur suppression");
-    }
-  }
+  const refresh = () => {
+    invoicesQuery.refetch();
+    salesLinesQuery.refetch();
+  };
 
   return (
     <MainLayout contentClassName="md:p-8">
       <div className="space-y-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm text-muted-foreground">Données</p>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <TrendingUp className="h-6 w-6" />
-              Ventes
-            </h1>
+            <p className="text-sm text-muted-foreground">Factures + lignes detaillees</p>
+            <h1 className="text-2xl font-bold flex items-center gap-2">Sales</h1>
             <p className="text-sm text-muted-foreground">
-              Source: <code className="text-xs">public.sales</code> (HT/TVA/TTC calculés)
+              Priorite v_sales_invoices_enriched, fallback sales_invoices. Lignes via sales si disponible.
             </p>
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={exportCsv} disabled={isLoading || filtered.length === 0}>
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
-            <Button variant="outline" onClick={refresh} disabled={isLoading} className="gap-2">
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            <Button variant="outline" onClick={refresh} disabled={invoicesQuery.isLoading || salesLinesQuery.isLoading} className="gap-2">
+              <RefreshCw className={`h-4 w-4 ${invoicesQuery.isLoading ? "animate-spin" : ""}`} />
               Actualiser
             </Button>
           </div>
         </div>
 
-        {error || warning ? (
-          <Card className={(warning || "").toLowerCase().includes("certaines") ? "border-amber-300 bg-amber-50" : "border-red-200"}>
-            <CardContent className="pt-6 text-sm text-foreground">{error || warning}</CardContent>
+        <ExportFiltersBar value={filters} onChange={setFilters} onRefresh={refresh} loading={invoicesQuery.isLoading} />
+
+        {invoicesQuery.data?.warning ? (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="pt-4 text-sm text-amber-800">{invoicesQuery.data.warning}</CardContent>
           </Card>
         ) : null}
 
-        {/* Saisie */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Plus className="h-5 w-5" /> Ajouter une vente
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-6">
-            <div className="space-y-2 md:col-span-2">
-              <Label>Date</Label>
-              <Input type="date" value={saleDate} onChange={(e) => setSaleDate(e.target.value)} />
-            </div>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+          <TabsList>
+            <TabsTrigger value="invoices">Factures</TabsTrigger>
+            <TabsTrigger value="lines">Lignes</TabsTrigger>
+          </TabsList>
 
-            <div className="space-y-2 md:col-span-2">
-              <Label>Territoire</Label>
-              <Select value={territoryCode} onValueChange={setTerritoryCode}>
-                <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
-                <SelectContent>
-                  {territories.map((t) => (
-                    <SelectItem key={t.code} value={t.code}>
-                      {t.label ?? t.code} ({t.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <TabsContent value="invoices" className="space-y-3">
+            <Card>
+              <CardHeader>
+                <CardTitle>Factures</CardTitle>
+                <CardDescription>Tableau triable, recherche invoice_number, filtres universels.</CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="cursor-pointer" onClick={() => handleSort("invoice_date")}>Date</TableHead>
+                      <TableHead>Facture</TableHead>
+                      <TableHead className="cursor-pointer" onClick={() => handleSort("client")}>Client</TableHead>
+                      <TableHead className="cursor-pointer" onClick={() => handleSort("territory")}>Ile</TableHead>
+                      <TableHead>Nb colis</TableHead>
+                      <TableHead className="cursor-pointer text-right" onClick={() => handleSort("products")}>Produits HT</TableHead>
+                      <TableHead className="cursor-pointer text-right" onClick={() => handleSort("transit")}>Transit</TableHead>
+                      <TableHead className="cursor-pointer text-right" onClick={() => handleSort("invoice_ht")}>Invoice HT</TableHead>
+                      <TableHead className="cursor-pointer text-right" onClick={() => handleSort("transport")}>Transport (info)</TableHead>
+                      <TableHead className="cursor-pointer text-right" onClick={() => handleSort("margin")}>Marge estimee</TableHead>
+                      <TableHead>Badge</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {invoicesQuery.isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={11} className="text-center text-muted-foreground">Chargement...</TableCell>
+                      </TableRow>
+                    ) : sortedInvoices.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={11} className="text-center text-muted-foreground">Aucune facture.</TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedInvoices.map((inv) => (
+                        <TableRow
+                          key={inv.invoice_number}
+                          className="cursor-pointer hover:bg-muted/40"
+                          onClick={() => navigate(`/invoices/${encodeURIComponent(inv.invoice_number)}`)}
+                        >
+                          <TableCell>{inv.invoice_date || "?"}</TableCell>
+                          <TableCell className="font-mono text-xs">{inv.invoice_number}</TableCell>
+                          <TableCell>{inv.client_name || inv.client_id || "Sans client"}</TableCell>
+                          <TableCell>{inv.territory_code || inv.ile || "?"}</TableCell>
+                          <TableCell>{inv.nb_colis ?? "?"}</TableCell>
+                          <TableCell className="text-right">{money(inv.products_ht_eur)}</TableCell>
+                          <TableCell className="text-right">{money(inv.transit_fee_eur)}</TableCell>
+                          <TableCell className="text-right">{money(inv.invoice_ht_eur)}</TableCell>
+                          <TableCell className="text-right">{money(inv.transport_cost_eur)}</TableCell>
+                          <TableCell className="text-right">{money(inv.marge_estimee)}</TableCell>
+                          <TableCell>
+                            <Badge variant={inv.products_estimated ? "outline" : "secondary"}>
+                              {inv.products_estimated ? "Estime" : "Reel"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-            <div className="space-y-2 md:col-span-2">
-              <Label>Client (optionnel)</Label>
-              <Select value={clientId} onValueChange={setClientId}>
-                <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">—</SelectItem>
-                  {clients.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name ?? c.id}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2 md:col-span-4">
-              <Label>Produit</Label>
-              <Select value={productId} onValueChange={setProductId}>
-                <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Choisir un produit…</SelectItem>
-                  {products.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.libelle_article ?? p.id}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                TVA auto via <code>vat_rates</code> + <code>products.tva_percent</code>. Si TVA inconnue : EXO.
-              </p>
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <Label>Destination (optionnel)</Label>
-              <Select value={destinationId} onValueChange={setDestinationId}>
-                <SelectTrigger><SelectValue placeholder="Choisir..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">—</SelectItem>
-                  {destinations.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>{d.name ?? d.id}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">Requis pour estimer le transport DHL.</p>
-            </div>
-
-            <div className="space-y-2 md:col-span-1">
-              <Label>Quantité</Label>
-              <Input value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal" />
-            </div>
-
-            <div className="space-y-2 md:col-span-1">
-              <Label>Prix unitaire HT</Label>
-              <Input value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} inputMode="decimal" />
-            </div>
-
-            <div className="md:col-span-6 flex justify-end">
-              <Button onClick={submit} disabled={saving || productId === "none"}>
-                <Plus className="h-4 w-4 mr-2" />
-                Enregistrer
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Recherche + totals */}
-        <div className="flex flex-col md:flex-row md:items-center gap-3">
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Recherche (territoire, client, produit, catégorie TVA…)" />
-          <div className="flex flex-wrap gap-2 text-xs">
-            <Badge variant="secondary">Lignes: {filtered.length}</Badge>
-            <Badge variant="secondary">HT: {money(totalHt)}</Badge>
-            <Badge variant="secondary">TVA: {money(totalVat)}</Badge>
-            <Badge variant="secondary">TTC: {money(totalTtc)}</Badge>
-          </div>
-        </div>
-
-        {/* Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Dernières ventes</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-background">
-                <tr className="border-b text-muted-foreground">
-                  <th className="py-2 text-left font-medium">Date</th>
-                  <th className="py-2 text-left font-medium">Territoire</th>
-                  <th className="py-2 text-left font-medium">Destination</th>
-                  <th className="py-2 text-left font-medium">Client</th>
-                  <th className="py-2 text-left font-medium">Produit</th>
-                  <th className="py-2 text-right font-medium">Qty</th>
-                  <th className="py-2 text-right font-medium">PU HT</th>
-                  <th className="py-2 text-right font-medium">HT</th>
-                  <th className="py-2 text-right font-medium">TVA</th>
-                  <th className="py-2 text-right font-medium">TTC</th>
-                  <th className="py-2 text-left font-medium">Cat.</th>
-                  <th className="py-2 text-left font-medium">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr><td className="py-3 text-muted-foreground" colSpan={12}>Chargement…</td></tr>
-                ) : filtered.length === 0 ? (
-                  <tr><td className="py-3 text-muted-foreground" colSpan={12}>Aucune donnée.</td></tr>
-                ) : (
-                  filtered.slice(0, 200).map((r) => (
-                    <tr key={r.id} className="border-b">
-                      <td className="py-2">{r.sale_date ?? "—"}</td>
-                      <td className="py-2">{r.territory_label ?? r.territory_code ?? "—"}</td>
-                      <td className="py-2">{r.destination_name ?? "—"}</td>
-                      <td className="py-2">{r.client_name ?? "—"}</td>
-                      <td className="py-2">{r.product_name ?? "—"}</td>
-                      <td className="py-2 text-right">{Number(r.quantity ?? 0).toLocaleString("fr-FR")}</td>
-                      <td className="py-2 text-right">{money(r.unit_price_ht)}</td>
-                      <td className="py-2 text-right">{money(r.amount_ht)}</td>
-                      <td className="py-2 text-right">{money(r.vat_amount)}</td>
-                      <td className="py-2 text-right">{money(r.amount_ttc)}</td>
-                      <td className="py-2">
-                        <Badge variant="secondary">{r.vat_category ?? "—"}</Badge>
-                      </td>
-                      <td className="py-2">
-                        <Button size="sm" variant="outline" onClick={() => void remove(r.id)}>
-                          <Trash2 className="h-4 w-4 mr-1" />
-                          Suppr.
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+          <TabsContent value="lines" className="space-y-3">
+            <Card>
+              <CardHeader>
+                <CardTitle>Lignes (sales)</CardTitle>
+                <CardDescription>Affiche les ventes associees si la table sales existe.</CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Produit</TableHead>
+                      <TableHead>Territoire</TableHead>
+                      <TableHead className="text-right">Quantite</TableHead>
+                      <TableHead className="text-right">PU HT</TableHead>
+                      <TableHead className="text-right">Montant HT</TableHead>
+                      <TableHead className="text-right">TVA</TableHead>
+                      <TableHead className="text-right">TTC</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {salesLinesQuery.isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center text-muted-foreground">Chargement...</TableCell>
+                      </TableRow>
+                    ) : lines.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center text-muted-foreground">
+                          {salesLinesQuery.data?.warning || "Aucune ligne (table sales manquante ou vide)."}
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      lines.map((l: SaleLine) => (
+                        <TableRow key={l.id}>
+                          <TableCell>{l.sale_date || "?"}</TableCell>
+                          <TableCell>{l.client_id || "?"}</TableCell>
+                          <TableCell>{l.product_id || "?"}</TableCell>
+                          <TableCell>{l.territory_code || "?"}</TableCell>
+                          <TableCell className="text-right">{l.quantity ?? ""}</TableCell>
+                          <TableCell className="text-right">{money(l.unit_price_ht)}</TableCell>
+                          <TableCell className="text-right">{money(l.amount_ht)}</TableCell>
+                          <TableCell className="text-right">{money(l.vat_amount)}</TableCell>
+                          <TableCell className="text-right">{money(l.amount_ttc)}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </MainLayout>
   );

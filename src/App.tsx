@@ -16,7 +16,6 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import SetPassword from "@/pages/SetPassword";
 
 import CommandCenter from "@/pages/CommandCenter";
-import ControlTower from "@/pages/ControlTower";
 import Simulator from "@/pages/Simulator";
 import InvoiceVerification from "@/pages/InvoiceVerification";
 
@@ -26,6 +25,7 @@ import Products from "@/pages/Products";
 import Sales from "@/pages/Sales";
 import Costs from "@/pages/Costs";
 import TaxesOM from "@/pages/TaxesOM";
+import InvoiceDetail from "@/pages/InvoiceDetail";
 
 import WatchCommercial from "@/pages/WatchCommercial";
 import WatchRegulatory from "@/pages/WatchRegulatory";
@@ -52,7 +52,7 @@ export default function App() {
                   <Route path="/" element={<Navigate to="/welcome" replace />} />
 
                   {/* Alias legacy / bookmarks */}
-                  <Route path="/hub" element={<Navigate to="/control-tower" replace />} />
+                  <Route path="/hub" element={<Navigate to="/command-center" replace />} />
 
                   {/* Public */}
                   <Route path="/welcome" element={<Welcome />} />
@@ -65,12 +65,19 @@ export default function App() {
                     path="/control-tower"
                     element={
                       <ProtectedRoute>
-                        <ControlTower />
+                        <CommandCenter />
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="/dashboard" element={<Navigate to="/control-tower" replace />} />
-                  <Route path="/command-center" element={<Navigate to="/control-tower" replace />} />
+                  <Route
+                    path="/command-center"
+                    element={
+                      <ProtectedRoute>
+                        <CommandCenter />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="/dashboard" element={<Navigate to="/command-center" replace />} />
                   <Route
                     path="/explore"
                     element={
@@ -80,6 +87,14 @@ export default function App() {
                     }
                   />
                   <Route path="/sales" element={<Navigate to="/explore" replace />} />
+                  <Route
+                    path="/invoices/:invoiceNumber"
+                    element={
+                      <ProtectedRoute>
+                        <InvoiceDetail />
+                      </ProtectedRoute>
+                    }
+                  />
 
                   {/* Costs & pricing */}
                   <Route
