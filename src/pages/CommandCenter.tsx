@@ -177,7 +177,12 @@ export default function CommandCenter() {
                   {topClientsQuery.data?.slice(0, 6).map((c) => (
                     <div key={c.client_id || "nc"} className="flex items-center justify-between rounded-lg border p-3">
                       <div>
-                        <div className="font-semibold">{c.client_name || "Sans client"}</div>
+                        <div className="flex items-center gap-2">
+                          <div className="font-semibold">{c.client_label || c.client_name || "Sans client"}</div>
+                          {c.client_label && looksLikeUuid(c.client_label) ? (
+                            <Badge variant="outline" className="text-[10px]">client non rapproche</Badge>
+                          ) : null}
+                        </div>
                         <div className="text-xs text-muted-foreground">{c.territory_code || "?"}</div>
                       </div>
                       <div className="text-right">
@@ -284,4 +289,8 @@ function KpiTile({ label, value }: { label: string; value: number }) {
       <div className="text-xl font-semibold">{money(value)}</div>
     </div>
   );
+}
+
+function looksLikeUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }

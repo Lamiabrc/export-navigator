@@ -27,6 +27,7 @@ export type Invoice = {
   invoice_number: string;
   invoice_date?: string | null;
   client_id?: string | null;
+  client_label?: string | null;
   client_name?: string | null;
   territory_code?: string | null;
   ile?: string | null;
@@ -94,6 +95,7 @@ export type Alert = {
 export type TopClient = {
   client_id: string | null;
   client_name?: string | null;
+  client_label?: string | null;
   ca_ht: number;
   products_ht: number;
   margin_estimee: number;

@@ -166,6 +166,7 @@ function mapInvoiceRow(row: any, source: string, ctx: RatesContext): Invoice {
     invoice_number: invoiceNumber,
     invoice_date: invoiceDate,
     client_id: row?.client_id ?? null,
+    client_label: row?.client_label ?? row?.client_name ?? row?.client_name_raw ?? row?.client_id ?? null,
     client_name: row?.client_name ?? row?.client_label ?? null,
     territory_code: row?.territory_code ?? null,
     ile: row?.ile ?? row?.island ?? null,
@@ -360,7 +361,8 @@ export async function fetchTopClients(filters: ExportFilters = {}): Promise<TopC
     const key = inv.client_id || "NC";
     const cur = map.get(key) || {
       client_id: inv.client_id ?? null,
-      client_name: inv.client_name ?? inv.client_id ?? "Sans client",
+      client_name: inv.client_name ?? inv.client_label ?? inv.client_id ?? "Sans client",
+      client_label: inv.client_label ?? inv.client_name ?? inv.client_id ?? "Sans client",
       ca_ht: 0,
       products_ht: 0,
       margin_estimee: 0,
