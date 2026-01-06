@@ -1,6 +1,7 @@
 import * as React from "react";
 import svgMap from "svgmap";
 import "svgmap/dist/svgMap.css";
+import "svg-pan-zoom/dist/svg-pan-zoom.min.js"; // polyfill needed by svgmap bundling (CSS export)
 import worldMap from "@/assets/world-map.svg";
 import { TERRITORY_PCT } from "@/domain/geo/territoryPct";
 
