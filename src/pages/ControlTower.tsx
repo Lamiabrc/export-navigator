@@ -378,8 +378,8 @@ export default function ControlTower() {
               <img
                 src={worldMap}
                 alt="World map"
-                className="absolute inset-0 h-full w-full object-cover opacity-70 pointer-events-none"
-                style={{ mixBlendMode: "screen" }}
+                className="absolute inset-0 h-full w-full object-contain opacity-30 pointer-events-none"
+                style={{ filter: "invert(1) saturate(1.2) contrast(1.05)" }}
               />
 
               <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="w-full h-full relative z-10">
