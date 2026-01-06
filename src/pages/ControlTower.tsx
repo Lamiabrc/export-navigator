@@ -79,7 +79,10 @@ export default function ControlTower() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [hovered, setHovered] = React.useState<string | null>(null);
+  const [tooltipPos, setTooltipPos] = React.useState<{ x: number; y: number } | null>(null);
   const [zoomTarget, setZoomTarget] = React.useState<"none" | "antilles">("none");
+  const [viewport, setViewport] = React.useState<{ scale: number; tx: number; ty: number }>({ scale: 1, tx: 0, ty: 0 });
+  const draggingRef = React.useRef<{ startX: number; startY: number; startTx: number; startTy: number } | null>(null);
 
   React.useEffect(() => {
     let active = true;
@@ -225,8 +228,8 @@ export default function ControlTower() {
 
   const hasZeroState = React.useMemo(() => {
     const allZero = totals.totalSalesHt === 0 && totals.totalSalesTtc === 0 && totals.totalCosts === 0 && totals.margin === 0;
-    return allZero || (!sales.length && !costs.length);
-  }, [totals.totalSalesHt, totals.totalSalesTtc, totals.totalCosts, totals.margin, sales.length, costs.length]);
+    return allZero && sales.length === 0;
+  }, [totals.totalSalesHt, totals.totalSalesTtc, totals.totalCosts, totals.margin, sales.length]);
 
   const lastRefreshText = React.useMemo(() => {
     if (!lastRefreshAt) return "Live";
@@ -247,30 +250,32 @@ export default function ControlTower() {
     []
   );
   const metropole = nodes.find((n) => n.code === "FR")!;
-  const zoomTransform = React.useMemo(() => {
-    if (zoomTarget === "none") return { scale: 1, tx: 0, ty: 0 };
-    const codes = ["GP", "MQ", "BL", "MF", "GF"];
-    const subset = nodes.filter((n) => codes.includes(n.code));
-    if (!subset.length) return { scale: 1, tx: 0, ty: 0 };
-    const minX = Math.min(...subset.map((n) => n.x));
-    const maxX = Math.max(...subset.map((n) => n.x));
-    const minY = Math.min(...subset.map((n) => n.y));
-    const maxY = Math.max(...subset.map((n) => n.y));
-    const bboxW = maxX - minX || 1;
-    const bboxH = maxY - minY || 1;
-    const scale = Math.min(3, Math.min(MAP_WIDTH / (bboxW * 2.4), MAP_HEIGHT / (bboxH * 2.4)));
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    const tx = MAP_WIDTH / 2 - centerX * scale;
-    const ty = MAP_HEIGHT / 2 - centerY * scale;
-    return { scale, tx, ty };
-  }, [nodes, zoomTarget]);
+  const computeZoomForSubset = React.useCallback(
+    (codes: string[]) => {
+      const subset = nodes.filter((n) => codes.includes(n.code));
+      if (!subset.length) return { scale: 1, tx: 0, ty: 0 };
+      const minX = Math.min(...subset.map((n) => n.x));
+      const maxX = Math.max(...subset.map((n) => n.x));
+      const minY = Math.min(...subset.map((n) => n.y));
+      const maxY = Math.max(...subset.map((n) => n.y));
+      const bboxW = maxX - minX || 1;
+      const bboxH = maxY - minY || 1;
+      const scale = Math.min(4, Math.min(MAP_WIDTH / (bboxW * 2.4), MAP_HEIGHT / (bboxH * 2.4)));
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const tx = MAP_WIDTH / 2 - centerX * scale;
+      const ty = MAP_HEIGHT / 2 - centerY * scale;
+      return { scale, tx, ty };
+    },
+    [nodes]
+  );
+
   const zoomCss = React.useMemo(
     () => ({
-      transform: `translate(${zoomTransform.tx}px, ${zoomTransform.ty}px) scale(${zoomTransform.scale})`,
+      transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`,
       transformOrigin: "0 0",
     }),
-    [zoomTransform]
+    [viewport.scale, viewport.tx, viewport.ty]
   );
 
   const competitionByTerritory = React.useMemo(() => {
@@ -287,7 +292,7 @@ export default function ControlTower() {
     const agg: Record<string, { route: string; volume: number; ca: number; marge: number }> = {};
     sales.forEach((s) => {
       const code = dromCodes.includes(s.territory_code || "") ? (s.territory_code as string) : "FR";
-      if (!agg[code]) agg[code] = { route: `FRA→${code}`, volume: 0, ca: 0, marge: 0 };
+      if (!agg[code]) agg[code] = { route: `FR→${code}`, volume: 0, ca: 0, marge: 0 };
       const ca = s.amount_ht || 0;
       const relatedCosts = costs.filter((c) => (c.destination || "FR") === code).reduce((t, c) => t + (c.amount || 0), 0);
       agg[code].volume += 1;
@@ -299,9 +304,19 @@ export default function ControlTower() {
 
   const topRoutes = React.useMemo(() => {
     return Object.values(salesByTerritory)
-      .filter((r) => r.route !== "FRA→FR")
+      .filter((r) => r.route !== "FR→FR")
       .sort((a, b) => b.ca - a.ca)
       .slice(0, 6);
+  }, [salesByTerritory]);
+
+  const topLabels = React.useMemo(() => {
+    return new Set(
+      Object.entries(salesByTerritory)
+        .filter(([code]) => code !== "FR")
+        .sort((a, b) => b[1].ca - a[1].ca)
+        .slice(0, 5)
+        .map(([code]) => code),
+    );
   }, [salesByTerritory]);
 
   const timeseries = React.useMemo(() => {
@@ -354,7 +369,7 @@ export default function ControlTower() {
 
   return (
     <MainLayout wrapperClassName="control-tower-neon" variant="bare">
-      <div className="space-y-4 px-3 pb-6">
+      <div className="space-y-4 px-3 pb-6 select-none">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs text-cyan-200/80 uppercase tracking-[0.35em]">Tour de controle export</p>
@@ -400,7 +415,41 @@ export default function ControlTower() {
                 <NeonKpiCard label="Ventes (30j)" value={sales.length.toString()} delta={sales.length ? 1.1 : -0.2} accent="var(--chart-4)" />
               </div>
 
-              <div className="absolute inset-0" style={zoomCss}>
+              <div
+                className="absolute inset-0"
+                style={zoomCss}
+                onWheel={(e) => {
+                  e.preventDefault();
+                  const delta = -e.deltaY * 0.0015;
+                  setViewport((prev) => {
+                    const nextScale = Math.min(5, Math.max(1, prev.scale * (1 + delta)));
+                    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                    const cx = e.clientX - rect.left;
+                    const cy = e.clientY - rect.top;
+                    const sx = (cx - prev.tx) / prev.scale;
+                    const sy = (cy - prev.ty) / prev.scale;
+                    const tx = cx - sx * nextScale;
+                    const ty = cy - sy * nextScale;
+                    return { scale: nextScale, tx, ty };
+                  });
+                }}
+                onMouseDown={(e) => {
+                  draggingRef.current = { startX: e.clientX, startY: e.clientY, startTx: viewport.tx, startTy: viewport.ty };
+                }}
+                onMouseMove={(e) => {
+                  if (!draggingRef.current) return;
+                  const { startX, startY, startTx, startTy } = draggingRef.current;
+                  const dx = e.clientX - startX;
+                  const dy = e.clientY - startY;
+                  setViewport((prev) => ({ ...prev, tx: startTx + dx, ty: startTy + dy }));
+                }}
+                onMouseUp={() => {
+                  draggingRef.current = null;
+                }}
+                onMouseLeave={() => {
+                  draggingRef.current = null;
+                }}
+              >
                 <img
                   src={worldMap}
                   alt="World map"
@@ -416,6 +465,10 @@ export default function ControlTower() {
                       const isActive = selected === node.code;
                       const isHover = hovered === node.code;
                       const strokeWidth = isActive || isHover ? 2.6 : 1.2;
+                      const territoryData = salesByTerritory[node.code];
+                      const hasFlow = territoryData?.ca > 0;
+                      const showLabel = topLabels.has(node.code);
+                      if (!hasFlow) return null;
                       return (
                         <g key={node.code}>
                           <path
@@ -434,17 +487,26 @@ export default function ControlTower() {
                             r={isActive || isHover ? 7 : 5.5}
                             fill={node.color}
                             className="cursor-pointer"
-                            onMouseEnter={() => setHovered(node.code)}
-                            onMouseLeave={() => setHovered(null)}
+                            onMouseEnter={(evt) => {
+                              setHovered(node.code);
+                              setTooltipPos({ x: evt.clientX, y: evt.clientY });
+                            }}
+                            onMouseMove={(evt) => setTooltipPos({ x: evt.clientX, y: evt.clientY })}
+                            onMouseLeave={() => {
+                              setHovered(null);
+                              setTooltipPos(null);
+                            }}
                             onClick={() => setVariable("territory_code", node.code)}
                             onDoubleClick={() => {
                               setVariable("territory_code", node.code);
                               navigate("/explore");
                             }}
                           />
-                          <text x={node.x + 12} y={node.y - 8} className="text-xs font-semibold fill-cyan-100 drop-shadow">
-                            {node.name}
-                          </text>
+                          {showLabel ? (
+                            <text x={node.x + 12} y={node.y - 8} className="text-xs font-semibold fill-cyan-100 drop-shadow">
+                              {node.name}
+                            </text>
+                          ) : null}
                         </g>
                       );
                     })}
@@ -458,8 +520,15 @@ export default function ControlTower() {
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.4 }}
                     className="cursor-pointer"
-                    onMouseEnter={() => setHovered("FR")}
-                    onMouseLeave={() => setHovered(null)}
+                    onMouseEnter={(evt) => {
+                      setHovered("FR");
+                      setTooltipPos({ x: evt.clientX, y: evt.clientY });
+                    }}
+                    onMouseMove={(evt) => setTooltipPos({ x: evt.clientX, y: evt.clientY })}
+                    onMouseLeave={() => {
+                      setHovered(null);
+                      setTooltipPos(null);
+                    }}
                     onClick={() => setVariable("territory_code", "FR")}
                     onDoubleClick={() => {
                       setVariable("territory_code", null);
@@ -476,6 +545,22 @@ export default function ControlTower() {
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                   <div className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
                     Aucune donnée sur la période. Ajuste les filtres ou importe des ventes.
+                  </div>
+                </div>
+              ) : null}
+
+              {hovered && tooltipPos ? (
+                <div
+                  className="pointer-events-none absolute z-30 rounded-lg border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-slate-100 shadow-xl"
+                  style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 30 }}
+                >
+                  <div className="font-semibold">{hovered === "FR" ? "Hub" : hovered}</div>
+                  <div className="text-slate-300">
+                    CA HT: {formatMoney(salesByTerritory[hovered]?.ca || 0)}
+                    <br />
+                    Ventes: {salesByTerritory[hovered]?.volume || 0}
+                    <br />
+                    Marge: {formatMoney(salesByTerritory[hovered]?.marge || 0)}
                   </div>
                 </div>
               ) : null}
