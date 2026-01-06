@@ -35,8 +35,14 @@ type CompetitionRow = {
   status: "premium" | "aligned" | "underpriced" | "no_data";
 };
 
-const MAP_WIDTH = 1200;
-const MAP_HEIGHT = 640;
+const MAP_WIDTH = 1010; // matches svg width
+const MAP_HEIGHT = 666; // matches svg height
+const GEO_BOUNDS = {
+  minLon: -169.110266,
+  maxLon: 190.486279,
+  maxLat: 83.600842,
+  minLat: -58.508473,
+};
 
 const DESTINATIONS: Destination[] = [
   { code: "FR", name: "Metropole", lat: 46.6, lon: 2.3, color: "#38bdf8" },
@@ -54,8 +60,8 @@ const formatMoney = (n: number | null | undefined) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
 
 const project = (lat: number, lon: number) => {
-  const x = ((lon + 180) / 360) * MAP_WIDTH;
-  const y = ((90 - lat) / 180) * MAP_HEIGHT;
+  const x = ((lon - GEO_BOUNDS.minLon) / (GEO_BOUNDS.maxLon - GEO_BOUNDS.minLon)) * MAP_WIDTH;
+  const y = ((GEO_BOUNDS.maxLat - lat) / (GEO_BOUNDS.maxLat - GEO_BOUNDS.minLat)) * MAP_HEIGHT;
   return { x, y };
 };
 
@@ -253,16 +259,28 @@ export default function ControlTower() {
     });
   }, [competition]);
 
-  const topRoutes = React.useMemo(() => {
-    const agg: Record<string, { route: string; volume: number; ca: number }> = {};
+  const dromCodes = ["GP", "MQ", "GF", "RE", "YT"];
+
+  const salesByTerritory = React.useMemo(() => {
+    const agg: Record<string, { route: string; volume: number; ca: number; marge: number }> = {};
     sales.forEach((s) => {
-      const code = s.territory_code || "FR";
-      if (!agg[code]) agg[code] = { route: `FRA→${code}`, volume: 0, ca: 0 };
+      const code = dromCodes.includes(s.territory_code || "") ? (s.territory_code as string) : "FR";
+      if (!agg[code]) agg[code] = { route: `FRA→${code}`, volume: 0, ca: 0, marge: 0 };
+      const ca = s.amount_ht || 0;
+      const relatedCosts = costs.filter((c) => (c.destination || "FR") === code).reduce((t, c) => t + (c.amount || 0), 0);
       agg[code].volume += 1;
-      agg[code].ca += s.amount_ht || 0;
+      agg[code].ca += ca;
+      agg[code].marge += ca - relatedCosts;
     });
-    return Object.values(agg).sort((a, b) => b.volume - a.volume).slice(0, 6);
-  }, [sales]);
+    return agg;
+  }, [sales, costs, dromCodes]);
+
+  const topRoutes = React.useMemo(() => {
+    return Object.values(salesByTerritory)
+      .filter((r) => r.route !== "FRA→FR")
+      .sort((a, b) => b.ca - a.ca)
+      .slice(0, 6);
+  }, [salesByTerritory]);
 
   const timeseries = React.useMemo(() => {
     const bucket: Record<string, { label: string; sales: number; costs: number }> = {};
@@ -285,19 +303,22 @@ export default function ControlTower() {
   }, [sales, costs]);
 
   const donuts = React.useMemo(() => {
-    const base = marginRate ?? 10;
-    const clamp = (v: number) => Math.min(95, Math.max(35, v));
+    const total = totals.totalSalesHt || 1;
+    const dromCa = dromCodes.reduce((s, code) => s + (salesByTerritory[code]?.ca || 0), 0);
+    const dromMarge = dromCodes.reduce((s, code) => s + (salesByTerritory[code]?.marge || 0), 0);
+    const dromVol = dromCodes.reduce((s, code) => s + (salesByTerritory[code]?.volume || 0), 0);
+    const totalVol = Object.values(salesByTerritory).reduce((s, r) => s + r.volume, 0) || 1;
     return {
-      transport: clamp(70 + base / 6),
-      docs: clamp(62 + base / 8),
-      incoterm: clamp(55 + base / 10),
-      invoice: clamp(68 + base / 12),
-      deltaTransport: 1.2,
-      deltaDocs: -0.5,
-      deltaIncoterm: 0.8,
-      deltaInvoice: 0.6,
+      dromCaPct: Math.min(100, Math.max(0, (dromCa / total) * 100)),
+      dromMargePct: totals.totalSalesHt > 0 ? Math.min(100, Math.max(0, (dromMarge / totals.totalSalesHt) * 100 + 50)) : 50,
+      dromVolPct: Math.min(100, Math.max(0, (dromVol / totalVol) * 100)),
+      onTime: 72, // placeholder until real data
+      deltaCa: 1.2,
+      deltaMarge: 0.5,
+      deltaVol: -0.3,
+      deltaOnTime: 1.1,
     };
-  }, [marginRate]);
+  }, [dromCodes, salesByTerritory, totals.totalSalesHt]);
 
   const alerts = React.useMemo(() => {
     const list = [];
@@ -338,10 +359,20 @@ export default function ControlTower() {
         <div className="grid grid-cols-12 gap-3">
           <div className="col-span-12 lg:col-span-8">
             <NeonSurface className="h-[460px] relative overflow-hidden">
-              <div className="absolute top-3 left-3 grid grid-cols-3 gap-3 w-[360px] z-20">
-                <NeonKpiCard label="CA cumulé" value={formatMoney(totals.totalSalesHt)} delta={3.2} />
-                <NeonKpiCard label="On-time transport" value={`${donuts.transport.toFixed(0)}%`} delta={donuts.deltaTransport} />
-                <NeonKpiCard label="Lead time (j)" value={(donuts.transport / 10).toFixed(1)} delta={-1.1} accent="var(--chart-3)" />
+              <div className="absolute top-3 left-3 grid grid-cols-2 md:grid-cols-4 gap-3 w-[520px] z-20">
+                <NeonKpiCard label="CA HT (30j)" value={formatMoney(totals.totalSalesHt)} delta={3.2} />
+                <NeonKpiCard label="CA TTC (30j)" value={formatMoney(totals.totalSalesTtc)} delta={2.4} accent="var(--chart-2)" />
+                <NeonKpiCard
+                  label="Marge % (30j)"
+                  value={
+                    marginRate === null
+                      ? "n/a"
+                      : `${marginRate.toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 0 })}%`
+                  }
+                  delta={marginRate ? marginRate / 10 : 0}
+                  accent="var(--chart-3)"
+                />
+                <NeonKpiCard label="Ventes (30j)" value={sales.length.toString()} delta={sales.length ? 1.1 : -0.2} accent="var(--chart-4)" />
               </div>
 
               <img
@@ -423,10 +454,10 @@ export default function ControlTower() {
           </div>
 
           <div className="col-span-12 lg:col-span-4 grid grid-rows-4 gap-3">
-            <NeonDonutCard label="On-time transport" value={donuts.transport} delta={donuts.deltaTransport} />
-            <NeonDonutCard label="Docs conformes" value={donuts.docs} delta={donuts.deltaDocs} color="var(--chart-2)" />
-            <NeonDonutCard label="Incoterm correct" value={donuts.incoterm} delta={donuts.deltaIncoterm} color="var(--chart-3)" />
-            <NeonDonutCard label="Factures validées" value={donuts.invoice} delta={donuts.deltaInvoice} color="var(--chart-4)" />
+            <NeonDonutCard label="% CA DROM" value={donuts.dromCaPct} delta={donuts.deltaCa} />
+            <NeonDonutCard label="% Marge DROM" value={donuts.dromMargePct} delta={donuts.deltaMarge} color="var(--chart-3)" />
+            <NeonDonutCard label="% Ventes DROM" value={donuts.dromVolPct} delta={donuts.deltaVol} color="var(--chart-2)" />
+            <NeonDonutCard label="On-time transport" value={donuts.onTime} delta={donuts.deltaOnTime} color="var(--chart-4)" />
           </div>
         </div>
 
