@@ -23,61 +23,66 @@ type State = {
   demo?: boolean;
 };
 
-export function useDashboardData(filters: {
-  from?: string;
-  to?: string;
-  territories?: string[];
-  channel?: string;
-  incoterm?: string;
-  client?: string;
-  product?: string;
-  dromOnly?: boolean;
-}, settings: ExportSettings) {
+export function useDashboardData(
+  filters: {
+    from?: string; // ISO date YYYY-MM-DD
+    to?: string;   // ISO date YYYY-MM-DD
+    territories?: string[];
+    channel?: string;
+    incoterm?: string;
+    client?: string;
+    product?: string;
+    dromOnly?: boolean;
+  },
+  settings: ExportSettings,
+) {
   const [state, setState] = useState<State>({ rows: [], loading: true });
 
   useEffect(() => {
     let active = true;
     const load = async () => {
       if (!SUPABASE_ENV_OK) {
-        setState({ rows: [], loading: false, warning: "Supabase non configuré, affichage vide." });
+        setState({ rows: [], loading: false, warning: "Supabase non configurée, affichage vide." });
         return;
       }
       try {
-        // Sélection minimale (certaines colonnes peuvent ne pas exister côté DB)
         const query = supabase
           .from("sales")
-          .select("id,sale_date,territory_code,client_id,product_ref,amount_ht,amount_ttc,transport_cost,taxes,margin", { head: false })
+          .select("id,sale_date,territory_code,client_id,product_id,amount_ht,amount_ttc,vat_amount,margin", { head: false })
           .order("sale_date", { ascending: false })
-          .limit(1500);
+          .limit(2000);
+
         if (filters.from) query.gte("sale_date", filters.from);
         if (filters.to) query.lte("sale_date", filters.to);
         if (filters.territories?.length) query.in("territory_code", filters.territories);
         if (filters.client) query.ilike("client_id", `%${filters.client}%`);
-        if (filters.product) query.ilike("product_ref", `%${filters.product}%`);
+        if (filters.product) query.ilike("product_id", `%${filters.product}%`);
+
         const { data, error } = await query;
         if (!active) return;
+
         if (error || !data) {
           if (isMissingTableError(error as any)) {
-            // Mode demo si table manquante
             setState({ rows: demoRows(), loading: false, warning: "Table sales absente (mode dégradé demo).", demo: true });
           } else {
             setState({ rows: [], loading: false, warning: error?.message || "Erreur chargement ventes." });
           }
           return;
         }
-        // Normalise pour les colonnes optionnelles (transport_cost/taxes/margin peuvent être absentes)
+
         const normalized = (data ?? []).map((r: any) => ({
           id: r.id,
           sale_date: r.sale_date,
           territory_code: r.territory_code,
           client_id: r.client_id,
-          product_ref: r.product_ref,
+          product_ref: r.product_id,
           amount_ht: r.amount_ht,
           amount_ttc: r.amount_ttc,
-          transport_cost: r.transport_cost ?? 0,
-          taxes: r.taxes ?? 0,
+          transport_cost: 0,
+          taxes: r.vat_amount ?? 0,
           margin: r.margin ?? null,
         })) as DashboardRow[];
+
         setState({ rows: normalized, loading: false, demo: false });
       } catch (err: any) {
         if (!active) return;
