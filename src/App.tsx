@@ -16,6 +16,7 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import SetPassword from "@/pages/SetPassword";
 
 import CommandCenter from "@/pages/CommandCenter";
+import ControlTower from "@/pages/ControlTower";
 import Simulator from "@/pages/Simulator";
 import InvoiceVerification from "@/pages/InvoiceVerification";
 
@@ -52,7 +53,7 @@ export default function App() {
                   <Route path="/" element={<Navigate to="/welcome" replace />} />
 
                   {/* Alias legacy / bookmarks */}
-                  <Route path="/hub" element={<Navigate to="/command-center" replace />} />
+                  <Route path="/hub" element={<Navigate to="/control-tower" replace />} />
 
                   {/* Public */}
                   <Route path="/welcome" element={<Welcome />} />
@@ -65,7 +66,7 @@ export default function App() {
                     path="/control-tower"
                     element={
                       <ProtectedRoute>
-                        <CommandCenter />
+                        <ControlTower />
                       </ProtectedRoute>
                     }
                   />
@@ -77,7 +78,7 @@ export default function App() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="/dashboard" element={<Navigate to="/command-center" replace />} />
+                  <Route path="/dashboard" element={<Navigate to="/control-tower" replace />} />
                   <Route
                     path="/explore"
                     element={

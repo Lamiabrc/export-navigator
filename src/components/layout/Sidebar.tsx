@@ -25,12 +25,12 @@ const navigation: NavSection[] = [
     title: "Pilotage & Ventes",
     items: [
       {
-        name: "Command Center",
-        href: "/command-center",
+        name: "Control Tower",
+        href: "/control-tower",
         icon: Activity,
         badge: "Live",
         featured: true,
-        aliases: ["/dashboard", "/control-tower", "/hub"],
+        aliases: ["/dashboard", "/command-center", "/hub"],
       },
       {
         name: "Analyse des ventes",
