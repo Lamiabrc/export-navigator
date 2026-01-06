@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useEffect, useMemo, useState } from "react";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { isMissingTableError } from "@/domain/calc";
 import { ExportSettings } from "./useExportSettings";

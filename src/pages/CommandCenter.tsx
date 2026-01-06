@@ -1,4 +1,5 @@
 import * as React from "react";
+import * as React from "react";
 import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -57,6 +58,7 @@ export default function CommandCenter() {
   });
 
   const { settings, loading: settingsLoading, warning: settingsWarning, save, DEFAULT_SETTINGS } = useExportSettings();
+  const debugEnabled = React.useMemo(() => typeof window !== "undefined" && window.location.search.includes("debug=1"), []);
   const todayIso = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
   const defaultFrom = React.useMemo(() => {
     const d = new Date();
@@ -510,6 +512,16 @@ export default function CommandCenter() {
           </TabsContent>
         </Tabs>
       </div>
+      {debugEnabled ? (
+        <div className="fixed bottom-4 left-4 z-50 rounded-lg border border-slate-700 bg-slate-900/95 px-3 py-2 text-xs text-slate-100 shadow-lg space-y-1">
+          <div className="font-semibold">DEBUG sales</div>
+          <div>rows: {salesState.rows.length}</div>
+          <div>from: {effectiveFrom} / to: {effectiveTo}</div>
+          <div>first: {salesState.rows[0]?.sale_date || "n/a"}</div>
+          <div>last: {salesState.rows[salesState.rows.length - 1]?.sale_date || "n/a"}</div>
+          {salesState.warning ? <div className="text-amber-300">warn: {salesState.warning}</div> : null}
+        </div>
+      ) : null}
     </MainLayout>
   );
 }
