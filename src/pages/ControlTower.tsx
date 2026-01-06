@@ -39,7 +39,7 @@ const MAP_WIDTH = 1010; // matches svg width
 const MAP_HEIGHT = 666; // matches svg height
 
 const DESTINATIONS: Destination[] = [
-  { code: "FR", name: "Metropole", lat: 48.8566, lon: 2.3522, color: "#38bdf8" },
+  { code: "FR", name: "Metropole", lat: 44.0, lon: 2.0, color: "#38bdf8" },
   { code: "GP", name: "Guadeloupe", lat: 16.265, lon: -61.551, color: "#fb7185" },
   { code: "MQ", name: "Martinique", lat: 14.6415, lon: -61.0242, color: "#f59e0b" },
   { code: "GF", name: "Guyane", lat: 4.0, lon: -53.0, color: "#22c55e" },
