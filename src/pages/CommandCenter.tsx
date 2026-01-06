@@ -20,6 +20,7 @@ import { MarginWaterfall } from "@/components/dashboard/MarginWaterfall";
 import { TopFlop } from "@/components/dashboard/TopFlop";
 import { RiskySales } from "@/components/dashboard/RiskySales";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
+import { ExportMap } from "@/components/dashboard/ExportMap";
 
 const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
 
@@ -75,6 +76,10 @@ export default function CommandCenter() {
   const [competitionRows, setCompetitionRows] = React.useState<CompetitorRow[]>([]);
   const [competitionError, setCompetitionError] = React.useState<string | null>(null);
   const [competitionLoading, setCompetitionLoading] = React.useState(false);
+  const selectedTerritory = React.useMemo(() => {
+    const t = (filters.territories || "").split(",").map((v) => v.trim()).filter(Boolean);
+    return t.length ? t[0] : null;
+  }, [filters.territories]);
 
   const kpis = [
     { label: "CA HT", value: formatMoney(aggregates.totalHt), delta: "", accent: "" },
@@ -106,6 +111,26 @@ export default function CommandCenter() {
     }
     return list;
   }, [aggregates.marginPct, aggregates.totalTransport, aggregates.totalHt, settings.thresholds]);
+
+  const mapData = React.useMemo(() => {
+    const res: Record<string, { ca_ht: number; ca_ttc: number; vat: number; lines: number }> = {};
+    aggregates.byTerritory.forEach((v, code) => {
+      if (code === "FR" || code === "HUB") return;
+      res[code] = { ca_ht: v.ca, ca_ttc: v.ca + v.taxes, vat: v.taxes, lines: v.count };
+    });
+    return res;
+  }, [aggregates.byTerritory]);
+
+  const handleSelectTerritory = React.useCallback(
+    (code: string | null) => {
+      if (!code) {
+        setFilters((prev) => ({ ...prev, territories: "", dromOnly: prev.dromOnly }));
+        return;
+      }
+      setFilters((prev) => ({ ...prev, territories: code, dromOnly: false }));
+    },
+    [setFilters],
+  );
 
   React.useEffect(() => {
     let active = true;
@@ -307,6 +332,12 @@ export default function CommandCenter() {
 
           <TabsContent value="overview" className="space-y-4">
             <FiltersBar value={filters} onChange={setFilters} onRefresh={() => null} />
+            <ExportMap
+              dataByTerritory={mapData}
+              selectedTerritory={selectedTerritory}
+              onSelectTerritory={handleSelectTerritory}
+              dateRangeLabel={filters.from || filters.to ? `${filters.from || "?"} → ${filters.to || "?"}` : "30 jours"}
+            />
             <KpiBar items={kpis} />
             <div className="grid gap-4 md:grid-cols-3">
               <MarginWaterfall steps={waterfallSteps} />

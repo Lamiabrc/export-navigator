@@ -393,15 +393,15 @@ export default function ControlTower() {
                 <NeonKpiCard label="Ventes (30j)" value={sales.length.toString()} delta={sales.length ? 1.1 : -0.2} accent="var(--chart-4)" />
               </div>
 
-              <img
-                src={worldMap}
-                alt="World map"
-                className="absolute inset-0 h-full w-full object-contain opacity-30 pointer-events-none"
-                style={{ filter: "invert(1) saturate(1.2) contrast(1.05)" }}
-              />
+              <div className="absolute inset-0" style={zoomCss}>
+                <img
+                  src={worldMap}
+                  alt="World map"
+                  className="absolute inset-0 h-full w-full object-contain opacity-40 pointer-events-none"
+                  style={{ filter: "invert(1) saturate(1.2) contrast(1.05)" }}
+                />
 
-              <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="w-full h-full relative z-10">
-                <g transform={`translate(${zoomTransform.tx},${zoomTransform.ty}) scale(${zoomTransform.scale})`}>
+                <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="absolute inset-0 w-full h-full">
                   {nodes
                     .filter((n) => n.code !== "FR")
                     .map((node) => {
@@ -418,6 +418,7 @@ export default function ControlTower() {
                             strokeWidth={strokeWidth}
                             strokeOpacity={isActive || isHover ? 0.9 : 0.35}
                             className="transition-all duration-300"
+                            vectorEffect="non-scaling-stroke"
                           />
                           <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={0.35} />
                           <circle
@@ -461,8 +462,8 @@ export default function ControlTower() {
                   <text x={metropole.x + 18} y={metropole.y + 4} className="text-sm font-bold fill-cyan-100 drop-shadow">
                     Metropole
                   </text>
-                </g>
-              </svg>
+                </svg>
+              </div>
 
               {hasZeroState ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40">
