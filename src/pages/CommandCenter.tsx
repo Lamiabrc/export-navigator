@@ -21,7 +21,7 @@ import { MarginWaterfall } from "@/components/dashboard/MarginWaterfall";
 import { TopFlop } from "@/components/dashboard/TopFlop";
 import { RiskySales } from "@/components/dashboard/RiskySales";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
-import { ExportMap } from "@/components/dashboard/ExportMap";
+import { SvgMapWorld } from "@/components/dashboard/SvgMapWorld";
 
 const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
 
@@ -342,7 +342,7 @@ export default function CommandCenter() {
 
           <TabsContent value="overview" className="space-y-4">
             <FiltersBar value={filters} onChange={setFilters} onRefresh={() => null} />
-            <ExportMap
+            <SvgMapWorld
               dataByTerritory={mapData}
               selectedTerritory={selectedTerritory}
               onSelectTerritory={handleSelectTerritory}
