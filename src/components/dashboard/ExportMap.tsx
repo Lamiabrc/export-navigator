@@ -289,7 +289,7 @@ function buildArc(sx: number, sy: number, ex: number, ey: number) {
   const len = Math.hypot(dx, dy) || 1;
   const nx = -dy / len;
   const ny = dx / len;
-  const bend = clamp(len * 0.18, 20, 120);
+  const bend = clamp(len * 0.12, 12, 100);
   const cx = mx + nx * bend;
   const cy = my + ny * bend;
   return `M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`;
