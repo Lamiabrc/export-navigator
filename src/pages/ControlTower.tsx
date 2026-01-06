@@ -265,6 +265,13 @@ export default function ControlTower() {
     const ty = MAP_HEIGHT / 2 - centerY * scale;
     return { scale, tx, ty };
   }, [nodes, zoomTarget]);
+  const zoomCss = React.useMemo(
+    () => ({
+      transform: `translate(${zoomTransform.tx}px, ${zoomTransform.ty}px) scale(${zoomTransform.scale})`,
+      transformOrigin: "0 0",
+    }),
+    [zoomTransform]
+  );
 
   const competitionByTerritory = React.useMemo(() => {
     return DESTINATIONS.map((d) => {
