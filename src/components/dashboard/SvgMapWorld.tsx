@@ -1,6 +1,5 @@
 import * as React from "react";
 import svgMap from "svgmap";
-import "svgmap/dist/svgMap.min.css";
 import "svg-pan-zoom/dist/svg-pan-zoom.min.js";
 import "@/styles/svgmap.css";
 import { TERRITORY_PCT } from "@/domain/geo/territoryPct";
