@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { fetchAlerts, fetchInvoices, fetchKpis, fetchTopClients } from "@/domain
 import { ExportFilters, Invoice } from "@/domain/export/types";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { toast } from "sonner";
+import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
 function money(n: number) {
   return new Intl.NumberFormat("fr-FR", {
@@ -21,38 +22,8 @@ function money(n: number) {
   }).format(Number(n || 0));
 }
 
-function countFmt(n: number) {
+function count(n: number) {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(Number(n || 0));
-}
-
-function looksLikeUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
-function pickHumanLabel(...values: Array<unknown>) {
-  for (const v of values) {
-    const s = typeof v === "string" ? v.trim() : "";
-    if (!s) continue;
-    if (!looksLikeUuid(s)) return s;
-  }
-  return null;
-}
-
-function invoiceClientDisplay(inv: Invoice) {
-  const anyInv = inv as any; // pour fallback sur champs présents en DB mais pas forcément typés côté TS
-  const label =
-    pickHumanLabel(inv.client_name, anyInv?.client_name_norm, anyInv?.client_name_raw) ??
-    (inv.client_id ? `Client non rapproché` : "Sans client");
-  const unlinked = !pickHumanLabel(inv.client_name, anyInv?.client_name_norm, anyInv?.client_name_raw) && !!inv.client_id;
-  return { label, unlinked };
-}
-
-function topClientDisplay(c: any) {
-  const label =
-    pickHumanLabel(c?.client_label, c?.client_name, c?.client_name_norm, c?.client_name_raw) ??
-    (c?.client_id ? "Client non rapproché" : "Sans client");
-  const unlinked = looksLikeUuid(String(c?.client_label || "")) || looksLikeUuid(String(c?.client_name || ""));
-  return { label, unlinked };
 }
 
 export default function CommandCenter() {
@@ -97,6 +68,70 @@ export default function CommandCenter() {
     queryFn: () => fetchTopClients(filters),
   });
 
+  // 1) On collecte les IDs client présents dans les données (Top clients + dernières factures)
+  // 2) On va chercher la "raison sociale" dans la table clients
+  const clientIdsToResolve = React.useMemo(() => {
+    const ids = new Set<string>();
+
+    const top = topClientsQuery.data || [];
+    for (const c of top) {
+      if (c?.client_id && looksLikeUuid(c.client_id)) ids.add(c.client_id);
+      if (c?.client_label && looksLikeUuid(c.client_label)) ids.add(c.client_label);
+    }
+
+    const invs = invoicesQuery.data?.data || [];
+    for (const inv of invs) {
+      if (inv?.client_id && looksLikeUuid(inv.client_id)) ids.add(inv.client_id);
+    }
+
+    return Array.from(ids);
+  }, [topClientsQuery.data, invoicesQuery.data?.data]);
+
+  const clientNamesQuery = useQuery({
+    queryKey: ["clients-names-by-ids", clientIdsToResolve.join(",")],
+    enabled: SUPABASE_ENV_OK && clientIdsToResolve.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, libelle_client")
+        .in("id", clientIdsToResolve);
+
+      if (error) throw error;
+
+      const map: Record<string, string> = {};
+      for (const row of data || []) {
+        if (row?.id && row?.libelle_client) map[row.id] = row.libelle_client;
+      }
+      return map;
+    },
+  });
+
+  const clientNameById = clientNamesQuery.data || {};
+
+  const resolveClientDisplay = React.useCallback(
+    (opts: { client_id?: string | null; client_name?: string | null; client_label?: string | null }) => {
+      // Priorité: client_id -> mapping -> client_name -> client_label
+      if (opts.client_id && clientNameById[opts.client_id]) return clientNameById[opts.client_id];
+      if (opts.client_name) return opts.client_name;
+      if (opts.client_label && clientNameById[opts.client_label]) return clientNameById[opts.client_label];
+      if (opts.client_label) return opts.client_label;
+      if (opts.client_id) return opts.client_id;
+      return "Sans client";
+    },
+    [clientNameById]
+  );
+
+  const isUnmatchedClient = React.useCallback(
+    (opts: { client_id?: string | null; client_label?: string | null }) => {
+      // "non rapproché" uniquement si on a un UUID mais aucun nom trouvé
+      const candidates = [opts.client_id, opts.client_label].filter(Boolean) as string[];
+      const hasUuid = candidates.some((v) => looksLikeUuid(v));
+      const hasName = candidates.some((v) => !!clientNameById[v]);
+      return hasUuid && !hasName;
+    },
+    [clientNameById]
+  );
+
   const handleDrill = (kpi: string) => navigate(`/sales?tab=invoices&kpi=${encodeURIComponent(kpi)}`);
   const handleInvoiceClick = (inv: Invoice) => navigate(`/invoices/${encodeURIComponent(inv.invoice_number)}`);
 
@@ -104,14 +139,16 @@ export default function CommandCenter() {
     if (kpisQuery.error) toast.error((kpisQuery.error as Error).message);
     if (invoicesQuery.error) toast.error((invoicesQuery.error as Error).message);
     if (alertsQuery.error) toast.error((alertsQuery.error as Error).message);
-  }, [kpisQuery.error, invoicesQuery.error, alertsQuery.error]);
+    if (topClientsQuery.error) toast.error((topClientsQuery.error as Error).message);
+    if (clientNamesQuery.error) toast.error((clientNamesQuery.error as Error).message);
+  }, [kpisQuery.error, invoicesQuery.error, alertsQuery.error, topClientsQuery.error, clientNamesQuery.error]);
 
   const kpiCards: Array<{ id: string; label: string; value: number; kind: "money" | "count" }> = [
     { id: "ca", label: "CA HT", value: kpisQuery.data?.caHt ?? 0, kind: "money" },
     { id: "products", label: "Total produits", value: kpisQuery.data?.totalProducts ?? 0, kind: "money" },
     { id: "transit", label: "Total transit", value: kpisQuery.data?.totalTransit ?? 0, kind: "money" },
     { id: "transport", label: "Transport (info)", value: kpisQuery.data?.totalTransport ?? 0, kind: "money" },
-    { id: "margin", label: "Marge estimee", value: kpisQuery.data?.estimatedMargin ?? 0, kind: "money" },
+    { id: "margin", label: "Marge estimée", value: kpisQuery.data?.estimatedMargin ?? 0, kind: "money" },
     { id: "invoices", label: "Nb factures", value: kpisQuery.data?.invoiceCount ?? 0, kind: "count" },
     { id: "parcels", label: "Nb colis", value: kpisQuery.data?.parcelCount ?? 0, kind: "count" },
   ];
@@ -138,6 +175,7 @@ export default function CommandCenter() {
             invoicesQuery.refetch();
             alertsQuery.refetch();
             topClientsQuery.refetch();
+            clientNamesQuery.refetch();
           }}
           loading={kpisQuery.isLoading || invoicesQuery.isLoading}
         />
@@ -156,7 +194,7 @@ export default function CommandCenter() {
                 <CardTitle className="text-sm text-muted-foreground">{kpi.label}</CardTitle>
               </CardHeader>
               <CardContent className="text-2xl font-bold">
-                {kpi.kind === "money" ? money(kpi.value) : countFmt(kpi.value)}
+                {kpi.kind === "money" ? money(kpi.value) : count(kpi.value)}
               </CardContent>
             </Card>
           ))}
@@ -167,7 +205,7 @@ export default function CommandCenter() {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Alertes</CardTitle>
-                <CardDescription>Qualite donnees et couts export</CardDescription>
+                <CardDescription>Qualité données et coûts export</CardDescription>
               </div>
               <Badge variant="outline">{alertsQuery.data?.length ?? 0}</Badge>
             </CardHeader>
@@ -175,7 +213,7 @@ export default function CommandCenter() {
               {alertsQuery.isLoading ? (
                 <p className="text-sm text-muted-foreground">Chargement...</p>
               ) : (alertsQuery.data?.length ?? 0) === 0 ? (
-                <p className="text-sm text-muted-foreground">Aucune alerte sur la periode.</p>
+                <p className="text-sm text-muted-foreground">Aucune alerte sur la période.</p>
               ) : (
                 alertsQuery.data?.map((a) => (
                   <div key={a.id} className="flex items-start gap-2 rounded-lg border p-3">
@@ -195,8 +233,8 @@ export default function CommandCenter() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle>Top clients (marge estimee)</CardTitle>
-                <CardDescription>Base sur toutes les factures filtrees</CardDescription>
+                <CardTitle>Top clients (marge estimée)</CardTitle>
+                <CardDescription>Base sur toutes les factures filtrées</CardDescription>
               </div>
               <Badge variant="outline">{topClientsQuery.data?.length ?? 0}</Badge>
             </CardHeader>
@@ -207,21 +245,28 @@ export default function CommandCenter() {
                 <p className="text-sm text-muted-foreground">Aucun client.</p>
               ) : (
                 <div className="space-y-2">
-                  {topClientsQuery.data?.slice(0, 6).map((c: any) => {
-                    const d = topClientDisplay(c);
+                  {topClientsQuery.data?.slice(0, 6).map((c) => {
+                    const displayName = resolveClientDisplay({
+                      client_id: c.client_id,
+                      client_name: c.client_name,
+                      client_label: c.client_label,
+                    });
+
+                    const showUnmatched = isUnmatchedClient({ client_id: c.client_id, client_label: c.client_label });
+
                     return (
-                      <div key={c.client_id || "nc"} className="flex items-center justify-between rounded-lg border p-3">
+                      <div key={c.client_id || c.client_label || "nc"} className="flex items-center justify-between rounded-lg border p-3">
                         <div>
                           <div className="flex items-center gap-2">
-                            <div className="font-semibold">{d.label}</div>
-                            {d.unlinked ? (
+                            <div className="font-semibold">{displayName}</div>
+                            {showUnmatched ? (
                               <Badge variant="outline" className="text-[10px]">
                                 client non rapproché
                               </Badge>
                             ) : null}
                           </div>
                           <div className="text-xs text-muted-foreground">{c.territory_code || "?"}</div>
-                          {d.unlinked ? (
+                          {showUnmatched ? (
                             <Link to="/clients" className="text-[11px] text-primary hover:underline">
                               Ouvrir Clients
                             </Link>
@@ -243,8 +288,8 @@ export default function CommandCenter() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>Dernieres factures</CardTitle>
-              <CardDescription>Source: v_sales_invoices_enriched en priorite</CardDescription>
+              <CardTitle>Dernières factures</CardTitle>
+              <CardDescription>Source: v_sales_invoices_enriched en priorité</CardDescription>
             </div>
             <Button variant="ghost" size="sm" className="gap-2" onClick={() => navigate("/sales?tab=invoices")}>
               Voir tout
@@ -259,11 +304,11 @@ export default function CommandCenter() {
                     <TableHead>Date</TableHead>
                     <TableHead>Facture</TableHead>
                     <TableHead>Client</TableHead>
-                    <TableHead>Ile</TableHead>
+                    <TableHead>Territoire</TableHead>
                     <TableHead className="text-right">Produits HT</TableHead>
                     <TableHead className="text-right">Transit</TableHead>
                     <TableHead className="text-right">Transport</TableHead>
-                    <TableHead className="text-right">Marge estimee</TableHead>
+                    <TableHead className="text-right">Marge estimée</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -281,7 +326,12 @@ export default function CommandCenter() {
                     </TableRow>
                   ) : (
                     invoicesQuery.data?.data.map((inv) => {
-                      const c = invoiceClientDisplay(inv);
+                      const clientDisplay =
+                        (inv.client_id && clientNameById[inv.client_id]) ||
+                        inv.client_name ||
+                        inv.client_id ||
+                        "Sans client";
+
                       return (
                         <TableRow
                           key={inv.invoice_number}
@@ -290,24 +340,15 @@ export default function CommandCenter() {
                         >
                           <TableCell>{inv.invoice_date || "?"}</TableCell>
                           <TableCell className="font-mono text-xs">{inv.invoice_number}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <span>{c.label}</span>
-                              {c.unlinked ? (
-                                <Badge variant="outline" className="text-[10px]">
-                                  non rapproché
-                                </Badge>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                          <TableCell>{(inv as any)?.ile || inv.territory_code || "?"}</TableCell>
+                          <TableCell>{clientDisplay}</TableCell>
+                          <TableCell>{inv.territory_code || inv.ile || "?"}</TableCell>
                           <TableCell className="text-right">
-                            {(inv as any)?.products_estimated ? <Badge variant="outline" className="mr-2">Estime</Badge> : null}
+                            {inv.products_estimated ? <Badge variant="outline" className="mr-2">Estimé</Badge> : null}
                             {money(inv.products_ht_eur)}
                           </TableCell>
                           <TableCell className="text-right">{money(inv.transit_fee_eur)}</TableCell>
                           <TableCell className="text-right">{money(inv.transport_cost_eur)}</TableCell>
-                          <TableCell className="text-right">{money((inv as any)?.marge_estimee ?? 0)}</TableCell>
+                          <TableCell className="text-right">{money(inv.marge_estimee)}</TableCell>
                         </TableRow>
                       );
                     })
@@ -320,14 +361,14 @@ export default function CommandCenter() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Focus couts export</CardTitle>
-            <CardDescription>OM, octroi, TVA estimes selon tables Supabase</CardDescription>
+            <CardTitle>Focus coûts export</CardTitle>
+            <CardDescription>OM, octroi, TVA estimés selon tables Supabase</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <KpiTile label="OM" value={kpisQuery.data?.estimatedExportCosts.om ?? 0} />
             <KpiTile label="Octroi" value={kpisQuery.data?.estimatedExportCosts.octroi ?? 0} />
             <KpiTile label="TVA" value={kpisQuery.data?.estimatedExportCosts.vat ?? 0} />
-            <KpiTile label="Autres regles" value={kpisQuery.data?.estimatedExportCosts.extraRules ?? 0} />
+            <KpiTile label="Autres règles" value={kpisQuery.data?.estimatedExportCosts.extraRules ?? 0} />
           </CardContent>
         </Card>
       </div>
@@ -342,4 +383,8 @@ function KpiTile({ label, value }: { label: string; value: number }) {
       <div className="text-xl font-semibold">{money(value)}</div>
     </div>
   );
+}
+
+function looksLikeUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
