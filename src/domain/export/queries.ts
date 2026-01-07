@@ -100,7 +100,7 @@ function shouldFallbackToNextSource(error: any): boolean {
   if (!error) return false;
   if (isMissingTableError(error) || isMissingColumnError(error)) return true;
   const status = (error as any)?.status;
-  // PostgREST returns status 400 on unknown column filters or bad casts; treat as recoverable to allow fallback.
+  // PostgREST returns 400 on unknown column filters / bad casts; treat as recoverable for fallback.
   if (status === 400) return true;
   return false;
 }
@@ -165,25 +165,40 @@ function mapInvoiceRow(row: any, source: string, ctx: RatesContext): Invoice {
   const productsHt = providedProducts !== undefined && providedProducts !== null ? num(providedProducts) : num(invoiceHt - transitFee);
 
   const transportCost = num(row?.transport_cost_eur ?? row?.transport_cost ?? row?.transport_fee_eur);
+
   const territory = row?.territory_code ?? row?.market_zone ?? row?.ile ?? row?.island ?? null;
+
+  // ⭐ IMPORTANT : on récupère le vrai nom client quand on a l’embed "client:clients(libelle_client)"
+  const embeddedClientName =
+    row?.client?.libelle_client ||
+    row?.clients?.libelle_client || // au cas où l’embed n’est pas aliasé
+    null;
+
+  const clientName =
+    embeddedClientName ||
+    row?.client_name ||
+    row?.client_label ||
+    row?.client_name_raw ||
+    row?.client_name_norm ||
+    null;
+
+  const clientLabel =
+    embeddedClientName ||
+    row?.client_label ||
+    row?.client_name ||
+    row?.client_name_raw ||
+    row?.client_id ||
+    null;
 
   const estimatedCosts = estimateExportCosts(productsHt, territory, ctx);
   const margin = productsHt - (transitFee + estimatedCosts.total + transportCost);
-
-  // priorité: un vrai nom (client_name / client_name_norm) > raw > label > id
-  const clientName =
-    row?.client_name_norm ??
-    row?.client_name ??
-    row?.client_label ??
-    row?.client_name_raw ??
-    null;
 
   return {
     id: row?.id || undefined,
     invoice_number: invoiceNumber,
     invoice_date: invoiceDate,
     client_id: row?.client_id ?? null,
-    client_label: clientName ?? row?.client_id ?? null,
+    client_label: clientLabel,
     client_name: clientName,
     territory_code: row?.territory_code ?? null,
     ile: row?.ile ?? row?.island ?? null,
@@ -201,22 +216,51 @@ function mapInvoiceRow(row: any, source: string, ctx: RatesContext): Invoice {
   };
 }
 
+function selectForSource(source: string) {
+  // v_sales_invoices_enriched : on ne sait pas exactement ses colonnes, donc "*"
+  if (source !== "sales_invoices") return "*";
+
+  // sales_invoices : on embed le client pour avoir la raison sociale (libelle_client)
+  // FK: sales_invoices.client_id -> clients.id
+  return [
+    "id",
+    "invoice_number",
+    "invoice_numbers_raw",
+    "invoice_date",
+    "invoice_date_raw",
+    "client_id",
+    "client_name_raw",
+    "client_name_norm",
+    "ile",
+    "territory_code",
+    "nb_colis",
+    "nb_colis_raw",
+    "products_ht_eur",
+    "transit_fee_eur",
+    "invoice_ht_eur",
+    "transport_cost_eur",
+    "client:clients(libelle_client)",
+  ].join(",");
+}
+
 function buildInvoiceQuery(source: string, filters: ExportFilters, pagination: Pagination | undefined, dateColumn: string) {
-  const query = supabase.from(source).select("*", { count: "exact" });
+  const query = supabase.from(source).select(selectForSource(source), { count: "exact" });
 
   if (filters.from) query.gte(dateColumn, filters.from);
   if (filters.to) query.lte(dateColumn, filters.to);
 
-  if (filters.territory) query.ilike("territory_code", `%${filters.territory}%`);
+  // filters.territory = code (GP, RE, ...)
+  if (filters.territory) query.eq("territory_code", filters.territory);
 
-  // client_id = UUID -> on doit faire eq (pas ilike)
+  // filters.clientId = uuid
   if (filters.clientId) query.eq("client_id", filters.clientId);
 
   if (filters.invoiceNumber) query.ilike("invoice_number", `%${filters.invoiceNumber}%`);
 
+  // Search "safe" (colonnes très probables)
   if (filters.search) {
     const pattern = `%${filters.search}%`;
-    query.or(`invoice_number.ilike.${pattern},client_name_raw.ilike.${pattern},client_name_norm.ilike.${pattern},territory_code.ilike.${pattern}`);
+    query.or(`invoice_number.ilike.${pattern},territory_code.ilike.${pattern},ile.ilike.${pattern}`);
   }
 
   query.order(dateColumn, { ascending: false });
@@ -242,51 +286,46 @@ export async function fetchInvoices(filters: ExportFilters = {}, pagination: Pag
   const { context, warning: rateWarning } = await loadRatesContext();
 
   let lastError: any;
-  const missingSources: string[] = [];
+  const triedSources: string[] = [];
 
   for (const source of INVOICE_SOURCES) {
+    triedSources.push(source);
+
     let attemptError: any = null;
 
     for (const dateCol of DATE_COLUMNS) {
-      const q = buildInvoiceQuery(source, filters, pagination, dateCol);
-      const { data, error, count } = await q;
+      const query = buildInvoiceQuery(source, filters, pagination, dateCol);
+      const { data, error, count } = await query;
 
       if (error) {
         attemptError = error;
-
         if (shouldFallbackToNextSource(error)) {
-          continue; // try next date column (or next source)
+          continue; // try next date column or next source
         }
-
         lastError = error;
         break;
       }
 
       const mapped = (data || []).map((row: any) => mapInvoiceRow(row, source, context));
 
+      const fallbackWarn = triedSources.length > 1 ? `Fallback sur ${source}` : undefined;
+
       return {
         data: mapped,
         total: count ?? mapped.length,
-        warning: combineWarnings(
-          rateWarning,
-          missingSources.length ? `Fallback: source(s) indisponible(s) -> ${missingSources.join(", ")}` : undefined,
-        ),
+        warning: combineWarnings(rateWarning, fallbackWarn),
         source,
       };
     }
 
     if (attemptError && shouldFallbackToNextSource(attemptError)) {
-      missingSources.push(source);
-      continue;
+      continue; // try next source
     }
   }
 
-  if (missingSources.length === INVOICE_SOURCES.length) {
-    return { data: [], total: 0, warning: "Aucune source invoice disponible (v_sales_invoices_enriched ou sales_invoices)" };
-  }
-
   if (lastError) throw lastError;
-  return { data: [], total: 0, warning: "Factures introuvables" };
+
+  return { data: [], total: 0, warning: "Aucune source invoice disponible (v_sales_invoices_enriched ou sales_invoices)" };
 }
 
 export async function fetchInvoiceByNumber(invoiceNumber: string): Promise<InvoiceDetail> {
@@ -299,7 +338,11 @@ export async function fetchInvoiceByNumber(invoiceNumber: string): Promise<Invoi
   const missingSources: string[] = [];
 
   for (const source of INVOICE_SOURCES) {
-    const { data, error } = await supabase.from(source).select("*").eq("invoice_number", invoiceNumber).limit(1);
+    const { data, error } = await supabase
+      .from(source)
+      .select(selectForSource(source))
+      .eq("invoice_number", invoiceNumber)
+      .limit(1);
 
     if (error) {
       if (shouldFallbackToNextSource(error)) {
@@ -315,7 +358,9 @@ export async function fetchInvoiceByNumber(invoiceNumber: string): Promise<Invoi
     }
   }
 
-  if (!invoice) throw new Error(`Facture ${invoiceNumber} introuvable`);
+  if (!invoice) {
+    throw new Error(`Facture ${invoiceNumber} introuvable`);
+  }
 
   const linesRes = await fetchInvoiceLines(invoiceNumber);
 
@@ -326,10 +371,7 @@ export async function fetchInvoiceByNumber(invoiceNumber: string): Promise<Invoi
 
   return {
     ...invoice,
-    warning: combineWarnings(
-      rateWarning,
-      missingSources.length ? `Vue invoices manquante (${missingSources.join(", ")})` : undefined,
-    ),
+    warning: combineWarnings(rateWarning, missingSources.length ? `Vue invoices manquante (${missingSources.join(", ")})` : undefined),
     lines: linesRes.data,
     linesWarning: linesRes.warning,
     competitors: competitorRes.data,
@@ -389,22 +431,20 @@ export async function fetchTopClients(filters: ExportFilters = {}): Promise<TopC
 
   invoices.forEach((inv) => {
     const key = inv.client_id || "NC";
-    const cur = map.get(key) || {
-      client_id: inv.client_id ?? null,
-      client_name: inv.client_name ?? inv.client_label ?? inv.client_id ?? "Sans client",
-      client_label: inv.client_label ?? inv.client_name ?? inv.client_id ?? "Sans client",
-      ca_ht: 0,
-      products_ht: 0,
-      margin_estimee: 0,
-      territory_code: inv.territory_code ?? null,
-    };
+    const cur =
+      map.get(key) || ({
+        client_id: inv.client_id ?? null,
+        client_name: inv.client_name ?? inv.client_label ?? inv.client_id ?? "Sans client",
+        client_label: inv.client_label ?? inv.client_name ?? inv.client_id ?? "Sans client",
+        ca_ht: 0,
+        products_ht: 0,
+        margin_estimee: 0,
+        territory_code: inv.territory_code ?? null,
+      } as TopClient);
 
     cur.ca_ht += num(inv.invoice_ht_eur);
     cur.products_ht += num(inv.products_ht_eur);
     cur.margin_estimee += num(inv.marge_estimee);
-
-    // on conserve un territoire "principal" si dispo
-    if (!cur.territory_code && inv.territory_code) cur.territory_code = inv.territory_code;
 
     map.set(key, cur);
   });
@@ -448,14 +488,12 @@ export async function fetchAlerts(filters: ExportFilters = {}): Promise<Alert[]>
     });
   }
 
-  // ✅ ICI: correction de la faute qui cassait le build (invoice_ht_el -> invoice_ht_eur + parenthèse)
-  const transitHeavy = invoices
-    .filter((i) => {
-      const invoiceHt = num(i.invoice_ht_eur);
-      const transit = num(i.transit_fee_eur);
-      return invoiceHt > 0 && transit / invoiceHt > TRANSIT_ALERT_PCT;
-    })
-    .length;
+  // ✅ FIX BUILD: invoice_ht_eur (pas invoice_ht_el; )
+  const transitHeavy = invoices.filter((i) => {
+    const invoiceHt = num(i.invoice_ht_eur);
+    const transit = num(i.transit_fee_eur);
+    return invoiceHt > 0 && transit / invoiceHt > TRANSIT_ALERT_PCT;
+  }).length;
 
   if (transitHeavy) {
     alerts.push({
@@ -490,14 +528,16 @@ export async function fetchAlerts(filters: ExportFilters = {}): Promise<Alert[]>
 export async function fetchSalesLines(filters: ExportFilters = {}, pagination: Pagination = {}): Promise<FetchResult<SaleLine>> {
   if (!SUPABASE_ENV_OK) return { data: [], total: 0, warning: "Supabase non configure" };
 
-  const query = supabase.from("sales").select(
-    "id,sale_date,client_id,product_id,territory_code,destination_id,quantity,unit_price_ht,amount_ht,vat_amount,amount_ttc,invoice_number",
-    { count: "exact" },
-  );
+  const query = supabase
+    .from("sales")
+    .select(
+      "id,sale_date,client_id,product_id,territory_code,destination_id,quantity,unit_price_ht,amount_ht,vat_amount,amount_ttc,invoice_number",
+      { count: "exact" },
+    );
 
   if (filters.from) query.gte("sale_date", filters.from);
   if (filters.to) query.lte("sale_date", filters.to);
-  if (filters.territory) query.ilike("territory_code", `%${filters.territory}%`);
+  if (filters.territory) query.eq("territory_code", filters.territory);
   if (filters.clientId) query.eq("client_id", filters.clientId);
   if (filters.invoiceNumber) query.ilike("invoice_number", `%${filters.invoiceNumber}%`);
 
@@ -510,6 +550,7 @@ export async function fetchSalesLines(filters: ExportFilters = {}, pagination: P
   query.range(fromIdx, toIdx);
 
   const { data, error, count } = await query;
+
   if (error) {
     if (isMissingTableError(error)) return { data: [], total: 0, warning: "Table sales manquante" };
     throw error;
@@ -535,52 +576,44 @@ export async function fetchSalesLines(filters: ExportFilters = {}, pagination: P
 export async function fetchInvoiceLines(invoiceNumber: string): Promise<FetchResult<InvoiceLine>> {
   if (!SUPABASE_ENV_OK) return { data: [], total: 0, warning: "Supabase non configure" };
 
-  // on teste plusieurs filtres possibles (selon la structure réelle de la table sales)
   const possibleFilters = ["invoice_number", "invoice_no", "order_id"];
 
-  // on teste plusieurs variantes de select (pour éviter les erreurs si colonne absente)
-  const selectVariants = [
-    "id,invoice_number,product_id,quantity,unit_price_ht,amount_ht,total_ht,weight_kg,territory_code,product_label",
-    "id,invoice_number,product_id,quantity,unit_price_ht,amount_ht,total_ht,territory_code,product_label",
-    "id,invoice_number,product_id,quantity,unit_price_ht,amount_ht,territory_code",
-  ];
-
   for (const column of possibleFilters) {
-    for (const selectStr of selectVariants) {
-      const query = supabase.from("sales").select(selectStr, { count: "exact" }).eq(column, invoiceNumber).limit(500);
-      const { data, error, count } = await query;
+    const query = supabase
+      .from("sales")
+      .select("id,invoice_number,product_id,quantity,unit_price_ht,amount_ht,total_ht,weight_kg,territory_code,product_label", { count: "exact" })
+      .eq(column, invoiceNumber)
+      .limit(500);
 
-      if (error) {
-        if (isMissingTableError(error)) return { data: [], total: 0, warning: "Table sales manquante" };
-        if (isMissingColumnError(error)) continue;
-        throw error;
-      }
+    const { data, error, count } = await query;
 
-      if (data && data.length) {
-        const mapped: InvoiceLine[] = data.map((row: any) => ({
-          id: row.id,
-          invoice_number: row.invoice_number ?? invoiceNumber,
-          product_id: row.product_id ?? null,
-          product_label: row.product_label ?? null,
-          quantity: row.quantity ?? null,
-          unit_price_ht: row.unit_price_ht ?? null,
-          total_ht: row.amount_ht ?? row.total_ht ?? null,
-          weight_kg: row.weight_kg ?? null,
-          territory_code: row.territory_code ?? null,
-        }));
+    if (error) {
+      if (isMissingTableError(error)) return { data: [], total: 0, warning: "Table sales manquante" };
+      if (isMissingColumnError(error)) continue;
+      throw error;
+    }
 
-        return { data: mapped, total: count ?? mapped.length, source: "sales" };
-      }
+    if (data && data.length) {
+      const mapped: InvoiceLine[] = data.map((row: any) => ({
+        id: row.id,
+        invoice_number: row.invoice_number ?? invoiceNumber,
+        product_id: row.product_id ?? null,
+        product_label: row.product_label ?? null,
+        quantity: row.quantity ?? null,
+        unit_price_ht: row.unit_price_ht ?? null,
+        total_ht: row.amount_ht ?? row.total_ht ?? null,
+        weight_kg: row.weight_kg ?? null,
+        territory_code: row.territory_code ?? null,
+      }));
+
+      return { data: mapped, total: count ?? mapped.length, source: "sales" };
     }
   }
 
   return { data: [], total: 0, warning: "Aucune ligne trouvee pour cette facture" };
 }
 
-export async function fetchCompetitorPrices(
-  territory: string | null | undefined,
-  skus: string[],
-): Promise<FetchResult<CompetitorPrice>> {
+export async function fetchCompetitorPrices(territory: string | null | undefined, skus: string[]): Promise<FetchResult<CompetitorPrice>> {
   if (!SUPABASE_ENV_OK) return { data: [], total: 0, warning: "Supabase non configure" };
   if (!skus.length) return { data: [], total: 0 };
 
@@ -600,7 +633,6 @@ export async function fetchCompetitorPrices(
   const rows = Array.isArray(data) ? data : data ? [data] : [];
 
   const mapped: CompetitorPrice[] = [];
-
   rows
     .filter((r) => !territory || !r?.territory_code || String(r.territory_code).toUpperCase() === String(territory).toUpperCase())
     .forEach((r: any) => {
