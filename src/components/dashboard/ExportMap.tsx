@@ -1,6 +1,8 @@
 import * as React from "react";
 import worldMap from "@/assets/world-map.svg";
 import { TERRITORY_PCT } from "@/domain/geo/territoryPct";
+import { Button } from "@/components/ui/button";
+import { Minus, Plus, RotateCcw } from "lucide-react";
 
 type TerritoryData = {
   ca_ht: number;
@@ -22,10 +24,14 @@ type Point = {
   name: string;
   x: number;
   y: number;
-  data: TerritoryData | undefined;
+  data?: TerritoryData;
 };
 
+const BASE_W = 1010;
+const BASE_H = 520;
+
 const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
+
 const LABEL_OFFSETS: Record<string, { dx: number; dy: number }> = {
   GP: { dx: -10, dy: -12 },
   MQ: { dx: -10, dy: 12 },
@@ -36,59 +42,51 @@ const LABEL_OFFSETS: Record<string, { dx: number; dy: number }> = {
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-const pulseStyle = `
-.map-pulse { position: relative; }
-.map-pulse::after {
-  content:""; position:absolute; inset:-4px; border-radius:9999px;
-  border:2px solid rgba(99, 102, 241, 0.4); animation:pulse 1.8s ease-out infinite;
-}
-@keyframes pulse {
-  0% { opacity:0.8; transform:scale(0.8);}
-  70% { opacity:0; transform:scale(1.6);}
-  100% { opacity:0; transform:scale(1.6);}
-}
-.arc-animate { stroke-dasharray: 4 6; animation: dash 1.8s linear infinite; }
-@keyframes dash { to { stroke-dashoffset: -20; } }
+const css = `
+.arc-animate { stroke-dasharray: 5 7; animation: dash 1.8s linear infinite; }
+@keyframes dash { to { stroke-dashoffset: -24; } }
 `;
 
-export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritory, dateRangeLabel, mode = "overview" }: Props) {
+export function ExportMap({
+  dataByTerritory,
+  selectedTerritory,
+  onSelectTerritory,
+  dateRangeLabel,
+  mode = "overview",
+}: Props) {
   const svgRef = React.useRef<SVGSVGElement | null>(null);
-  const [size, setSize] = React.useState({ w: 1010, h: 520 });
+
   const [hover, setHover] = React.useState<{ code: string; x: number; y: number } | null>(null);
-  const [drag, setDrag] = React.useState<{ startX: number; startY: number; ox: number; oy: number } | null>(null);
-  const [offset, setOffset] = React.useState({ x: 0, y: 0 });
+
+  // Pan/Zoom (pointer events = plus fiable que mouse events)
   const [scale, setScale] = React.useState(1);
-  const debug = React.useMemo(() => typeof window !== "undefined" && window.location.search.includes("debug=1"), []);
+  const [offset, setOffset] = React.useState({ x: 0, y: 0 });
+  const panRef = React.useRef<{
+    active: boolean;
+    pointerId: number | null;
+    startX: number;
+    startY: number;
+    ox: number;
+    oy: number;
+  }>({ active: false, pointerId: null, startX: 0, startY: 0, ox: 0, oy: 0 });
 
-  // ResizeObserver pour garder arcs/points alignés
-  React.useEffect(() => {
-    const el = svgRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const obs = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const cr = entry.contentRect;
-        setSize({ w: cr.width || 1010, h: cr.height || 520 });
-      }
-    });
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
-  const toXY = React.useCallback(
-    (code: string) => {
-      const pct = TERRITORY_PCT[code];
-      if (!pct) return null;
-      return { x: (pct.x / 100) * size.w, y: (pct.y / 100) * size.h };
-    },
-    [size.w, size.h],
+  const debug = React.useMemo(
+    () => typeof window !== "undefined" && window.location.search.includes("debug=1"),
+    []
   );
+
+  const toXY = React.useCallback((code: string) => {
+    const pct = (TERRITORY_PCT as any)[code];
+    if (!pct) return null;
+    return { x: (pct.x / 100) * BASE_W, y: (pct.y / 100) * BASE_H };
+  }, []);
 
   const hub = toXY("HUB_FR");
 
   const points: Point[] = React.useMemo(() => {
-    return Object.entries(TERRITORY_PCT)
+    return Object.entries(TERRITORY_PCT as any)
       .filter(([code]) => code !== "HUB_FR")
-      .map(([code, pct]) => {
+      .map(([code, pct]: any) => {
         const pos = toXY(code);
         return {
           code,
@@ -100,168 +98,277 @@ export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritor
       });
   }, [dataByTerritory, toXY]);
 
-  const totalLines = React.useMemo(() => Object.values(dataByTerritory).reduce((s, d) => s + (d.lines || 0), 0), [dataByTerritory]);
+  const visiblePoints = React.useMemo(() => {
+    return points.filter((p) => (mode === "drom" ? DROM_CODES.includes(p.code) : true));
+  }, [points, mode]);
+
+  const totalLines = React.useMemo(
+    () => Object.values(dataByTerritory).reduce((s, d) => s + (d?.lines || 0), 0),
+    [dataByTerritory]
+  );
   const hasData = totalLines > 0;
 
+  const maxCa = React.useMemo(
+    () => Math.max(0, ...Object.values(dataByTerritory).map((d) => d?.ca_ht || 0)),
+    [dataByTerritory]
+  );
+
   const topTerritories = React.useMemo(() => {
-    const sorted = points
-      .map((p) => ({ p, ca: p.data?.ca_ht || 0 }))
+    const sorted = visiblePoints
+      .map((p) => ({ code: p.code, ca: p.data?.ca_ht || 0 }))
       .sort((a, b) => b.ca - a.ca)
-      .map((a) => a.p);
-    return new Set(sorted.slice(0, 5).map((p) => p.code));
-  }, [points]);
-
-  const maxCa = React.useMemo(() => Math.max(0, ...Object.values(dataByTerritory).map((d) => d.ca_ht)), [dataByTerritory]);
-
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = -e.deltaY;
-    const factor = delta > 0 ? 1.08 : 0.92;
-    const next = clamp(scale * factor, 0.8, 3.5);
-    setScale(next);
-  };
-  const handleMouseDown = (e: React.MouseEvent) => setDrag({ startX: e.clientX, startY: e.clientY, ox: offset.x, oy: offset.y });
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!drag) return;
-    const dx = e.clientX - drag.startX;
-    const dy = e.clientY - drag.startY;
-    setOffset({ x: drag.ox + dx, y: drag.oy + dy });
-  };
-  const handleMouseUp = () => setDrag(null);
-  const handleMouseLeave = () => setDrag(null);
+      .map((x) => x.code);
+    return new Set(sorted.slice(0, 5));
+  }, [visiblePoints]);
 
   const transform = `translate(${offset.x},${offset.y}) scale(${scale})`;
-  const viewBox = `0 0 ${size.w} ${size.h}`;
+  const viewBox = `0 0 ${BASE_W} ${BASE_H}`;
 
+  const hoveredPct = hover ? (TERRITORY_PCT as any)[hover.code] : undefined;
   const hoveredData = hover ? dataByTerritory[hover.code] : undefined;
-  const hoveredPct = hover ? TERRITORY_PCT[hover.code] : undefined;
+
+  const zoomIn = () => setScale((s) => clamp(s * 1.12, 0.85, 3.5));
+  const zoomOut = () => setScale((s) => clamp(s / 1.12, 0.85, 3.5));
+  const resetView = () => {
+    setScale(1);
+    setOffset({ x: 0, y: 0 });
+  };
+
+  const onWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.08 : 0.92;
+    setScale((s) => clamp(s * factor, 0.85, 3.5));
+  };
+
+  const startPan = (e: React.PointerEvent) => {
+    // si click sur un point, le point stoppe la propagation => on arrive pas ici
+    panRef.current.active = true;
+    panRef.current.pointerId = e.pointerId;
+    panRef.current.startX = e.clientX;
+    panRef.current.startY = e.clientY;
+    panRef.current.ox = offset.x;
+    panRef.current.oy = offset.y;
+    svgRef.current?.setPointerCapture(e.pointerId);
+  };
+
+  const movePan = (e: React.PointerEvent) => {
+    if (!panRef.current.active) return;
+    const dx = e.clientX - panRef.current.startX;
+    const dy = e.clientY - panRef.current.startY;
+    setOffset({ x: panRef.current.ox + dx, y: panRef.current.oy + dy });
+  };
+
+  const endPan = (e: React.PointerEvent) => {
+    if (panRef.current.pointerId === e.pointerId) {
+      panRef.current.active = false;
+      panRef.current.pointerId = null;
+    }
+  };
 
   return (
     <div className="relative h-[520px] w-full overflow-hidden rounded-2xl bg-slate-950/80 border border-slate-800">
-      <style>{pulseStyle}</style>
-      <div className="absolute top-3 left-3 text-xs text-slate-300/80">
-        Carte : clic = filtre, double clic = reset. <span className="text-slate-400">{dateRangeLabel}</span>
+      <style>{css}</style>
+
+      {/* Aide + contrôles */}
+      <div className="absolute top-3 left-3 z-20 text-xs text-slate-300/85">
+        <div>Survole = infos • Clic = filtre • Double-clic = reset filtre</div>
+        <div className="text-slate-400">{dateRangeLabel}</div>
+      </div>
+
+      <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
+        <Button size="sm" variant="secondary" className="h-8 px-2" onClick={zoomOut} title="Zoom -">
+          <Minus className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="secondary" className="h-8 px-2" onClick={zoomIn} title="Zoom +">
+          <Plus className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="outline" className="h-8 px-2" onClick={resetView} title="Reset vue">
+          <RotateCcw className="h-4 w-4" />
+        </Button>
       </div>
 
       <svg
         ref={svgRef}
         viewBox={viewBox}
         className="absolute inset-0 h-full w-full cursor-grab active:cursor-grabbing"
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
         preserveAspectRatio="xMidYMid meet"
+        onWheel={onWheel}
+        onPointerDown={startPan}
+        onPointerMove={movePan}
+        onPointerUp={endPan}
+        onPointerCancel={endPan}
+        onPointerLeave={() => {
+          panRef.current.active = false;
+          panRef.current.pointerId = null;
+        }}
       >
         <g transform={transform}>
-          <image href={worldMap} x={0} y={0} width={size.w} height={size.h} opacity={0.45} style={{ filter: "invert(1) saturate(1.2) contrast(1.05)" }} />
+          {/* Fond: jamais bloquer les clics */}
+          <image
+            href={worldMap}
+            x={0}
+            y={0}
+            width={BASE_W}
+            height={BASE_H}
+            opacity={0.45}
+            style={{ filter: "invert(1) saturate(1.2) contrast(1.05)", pointerEvents: "none" }}
+            preserveAspectRatio="xMidYMid meet"
+          />
 
-          {hasData &&
-            hub &&
-            points
-              .filter((p) => (mode === "drom" ? DROM_CODES.includes(p.code) : true))
-              .map((p) => {
-                if (!p.data || p.data.ca_ht <= 0) return null;
-                const width = scaleStroke(p.data.ca_ht, maxCa);
+          {/* Arcs (seulement si on a de la data) */}
+          {hasData && hub
+            ? visiblePoints.map((p) => {
+                const ca = p.data?.ca_ht || 0;
+                if (ca <= 0) return null;
+                const width = scaleStroke(ca, maxCa);
                 const arc = buildArc(hub.x, hub.y, p.x, p.y);
                 return (
-                  <g key={`arc-${p.code}`}>
-                    <path
-                      d={arc}
-                      stroke={pickColor(p.code)}
-                      strokeWidth={width}
-                      fill="none"
-                      className="arc-animate"
-                      strokeOpacity={0.65}
-                      vectorEffect="non-scaling-stroke"
-                    />
-                    {debug ? <circle cx={p.x} cy={p.y} r={2} fill="#fbbf24" /> : null}
-                  </g>
+                  <path
+                    key={`arc-${p.code}`}
+                    d={arc}
+                    stroke={pickColor(p.code)}
+                    strokeWidth={width}
+                    fill="none"
+                    className="arc-animate"
+                    strokeOpacity={0.65}
+                    vectorEffect="non-scaling-stroke"
+                    pointerEvents="none"
+                  />
                 );
-              })}
+              })
+            : null}
 
+          {/* Hub */}
           {hub ? (
             <g
-              onMouseEnter={(e) => setHover({ code: "HUB_FR", x: e.clientX, y: e.clientY })}
-              onMouseLeave={() => setHover(null)}
-              onClick={() => onSelectTerritory(null)}
               className="cursor-pointer"
+              onPointerEnter={(e) => setHover({ code: "HUB_FR", x: e.clientX, y: e.clientY })}
+              onPointerLeave={() => setHover(null)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectTerritory(null);
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
             >
-              <circle cx={hub.x} cy={hub.y} r={10} fill="#38bdf8" opacity={0.9} />
-              <text x={hub.x + 12} y={hub.y + 4} className="text-xs font-bold fill-cyan-100 drop-shadow">
+              <circle cx={hub.x} cy={hub.y} r={11} fill="#38bdf8" opacity={0.92} />
+              <text x={hub.x + 14} y={hub.y + 4} className="text-xs font-bold fill-cyan-100 drop-shadow">
                 Hub
               </text>
-              {debug ? <line x1={hub.x - 4} y1={hub.y} x2={hub.x + 4} y2={hub.y} stroke="#f87171" /> : null}
             </g>
           ) : null}
 
-          {hasData &&
-            points
-              .filter((p) => (mode === "drom" ? DROM_CODES.includes(p.code) : true))
-              .map((p) => {
-                const ca = p.data?.ca_ht || 0;
-                const sizePt = markerSize(ca);
-                const isSelected = selectedTerritory === p.code;
-                const isTop = topTerritories.has(p.code);
-                const showLabel = isTop;
-                const label = p.name;
-                const offsetLabel = LABEL_OFFSETS[p.code] || { dx: 10, dy: -8 };
-                return (
-                  <g key={p.code} className="transition-all duration-300">
-                    <g
-                      onMouseEnter={(e) => setHover({ code: p.code, x: e.clientX, y: e.clientY })}
-                      onMouseLeave={() => setHover(null)}
-                      onClick={() => onSelectTerritory(p.code)}
-                      onDoubleClick={() => onSelectTerritory(null)}
-                      className="cursor-pointer"
-                    >
-                      <circle cx={p.x} cy={p.y} r={sizePt + 4} fill="#0f172a" opacity={0.4} />
-                      <circle
-                        cx={p.x}
-                        cy={p.y}
-                        r={sizePt}
-                        className={ca > 0 ? "map-pulse" : ""}
-                        fill={isSelected ? "#38bdf8" : pickColor(p.code)}
-                        opacity={isSelected ? 0.95 : 0.75}
-                      />
-                    </g>
-                    {showLabel ? (
-                      <g transform={`translate(${p.x + offsetLabel.dx},${p.y + offsetLabel.dy})`}>
-                        <rect x={-4} y={-12} width={label.length * 7 + 12} height={20} rx={6} fill="#0f172a" opacity={0.7} />
-                        <text className="text-[11px] font-semibold fill-slate-100" x={4} y={4}>
-                          {label}
-                        </text>
-                      </g>
-                    ) : null}
-                  </g>
-                );
-              })}
+          {/* Points */}
+          {visiblePoints.map((p) => {
+            const ca = p.data?.ca_ht || 0;
+            const lines = p.data?.lines || 0;
 
-          {debug &&
-            points.map((p) => (
-              <g key={`debug-${p.code}`}>
-                <line x1={p.x - 3} y1={p.y} x2={p.x + 3} y2={p.y} stroke="#22d3ee" />
-                <line x1={p.x} y1={p.y - 3} x2={p.x} y2={p.y + 3} stroke="#22d3ee" />
+            const isSelected = selectedTerritory === p.code;
+            const isTop = topTerritories.has(p.code);
+
+            const r = markerSize(ca);
+            const label = p.name;
+            const offsetLabel = LABEL_OFFSETS[p.code] || { dx: 10, dy: -8 };
+
+            const fill = isSelected ? "#38bdf8" : pickColor(p.code);
+            const opacity = ca > 0 ? 0.8 : 0.25;
+
+            return (
+              <g key={p.code} className="select-none">
+                {/* Hit area */}
+                <circle cx={p.x} cy={p.y} r={Math.max(14, r + 10)} fill="transparent" />
+
+                {/* Glow */}
+                <circle cx={p.x} cy={p.y} r={r + 6} fill="#0f172a" opacity={0.35} pointerEvents="none" />
+
+                {/* Pulse (SVG, fiable) */}
+                {ca > 0 ? (
+                  <circle cx={p.x} cy={p.y} r={r + 2} fill="none" stroke={fill} strokeOpacity={0.45} strokeWidth={2} pointerEvents="none">
+                    <animate attributeName="r" values={`${r + 2};${r + 18}`} dur="1.8s" repeatCount="indefinite" />
+                    <animate attributeName="stroke-opacity" values="0.45;0" dur="1.8s" repeatCount="indefinite" />
+                  </circle>
+                ) : null}
+
+                {/* Dot */}
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={r}
+                  fill={fill}
+                  opacity={isSelected ? 0.95 : opacity}
+                  className="cursor-pointer"
+                  onPointerDown={(e) => {
+                    // IMPORTANT: ne pas déclencher le pan quand on clique un point
+                    e.stopPropagation();
+                  }}
+                  onPointerEnter={(e) => setHover({ code: p.code, x: e.clientX, y: e.clientY })}
+                  onPointerMove={(e) => setHover({ code: p.code, x: e.clientX, y: e.clientY })}
+                  onPointerLeave={() => setHover(null)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectTerritory(p.code);
+                  }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    onSelectTerritory(null);
+                  }}
+                />
+
+                {/* Label sur top 5 OU sélection */}
+                {(isTop || isSelected) && (
+                  <g transform={`translate(${p.x + offsetLabel.dx},${p.y + offsetLabel.dy})`} pointerEvents="none">
+                    <rect x={-4} y={-12} width={Math.min(220, label.length * 7 + 12)} height={20} rx={6} fill="#0f172a" opacity={0.75} />
+                    <text className="text-[11px] font-semibold fill-slate-100" x={4} y={4}>
+                      {label}
+                    </text>
+                  </g>
+                )}
+
+                {/* mini debug */}
+                {debug ? (
+                  <text x={p.x + 6} y={p.y + 18} fontSize={10} fill="#fbbf24">
+                    {p.code} ({lines})
+                  </text>
+                ) : null}
               </g>
-            ))}
+            );
+          })}
         </g>
       </svg>
 
-      {hover && hoveredData && hoveredPct ? (
+      {/* Tooltip : TOUJOURS afficher dès qu'on hover (même si pas de data) */}
+      {hover && hoveredPct ? (
         <div
           className="pointer-events-none fixed z-30 rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-2 shadow-xl text-xs text-slate-100"
-          style={{ left: hover.x + 12, top: hover.y + 12, minWidth: 180 }}
+          style={{ left: hover.x + 12, top: hover.y + 12, minWidth: 190 }}
         >
           <div className="flex items-center justify-between">
             <span className="font-semibold">{hoveredPct.label || hoveredPct.code}</span>
             <span className="text-[10px] text-slate-400">{hoveredPct.code}</span>
           </div>
+
           <div className="mt-1 space-y-1">
-            <div className="flex justify-between"><span className="text-slate-400">CA HT</span><span>{formatMoney(hoveredData.ca_ht)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-400">CA TTC</span><span>{formatMoney(hoveredData.ca_ttc)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-400">TVA</span><span>{formatMoney(hoveredData.vat)}</span></div>
-            <div className="flex justify-between"><span className="text-slate-400">Ventes</span><span>{hoveredData.lines}</span></div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">CA HT</span>
+              <span>{money(hoveredData?.ca_ht || 0)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">CA TTC</span>
+              <span>{money(hoveredData?.ca_ttc || 0)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">TVA</span>
+              <span>{money(hoveredData?.vat || 0)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Ventes</span>
+              <span>{(hoveredData?.lines || 0).toLocaleString("fr-FR")}</span>
+            </div>
+
+            {!hoveredData ? (
+              <div className="mt-2 text-[11px] text-amber-200/90">
+                Pas de données pour ce territoire (code non présent ou ventes = 0).
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -277,8 +384,8 @@ export function ExportMap({ dataByTerritory, selectedTerritory, onSelectTerritor
   );
 }
 
-function formatMoney(n: number) {
-  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n);
+function money(n: number) {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
 }
 
 function buildArc(sx: number, sy: number, ex: number, ey: number) {
