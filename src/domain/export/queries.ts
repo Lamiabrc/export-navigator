@@ -18,6 +18,7 @@ import {
 
 const INVOICE_SOURCES = ["v_sales_invoices_enriched", "sales_invoices"] as const;
 const DATE_COLUMNS = ["invoice_date", "date", "created_at"] as const;
+
 const MAX_ROWS = 2000;
 const DEFAULT_PAGE_SIZE = 50;
 const TRANSIT_ALERT_PCT = 0.35; // alert when transit fee represents more than 35% of invoice HT
@@ -51,78 +52,6 @@ function percentFromRow(row: any, keys: string[]): number | undefined {
     if (Number.isFinite(parsed)) return parsed;
   }
   return undefined;
-}
-
-function isMissingColumnError(error: any): boolean {
-  const msg = String(error?.message || "").toLowerCase();
-  return msg.includes("column") && msg.includes("does not exist");
-}
-
-function stripAccentsUpper(input: string) {
-  return input
-    .normalize("NFD")
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toUpperCase();
-}
-
-function normalizeTerritoryCode(rawTerritory: unknown, rawIsland: unknown): string | null {
-  const t = typeof rawTerritory === "string" ? stripAccentsUpper(rawTerritory) : "";
-  const i = typeof rawIsland === "string" ? stripAccentsUpper(rawIsland) : "";
-
-  // si déjà un code correct
-  const maybe = (t || i).replace(/\s+/g, "");
-  const allowed = new Set(["FR", "GP", "MQ", "GF", "RE", "YT", "DROM", "UE", "HORSUE", "HORS_UE"]);
-  if (allowed.has(maybe)) {
-    if (maybe === "HORSUE") return "Hors UE";
-    if (maybe === "HORS_UE") return "Hors UE";
-    return maybe;
-  }
-
-  const value = t || i;
-  if (!value) return null;
-
-  // mapping îles -> codes DROM
-  if (value.includes("GUADELOUPE") || value === "GP") return "GP";
-  if (value.includes("MARTINIQUE") || value === "MQ") return "MQ";
-  if (value.includes("GUYANE") || value === "GF") return "GF";
-  if (value.includes("REUNION") || value.includes("RÉUNION") || value === "RE") return "RE";
-  if (value.includes("MAYOTTE") || value === "YT") return "YT";
-
-  // métropole / france
-  if (value.includes("METROPOLE") || value.includes("METROPOL") || value.includes("FRANCE") || value.includes("HEXAGONE"))
-    return "FR";
-
-  // si ça ressemble déjà à un petit code 2 lettres
-  if (/^[A-Z]{2}$/.test(value)) return value;
-
-  return null;
-}
-
-function looksLikeUuid(value: string | null | undefined) {
-  if (!value) return false;
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
-function bestClientName(row: any): string | null {
-  // priorité : raison sociale normalisée, puis raw, puis label, puis name éventuel
-  const candidates = [
-    row?.client_name_norm,
-    row?.client_name,
-    row?.client_label,
-    row?.client_name_raw,
-  ]
-    .map((v: any) => (typeof v === "string" ? v.trim() : ""))
-    .filter(Boolean);
-
-  const chosen = candidates[0] || "";
-  if (!chosen) return null;
-
-  // si c’est un UUID (ex: label mal rempli), on le jette
-  if (looksLikeUuid(chosen)) return null;
-
-  return chosen;
 }
 
 function estimateExportCosts(base: number, territory: string | null | undefined, ctx: RatesContext): ExportCostComponents {
@@ -162,10 +91,16 @@ function estimateExportCosts(base: number, territory: string | null | undefined,
   };
 }
 
+function isMissingColumnError(error: any): boolean {
+  const msg = String(error?.message || "").toLowerCase();
+  return msg.includes("column") && msg.includes("does not exist");
+}
+
 function shouldFallbackToNextSource(error: any): boolean {
   if (!error) return false;
   if (isMissingTableError(error) || isMissingColumnError(error)) return true;
   const status = (error as any)?.status;
+  // PostgREST returns status 400 on unknown column filters or bad casts; treat as recoverable to allow fallback.
   if (status === 400) return true;
   return false;
 }
@@ -227,53 +162,40 @@ function mapInvoiceRow(row: any, source: string, ctx: RatesContext): Invoice {
   const transitFee = num(row?.transit_fee_eur ?? row?.transit_fee);
 
   const providedProducts = row?.products_ht_eur ?? row?.products_amount_ht;
-  const productsHt =
-    providedProducts !== undefined && providedProducts !== null ? num(providedProducts) : num(invoiceHt - transitFee);
+  const productsHt = providedProducts !== undefined && providedProducts !== null ? num(providedProducts) : num(invoiceHt - transitFee);
 
   const transportCost = num(row?.transport_cost_eur ?? row?.transport_cost ?? row?.transport_fee_eur);
+  const territory = row?.territory_code ?? row?.market_zone ?? row?.ile ?? row?.island ?? null;
 
-  const ileRaw = row?.ile ?? row?.island ?? null;
-  const territoryRaw = row?.territory_code ?? row?.market_zone ?? null;
-
-  // ✅ NORMALISATION = clé pour la carte + affichage propre
-  const territoryCode = normalizeTerritoryCode(territoryRaw, ileRaw);
-
-  const estimatedCosts = estimateExportCosts(productsHt, territoryCode, ctx);
+  const estimatedCosts = estimateExportCosts(productsHt, territory, ctx);
   const margin = productsHt - (transitFee + estimatedCosts.total + transportCost);
 
-  const clientName = bestClientName(row);
-  const clientLabel =
-    clientName ||
-    (typeof row?.client_label === "string" && !looksLikeUuid(row.client_label) ? row.client_label : null) ||
-    (typeof row?.client_name_raw === "string" ? row.client_name_raw : null) ||
-    row?.client_id ||
-    "Sans client";
+  // priorité: un vrai nom (client_name / client_name_norm) > raw > label > id
+  const clientName =
+    row?.client_name_norm ??
+    row?.client_name ??
+    row?.client_label ??
+    row?.client_name_raw ??
+    null;
 
   return {
     id: row?.id || undefined,
     invoice_number: invoiceNumber,
     invoice_date: invoiceDate,
     client_id: row?.client_id ?? null,
-    client_label: clientLabel ?? null,
-    client_name: clientName ?? clientLabel ?? null,
-
-    // IMPORTANT: territory_code doit être un code type GP/RE/FR pour matcher TERRITORY_PCT
-    territory_code: territoryCode ?? row?.territory_code ?? null,
-    ile: ileRaw,
-
+    client_label: clientName ?? row?.client_id ?? null,
+    client_name: clientName,
+    territory_code: row?.territory_code ?? null,
+    ile: row?.ile ?? row?.island ?? null,
     nb_colis: row?.nb_colis ?? row?.parcel_count ?? row?.nb_parcels ?? null,
     currency: row?.currency ?? "EUR",
-
     invoice_ht_eur: invoiceHt,
     products_ht_eur: productsHt,
     products_estimated: providedProducts === undefined || providedProducts === null,
-
     transit_fee_eur: transitFee,
     transport_cost_eur: transportCost,
-
     estimated_export_costs: estimatedCosts,
     marge_estimee: margin,
-
     status: row?.status ?? null,
     source,
   };
@@ -285,21 +207,16 @@ function buildInvoiceQuery(source: string, filters: ExportFilters, pagination: P
   if (filters.from) query.gte(dateColumn, filters.from);
   if (filters.to) query.lte(dateColumn, filters.to);
 
-  // ✅ Territoire : on filtre sur territory_code OU ile (sans colonnes exotiques)
-  if (filters.territory) {
-    const pattern = `%${filters.territory}%`;
-    query.or(`territory_code.ilike.${pattern},ile.ilike.${pattern}`);
-  }
+  if (filters.territory) query.ilike("territory_code", `%${filters.territory}%`);
 
-  // ✅ clientId = uuid => eq est plus propre qu'ilike
+  // client_id = UUID -> on doit faire eq (pas ilike)
   if (filters.clientId) query.eq("client_id", filters.clientId);
 
   if (filters.invoiceNumber) query.ilike("invoice_number", `%${filters.invoiceNumber}%`);
 
   if (filters.search) {
     const pattern = `%${filters.search}%`;
-    // colonnes "sûres" (évite les 400 si la vue n'a pas client_name_norm)
-    query.or(`invoice_number.ilike.${pattern},client_id::text.ilike.${pattern},territory_code.ilike.${pattern},ile.ilike.${pattern}`);
+    query.or(`invoice_number.ilike.${pattern},client_name_raw.ilike.${pattern},client_name_norm.ilike.${pattern},territory_code.ilike.${pattern}`);
   }
 
   query.order(dateColumn, { ascending: false });
@@ -331,12 +248,16 @@ export async function fetchInvoices(filters: ExportFilters = {}, pagination: Pag
     let attemptError: any = null;
 
     for (const dateCol of DATE_COLUMNS) {
-      const query = buildInvoiceQuery(source, filters, pagination, dateCol);
-      const { data, error, count } = await query;
+      const q = buildInvoiceQuery(source, filters, pagination, dateCol);
+      const { data, error, count } = await q;
 
       if (error) {
         attemptError = error;
-        if (shouldFallbackToNextSource(error)) continue;
+
+        if (shouldFallbackToNextSource(error)) {
+          continue; // try next date column (or next source)
+        }
+
         lastError = error;
         break;
       }
@@ -348,7 +269,7 @@ export async function fetchInvoices(filters: ExportFilters = {}, pagination: Pag
         total: count ?? mapped.length,
         warning: combineWarnings(
           rateWarning,
-          missingSources.length ? `Fallback sur ${source} (vue manquante)` : undefined,
+          missingSources.length ? `Fallback: source(s) indisponible(s) -> ${missingSources.join(", ")}` : undefined,
         ),
         source,
       };
@@ -373,6 +294,7 @@ export async function fetchInvoiceByNumber(invoiceNumber: string): Promise<Invoi
   if (!SUPABASE_ENV_OK) throw new Error("Supabase non configure pour les factures");
 
   const { context, warning: rateWarning } = await loadRatesContext();
+
   let invoice: Invoice | null = null;
   const missingSources: string[] = [];
 
@@ -466,13 +388,11 @@ export async function fetchTopClients(filters: ExportFilters = {}): Promise<TopC
   const map = new Map<string, TopClient>();
 
   invoices.forEach((inv) => {
-    // ✅ si client_id manquant, on groupe par nom/label plutôt que tout mettre dans "NC"
-    const key = (inv.client_id || inv.client_name || inv.client_label || "NC").toString();
-
+    const key = inv.client_id || "NC";
     const cur = map.get(key) || {
       client_id: inv.client_id ?? null,
-      client_name: inv.client_name ?? inv.client_label ?? "Sans client",
-      client_label: inv.client_label ?? inv.client_name ?? "Sans client",
+      client_name: inv.client_name ?? inv.client_label ?? inv.client_id ?? "Sans client",
+      client_label: inv.client_label ?? inv.client_name ?? inv.client_id ?? "Sans client",
       ca_ht: 0,
       products_ht: 0,
       margin_estimee: 0,
@@ -483,7 +403,7 @@ export async function fetchTopClients(filters: ExportFilters = {}): Promise<TopC
     cur.products_ht += num(inv.products_ht_eur);
     cur.margin_estimee += num(inv.marge_estimee);
 
-    // garde un territoire “principal” si dispo
+    // on conserve un territoire "principal" si dispo
     if (!cur.territory_code && inv.territory_code) cur.territory_code = inv.territory_code;
 
     map.set(key, cur);
@@ -495,14 +415,15 @@ export async function fetchTopClients(filters: ExportFilters = {}): Promise<TopC
 export async function fetchAlerts(filters: ExportFilters = {}): Promise<Alert[]> {
   const invoicesRes = await fetchInvoices(filters, { page: 1, pageSize: MAX_ROWS });
   const invoices = invoicesRes.data;
+
   const alerts: Alert[] = [];
 
-  const missingClientId = invoices.filter((i) => !i.client_id).length;
-  if (missingClientId) {
+  const missingClient = invoices.filter((i) => !i.client_id).length;
+  if (missingClient) {
     alerts.push({
       id: "missing-client",
       severity: "warning",
-      title: `${missingClientId} facture(s) sans client_id`,
+      title: `${missingClient} facture(s) sans client_id`,
       description: "Verifier le mapping clients.",
     });
   }
@@ -527,11 +448,14 @@ export async function fetchAlerts(filters: ExportFilters = {}): Promise<Alert[]>
     });
   }
 
-  const transitHeavy = invoices.filter((i) => {
-    const invoiceHt = num(i.invoice_ht_el;
-    const transit = num(i.transit_fee_eur);
-    return invoiceHt > 0 && transit / invoiceHt > TRANSIT_ALERT_PCT;
-  }).length;
+  // ✅ ICI: correction de la faute qui cassait le build (invoice_ht_el -> invoice_ht_eur + parenthèse)
+  const transitHeavy = invoices
+    .filter((i) => {
+      const invoiceHt = num(i.invoice_ht_eur);
+      const transit = num(i.transit_fee_eur);
+      return invoiceHt > 0 && transit / invoiceHt > TRANSIT_ALERT_PCT;
+    })
+    .length;
 
   if (transitHeavy) {
     alerts.push({
@@ -542,7 +466,7 @@ export async function fetchAlerts(filters: ExportFilters = {}): Promise<Alert[]>
     });
   }
 
-  const missingTransport = invoices.filter((i) => i.transport_cost_eur == null).length;
+  const missingTransport = invoices.filter((i) => !i.transport_cost_eur).length;
   if (missingTransport) {
     alerts.push({
       id: "missing-transport",
@@ -566,12 +490,10 @@ export async function fetchAlerts(filters: ExportFilters = {}): Promise<Alert[]>
 export async function fetchSalesLines(filters: ExportFilters = {}, pagination: Pagination = {}): Promise<FetchResult<SaleLine>> {
   if (!SUPABASE_ENV_OK) return { data: [], total: 0, warning: "Supabase non configure" };
 
-  const query = supabase
-    .from("sales")
-    .select(
-      "id,sale_date,client_id,product_id,territory_code,destination_id,quantity,unit_price_ht,amount_ht,vat_amount,amount_ttc,invoice_number",
-      { count: "exact" },
-    );
+  const query = supabase.from("sales").select(
+    "id,sale_date,client_id,product_id,territory_code,destination_id,quantity,unit_price_ht,amount_ht,vat_amount,amount_ttc,invoice_number",
+    { count: "exact" },
+  );
 
   if (filters.from) query.gte("sale_date", filters.from);
   if (filters.to) query.lte("sale_date", filters.to);
@@ -613,37 +535,42 @@ export async function fetchSalesLines(filters: ExportFilters = {}, pagination: P
 export async function fetchInvoiceLines(invoiceNumber: string): Promise<FetchResult<InvoiceLine>> {
   if (!SUPABASE_ENV_OK) return { data: [], total: 0, warning: "Supabase non configure" };
 
+  // on teste plusieurs filtres possibles (selon la structure réelle de la table sales)
   const possibleFilters = ["invoice_number", "invoice_no", "order_id"];
+
+  // on teste plusieurs variantes de select (pour éviter les erreurs si colonne absente)
+  const selectVariants = [
+    "id,invoice_number,product_id,quantity,unit_price_ht,amount_ht,total_ht,weight_kg,territory_code,product_label",
+    "id,invoice_number,product_id,quantity,unit_price_ht,amount_ht,total_ht,territory_code,product_label",
+    "id,invoice_number,product_id,quantity,unit_price_ht,amount_ht,territory_code",
+  ];
+
   for (const column of possibleFilters) {
-    const query = supabase
-      .from("sales")
-      .select("id,invoice_number,product_id,quantity,unit_price_ht,amount_ht,total_ht,weight_kg,territory_code,product_label", {
-        count: "exact",
-      })
-      .eq(column, invoiceNumber)
-      .limit(500);
+    for (const selectStr of selectVariants) {
+      const query = supabase.from("sales").select(selectStr, { count: "exact" }).eq(column, invoiceNumber).limit(500);
+      const { data, error, count } = await query;
 
-    const { data, error, count } = await query;
+      if (error) {
+        if (isMissingTableError(error)) return { data: [], total: 0, warning: "Table sales manquante" };
+        if (isMissingColumnError(error)) continue;
+        throw error;
+      }
 
-    if (error) {
-      if (isMissingTableError(error)) return { data: [], total: 0, warning: "Table sales manquante" };
-      if (isMissingColumnError(error)) continue;
-      throw error;
-    }
+      if (data && data.length) {
+        const mapped: InvoiceLine[] = data.map((row: any) => ({
+          id: row.id,
+          invoice_number: row.invoice_number ?? invoiceNumber,
+          product_id: row.product_id ?? null,
+          product_label: row.product_label ?? null,
+          quantity: row.quantity ?? null,
+          unit_price_ht: row.unit_price_ht ?? null,
+          total_ht: row.amount_ht ?? row.total_ht ?? null,
+          weight_kg: row.weight_kg ?? null,
+          territory_code: row.territory_code ?? null,
+        }));
 
-    if (data && data.length) {
-      const mapped: InvoiceLine[] = data.map((row: any) => ({
-        id: row.id,
-        invoice_number: row.invoice_number ?? invoiceNumber,
-        product_id: row.product_id ?? null,
-        product_label: row.product_label ?? null,
-        quantity: row.quantity ?? null,
-        unit_price_ht: row.unit_price_ht ?? null,
-        total_ht: row.amount_ht ?? row.total_ht ?? null,
-        weight_kg: row.weight_kg ?? null,
-        territory_code: row.territory_code ?? null,
-      }));
-      return { data: mapped, total: count ?? mapped.length, source: "sales" };
+        return { data: mapped, total: count ?? mapped.length, source: "sales" };
+      }
     }
   }
 
@@ -673,6 +600,7 @@ export async function fetchCompetitorPrices(
   const rows = Array.isArray(data) ? data : data ? [data] : [];
 
   const mapped: CompetitorPrice[] = [];
+
   rows
     .filter((r) => !territory || !r?.territory_code || String(r.territory_code).toUpperCase() === String(territory).toUpperCase())
     .forEach((r: any) => {
