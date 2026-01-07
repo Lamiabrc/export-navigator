@@ -23,8 +23,22 @@ type Destination = {
   color: string;
 };
 
-type SalesRow = { id: string; sale_date: string; territory_code: string | null; amount_ht: number | null; amount_ttc: number | null };
-type CostRow = { id: string; date: string | null; destination: string | null; amount: number | null; cost_type: string | null };
+type SalesRow = {
+  id: string;
+  sale_date: string;
+  territory_code: string | null;
+  amount_ht: number | null;
+  amount_ttc: number | null;
+};
+
+type CostRow = {
+  id: string;
+  date: string | null;
+  destination: string | null;
+  amount: number | null;
+  cost_type: string | null;
+};
+
 type CompetitionRow = {
   sku: string;
   label: string | null;
@@ -52,7 +66,9 @@ const DESTINATIONS: Destination[] = [
 ];
 
 const formatMoney = (n: number | null | undefined) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
+  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(
+    Number(n || 0)
+  );
 
 const project = (lat: number, lon: number) => {
   const paddingX = 20;
@@ -84,7 +100,9 @@ export default function ControlTower() {
   const [tooltipPos, setTooltipPos] = React.useState<{ x: number; y: number } | null>(null);
   const [zoomTarget, setZoomTarget] = React.useState<"none" | "antilles">("none");
   const [viewport, setViewport] = React.useState<{ scale: number; tx: number; ty: number }>({ scale: 1, tx: 0, ty: 0 });
+
   const draggingRef = React.useRef<{ startX: number; startY: number; startTx: number; startTy: number } | null>(null);
+  const zoomLayerRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     let active = true;
@@ -114,6 +132,7 @@ export default function ControlTower() {
         const [salesRes, costRes] = await Promise.all([salesQuery, costQuery]);
         if (!active) return;
         if (salesRes.error) throw salesRes.error;
+
         let costData = costRes.data || [];
         if (costRes.error) {
           if (isMissingTableError(costRes.error)) {
@@ -248,7 +267,8 @@ export default function ControlTower() {
 
   const hasData = sales.length > 0;
   const hasZeroState = React.useMemo(() => {
-    const allZero = totals.totalSalesHt === 0 && totals.totalSalesTtc === 0 && totals.totalCosts === 0 && totals.margin === 0;
+    const allZero =
+      totals.totalSalesHt === 0 && totals.totalSalesTtc === 0 && totals.totalCosts === 0 && totals.margin === 0;
     return allZero && !hasData;
   }, [totals.totalSalesHt, totals.totalSalesTtc, totals.totalCosts, totals.margin, hasData]);
 
@@ -270,7 +290,9 @@ export default function ControlTower() {
       }),
     []
   );
+
   const metropole = nodes.find((n) => n.code === "FR")!;
+
   const computeZoomForSubset = React.useCallback(
     (codes: string[]) => {
       const subset = nodes.filter((n) => codes.includes(n.code));
@@ -298,14 +320,6 @@ export default function ControlTower() {
     }),
     [viewport.scale, viewport.tx, viewport.ty]
   );
-
-  const competitionByTerritory = React.useMemo(() => {
-    return DESTINATIONS.map((d) => {
-      const rows = competition.filter((r) => r.territory_code === d.code && Number.isFinite(r.gapPct));
-      const avgGap = rows.length ? rows.reduce((s, r) => s + (r.gapPct as number), 0) / rows.length : null;
-      return { territory: d.code, count: rows.length, avgGap };
-    });
-  }, [competition]);
 
   const dromCodes = ["GP", "MQ", "GF", "RE", "YT"];
 
@@ -378,7 +392,7 @@ export default function ControlTower() {
   }, [dromCodes, salesByTerritory, totals.totalSalesHt]);
 
   const alerts = React.useMemo(() => {
-    const list = [];
+    const list: { label: string; severity: "warning" }[] = [];
     if ((marginRate ?? 0) < 5) list.push({ label: "Marge < 5% sur la période", severity: "warning" });
     if (!sales.length) list.push({ label: "Aucune vente sur la période filtrée", severity: "warning" });
     if (!costs.length) list.push({ label: "Pas de coûts logistiques injectés", severity: "warning" });
@@ -386,6 +400,36 @@ export default function ControlTower() {
   }, [marginRate, sales.length, costs.length]);
 
   const actions = ["Ouvrir Explore", "Optimiser incoterm", "Importer CSV coûts"];
+
+  // ✅ Wheel zoom: native listener (passive: false) + pas d'event React dans setState
+  React.useEffect(() => {
+    const el = zoomLayerRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      // empêcher le scroll du navigateur sur la carte
+      e.preventDefault();
+
+      const delta = -e.deltaY * 0.0015;
+      const rect = el.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+
+      setViewport((prev) => {
+        const nextScale = Math.min(5, Math.max(1, prev.scale * (1 + delta)));
+        const sx = (cx - prev.tx) / prev.scale;
+        const sy = (cy - prev.ty) / prev.scale;
+        const tx = cx - sx * nextScale;
+        const ty = cy - sy * nextScale;
+        return { scale: nextScale, tx, ty };
+      });
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, []);
 
   return (
     <MainLayout wrapperClassName="control-tower-neon" variant="bare">
@@ -396,33 +440,34 @@ export default function ControlTower() {
             <h1 className="text-3xl font-bold text-slate-50 drop-shadow-sm">Flux DOM-TOM en temps réel</h1>
             <p className="text-sm text-slate-300/80">Carte : clic = filtre, double clic = Explore préfiltré.</p>
           </div>
-            <div className="flex flex-wrap items-center gap-2 text-right justify-end">
-              <div className="text-xs text-slate-300/80">
-                <div className="font-semibold text-cyan-100">Période : {resolvedRange.label || "dernière période"}</div>
-                <div className="text-[11px] text-slate-400">
-                  Dernière mise à jour : <span className="text-emerald-300">Live</span> {lastRefreshText !== "Live" ? `• ${lastRefreshText}` : ""}
-                </div>
+          <div className="flex flex-wrap items-center gap-2 text-right justify-end">
+            <div className="text-xs text-slate-300/80">
+              <div className="font-semibold text-cyan-100">Période : {resolvedRange.label || "dernière période"}</div>
+              <div className="text-[11px] text-slate-400">
+                Dernière mise à jour : <span className="text-emerald-300">Live</span>{" "}
+                {lastRefreshText !== "Live" ? `• ${lastRefreshText}` : ""}
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant={zoomTarget === "antilles" ? "secondary" : "outline"}
-                  onClick={() => {
-                    if (zoomTarget === "antilles") {
-                      setZoomTarget("none");
-                      setViewport({ scale: 1, tx: 0, ty: 0 });
-                    } else {
-                      setZoomTarget("antilles");
-                      setViewport(computeZoomForSubset(["GP", "MQ", "BL", "MF", "GF"]));
-                    }
-                  }}
-                >
-                  {zoomTarget === "antilles" ? "Vue globale" : "Zoom Antilles"}
-                </Button>
-                <Button variant="outline" onClick={() => setVariable("territory_code", null)}>
-                  Reset territoire
-                </Button>
-                <Button onClick={() => navigate("/explore")}>Ouvrir Explore</Button>
-              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant={zoomTarget === "antilles" ? "secondary" : "outline"}
+                onClick={() => {
+                  if (zoomTarget === "antilles") {
+                    setZoomTarget("none");
+                    setViewport({ scale: 1, tx: 0, ty: 0 });
+                  } else {
+                    setZoomTarget("antilles");
+                    setViewport(computeZoomForSubset(["GP", "MQ", "BL", "MF", "GF"]));
+                  }
+                }}
+              >
+                {zoomTarget === "antilles" ? "Vue globale" : "Zoom Antilles"}
+              </Button>
+              <Button variant="outline" onClick={() => setVariable("territory_code", null)}>
+                Reset territoire
+              </Button>
+              <Button onClick={() => navigate("/explore")}>Ouvrir Explore</Button>
+            </div>
           </div>
         </div>
 
@@ -447,23 +492,10 @@ export default function ControlTower() {
               </div>
 
               <div
+                ref={zoomLayerRef}
                 className="absolute inset-0 bg-gradient-to-br from-slate-900/60 via-slate-900/40 to-cyan-900/20 rounded-xl border border-cyan-500/20 shadow-[0_0_40px_rgba(34,211,238,0.15)]"
                 style={zoomCss}
-                onWheel={(e) => {
-                  e.preventDefault();
-                  const delta = -e.deltaY * 0.0015;
-                  setViewport((prev) => {
-                    const nextScale = Math.min(5, Math.max(1, prev.scale * (1 + delta)));
-                    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
-                    const cx = e.clientX - rect.left;
-                    const cy = e.clientY - rect.top;
-                    const sx = (cx - prev.tx) / prev.scale;
-                    const sy = (cy - prev.ty) / prev.scale;
-                    const tx = cx - sx * nextScale;
-                    const ty = cy - sy * nextScale;
-                    return { scale: nextScale, tx, ty };
-                  });
-                }}
+                // ⚠️ wheel géré via addEventListener(passive:false) dans useEffect
                 onMouseDown={(e) => {
                   draggingRef.current = { startX: e.clientX, startY: e.clientY, startTx: viewport.tx, startTy: viewport.ty };
                 }}
@@ -498,6 +530,7 @@ export default function ControlTower() {
                       </feMerge>
                     </filter>
                   </defs>
+
                   {nodes
                     .filter((n) => n.code !== "FR")
                     .map((node) => {
@@ -508,6 +541,7 @@ export default function ControlTower() {
                       const territoryData = salesByTerritory[node.code];
                       const hasFlow = (territoryData?.ca || 0) > 0;
                       const showLabel = topLabels.has(node.code);
+
                       return (
                         <g key={node.code}>
                           {hasFlow ? (
@@ -522,6 +556,7 @@ export default function ControlTower() {
                               filter="url(#glow)"
                             />
                           ) : null}
+
                           <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={hasFlow ? 0.35 : 0.15} />
                           <circle
                             cx={node.x}
@@ -545,6 +580,7 @@ export default function ControlTower() {
                               navigate("/explore");
                             }}
                           />
+
                           {showLabel ? (
                             <text x={node.x + 12} y={node.y - 8} className="text-xs font-semibold fill-cyan-100 drop-shadow">
                               {node.name}
@@ -578,6 +614,7 @@ export default function ControlTower() {
                       navigate("/explore");
                     }}
                   />
+
                   <text x={metropole.x + 18} y={metropole.y + 4} className="text-sm font-bold fill-cyan-100 drop-shadow">
                     Metropole
                   </text>
@@ -589,7 +626,9 @@ export default function ControlTower() {
                     {DESTINATIONS.filter((d) => d.code !== "FR").map((d) => (
                       <div key={d.code} className="flex items-center gap-2">
                         <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: d.color }} />
-                        <span className="text-[11px] text-slate-200">{d.code} — {d.name}</span>
+                        <span className="text-[11px] text-slate-200">
+                          {d.code} — {d.name}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -635,6 +674,7 @@ export default function ControlTower() {
           <div className="col-span-12 md:col-span-4">
             <NeonBarCard title="Top routes par volume" data={topRoutes} dataKey="volume" labelKey="route" />
           </div>
+
           <div className="col-span-12 md:col-span-4">
             <NeonSurface className="h-full">
               <div className="mb-2 text-sm text-slate-300/80">DOM focus</div>
@@ -659,6 +699,7 @@ export default function ControlTower() {
               </div>
             </NeonSurface>
           </div>
+
           <div className="col-span-12 md:col-span-4">
             <NeonLineCard
               title="CA / Marge / Coûts (30j)"
@@ -694,10 +735,16 @@ export default function ControlTower() {
               </div>
             </NeonSurface>
           </div>
+
           <div className="col-span-12 md:col-span-6">
             <NeonSurface className="flex flex-wrap gap-2">
               {actions.map((a) => (
-                <Button key={a} variant="outline" className="border-cyan-400/40 text-cyan-100 hover:bg-cyan-500/10" onClick={() => a === "Ouvrir Explore" ? navigate("/explore") : null}>
+                <Button
+                  key={a}
+                  variant="outline"
+                  className="border-cyan-400/40 text-cyan-100 hover:bg-cyan-500/10"
+                  onClick={() => (a === "Ouvrir Explore" ? navigate("/explore") : null)}
+                >
                   {a}
                 </Button>
               ))}
@@ -710,11 +757,7 @@ export default function ControlTower() {
             Erreur chargement données : {error}. Affichage des données démo si disponibles.
           </div>
         ) : null}
-        {warning ? (
-          <div className="text-sm text-amber-200">
-            {warning}
-          </div>
-        ) : null}
+        {warning ? <div className="text-sm text-amber-200">{warning}</div> : null}
       </div>
     </MainLayout>
   );
