@@ -137,7 +137,9 @@ export function RefreshNowButton() {
     }
   };
 
-  const label = lastRefreshAt ? new Date(lastRefreshAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "Now";
+  const label = lastRefreshAt
+    ? new Date(lastRefreshAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+    : "Now";
 
   return (
     <Button variant="outline" size="sm" className="gap-2" onClick={() => void handleRefresh()} disabled={busy}>
@@ -251,6 +253,7 @@ export function VariablesBar() {
         </Badge>
         {lookupsLoading ? <Badge variant="secondary">Loading...</Badge> : null}
       </div>
+
       <div className="grid gap-2 md:grid-cols-4 lg:grid-cols-5">
         <Select
           value={variables.territory_code ?? "all"}
@@ -276,13 +279,25 @@ export function VariablesBar() {
           <SelectTrigger className="h-9">
             <SelectValue placeholder="Client" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-h-80">
             <SelectItem value="all">Tous clients</SelectItem>
-            {lookups.clients.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name || c.id}
-              </SelectItem>
-            ))}
+
+            {lookups.clients.map((c: any) => {
+              const label = formatClientName(c);
+              const idShort = shortId(c?.id);
+              const showSecondLine = Boolean(c?.id) && label && label !== c?.id;
+
+              return (
+                <SelectItem key={c.id} value={c.id}>
+                  <div className="flex flex-col leading-tight">
+                    <div className="text-sm">{label}</div>
+                    {showSecondLine ? (
+                      <div className="text-[11px] text-muted-foreground">{idShort}</div>
+                    ) : null}
+                  </div>
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
 
@@ -293,13 +308,23 @@ export function VariablesBar() {
           <SelectTrigger className="h-9">
             <SelectValue placeholder="Produit" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-h-80">
             <SelectItem value="all">Tous produits</SelectItem>
-            {lookups.products.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.label || p.id}
-              </SelectItem>
-            ))}
+            {lookups.products.map((p: any) => {
+              const label = (p?.label || p?.name || p?.sku || p?.id) as string;
+              const idShort = shortId(p?.id);
+              const showSecondLine = Boolean(p?.id) && label && label !== p?.id;
+              return (
+                <SelectItem key={p.id} value={p.id}>
+                  <div className="flex flex-col leading-tight">
+                    <div className="text-sm">{label}</div>
+                    {showSecondLine ? (
+                      <div className="text-[11px] text-muted-foreground">{idShort}</div>
+                    ) : null}
+                  </div>
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
 
@@ -335,4 +360,31 @@ export function VariablesBar() {
       </div>
     </div>
   );
+}
+
+function looksLikeUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function shortId(id?: string | null) {
+  if (!id) return "";
+  if (!looksLikeUuid(id)) return id;
+  return `${id.slice(0, 8)}…${id.slice(-4)}`;
+}
+
+function formatClientName(c: any) {
+  const raw =
+    c?.name ||
+    c?.libelle_client ||
+    c?.label ||
+    c?.raison_sociale ||
+    c?.company_name ||
+    c?.client_name ||
+    c?.id ||
+    "Client";
+
+  if (typeof raw !== "string") return "Client";
+  if (!raw.trim()) return c?.id ? `Client ${shortId(c.id)}` : "Client";
+  if (looksLikeUuid(raw)) return `Client ${shortId(raw)}`;
+  return raw;
 }
