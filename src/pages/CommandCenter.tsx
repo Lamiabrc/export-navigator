@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,10 +12,47 @@ import { fetchAlerts, fetchInvoices, fetchKpis, fetchTopClients } from "@/domain
 import { ExportFilters, Invoice } from "@/domain/export/types";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { toast } from "sonner";
-import { Link } from "react-router-dom";
 
 function money(n: number) {
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(Number(n || 0));
+}
+
+function countFmt(n: number) {
+  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(Number(n || 0));
+}
+
+function looksLikeUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function pickHumanLabel(...values: Array<unknown>) {
+  for (const v of values) {
+    const s = typeof v === "string" ? v.trim() : "";
+    if (!s) continue;
+    if (!looksLikeUuid(s)) return s;
+  }
+  return null;
+}
+
+function invoiceClientDisplay(inv: Invoice) {
+  const anyInv = inv as any; // pour fallback sur champs présents en DB mais pas forcément typés côté TS
+  const label =
+    pickHumanLabel(inv.client_name, anyInv?.client_name_norm, anyInv?.client_name_raw) ??
+    (inv.client_id ? `Client non rapproché` : "Sans client");
+  const unlinked = !pickHumanLabel(inv.client_name, anyInv?.client_name_norm, anyInv?.client_name_raw) && !!inv.client_id;
+  return { label, unlinked };
+}
+
+function topClientDisplay(c: any) {
+  const label =
+    pickHumanLabel(c?.client_label, c?.client_name, c?.client_name_norm, c?.client_name_raw) ??
+    (c?.client_id ? "Client non rapproché" : "Sans client");
+  const unlinked = looksLikeUuid(String(c?.client_label || "")) || looksLikeUuid(String(c?.client_name || ""));
+  return { label, unlinked };
 }
 
 export default function CommandCenter() {
@@ -69,14 +106,14 @@ export default function CommandCenter() {
     if (alertsQuery.error) toast.error((alertsQuery.error as Error).message);
   }, [kpisQuery.error, invoicesQuery.error, alertsQuery.error]);
 
-  const kpiCards = [
-    { id: "ca", label: "CA HT", value: kpisQuery.data?.caHt ?? 0 },
-    { id: "products", label: "Total produits", value: kpisQuery.data?.totalProducts ?? 0 },
-    { id: "transit", label: "Total transit", value: kpisQuery.data?.totalTransit ?? 0 },
-    { id: "transport", label: "Transport (info)", value: kpisQuery.data?.totalTransport ?? 0 },
-    { id: "margin", label: "Marge estimee", value: kpisQuery.data?.estimatedMargin ?? 0 },
-    { id: "invoices", label: "Nb factures", value: kpisQuery.data?.invoiceCount ?? 0 },
-    { id: "parcels", label: "Nb colis", value: kpisQuery.data?.parcelCount ?? 0 },
+  const kpiCards: Array<{ id: string; label: string; value: number; kind: "money" | "count" }> = [
+    { id: "ca", label: "CA HT", value: kpisQuery.data?.caHt ?? 0, kind: "money" },
+    { id: "products", label: "Total produits", value: kpisQuery.data?.totalProducts ?? 0, kind: "money" },
+    { id: "transit", label: "Total transit", value: kpisQuery.data?.totalTransit ?? 0, kind: "money" },
+    { id: "transport", label: "Transport (info)", value: kpisQuery.data?.totalTransport ?? 0, kind: "money" },
+    { id: "margin", label: "Marge estimee", value: kpisQuery.data?.estimatedMargin ?? 0, kind: "money" },
+    { id: "invoices", label: "Nb factures", value: kpisQuery.data?.invoiceCount ?? 0, kind: "count" },
+    { id: "parcels", label: "Nb colis", value: kpisQuery.data?.parcelCount ?? 0, kind: "count" },
   ];
 
   return (
@@ -114,15 +151,13 @@ export default function CommandCenter() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {kpiCards.map((kpi) => (
-            <Card
-              key={kpi.id}
-              className="cursor-pointer hover:border-primary/50 transition"
-              onClick={() => handleDrill(kpi.id)}
-            >
+            <Card key={kpi.id} className="cursor-pointer hover:border-primary/50 transition" onClick={() => handleDrill(kpi.id)}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-muted-foreground">{kpi.label}</CardTitle>
               </CardHeader>
-              <CardContent className="text-2xl font-bold">{money(kpi.value)}</CardContent>
+              <CardContent className="text-2xl font-bold">
+                {kpi.kind === "money" ? money(kpi.value) : countFmt(kpi.value)}
+              </CardContent>
             </Card>
           ))}
         </div>
@@ -143,10 +178,7 @@ export default function CommandCenter() {
                 <p className="text-sm text-muted-foreground">Aucune alerte sur la periode.</p>
               ) : (
                 alertsQuery.data?.map((a) => (
-                  <div
-                    key={a.id}
-                    className="flex items-start gap-2 rounded-lg border p-3"
-                  >
+                  <div key={a.id} className="flex items-start gap-2 rounded-lg border p-3">
                     <Badge variant={a.severity === "critical" ? "destructive" : a.severity === "warning" ? "secondary" : "outline"}>
                       {a.severity}
                     </Badge>
@@ -175,26 +207,33 @@ export default function CommandCenter() {
                 <p className="text-sm text-muted-foreground">Aucun client.</p>
               ) : (
                 <div className="space-y-2">
-                  {topClientsQuery.data?.slice(0, 6).map((c) => (
-                    <div key={c.client_id || "nc"} className="flex items-center justify-between rounded-lg border p-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <div className="font-semibold">{c.client_label || c.client_name || "Sans client"}</div>
-                          {c.client_label && looksLikeUuid(c.client_label) ? (
-                            <Badge variant="outline" className="text-[10px]">client non rapproche</Badge>
+                  {topClientsQuery.data?.slice(0, 6).map((c: any) => {
+                    const d = topClientDisplay(c);
+                    return (
+                      <div key={c.client_id || "nc"} className="flex items-center justify-between rounded-lg border p-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-semibold">{d.label}</div>
+                            {d.unlinked ? (
+                              <Badge variant="outline" className="text-[10px]">
+                                client non rapproché
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{c.territory_code || "?"}</div>
+                          {d.unlinked ? (
+                            <Link to="/clients" className="text-[11px] text-primary hover:underline">
+                              Ouvrir Clients
+                            </Link>
                           ) : null}
                         </div>
-                        <div className="text-xs text-muted-foreground">{c.territory_code || "?"}</div>
-                        {c.client_label && looksLikeUuid(c.client_label) ? (
-                          <Link to="/clients" className="text-[11px] text-primary hover:underline">Ouvrir Clients</Link>
-                        ) : null}
+                        <div className="text-right">
+                          <div className="text-sm font-semibold">{money(c.margin_estimee)}</div>
+                          <div className="text-[11px] text-muted-foreground">Produits: {money(c.products_ht)}</div>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-sm font-semibold">{money(c.margin_estimee)}</div>
-                        <div className="text-[11px] text-muted-foreground">Produits: {money(c.products_ht)}</div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -241,27 +280,37 @@ export default function CommandCenter() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    invoicesQuery.data?.data.map((inv) => (
-                      <TableRow
-                        key={inv.invoice_number}
-                        className="cursor-pointer hover:bg-muted/40"
-                        onClick={() => handleInvoiceClick(inv)}
-                      >
-                        <TableCell>{inv.invoice_date || "?"}</TableCell>
-                        <TableCell className="font-mono text-xs">{inv.invoice_number}</TableCell>
-                        <TableCell>{inv.client_name || inv.client_id || "Sans client"}</TableCell>
-                        <TableCell>{inv.territory_code || inv.ile || "?"}</TableCell>
-                        <TableCell className="text-right">
-                          {inv.products_estimated ? (
-                            <Badge variant="outline" className="mr-2">Estime</Badge>
-                          ) : null}
-                          {money(inv.products_ht_eur)}
-                        </TableCell>
-                        <TableCell className="text-right">{money(inv.transit_fee_eur)}</TableCell>
-                        <TableCell className="text-right">{money(inv.transport_cost_eur)}</TableCell>
-                        <TableCell className="text-right">{money(inv.marge_estimee)}</TableCell>
-                      </TableRow>
-                    ))
+                    invoicesQuery.data?.data.map((inv) => {
+                      const c = invoiceClientDisplay(inv);
+                      return (
+                        <TableRow
+                          key={inv.invoice_number}
+                          className="cursor-pointer hover:bg-muted/40"
+                          onClick={() => handleInvoiceClick(inv)}
+                        >
+                          <TableCell>{inv.invoice_date || "?"}</TableCell>
+                          <TableCell className="font-mono text-xs">{inv.invoice_number}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span>{c.label}</span>
+                              {c.unlinked ? (
+                                <Badge variant="outline" className="text-[10px]">
+                                  non rapproché
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell>{(inv as any)?.ile || inv.territory_code || "?"}</TableCell>
+                          <TableCell className="text-right">
+                            {(inv as any)?.products_estimated ? <Badge variant="outline" className="mr-2">Estime</Badge> : null}
+                            {money(inv.products_ht_eur)}
+                          </TableCell>
+                          <TableCell className="text-right">{money(inv.transit_fee_eur)}</TableCell>
+                          <TableCell className="text-right">{money(inv.transport_cost_eur)}</TableCell>
+                          <TableCell className="text-right">{money((inv as any)?.marge_estimee ?? 0)}</TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -293,8 +342,4 @@ function KpiTile({ label, value }: { label: string; value: number }) {
       <div className="text-xl font-semibold">{money(value)}</div>
     </div>
   );
-}
-
-function looksLikeUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
