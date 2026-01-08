@@ -28,9 +28,7 @@ import { useTaxesOm } from "@/hooks/useTaxesOm";
 
 type Destination = { code: string; name: string };
 
-/**
- * ✅ Métropole supprimée du listing (demande user)
- */
+/** ✅ Métropole supprimée du listing */
 const DESTINATIONS: Destination[] = [
   { code: "GP", name: "Guadeloupe" },
   { code: "MQ", name: "Martinique" },
@@ -42,9 +40,7 @@ const DESTINATIONS: Destination[] = [
   { code: "SPM", name: "Saint-Pierre-et-Miquelon" },
 ];
 
-/**
- * ✅ Références douanières (HS codes) fournies
- */
+/** ✅ Références douanières (HS codes) fournies */
 const OUR_HS_CODES = [
   "61151010",
   "62129000",
@@ -67,6 +63,26 @@ type ProductRow = {
   sku?: string | null;
   label?: string | null;
   hs_code?: string | null;
+};
+
+type VatInfo = {
+  title: string;
+  normal?: number;
+  reduced?: number;
+  special1?: number;
+  special2?: number;
+  note: string;
+};
+
+const OFFICIAL_VAT: Record<string, VatInfo> = {
+  GP: { title: "TVA DOM", normal: 8.5, reduced: 2.1, special1: 1.75, special2: 1.05, note: "Guadeloupe : 4 taux (8,5 / 2,1 / 1,75 / 1,05)." },
+  MQ: { title: "TVA DOM", normal: 8.5, reduced: 2.1, special1: 1.75, special2: 1.05, note: "Martinique : 4 taux (8,5 / 2,1 / 1,75 / 1,05)." },
+  RE: { title: "TVA DOM", normal: 8.5, reduced: 2.1, special1: 1.75, special2: 1.05, note: "Réunion : 4 taux (8,5 / 2,1 / 1,75 / 1,05)." },
+  GF: { title: "TVA", note: "Guyane : TVA non applicable." },
+  YT: { title: "TVA", note: "Mayotte : TVA non applicable." },
+  BL: { title: "TVA", note: "COM : assimilé “pays tiers” pour la TVA (facturation HT/export en général)." },
+  MF: { title: "TVA", note: "COM : assimilé “pays tiers” pour la TVA (facturation HT/export en général)." },
+  SPM: { title: "TVA", note: "COM : assimilé “pays tiers” pour la TVA (facturation HT/export en général)." },
 };
 
 function uniqStrings(values: (string | null | undefined)[]) {
@@ -134,6 +150,84 @@ function isPermissionError(e: any) {
     msg.includes("rls") ||
     msg.includes("not allowed")
   );
+}
+
+function isMissingColumnError(e: any) {
+  const msg = String(e?.message || "").toLowerCase();
+  const code = String(e?.code || "").toUpperCase();
+  return (
+    code === "42703" ||
+    (msg.includes("column") &&
+      (msg.includes("does not exist") ||
+        msg.includes("schema cache") ||
+        msg.includes("could not find")))
+  );
+}
+
+/** ✅ Chargement products avec fallback de colonnes (sku/label/hs_code) */
+async function loadProductsFlexible(limit = 5000): Promise<ProductRow[]> {
+  const attempts: Array<{
+    select: string;
+    map: (r: any) => ProductRow;
+  }> = [
+    {
+      select: "id,sku,label,hs_code",
+      map: (r) => ({ id: r.id, sku: r.sku ?? null, label: r.label ?? null, hs_code: r.hs_code ?? null }),
+    },
+    {
+      select: "id,code_article,libelle_article,hs_code,hs4",
+      map: (r) => ({
+        id: r.id,
+        sku: r.code_article ?? null,
+        label: r.libelle_article ?? null,
+        hs_code: r.hs_code ?? r.hs4 ?? null,
+      }),
+    },
+    {
+      select: "id,code,libelle,hs_code,hs4",
+      map: (r) => ({
+        id: r.id,
+        sku: r.code ?? null,
+        label: r.libelle ?? null,
+        hs_code: r.hs_code ?? r.hs4 ?? null,
+      }),
+    },
+    {
+      select: "id,code,name,hs_code,hs4",
+      map: (r) => ({
+        id: r.id,
+        sku: r.code ?? null,
+        label: r.name ?? null,
+        hs_code: r.hs_code ?? r.hs4 ?? null,
+      }),
+    },
+  ];
+
+  let lastErr: any = null;
+
+  for (const a of attempts) {
+    const res = await supabase.from("products").select(a.select).limit(limit);
+    if (res.error) {
+      lastErr = res.error;
+
+      // stop conditions
+      if (isPermissionError(res.error)) throw res.error;
+      if (isMissingTableError(res.error)) throw res.error;
+
+      // try next if it looks like a missing column / schema-cache mismatch
+      if (isMissingColumnError(res.error)) continue;
+
+      // unknown error => stop
+      throw res.error;
+    }
+
+    const rows = (res.data || []).map(a.map);
+    return rows
+      .map((p) => ({ ...p, hs_code: normalizeHS(p.hs_code) || null }))
+      .filter((p) => Boolean(p.hs_code));
+  }
+
+  throw lastErr || new Error("Impossible de charger products");
 }
 
 // Essaie plusieurs colonnes possibles pour filtrer (schema incertain)
@@ -256,7 +350,6 @@ export default function TaxesOM() {
   const refreshNonceRef = React.useRef(0);
   const [refreshNonce, setRefreshNonce] = React.useState(0);
 
-  // Sécurité: si une valeur "FR" traîne (cache/state), on la remplace
   React.useEffect(() => {
     if (destination === "FR") setDestination("GP");
   }, [destination]);
@@ -281,7 +374,6 @@ export default function TaxesOM() {
         .filter((r) => Boolean(r.hs_code));
     }
 
-    // fallback : HS codes only (si products absent / refusé)
     return OUR_HS_CODES.map((h) => ({
       key: `HS-${h}`,
       sku: null,
@@ -311,6 +403,11 @@ export default function TaxesOM() {
     return m;
   }, [omRows]);
 
+  const missingHsForDestination = React.useMemo(() => {
+    const set = new Set(Array.from(omByHs.keys()).map(normalizeHS));
+    return OUR_HS_CODES.map(normalizeHS).filter((h) => !set.has(h));
+  }, [omByHs]);
+
   React.useEffect(() => {
     setSelectedHs(null);
   }, [destination]);
@@ -330,22 +427,16 @@ export default function TaxesOM() {
           throw new Error("Supabase non configuré (VITE_SUPABASE_URL / KEY).");
         }
 
-        // 1) Produits (optionnel)
+        // 1) Produits (fallback colonnes)
         let prod: ProductRow[] = [];
         try {
-          const res = await supabase
-            .from("products")
-            .select("id,sku,label,hs_code")
-            .not("hs_code", "is", null)
-            .limit(5000);
-          if (res.error) throw res.error;
-          prod = (res.data || []) as ProductRow[];
+          prod = await loadProductsFlexible(5000);
         } catch (e: any) {
           const msg = isMissingTableError(e)
-            ? "Table products absente : recherche par produit limitée (HS only OK)."
+            ? "Table products introuvable OU non exposée à l’API (schéma). Recherche par produit limitée (HS only OK)."
             : isPermissionError(e)
-              ? "Accès products refusé (RLS/droits) : recherche par produit limitée (HS only OK)."
-              : "Impossible de charger products : recherche par produit limitée (HS only OK).";
+              ? "Accès products refusé (RLS/droits). Recherche par produit limitée (HS only OK)."
+              : "Impossible de charger products. Recherche par produit limitée (HS only OK).";
           setWarning((prev) => (prev ? `${prev}\n${msg}` : msg));
           prod = [];
         }
@@ -358,7 +449,7 @@ export default function TaxesOM() {
         setProducts(prod);
         setOurProducts(our);
 
-        // 2) OM rates : toujours filtrer sur NOS HS codes
+        // 2) OM rates : filtrer sur NOS HS codes
         try {
           const om = await fetchWithColumnFallback<any>({
             table: "om_rates",
@@ -380,7 +471,7 @@ export default function TaxesOM() {
 
           if (!alive) return;
 
-          // fallback client-side si filtre hs pas appliqué côté DB
+          // fallback client-side si filtre HS pas appliqué côté DB
           let data = (om.data || []) as any[];
           if (!om.usedIn) {
             const ourSet = new Set(OUR_HS_CODES.map(normalizeHS));
@@ -474,6 +565,8 @@ export default function TaxesOM() {
     };
   }, [destination, refreshNonce]);
 
+  const vatInfo = OFFICIAL_VAT[destination];
+
   return (
     <MainLayout>
       <div className="space-y-5">
@@ -515,7 +608,7 @@ export default function TaxesOM() {
           <Card
             className={
               String(headerMessage || "").toLowerCase().includes("absente") ||
-              String(headerMessage || "").toLowerCase().includes("manquante") ||
+              String(headerMessage || "").toLowerCase().includes("introuvable") ||
               String(headerMessage || "").toLowerCase().includes("refus")
                 ? "border-amber-300 bg-amber-50"
                 : "border-red-200"
@@ -541,10 +634,15 @@ export default function TaxesOM() {
             HS références: <span className="ml-1 font-semibold">{OUR_HS_CODES.length}</span>
           </Badge>
 
+          <Badge variant={missingHsForDestination.length ? "outline" : "secondary"}>
+            HS sans règle OM:{" "}
+            <span className="ml-1 font-semibold">{missingHsForDestination.length}</span>
+          </Badge>
+
           <Button
             variant="outline"
             onClick={() => {
-              refresh(); // hook counts
+              refresh();
               refreshNonceRef.current += 1;
               setRefreshNonce(refreshNonceRef.current);
             }}
@@ -556,7 +654,35 @@ export default function TaxesOM() {
           </Button>
         </div>
 
-        {/* ✅ Récapitulatif demandé */}
+        {/* ✅ TVA officielle (réelle) */}
+        {vatInfo ? (
+          <Card className="border-muted">
+            <CardHeader>
+              <CardTitle className="text-base">TVA officielle — {destinationLabel}</CardTitle>
+              <CardDescription>Valeurs “réelles” (référence) pour t’aider même si vat_rates est vide.</CardDescription>
+            </CardHeader>
+            <CardContent className="text-sm space-y-2">
+              {vatInfo.normal !== undefined ? (
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">Normal: {vatInfo.normal}%</Badge>
+                  <Badge variant="secondary">Réduit: {vatInfo.reduced}%</Badge>
+                  {vatInfo.special1 !== undefined ? (
+                    <Badge variant="outline">Particulier: {vatInfo.special1}%</Badge>
+                  ) : null}
+                  {vatInfo.special2 !== undefined ? (
+                    <Badge variant="outline">Particulier: {vatInfo.special2}%</Badge>
+                  ) : null}
+                </div>
+              ) : null}
+              <div className="text-muted-foreground">{vatInfo.note}</div>
+              <div className="text-xs text-muted-foreground">
+                (Tes tables Supabase restent la source opérationnelle ; ceci est un repère officiel.)
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {/* ✅ Récap */}
         <Card>
           <CardHeader>
             <CardTitle>Récapitulatif — OM de nos produits (HS) + recherche</CardTitle>
@@ -572,7 +698,7 @@ export default function TaxesOM() {
                 <Input
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
-                  placeholder="Rechercher (sku / label / HS code)…"
+                  placeholder="Rechercher (code article / libellé / HS)…"
                   className="pl-9"
                 />
               </div>
@@ -587,7 +713,7 @@ export default function TaxesOM() {
                     <th>Produit</th>
                     <th className="whitespace-nowrap">HS</th>
                     <th className="whitespace-nowrap">Règles OM</th>
-                    <th className="whitespace-nowrap">Détails</th>
+                    <th className="whitespace-nowrap">Statut</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -595,6 +721,7 @@ export default function TaxesOM() {
                     const hs = normalizeHS(r.hs_code);
                     const rules = omByHs.get(hs) || [];
                     const selected = selectedHs === hs;
+                    const ok = rules.length > 0;
                     return (
                       <tr
                         key={r.key}
@@ -614,7 +741,7 @@ export default function TaxesOM() {
                             </div>
                           ) : (
                             <span className="text-muted-foreground">
-                              (produits indisponibles) — HS uniquement
+                              (products indisponible) — HS uniquement
                             </span>
                           )}
                         </td>
@@ -622,12 +749,14 @@ export default function TaxesOM() {
                           <Badge variant="outline">{hs}</Badge>
                         </td>
                         <td className="whitespace-nowrap">
-                          <Badge variant={rules.length ? "secondary" : "outline"}>
+                          <Badge variant={ok ? "secondary" : "outline"}>
                             {rules.length} règle(s)
                           </Badge>
                         </td>
-                        <td className="whitespace-nowrap text-muted-foreground">
-                          Cliquer
+                        <td className="whitespace-nowrap">
+                          <Badge variant={ok ? "secondary" : "outline"}>
+                            {ok ? "OK" : "À compléter"}
+                          </Badge>
                         </td>
                       </tr>
                     );
@@ -636,9 +765,11 @@ export default function TaxesOM() {
               </table>
             </div>
 
-            {recapFiltered.length > 300 ? (
+            {missingHsForDestination.length ? (
               <div className="text-xs text-muted-foreground">
-                Affichage limité à 300 lignes (performance).
+                HS sans règle OM pour {destinationLabel} :{" "}
+                {missingHsForDestination.slice(0, 12).join(", ")}
+                {missingHsForDestination.length > 12 ? "…" : ""}
               </div>
             ) : null}
 
@@ -659,8 +790,6 @@ export default function TaxesOM() {
                 ) : (omByHs.get(selectedHs) || []).length === 0 ? (
                   <div className="text-sm text-muted-foreground">
                     Aucune règle OM trouvée pour ce HS code sur cette destination.
-                    <br />
-                    Vérifie que <code className="text-xs">om_rates</code> contient bien ce HS et la destination.
                   </div>
                 ) : (
                   (omByHs.get(selectedHs) || []).slice(0, 50).map((row, idx) => (
@@ -702,11 +831,11 @@ export default function TaxesOM() {
               <CardHeader>
                 <CardTitle>Récap — Notes</CardTitle>
                 <CardDescription>
-                  Les “données réelles” affichées ici sont celles de tes tables Supabase (om_rates/vat_rates/tax_rules_extra).
+                  Les données OM/taxes utilisées viennent de tes tables Supabase. La TVA “officielle” est affichée comme repère.
                 </CardDescription>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground space-y-2">
-                <div>• Métropole est exclue du listing comme demandé.</div>
+                <div>• Métropole exclue du listing.</div>
                 <div>• Si products est refusé (RLS), le récap reste utilisable via HS codes.</div>
               </CardContent>
             </Card>
@@ -760,7 +889,7 @@ export default function TaxesOM() {
                   <div className="text-sm text-muted-foreground">Chargement TVA…</div>
                 ) : !vatRows.length ? (
                   <div className="text-sm text-muted-foreground">
-                    Aucune règle TVA trouvée (ou table absente).
+                    Aucune règle TVA trouvée (ou table absente). Repère officiel affiché plus haut.
                   </div>
                 ) : (
                   vatRows.slice(0, 200).map((row, idx) => (
@@ -808,13 +937,13 @@ export default function TaxesOM() {
               <CardHeader>
                 <CardTitle>Produits</CardTitle>
                 <CardDescription>
-                  {isLoading ? "Chargement..." : `${products.length} produit(s) (tous HS confondus)`}
+                  {isLoading ? "Chargement..." : `${products.length} produit(s) avec HS`}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
                 {!products.length ? (
                   <div className="text-sm text-muted-foreground">
-                    Aucun produit chargé (table absente ou refusée). Le récap fonctionne quand même via HS.
+                    Aucun produit chargé (table absente/refusée). Le récap fonctionne via HS.
                   </div>
                 ) : (
                   products.slice(0, 50).map((p) => (
