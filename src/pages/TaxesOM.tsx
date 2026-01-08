@@ -106,7 +106,6 @@ function vatFallbackForTerritory(code: string) {
   return "—";
 }
 
-/** Détecte une colonne existante (pour vat_rates / tax_rules_extra) */
 function firstExistingKey(obj: any, candidates: string[]) {
   if (!obj) return null;
   const keys = new Set(Object.keys(obj));
@@ -114,13 +113,26 @@ function firstExistingKey(obj: any, candidates: string[]) {
   return null;
 }
 
-/** ✅ Choisit une table accessible (octroi_rates > om_rates) */
-async function pickOmTable(): Promise<string> {
-  for (const t of ["octroi_rates", "om_rates"]) {
-    const res = await supabase.from(t).select("*").limit(1);
+/**
+ * ✅ Choisit une table OM qui a le schéma attendu.
+ * On teste un select des colonnes connues (sinon PostgREST renvoie 400).
+ */
+async function pickOmTableWithSchema(): Promise<string> {
+  const tables = ["octroi_rates", "om_rates"] as const;
+
+  for (const t of tables) {
+    const res = await supabase
+      .from(t)
+      .select("territory_code,hs4,om_rate,omr_rate,year,source")
+      .limit(1);
+
     if (!res.error) return t;
+
     if (isMissingTableError(res.error)) continue;
     if (isPermissionError(res.error)) continue;
+
+    // Si erreur "column does not exist", on skip aussi
+    continue;
   }
   return "om_rates";
 }
@@ -165,10 +177,10 @@ export default function TaxesOM() {
     return HS_CODES.filter((h) => h.toLowerCase().includes(q));
   }, [search]);
 
-  /** Index OM: territory -> hs4 -> rows */
   const omIndex = React.useMemo(() => {
     const map = new Map<string, Map<string, OmRow[]>>();
     for (const t of TERRITORIES) map.set(t.code, new Map());
+
     for (const r of omRows) {
       const terr = String(r.territory_code ?? "").trim();
       const h4 = String(r.hs4 ?? "").trim();
@@ -177,13 +189,14 @@ export default function TaxesOM() {
       if (!terrMap.has(h4)) terrMap.set(h4, []);
       terrMap.get(h4)!.push(r);
     }
-    // tri par année décroissante
+
     for (const terrMap of map.values()) {
       for (const [k, arr] of terrMap.entries()) {
         arr.sort((a, b) => (Number(b.year ?? -1) - Number(a.year ?? -1)));
         terrMap.set(k, arr);
       }
     }
+
     return map;
   }, [omRows]);
 
@@ -214,7 +227,6 @@ export default function TaxesOM() {
       ? taxRows.filter((r) => String(r?.[taxMeta.territoryCol as any] ?? "").trim() === selected.territory)
       : [];
 
-    // si tax_rules_extra a un hs col, on filtre aussi par hs4/hs
     let extra = extraBase;
     if (taxMeta?.hsCol) {
       const hsCol = taxMeta.hsCol;
@@ -222,7 +234,7 @@ export default function TaxesOM() {
       const targetHs4 = hs4Of(selected.hs);
       extra = extraBase.filter((r) => {
         const v = normalizeHS(r?.[hsCol]);
-        if (!v) return true; // si vide, on garde
+        if (!v) return true;
         return v === targetHs || v === targetHs4 || v.startsWith(targetHs4);
       });
     }
@@ -242,23 +254,51 @@ export default function TaxesOM() {
       try {
         if (!SUPABASE_ENV_OK) throw new Error("Supabase non configuré (VITE_SUPABASE_URL / KEY).");
 
-        // ✅ OM (octroi_rates > om_rates) — colonnes connues => pas de 400
-        const omT = await pickOmTable();
-        if (!alive) return;
-        setOmTable(omT);
-
+        // ✅ OM : table schema-compatible, puis fallback si vide après filtre
         const terrFilter = TERRITORIES.map((t) => t.code);
+        const preferred = await pickOmTableWithSchema();
 
-        const omRes = await supabase
-          .from(omT)
-          .select("*")
-          .in("territory_code" as any, terrFilter as any)
-          .in("hs4" as any, hs4List as any)
-          .limit(20000);
+        const tryLoadOm = async (table: string) => {
+          const res = await supabase
+            .from(table)
+            .select("*")
+            .in("territory_code" as any, terrFilter as any)
+            .in("hs4" as any, hs4List as any)
+            .limit(20000);
 
-        if (omRes.error) throw omRes.error;
+          if (res.error) throw res.error;
+          return (res.data || []) as OmRow[];
+        };
+
+        let used = preferred;
+        let data: OmRow[] = [];
+
+        try {
+          data = await tryLoadOm(preferred);
+        } catch (e: any) {
+          // Si octroi_rates a pas les colonnes attendues ou autre, fallback
+          if (preferred !== "om_rates") {
+            used = "om_rates";
+            data = await tryLoadOm("om_rates");
+            setWarning((p) => (p ? `${p}\nFallback OM: octroi_rates incompatible → om_rates utilisé.` : "Fallback OM: octroi_rates incompatible → om_rates utilisé."));
+          } else {
+            throw e;
+          }
+        }
+
+        // si table OK mais retour 0 (souvent table vide) => fallback sur om_rates
+        if (data.length === 0 && used !== "om_rates") {
+          const omFallback = await tryLoadOm("om_rates");
+          if (omFallback.length > 0) {
+            used = "om_rates";
+            data = omFallback;
+            setWarning((p) => (p ? `${p}\nFallback OM: octroi_rates vide → om_rates utilisé.` : "Fallback OM: octroi_rates vide → om_rates utilisé."));
+          }
+        }
+
         if (!alive) return;
-        setOmRows((omRes.data || []) as OmRow[]);
+        setOmTable(used);
+        setOmRows(data);
 
         // ✅ VAT (best effort)
         try {
@@ -280,7 +320,7 @@ export default function TaxesOM() {
           } else {
             setVatRows([]);
           }
-        } catch (e: any) {
+        } catch {
           setVatMeta(null);
           setVatRows([]);
           setWarning((p) => (p ? `${p}\nvat_rates indisponible → repère TVA affiché.` : "vat_rates indisponible → repère TVA affiché."));
@@ -309,7 +349,7 @@ export default function TaxesOM() {
           } else {
             setTaxRows([]);
           }
-        } catch (e: any) {
+        } catch {
           setTaxMeta(null);
           setTaxRows([]);
           setWarning((p) => (p ? `${p}\ntax_rules_extra indisponible.` : "tax_rules_extra indisponible."));
@@ -332,7 +372,6 @@ export default function TaxesOM() {
   return (
     <MainLayout>
       <div className="space-y-5">
-        {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-sm text-muted-foreground">Dashboard</p>
@@ -341,7 +380,7 @@ export default function TaxesOM() {
               OM & Taxes — Récapitulatif par territoire × HS
             </h1>
             <p className="text-sm text-muted-foreground">
-              Page dédiée uniquement au récapitulatif : <b>OM/OMR</b> + <b>TVA</b> + <b>Taxes extra</b> sur tes HS codes.
+              Page dédiée uniquement au récapitulatif : <b>OM/OMR</b> + <b>TVA</b> + <b>Taxes extra</b>.
             </p>
           </div>
 
@@ -359,7 +398,6 @@ export default function TaxesOM() {
           </Button>
         </div>
 
-        {/* Messages */}
         {error ? (
           <Card className="border-red-200">
             <CardContent className="pt-6 text-sm text-foreground whitespace-pre-line">
@@ -374,7 +412,6 @@ export default function TaxesOM() {
           </Card>
         ) : null}
 
-        {/* Meta */}
         <div className="flex flex-wrap gap-2 items-center">
           <Badge variant="secondary">HS: {HS_CODES.length}</Badge>
           <Badge variant="secondary">HS4 uniques: {hs4List.length}</Badge>
@@ -395,7 +432,6 @@ export default function TaxesOM() {
           </Badge>
         </div>
 
-        {/* Search */}
         <Card>
           <CardHeader>
             <CardTitle>Filtre HS</CardTitle>
@@ -411,20 +447,21 @@ export default function TaxesOM() {
                 className="pl-9"
               />
             </div>
-            <Badge variant="secondary">{filteredHs.length} / {HS_CODES.length}</Badge>
+            <Badge variant="secondary">
+              {filteredHs.length} / {HS_CODES.length}
+            </Badge>
             <div className="text-xs text-muted-foreground sm:ml-auto">
               Clique une cellule pour voir les détails.
             </div>
           </CardContent>
         </Card>
 
-        {/* Matrix */}
         <Card>
           <CardHeader>
             <CardTitle>Matrice — OM / OMR / Taxes</CardTitle>
             <CardDescription>
               Lignes = HS codes. Colonnes = territoires. <br />
-              Les valeurs OM/OMR sont lues sur <code className="text-xs">hs4</code> (préfixe du HS code).
+              OM/OMR matchés via <code className="text-xs">hs4</code> (préfixe des HS codes).
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -456,7 +493,8 @@ export default function TaxesOM() {
 
                         {TERRITORIES.map((t) => {
                           const rows = omIndex.get(t.code)?.get(h4) || [];
-                          const best = rows[0] || null; // déjà trié année desc
+                          const best = rows[0] || null;
+
                           const om = best ? percentFormat(best.om_rate) : "—";
                           const omr = best ? percentFormat(best.omr_rate) : "—";
                           const year = best?.year ?? null;
@@ -501,20 +539,17 @@ export default function TaxesOM() {
             </div>
 
             <div className="text-xs text-muted-foreground mt-2">
-              Affichage “OM/OMR” = règle la plus récente (année max) si plusieurs lignes existent.
+              Valeur affichée = règle la plus récente (année max) si plusieurs lignes.
             </div>
           </CardContent>
         </Card>
 
-        {/* Details */}
         <Card className="border-muted">
           <CardHeader>
             <CardTitle className="text-base">
               Détails — {selected ? `${selected.territory} × HS ${selected.hs} (HS4 ${hs4Of(selected.hs)})` : "clique une cellule"}
             </CardTitle>
-            <CardDescription>
-              Détails bruts (OM/OMR + TVA + Taxes extra) pour validation.
-            </CardDescription>
+            <CardDescription>Détails bruts (OM/VAT/Extra) pour validation.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {!selected ? (
@@ -523,7 +558,6 @@ export default function TaxesOM() {
               </div>
             ) : (
               <>
-                {/* OM */}
                 <Card className="border-muted">
                   <CardHeader>
                     <CardTitle className="text-base">OM / OMR</CardTitle>
@@ -543,13 +577,9 @@ export default function TaxesOM() {
                         </Card>
                       ))
                     )}
-                    {selectedDetails?.om?.length > 20 ? (
-                      <div className="text-xs text-muted-foreground">Affichage limité à 20 lignes.</div>
-                    ) : null}
                   </CardContent>
                 </Card>
 
-                {/* VAT */}
                 <Card className="border-muted">
                   <CardHeader>
                     <CardTitle className="text-base">TVA</CardTitle>
@@ -574,7 +604,6 @@ export default function TaxesOM() {
                   </CardContent>
                 </Card>
 
-                {/* Extra */}
                 <Card className="border-muted">
                   <CardHeader>
                     <CardTitle className="text-base">Taxes extra</CardTitle>
