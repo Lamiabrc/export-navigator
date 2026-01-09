@@ -46,29 +46,24 @@ function normalizeSpaces(s: string) {
   return (s || "").replace(/\s+/g, " ").trim();
 }
 
-function normalizeHsOrDigits(v: string) {
+function normalizeDigits(v: string) {
   return (v || "").replace(/[^\d]/g, "");
 }
 
-function hs4FromHs(v: string) {
-  const s = normalizeHsOrDigits(v);
-  return s.length >= 4 ? s.slice(0, 4) : "";
-}
-
 function parseEuroAmountFromMatch(m: string): number | null {
-  // ex: "1 234,56" / "1234,56" / "1234.56" / "1.234,56"
+  // "1 234,56" / "1.234,56" / "1234,56" / "1234.56"
   const cleaned = (m || "")
     .replace(/\u00a0/g, " ")
     .replace(/\s/g, "")
-    // remove thousands separators like 1.234,56 -> 1234,56
-    .replace(/\.(?=\d{3}([,]|$))/g, "")
+    .replace(/\.(?=\d{3}([,]|$))/g, "") // thousands
     .replace(/,(?=\d{2}$)/g, ".")
-    .replace(/,/g, "."); // fallback
+    .replace(/,/g, ".");
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
 }
 
-function extractEuroAmounts(line: string): number[] {
+function extractEuroAmountsGeneric(line: string): number[] {
+  // Montants avec 2 décimales (on évite de capturer des codes produits)
   const re = /-?\d{1,3}(?:[ \u00a0.]?\d{3})*(?:[.,]\d{2})/g;
   const matches = line.match(re) || [];
   const nums: number[] = [];
@@ -79,22 +74,62 @@ function extractEuroAmounts(line: string): number[] {
   return nums;
 }
 
+function extractEuroAmountsWithCurrency(line: string): number[] {
+  // Montants proches de € ou EUR (beaucoup plus fiables)
+  const nums: number[] = [];
+
+  const reAfter = /(-?\d{1,3}(?:[ \u00a0.]?\d{3})*(?:[.,]\d{2}))\s*(?:€|EUR)\b/gi;
+  const reBefore = /(?:€|EUR)\s*(-?\d{1,3}(?:[ \u00a0.]?\d{3})*(?:[.,]\d{2}))/gi;
+
+  let m: RegExpExecArray | null;
+  while ((m = reAfter.exec(line)) !== null) {
+    const n = parseEuroAmountFromMatch(m[1]);
+    if (n !== null) nums.push(n);
+  }
+  while ((m = reBefore.exec(line)) !== null) {
+    const n = parseEuroAmountFromMatch(m[1]);
+    if (n !== null) nums.push(n);
+  }
+
+  return nums;
+}
+
+function pickBestLineAmount(line: string): number | null {
+  // 1) prioritaire : montants associés à € / EUR
+  const currencyNums = extractEuroAmountsWithCurrency(line).filter((n) => Math.abs(n) > 0.0001);
+  if (currencyNums.length) {
+    // souvent le dernier montant "€" est le total de ligne
+    return currencyNums[currencyNums.length - 1];
+  }
+
+  // 2) fallback : montants génériques
+  const nums = extractEuroAmountsGeneric(line);
+  const positive = nums.filter((n) => n > 0.0001);
+
+  // si le dernier est 0.00 mais qu'il existe un autre montant >0, on évite le 0
+  if (nums.length && Math.abs(nums[nums.length - 1]) < 0.0001 && positive.length) {
+    return Math.max(...positive);
+  }
+
+  if (positive.length) return Math.max(...positive);
+  if (nums.length) return nums[nums.length - 1];
+
+  return null;
+}
+
 function findInvoiceNumber(text: string): string | null {
-  // adapte à tes formats FV / PF / FAC…
   const match = text.match(/(FA[CV]?[\s-]?\d{4,}|FV[\s-]?\d{4,}|PF[\s-]?\d{4,})/i);
   return match ? match[0].replace(/\s/g, "") : null;
 }
 
 function findDate(lines: string[]): string | null {
-  // priorité aux lignes avec "date"
-  for (const l of lines.slice(0, 80)) {
+  for (const l of lines.slice(0, 120)) {
     const lower = l.toLowerCase();
     if (lower.includes("date")) {
       const m = l.match(/(\d{2}\/\d{2}\/\d{4})|(\d{4}-\d{2}-\d{2})/);
       if (m) return m[0];
     }
   }
-  // fallback global
   const full = lines.join("\n");
   const m = full.match(/(\d{2}\/\d{2}\/\d{4})|(\d{4}-\d{2}-\d{2})/);
   return m ? m[0] : null;
@@ -102,9 +137,8 @@ function findDate(lines: string[]): string | null {
 
 function findSupplier(lines: string[]): string | null {
   const legal = ["SARL", "SAS", "SASU", "SA", "EURL", "SOCIETE", "SOCIÉTÉ", "LTD", "GMBH", "BV", "INC"];
-  const banned = ["FACTURE", "INVOICE", "DEVIS", "BON", "COMMANDE", "BL", "BORDEREAU"];
+  const banned = ["FACTURE", "INVOICE", "DEVIS", "BON", "COMMANDE", "BORDEREAU"];
 
-  // cherche dans les 30 premières lignes
   for (const l of lines.slice(0, 30)) {
     const clean = normalizeSpaces(l);
     if (!clean) continue;
@@ -112,40 +146,34 @@ function findSupplier(lines: string[]): string | null {
     if (banned.some((b) => up.includes(b))) continue;
 
     if (legal.some((k) => up.includes(k))) return clean;
-    // sinon: ligne "plutôt entreprise" (beaucoup de majuscules)
+
     const letters = up.replace(/[^A-Z]/g, "").length;
     const ratio = clean.length ? letters / clean.length : 0;
     if (clean.length >= 6 && ratio > 0.45) return clean;
   }
 
-  // fallback première ligne non vide
   const first = lines.find((l) => normalizeSpaces(l).length > 0);
   return first ? normalizeSpaces(first) : null;
 }
 
-function scoreLine(lower: string, keywords: string[]) {
-  let s = 0;
-  for (const k of keywords) if (lower.includes(k)) s += 2;
-  if (lower.includes("total")) s += 3;
-  if (lower.includes("ht")) s += 2;
-  if (lower.includes("ttc")) s += 2;
-  if (lower.includes("tva") || lower.includes("vat")) s += 2;
-  if (lower.includes("net")) s += 1;
-  if (lower.includes("à payer") || lower.includes("a payer") || lower.includes("apayer")) s += 2;
-  return s;
-}
-
 function findAmountInLines(lines: string[], keywords: string[]): number | null {
   let best: { score: number; value: number } | null = null;
+
   for (const line of lines) {
     const lower = line.toLowerCase();
     if (!keywords.some((k) => lower.includes(k))) continue;
-    const nums = extractEuroAmounts(line);
-    if (!nums.length) continue;
-    const value = nums[nums.length - 1]; // souvent le dernier montant est le bon
-    const s = scoreLine(lower, keywords);
-    if (!best || s > best.score) best = { score: s, value };
+
+    const value = pickBestLineAmount(line);
+    if (value === null) continue;
+
+    let score = 0;
+    if (lower.includes("total")) score += 5;
+    for (const k of keywords) if (lower.includes(k)) score += 2;
+    if (line.includes("€") || /EUR\b/i.test(line)) score += 3;
+
+    if (!best || score > best.score) best = { score, value };
   }
+
   return best ? best.value : null;
 }
 
@@ -164,7 +192,7 @@ function extractBillingCountry(lines: string[]): string | null {
 
   const block: string[] = [];
   if (startIdx >= 0) {
-    for (let i = startIdx; i < Math.min(lines.length, startIdx + 12); i++) {
+    for (let i = startIdx; i < Math.min(lines.length, startIdx + 14); i++) {
       const low = lines[i].toLowerCase();
       if (i > startIdx && stopKeys.some((k) => low.includes(k))) break;
       block.push(lines[i]);
@@ -173,7 +201,6 @@ function extractBillingCountry(lines: string[]): string | null {
 
   const text = (block.length ? block.join(" ") : lines.join(" ")).toUpperCase();
 
-  // détecte pays principaux
   if (text.includes(" FRANCE") || text.includes("FRANCE ")) return "France";
   if (text.includes(" BELGIQUE") || text.includes("BELGIUM")) return "Belgique";
   if (text.includes(" ESPAGNE") || text.includes("SPAIN")) return "Espagne";
@@ -202,6 +229,13 @@ function extractVatExemptionMention(lines: string[]): string | null {
   return null;
 }
 
+function looksLikeHeader(l: string) {
+  const low = l.toLowerCase();
+  const a = ["désignation", "designation", "description", "libellé", "libelle", "article", "produit"];
+  const b = ["montant", "total", "ht", "ttc", "prix", "pu", "qté", "qte", "quantité", "qty"];
+  return a.some((x) => low.includes(x)) && b.some((x) => low.includes(x));
+}
+
 function isStopTotalsLine(l: string) {
   const low = l.toLowerCase();
   const stop = [
@@ -214,22 +248,30 @@ function isStopTotalsLine(l: string) {
     "à payer",
     "a payer",
     "apayer",
-    "tva",
-    "vat",
     "montant total",
   ];
   return stop.some((k) => low.includes(k));
 }
 
-function looksLikeHeader(l: string) {
-  const low = l.toLowerCase();
-  const a = ["désignation", "designation", "description", "libellé", "libelle", "article", "produit"];
-  const b = ["montant", "total", "ht", "ttc", "prix", "pu", "qté", "qte", "quantité", "qty"];
-  return a.some((x) => low.includes(x)) && b.some((x) => low.includes(x));
+function extractEan13(line: string): string | null {
+  // 1) cas simple: 13 chiffres contigus
+  const direct = (line.match(/\b\d{13}\b/) || [])[0];
+  if (direct) return normalizeDigits(direct);
+
+  // 2) cas PDF cassé: groupes de chiffres séparés
+  const groups = line.match(/\d+/g) || [];
+  for (let i = 0; i < groups.length; i++) {
+    let acc = "";
+    for (let j = i; j < groups.length; j++) {
+      acc += groups[j];
+      if (acc.length === 13) return acc;
+      if (acc.length > 13) break;
+    }
+  }
+  return null;
 }
 
 function detectLineItems(lines: string[]): ParsedInvoiceLineItem[] {
-  // 1) trouver l’en-tête de tableau si possible
   let headerIdx = -1;
   for (let i = 0; i < Math.min(lines.length, 300); i++) {
     if (looksLikeHeader(lines[i])) {
@@ -241,55 +283,48 @@ function detectLineItems(lines: string[]): ParsedInvoiceLineItem[] {
   const start = headerIdx >= 0 ? headerIdx + 1 : 0;
 
   const items: ParsedInvoiceLineItem[] = [];
-  let currentDescContinuation: string | null = null;
+  let pendingDesc: string | null = null;
 
-  for (let i = start; i < Math.min(lines.length, start + 400); i++) {
+  for (let i = start; i < Math.min(lines.length, start + 500); i++) {
     const line = normalizeSpaces(lines[i]);
     if (!line) continue;
 
-    // stop : on arrive dans la zone totals
     if (headerIdx >= 0 && isStopTotalsLine(line)) break;
 
-    // si pas d'entête trouvé, on ne garde que des lignes qui ressemblent à des lignes produit
-    const euroNums = extractEuroAmounts(line);
-    const hasEuro = euroNums.length > 0;
+    const amountHT = pickBestLineAmount(line); // ✅ FIX ICI
 
-    // Heuristique anti-bruit (si pas header)
+    // si pas d'entête, on filtre plus fort
     if (headerIdx < 0) {
       const low = line.toLowerCase();
       if (isStopTotalsLine(line)) continue;
-      // ignore lignes trop courtes ou meta
       if (line.length < 12) continue;
       if (low.includes("facture") || low.includes("invoice") || low.includes("page")) continue;
-      // nécessite un montant
-      if (!hasEuro) continue;
+      if (amountHT === null) continue;
     }
 
-    // Continuation de description (ligne sans montant)
-    if (!hasEuro) {
+    // continuation (ligne description sans montant)
+    if (amountHT === null) {
       if (items.length) {
         const prev = items[items.length - 1];
         prev.description = normalizeSpaces(`${prev.description || ""} ${line}`);
       } else {
-        currentDescContinuation = normalizeSpaces(`${currentDescContinuation || ""} ${line}`);
+        pendingDesc = normalizeSpaces(`${pendingDesc || ""} ${line}`);
       }
       continue;
     }
 
-    const amountHT = euroNums[euroNums.length - 1];
-
-    // EAN13
-    const ean = (line.match(/\b\d{13}\b/) || [])[0] || null;
+    // EAN13 (robuste)
+    const ean = extractEan13(line);
 
     // HS code explicite
     const hsExplicit = (line.match(/(?:HS|NC|TARIC)\s*[:#]?\s*(\d{4,10})/i) || [])[1] || null;
-    let hsCode: string | null = hsExplicit ? normalizeHsOrDigits(hsExplicit) : null;
+    let hsCode: string | null = hsExplicit ? normalizeDigits(hsExplicit) : null;
 
-    // HS code "nu" (8-10 chiffres) si présent et différent d’EAN
+    // HS "nu"
     if (!hsCode) {
       const candidates = line.match(/\b\d{8,10}\b/g) || [];
-      const found = candidates.find((c) => (!ean || c !== ean) && hs4FromHs(c));
-      if (found) hsCode = normalizeHsOrDigits(found);
+      const found = candidates.find((c) => !!c && c.length >= 8);
+      if (found) hsCode = normalizeDigits(found);
     }
 
     // code article plausible
@@ -298,22 +333,19 @@ function detectLineItems(lines: string[]): ParsedInvoiceLineItem[] {
       tokens.find((t) => {
         const cleaned = t.replace(/[^\w-]/g, "");
         if (!cleaned) return false;
-        if (/^\d+$/.test(cleaned)) return false; // tout chiffre
+        if (/^\d+$/.test(cleaned)) return false;
         if (ean && cleaned.includes(ean)) return false;
         if (hsCode && cleaned.includes(hsCode)) return false;
-        // doit contenir lettres + chiffres
         const hasLetter = /[A-Za-z]/.test(cleaned);
         const hasDigit = /\d/.test(cleaned);
         if (!hasLetter || !hasDigit) return false;
         if (cleaned.length < 4 || cleaned.length > 24) return false;
-        // évite des mots “FACTURE…”
         const up = cleaned.toUpperCase();
         if (up.includes("FACTURE") || up.includes("INVOICE")) return false;
         return true;
       }) || null;
 
-    // quantité (best effort) : cherche un petit nombre "isolé" avant les montants
-    // (on ne bloque pas si on ne trouve pas)
+    // quantité (best effort)
     let quantity: number | null = null;
     for (const t of tokens) {
       const c = t.replace(",", ".").replace(/[^\d.]/g, "");
@@ -322,23 +354,26 @@ function detectLineItems(lines: string[]): ParsedInvoiceLineItem[] {
       const n = Number(c);
       if (!Number.isFinite(n)) continue;
       if (n <= 0) continue;
-      // évite de prendre les montants (souvent >= 1.00 mais on filtre sur "petit" et entier)
       if (Number.isInteger(n) && n <= 999) {
         quantity = n;
         break;
       }
     }
 
-    // description = tout ce qui est avant le 1er montant détecté (approx)
-    const firstAmountMatch = (lines[i].match(/-?\d{1,3}(?:[ \u00a0.]?\d{3})*(?:[.,]\d{2})/) || [])[0];
+    // description = avant le premier montant monétaire (si possible)
     let description = line;
-    if (firstAmountMatch) {
-      const idx = line.indexOf(firstAmountMatch);
+    const moneyMatch =
+      (line.match(/(-?\d{1,3}(?:[ \u00a0.]?\d{3})*(?:[.,]\d{2}))\s*(?:€|EUR)\b/i) || [])[0] ||
+      (line.match(/-?\d{1,3}(?:[ \u00a0.]?\d{3})*(?:[.,]\d{2})/i) || [])[0];
+
+    if (moneyMatch) {
+      const idx = line.indexOf(moneyMatch);
       if (idx > 0) description = normalizeSpaces(line.slice(0, idx));
     }
-    if (currentDescContinuation) {
-      description = normalizeSpaces(`${currentDescContinuation} ${description}`);
-      currentDescContinuation = null;
+
+    if (pendingDesc) {
+      description = normalizeSpaces(`${pendingDesc} ${description}`);
+      pendingDesc = null;
     }
 
     items.push({
@@ -346,13 +381,12 @@ function detectLineItems(lines: string[]): ParsedInvoiceLineItem[] {
       quantity,
       amountHT,
       codeArticle,
-      ean13: ean ? normalizeHsOrDigits(ean) : null,
+      ean13: ean ? normalizeDigits(ean) : null,
       hsCode,
     });
   }
 
-  // nettoie items “vides”
-  return items.filter((it) => (it.amountHT ?? 0) > 0 || (it.description || "").length > 3);
+  return items.filter((it) => (it.amountHT ?? 0) > 0.0001 || (it.description || "").length > 3);
 }
 
 async function extractStructuredTextFromPdf(file: File): Promise<{ rawText: string; lines: string[] }> {
@@ -377,10 +411,9 @@ async function extractStructuredTextFromPdf(file: File): Promise<{ rawText: stri
       positioned.push({ str, x, y });
     }
 
-    // tri par lignes (y desc) puis x asc
     positioned.sort((a, b) => (b.y - a.y) || (a.x - b.x));
 
-    const yTol = 2.5;
+    const yTol = 3.0; // un peu plus permissif
     let currentY: number | null = null;
     let current: PositionedText[] = [];
 
@@ -414,8 +447,7 @@ async function extractStructuredTextFromPdf(file: File): Promise<{ rawText: stri
     }
     flush();
 
-    // séparation pages
-    allLines.push(" "); // ligne vide
+    allLines.push(" "); // séparation pages
   }
 
   const lines = allLines.map((l) => normalizeSpaces(l)).filter((l) => l.length > 0);
@@ -434,7 +466,6 @@ export async function extractInvoiceFromPdf(file: File): Promise<ParsedInvoice> 
   const totalTTC = findAmountInLines(lines, ["total ttc", "ttc", "net à payer", "net a payer", "à payer", "a payer", "apayer"]);
   const totalTVA = findAmountInLines(lines, ["total tva", "tva", "vat"]);
 
-  // transit: on privilégie "frais de transit" puis "transit", puis "transport"
   const transitFees =
     findAmountInLines(lines, ["frais de transit"]) ??
     findAmountInLines(lines, ["transit"]) ??
@@ -445,7 +476,6 @@ export async function extractInvoiceFromPdf(file: File): Promise<ParsedInvoice> 
 
   const lineItems = detectLineItems(lines);
 
-  // fallback TTC si absent mais HT + TVA dispo
   const computedTtc =
     totalTTC ??
     (totalHT !== null && totalTVA !== null ? totalHT + totalTVA : null);
