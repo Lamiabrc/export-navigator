@@ -31,7 +31,10 @@ export type ParsedInvoice = {
   /** ✅ transit HT détecté (frais port/transport) */
   transitFees: number | null;
 
+  /** pays/zone côté client (facturé/livré) */
   billingCountry: string | null;
+
+  /** mention exonération/autoliquidation détectée */
   vatExemptionMention: string | null;
 
   lineItems: ParsedInvoiceLineItem[];
@@ -99,10 +102,13 @@ function pickBestLineAmount(line: string): number | null {
   return null;
 }
 
-function isTotalsLine(line: string) {
+function isTotalsOrSummaryLine(line: string) {
   const low = line.toLowerCase();
-  return [
+
+  // ✅ totaux classiques
+  const totals = [
     "total ht",
+    "total h.t",
     "total ttc",
     "total général",
     "total general",
@@ -112,12 +118,26 @@ function isTotalsLine(line: string) {
     "à payer",
     "a payer",
     "apayer",
-  ].some((k) => low.includes(k));
+    "montant tva",
+    "total tva",
+    "conditions de paiement",
+    "date échéance",
+    "date echeance",
+    "reste à règler",
+    "reste a regler",
+    "base taxe",
+    "total lignes ht",
+  ];
+  if (totals.some((k) => low.includes(k))) return true;
+
+  // ✅ lignes "tax summary" typiques (ex: "DROM TVA 0% ... Transit 434,28")
+  if (/\b(drom|tva)\b/i.test(line) && /\btransit\b/i.test(line)) return true;
+
+  return false;
 }
 
 function isVatLine(line: string) {
   const low = line.toLowerCase();
-  // TVA / VAT + taux ou base
   if (!/(tva|vat)\b/i.test(line)) return false;
   if (/(total ht|total ttc|net a payer|net à payer)/i.test(line)) return false;
   return true;
@@ -129,7 +149,6 @@ function findInvoiceNumber(text: string): string | null {
 }
 
 function findDate(lines: string[]): string | null {
-  // d’abord les lignes contenant "date"
   for (const l of lines.slice(0, 120)) {
     const low = l.toLowerCase();
     if (low.includes("date")) {
@@ -175,7 +194,7 @@ function findAmountInLines(lines: string[], keywords: string[]): number | null {
     let score = 0;
     for (const k of keywords) if (lower.includes(k)) score += 4;
     if (line.includes("€") || /EUR\b/i.test(line)) score += 2;
-    if (isTotalsLine(line)) score += 3;
+    if (isTotalsOrSummaryLine(line)) score += 2;
 
     if (!best || score > best.score) best = { score, value };
   }
@@ -183,12 +202,24 @@ function findAmountInLines(lines: string[], keywords: string[]): number | null {
   return best ? best.value : null;
 }
 
+/** pays côté client : on privilégie les blocs "facturé à" / "livré à" */
 function extractBillingCountry(lines: string[]): string | null {
-  const startKeys = ["adresse de facturation", "facturé à", "facture à", "bill to", "billing address", "adresse facturation"];
-  const stopKeys = ["adresse de livraison", "ship to", "livraison", "référence", "reference", "invoice", "facture"];
+  const startKeys = [
+    "adresse de facturation",
+    "adresse facturation",
+    "facturé à",
+    "facture à",
+    "bill to",
+    "billing address",
+    "livré à",
+    "livre a",
+    "ship to",
+    "sold to",
+  ];
+  const stopKeys = ["référence", "reference", "invoice", "facture", "article", "hs code", "quantité", "total ht"];
 
   let startIdx = -1;
-  for (let i = 0; i < Math.min(lines.length, 250); i++) {
+  for (let i = 0; i < Math.min(lines.length, 300); i++) {
     const l = lines[i].toLowerCase();
     if (startKeys.some((k) => l.includes(k))) {
       startIdx = i;
@@ -198,7 +229,7 @@ function extractBillingCountry(lines: string[]): string | null {
 
   const block: string[] = [];
   if (startIdx >= 0) {
-    for (let i = startIdx; i < Math.min(lines.length, startIdx + 14); i++) {
+    for (let i = startIdx; i < Math.min(lines.length, startIdx + 18); i++) {
       const low = lines[i].toLowerCase();
       if (i > startIdx && stopKeys.some((k) => low.includes(k))) break;
       block.push(lines[i]);
@@ -254,35 +285,31 @@ function extractEan13(line: string): string | null {
 function looksLikeHeader(l: string) {
   const low = l.toLowerCase();
   const a = ["désignation", "designation", "description", "libellé", "libelle", "article", "produit"];
-  const b = ["montant", "total", "ht", "ttc", "prix", "pu", "qté", "qte", "quantité", "qty"];
+  const b = ["montant", "total", "ht", "ttc", "prix", "pu", "qté", "qte", "quantité", "qty", "hs code"];
   return a.some((x) => low.includes(x)) && b.some((x) => low.includes(x));
 }
 
 function detectLineItems(lines: string[]): ParsedInvoiceLineItem[] {
   let headerIdx = -1;
-  for (let i = 0; i < Math.min(lines.length, 300); i++) {
+  for (let i = 0; i < Math.min(lines.length, 400); i++) {
     if (looksLikeHeader(lines[i])) {
       headerIdx = i;
       break;
     }
   }
 
-  const start = headerIdx >= 0 ? headerIdx + 1 : 0;
   const items: ParsedInvoiceLineItem[] = [];
   let pendingDesc: string | null = null;
 
-  for (let i = start; i < Math.min(lines.length, start + 600); i++) {
+  for (let i = headerIdx >= 0 ? headerIdx + 1 : 0; i < Math.min(lines.length, 900); i++) {
     const line = normalizeSpaces(lines[i]);
     if (!line) continue;
 
-    // stop si on arrive sur les totaux (si header trouvé)
-    if (headerIdx >= 0 && isTotalsLine(line)) break;
-
-    // ignore lignes de total même en mode fallback
-    if (isTotalsLine(line)) continue;
+    // ✅ stop dès qu'on entre dans les totaux / base taxe / conditions paiement
+    if (headerIdx >= 0 && isTotalsOrSummaryLine(line)) break;
+    if (isTotalsOrSummaryLine(line)) continue;
 
     const amountHT = pickBestLineAmount(line);
-
     if (amountHT === null) {
       if (items.length) {
         const prev = items[items.length - 1];
@@ -333,7 +360,6 @@ function detectLineItems(lines: string[]): ParsedInvoiceLineItem[] {
       }
     }
 
-    // description sans la partie "montant"
     let description = line;
     const moneyMatch =
       (line.match(/(-?\d{1,3}(?:[ \u00a0.]?\d{3})*(?:[.,]\d{2}))\s*(?:€|EUR)\b/i) || [])[0] ||
@@ -376,29 +402,26 @@ function computeGoodsSum(items: ParsedInvoiceLineItem[]) {
 
 function computeTransitFromItems(items: ParsedInvoiceLineItem[]) {
   const shipRe = /\b(transport|transit|livraison|exp[ée]dition|shipping|fret|affranchissement|port)\b/i;
-
   return items
     .filter((it) => {
       const desc = normalizeSpaces(it.description || "");
       if (!desc) return false;
-      if (isTotalsLine(desc)) return false;
+      if (isTotalsOrSummaryLine(desc)) return false;
       if (isVatLine(desc)) return false;
       return shipRe.test(desc);
     })
     .reduce((s, it) => s + (Number.isFinite(Number(it.amountHT)) ? Number(it.amountHT) : 0), 0);
 }
 
-/**
- * ✅ scan direct des "lines" PDF pour trouver les frais de transport
- * - exclut lignes TOTAL / TVA
- * - filtre les montants qui == totalHT/totalTTC/TVA
- */
-function computeTransitFromLinesScan(lines: string[], totals: { ht: number | null; ttc: number | null; tva: number | null }) {
+function computeTransitFromLinesScan(
+  lines: string[],
+  totals: { ht: number | null; ttc: number | null; tva: number | null },
+) {
   const weights: Array<[RegExp, number]> = [
-    [/\bfrais\s+de\s+port\b/i, 12],
+    [/\btransit\b/i, 12],
     [/\bfrais\s+de\s+transit\b/i, 12],
-    [/\btransit\b/i, 10],
-    [/\btransport\b/i, 8],
+    [/\bfrais\s+de\s+port\b/i, 10],
+    [/\btransport\b/i, 10],
     [/\blivraison\b/i, 8],
     [/\bexp[ée]dition\b/i, 8],
     [/\bfret\b/i, 8],
@@ -407,65 +430,51 @@ function computeTransitFromLinesScan(lines: string[], totals: { ht: number | nul
   ];
 
   const tol = 0.02;
-
   const isSame = (a: number, b: number | null) => b !== null && Math.abs(a - b) <= tol;
-  const reject = (v: number) => isSame(v, totals.ht) || isSame(v, totals.ttc) || (totals.tva !== null && totals.tva > 0.01 && isSame(v, totals.tva));
+  const reject = (v: number) =>
+    isSame(v, totals.ht) || isSame(v, totals.ttc) || (totals.tva !== null && totals.tva > 0.01 && isSame(v, totals.tva));
 
-  const candidates: Array<{ amount: number; score: number; line: string }> = [];
+  const candidates: Array<{ amount: number; score: number }> = [];
 
-  for (const line of lines) {
-    const l = normalizeSpaces(line);
+  for (const raw of lines) {
+    const l = normalizeSpaces(raw);
     if (!l) continue;
 
-    const low = l.toLowerCase();
-    // exclure zones d'adresse etc.
-    if (low.includes("adresse") && (low.includes("facturation") || low.includes("livraison"))) continue;
-
-    if (isTotalsLine(l)) continue;
-    if (isVatLine(l)) continue;
-
     let kwScore = 0;
-    for (const [re, w] of weights) {
-      if (re.test(l)) kwScore = Math.max(kwScore, w);
-    }
-    if (kwScore === 0) continue;
+    for (const [re, w] of weights) if (re.test(l)) kwScore = Math.max(kwScore, w);
+    if (!kwScore) continue;
 
-    const amounts = [
-      ...extractEuroAmountsWithCurrency(l),
-      ...extractEuroAmountsGeneric(l),
-    ].filter((n) => n > 0.0001);
+    // ⚠️ ici on ne skip PAS les lignes "summary" : c'est justement là que ton PDF met "Transit 434,28"
+    // on exclut juste les lignes 100% TVA sans transit
+    if (isVatLine(l) && !/\btransit\b/i.test(l)) continue;
 
+    const amounts = [...extractEuroAmountsWithCurrency(l), ...extractEuroAmountsGeneric(l)].filter((n) => n > 0.0001);
     if (!amounts.length) continue;
 
-    // filtre montants "totaux"
     const filtered = amounts.filter((n) => !reject(n));
     if (!filtered.length) continue;
 
-    // en général le coût est le plus grand montant restant sur la ligne
+    // on prend le plus gros montant restant de la ligne (ex : 434,28 après avoir rejeté 3 408,97)
     const picked = Math.max(...filtered);
 
     let score = kwScore;
     if (l.includes("€") || /EUR\b/i.test(l)) score += 2;
-    if (low.includes("total")) score -= 3;
-
-    candidates.push({ amount: picked, score, line: l });
+    candidates.push({ amount: picked, score });
   }
 
   if (!candidates.length) return 0;
-
-  // si plusieurs lignes de transport, on additionne celles "bonnes"
   candidates.sort((a, b) => b.score - a.score);
 
-  // garde top N similaires
+  // additionne les meilleurs candidats (souvent un seul)
   const topScore = candidates[0].score;
   const kept = candidates.filter((c) => c.score >= topScore - 2);
 
-  // somme en évitant doublons évidents
+  // dédoublonnage simple
   const uniq = new Map<string, number>();
-  kept.forEach((c) => {
-    const key = `${c.amount.toFixed(2)}-${c.score}`;
+  for (const c of kept) {
+    const key = c.amount.toFixed(2);
     if (!uniq.has(key)) uniq.set(key, c.amount);
-  });
+  }
 
   return Array.from(uniq.values()).reduce((s, v) => s + v, 0);
 }
@@ -565,43 +574,39 @@ export async function extractInvoiceFromPdf(file: File): Promise<ParsedInvoice> 
   const supplier = findSupplier(lines);
   const date = findDate(lines);
 
-  // ✅ Totaux : éviter mots trop génériques ("ht" tout seul)
+  // ✅ Totaux : éviter mots trop génériques
   const totalHT =
-    findAmountInLines(lines, ["total ht", "total h.t", "total hors taxe", "total hors-taxe", "montant ht"]) ??
-    null;
+    findAmountInLines(lines, ["total ht", "total h.t", "total hors taxe", "total hors-taxe", "montant ht"]) ?? null;
 
   const totalTTC =
-    findAmountInLines(lines, ["total ttc", "net à payer", "net a payer", "montant ttc", "à payer", "a payer", "apayer"]) ??
-    null;
+    findAmountInLines(lines, ["total ttc", "net à payer", "net a payer", "montant ttc", "à payer", "a payer", "apayer"]) ?? null;
 
-  // ✅ TVA : calcul priorité (évite de confondre avec Total)
+  // ✅ TVA : calcul en priorité
   let totalTVA: number | null = null;
   if (totalHT !== null && totalTTC !== null) {
     const diff = totalTTC - totalHT;
     totalTVA = diff >= -0.02 && diff <= Math.max(0.35 * totalHT, 20000) ? Math.max(0, diff) : null;
   }
-  if (totalTVA === null) {
-    // fallback "total tva" seulement (pas "tva" tout court)
-    totalTVA = findAmountInLines(lines, ["total tva", "montant tva", "total vat"]) ?? null;
-  }
+  if (totalTVA === null) totalTVA = findAmountInLines(lines, ["montant tva", "total tva", "total vat"]) ?? null;
 
   const billingCountry = extractBillingCountry(lines);
   const vatExemptionMention = extractVatExemptionMention(lines);
 
   const lineItems = detectLineItems(lines);
-
   const goodsSum = computeGoodsSum(lineItems);
+
+  // 1) transit depuis lignes items (si la facture contient une ligne "transport")
   const transitFromItems = computeTransitFromItems(lineItems);
 
-  // ✅ transit via scan des lignes (si pas de ligne item transport)
-  const transitFromScan = transitFromItems > 0.0001
-    ? transitFromItems
-    : computeTransitFromLinesScan(lines, { ht: totalHT, ttc: totalTTC, tva: totalTVA });
+  // 2) sinon scan des lignes PDF (✅ ton cas : "Transit 434,28" est dans le récap)
+  const transitFromScan =
+    transitFromItems > 0.0001
+      ? transitFromItems
+      : computeTransitFromLinesScan(lines, { ht: totalHT, ttc: totalTTC, tva: totalTVA });
 
-  // ✅ fallback texte très léger si scan ne trouve rien
+  // 3) fallback très léger
   let transitFallback = 0;
   if (transitFromScan <= 0.0001) {
-    // on ne cherche que "frais de port/transit" (pas "transport" générique)
     const t1 = findAmountInLines(lines, ["frais de transit"]) ?? 0;
     const t2 = findAmountInLines(lines, ["frais de port"]) ?? 0;
     transitFallback = Math.max(t1, t2);
@@ -613,8 +618,8 @@ export async function extractInvoiceFromPdf(file: File): Promise<ParsedInvoice> 
   else if (transitFromScan > 0.0001) transitDetectionSource = "lines_scan";
   else if (transitFallback > 0.0001) transitDetectionSource = "text_fallback";
 
-  // ✅ rejet si transit = total (et que la facture ressemble à une facture marchandises)
-  const sanitized = sanitizeTransit({
+  // ✅ si le transit trouvé est rejeté (car = total), on retente via scan
+  const sanitized1 = sanitizeTransit({
     transit: transitFees,
     totalHT,
     totalTTC,
@@ -623,9 +628,22 @@ export async function extractInvoiceFromPdf(file: File): Promise<ParsedInvoice> 
     itemsCount: lineItems.length,
   });
 
-  transitFees = sanitized === null ? null : sanitized;
+  if (sanitized1 === null) {
+    const rescanned = computeTransitFromLinesScan(lines, { ht: totalHT, ttc: totalTTC, tva: totalTVA });
+    const sanitized2 = sanitizeTransit({
+      transit: rescanned,
+      totalHT,
+      totalTTC,
+      totalTVA,
+      goodsSum,
+      itemsCount: lineItems.length,
+    });
+    transitFees = sanitized2 === null ? null : sanitized2;
+    if (transitFees !== null) transitDetectionSource = "lines_scan";
+  } else {
+    transitFees = sanitized1;
+  }
 
-  // TTC fallback si pas détecté
   const computedTtc = totalTTC ?? (totalHT !== null && totalTVA !== null ? totalHT + totalTVA : null);
 
   return {
