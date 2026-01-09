@@ -6,7 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+
 import {
   FileText,
   Upload,
@@ -34,34 +36,33 @@ import { calculateCosts, type ProductType, type CostBreakdown } from "@/utils/co
 import { getZoneFromDestination } from "@/data/referenceRates";
 import { useReferenceRates } from "@/hooks/useReferenceRates";
 import type { Destination, Incoterm, TransportMode } from "@/types";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { supabase } from "@/integrations/supabase/client";
 
 interface ExtractedLineItem {
   description?: string;
-  codeArticle?: string;
-  ean13?: string;
-  hsCode?: string;
-  amountHT?: number;
-  quantity?: number;
+  codeArticle?: string | null;
+  ean13?: string | null;
+  hsCode?: string | null;
+  amountHT?: number | null;
+  quantity?: number | null;
 }
 
 interface ExtractedInvoice {
-  invoiceNumber?: string;
-  invoiceDate?: string;
-  supplierName?: string;
+  invoiceNumber?: string | null;
+  invoiceDate?: string | null;
+  supplierName?: string | null;
 
-  totalHT?: number;
-  totalTVA?: number;
-  totalTTC?: number;
-  transitFees?: number;
+  totalHT?: number | null;
+  totalTVA?: number | null;
+  totalTTC?: number | null;
+  transitFees?: number | null;
 
-  billingCountry?: string; // déduit adresse facturation (si dispo)
-  vatExemptionMention?: string; // mention exonération (si TVA absente hors France)
+  billingCountry?: string | null;
+  vatExemptionMention?: string | null;
 
-  lineItems?: ExtractedLineItem[]; // ✅ IMPORTANT : pas de saisie manuelle
-  rawText?: string; // ✅ fallback si pas de lineItems
+  lineItems?: ExtractedLineItem[];
+  rawText?: string | null;
 }
 
 type InvoiceVerdict = "favorable" | "defavorable" | "not_applicable";
@@ -80,7 +81,7 @@ interface OmLine {
   hsCode: string;
   hs4: string;
   baseHT: number;
-  totalRate: number;
+  totalRate: number; // 0.125
   omAmount: number;
   year?: number | null;
   source?: string | null;
@@ -145,28 +146,28 @@ function safeNumber(v: any) {
 }
 
 function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(
-    Number.isFinite(amount) ? amount : 0,
-  );
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(Number.isFinite(amount) ? amount : 0);
 }
 
-function normalizeHsCode(v: string) {
+function normalizeDigits(v: string) {
   return (v || "").replace(/[^\d]/g, "");
 }
 
 function hs4FromHsCode(v: string) {
-  const s = normalizeHsCode(v);
+  const s = normalizeDigits(v || "");
   return s.length >= 4 ? s.slice(0, 4) : "";
 }
 
 function normalizeCountry(v: string) {
   return (v || "").trim().toLowerCase();
 }
-
 function isFranceCountry(v: string) {
   const c = normalizeCountry(v);
   return c === "france" || c === "fr" || c === "fra";
 }
+
+/** ✅ FIX TAUX: si > 1, on considère que c'est un pourcentage (12.5 => 0.125) */
+const normalizeRate = (r: number) => (r > 1 ? r / 100 : r);
 
 function territoryCodeFromDestination(dest: Destination): string | null {
   switch (dest) {
@@ -216,9 +217,8 @@ async function fetchOmRatesByHs4(territoryCode: string, hs4List: string[]) {
   return map;
 }
 
-function inferBillingCountryFromText(rawText?: string): string | undefined {
+function inferBillingCountryFromText(rawText?: string | null): string | undefined {
   const t = (rawText || "").toUpperCase();
-  // heuristiques simples (on améliorera dans l’extracteur)
   if (t.includes(" FRANCE")) return "France";
   if (t.includes(" BELGIQUE") || t.includes(" BELGIUM")) return "Belgique";
   if (t.includes(" ESPAGNE") || t.includes(" SPAIN")) return "Espagne";
@@ -227,27 +227,18 @@ function inferBillingCountryFromText(rawText?: string): string | undefined {
   return undefined;
 }
 
-function inferVatExemptionMentionFromText(rawText?: string): string | undefined {
-  const lines = (rawText || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const keywords = [
-    "exon",
-    "exonération",
-    "tva non applicable",
-    "article 262",
-    "262 ter",
-    "autoliquidation",
-    "reverse charge",
-  ];
-  const hit = lines.find((l) => keywords.some((k) => l.toLowerCase().includes(k)));
-  return hit;
+function inferVatExemptionMentionFromText(rawText?: string | null): string | undefined {
+  const lines = (rawText || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const keywords = ["exon", "exonération", "tva non applicable", "article 262", "262 ter", "autoliquidation", "reverse charge", "vat exempt", "tax exempt"];
+  return lines.find((l) => keywords.some((k) => l.toLowerCase().includes(k)));
 }
 
 function parseNumberFr(s: string): number {
-  // gère "1 234,56" ou "1234.56"
-  const cleaned = (s || "")
-    .replace(/\s/g, "")
-    .replace(/\./g, ".")
-    .replace(/,/g, ".");
+  const cleaned = (s || "").replace(/\s/g, "").replace(/\u00a0/g, "").replace(/,/g, ".").replace(/[^\d.-]/g, "");
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
@@ -258,6 +249,7 @@ function detectDelimiter(firstLine: string) {
   return semi >= comma ? ";" : ",";
 }
 
+/** CSV simple (sans gestion complète des guillemets) : OK pour exports simples */
 function parseCsvText(text: string): ExtractedInvoice {
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) return {};
@@ -280,10 +272,7 @@ function parseCsvText(text: string): ExtractedInvoice {
   const idxCodeArticle = idx(["code_article", "sku", "ref", "reference"]);
   const idxEan = idx(["ean13", "ean", "gtin", "code_barre"]);
 
-  // On lit toutes les lignes comme "lineItems" si possible
   const rows = lines.slice(1).map((l) => l.split(delimiter));
-
-  // Si le CSV contient une seule ligne récap, on tente de la lire
   const firstRow = rows[0] || [];
 
   const invoiceNumber = idxInvoice >= 0 ? (firstRow[idxInvoice] || "").trim() : undefined;
@@ -298,12 +287,11 @@ function parseCsvText(text: string): ExtractedInvoice {
   const lineItems: ExtractedLineItem[] = rows
     .map((r) => {
       const description = idxDesc >= 0 ? (r[idxDesc] || "").trim() : "";
-      const hsCode = idxHs >= 0 ? normalizeHsCode(r[idxHs] || "") : "";
+      const hsCode = idxHs >= 0 ? normalizeDigits(r[idxHs] || "") : "";
       const amountHT = idxAmountLine >= 0 ? parseNumberFr(r[idxAmountLine] || "") : 0;
       const codeArticle = idxCodeArticle >= 0 ? (r[idxCodeArticle] || "").trim() : "";
-      const ean13 = idxEan >= 0 ? normalizeHsCode(r[idxEan] || "") : "";
+      const ean13 = idxEan >= 0 ? normalizeDigits(r[idxEan] || "") : "";
 
-      // On garde la ligne si elle a un minimum d’info (produit + montant)
       const keep = description || hsCode || codeArticle || ean13 || amountHT > 0;
       if (!keep) return null;
 
@@ -323,51 +311,44 @@ function parseCsvText(text: string): ExtractedInvoice {
   };
 }
 
+/** ✅ Enrichissement HS depuis `products` (sans OR fragile) */
 async function enrichHsCodesFromProducts(lines: ExtractedLineItem[]): Promise<ExtractedLineItem[]> {
-  // Stratégie: si HS absent, tenter map via code_article / ean13 depuis table products
-  const needs = lines.filter((l) => !normalizeHsCode(l.hsCode || ""));
-
+  const needs = lines.filter((l) => !normalizeDigits(l.hsCode || ""));
   const codes = Array.from(new Set(needs.map((l) => (l.codeArticle || "").trim()).filter(Boolean)));
-  const eans = Array.from(new Set(needs.map((l) => normalizeHsCode(l.ean13 || "")).filter(Boolean)));
+  const eans = Array.from(new Set(needs.map((l) => normalizeDigits(l.ean13 || "")).filter(Boolean)));
 
   if (codes.length === 0 && eans.length === 0) return lines;
-
-  // ⚠️ On s’appuie sur colonnes vues dans tes tables: products.code_article, products.code_acl13_ou_ean13, products.hs_code
-  // (si tes noms diffèrent, on ajustera après)
-  const orParts: string[] = [];
-  if (codes.length) orParts.push(`code_article.in.(${codes.map((c) => `"${c.replace(/"/g, "")}"`).join(",")})`);
-  if (eans.length) orParts.push(`code_acl13_ou_ean13.in.(${eans.map((e) => `"${e.replace(/"/g, "")}"`).join(",")})`);
-  const or = orParts.join(",");
-
-  const { data, error } = await supabase
-    .from("products")
-    .select("code_article, code_acl13_ou_ean13, hs_code")
-    .or(or);
-
-  if (error) {
-    // on ne bloque pas l’analyse, on renvoie tel quel
-    return lines;
-  }
 
   const byCode = new Map<string, string>();
   const byEan = new Map<string, string>();
 
-  (data || []).forEach((p: any) => {
-    const ca = (p.code_article || "").trim();
-    const ean = normalizeHsCode(p.code_acl13_ou_ean13 || "");
-    const hs = normalizeHsCode(p.hs_code || "");
-    if (ca && hs) byCode.set(ca, hs);
-    if (ean && hs) byEan.set(ean, hs);
-  });
+  if (codes.length) {
+    const { data } = await supabase.from("products").select("code_article, hs_code").in("code_article", codes);
+    (data || []).forEach((p: any) => {
+      const ca = (p.code_article || "").trim();
+      const hs = normalizeDigits(p.hs_code || "");
+      if (ca && hs) byCode.set(ca, hs);
+    });
+  }
+
+  if (eans.length) {
+    const { data } = await supabase.from("products").select("code_acl13_ou_ean13, hs_code");
+    // on filtre côté client car certains champs EAN sont sales (espaces)
+    (data || []).forEach((p: any) => {
+      const ean = normalizeDigits(p.code_acl13_ou_ean13 || "");
+      const hs = normalizeDigits(p.hs_code || "");
+      if (ean && hs && eans.includes(ean)) byEan.set(ean, hs);
+    });
+  }
 
   return lines.map((l) => {
-    const hs = normalizeHsCode(l.hsCode || "");
+    const hs = normalizeDigits(l.hsCode || "");
     if (hs) return l;
 
     const ca = (l.codeArticle || "").trim();
-    const ean = normalizeHsCode(l.ean13 || "");
-
+    const ean = normalizeDigits(l.ean13 || "");
     const found = (ca && byCode.get(ca)) || (ean && byEan.get(ean)) || "";
+
     return found ? { ...l, hsCode: found } : l;
   });
 }
@@ -375,7 +356,6 @@ async function enrichHsCodesFromProducts(lines: ExtractedLineItem[]): Promise<Ex
 export default function InvoiceVerification() {
   const { toast } = useToast();
   const { upsert, items } = useInvoiceTracker();
-
   const { vatRates, octroiMerRates, transportCosts, serviceCharges } = useReferenceRates();
 
   const [currentFile, setCurrentFile] = useState<File | null>(null);
@@ -385,7 +365,7 @@ export default function InvoiceVerification() {
   const [extractedData, setExtractedData] = useState<ExtractedInvoice | null>(null);
   const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
 
-  // ✅ Contexte export (peut rester paramétrable)
+  // Contexte export (paramètres de calcul)
   const [destination, setDestination] = useState<Destination>("Martinique");
   const [incoterm, setIncoterm] = useState<Incoterm>("DAP");
   const [transportMode, setTransportMode] = useState<TransportMode>("Maritime");
@@ -398,12 +378,9 @@ export default function InvoiceVerification() {
 
   const extractedLines = useMemo(() => extractedData?.lineItems || [], [extractedData]);
 
-  const productsTotalHT = useMemo(() => {
-    return extractedLines.reduce((s, l) => s + safeNumber(l.amountHT), 0);
-  }, [extractedLines]);
+  const productsTotalHT = useMemo(() => extractedLines.reduce((s, l) => s + safeNumber(l.amountHT), 0), [extractedLines]);
 
   const goodsValueForCalc = useMemo(() => {
-    // Base calcul = somme lignes si dispo, sinon totalHT
     if (productsTotalHT > 0) return productsTotalHT;
     return safeNumber(extractedData?.totalHT);
   }, [productsTotalHT, extractedData?.totalHT]);
@@ -422,19 +399,7 @@ export default function InvoiceVerification() {
       margin: safeNumber(margin),
       customRates: { vatRates, octroiMerRates, transportCosts, serviceCharges },
     });
-  }, [
-    goodsValueForCalc,
-    destination,
-    incoterm,
-    productType,
-    transportMode,
-    weightKg,
-    margin,
-    vatRates,
-    octroiMerRates,
-    transportCosts,
-    serviceCharges,
-  ]);
+  }, [goodsValueForCalc, destination, incoterm, productType, transportMode, weightKg, margin, vatRates, octroiMerRates, transportCosts, serviceCharges]);
 
   const resetForm = () => {
     setCurrentFile(null);
@@ -442,7 +407,7 @@ export default function InvoiceVerification() {
     setVerificationResult(null);
   };
 
-  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -451,11 +416,7 @@ export default function InvoiceVerification() {
     const isCsv = file.type === "text/csv" || name.endsWith(".csv") || file.type === "application/vnd.ms-excel";
 
     if (!isPdf && !isCsv) {
-      toast({
-        title: "Format invalide",
-        description: "Veuillez sélectionner un fichier PDF ou CSV",
-        variant: "destructive",
-      });
+      toast({ title: "Format invalide", description: "Veuillez sélectionner un fichier PDF ou CSV", variant: "destructive" });
       return;
     }
 
@@ -478,28 +439,20 @@ export default function InvoiceVerification() {
       if (isPdf) {
         const parsed: any = await extractInvoiceFromPdf(currentFile);
 
-        const totalHT = parsed.totalHT ?? undefined;
-        const totalTTC = parsed.totalTTC ?? undefined;
-        const totalTVA =
-          totalTTC != null && totalHT != null ? (totalTTC as number) - (totalHT as number) : parsed.totalTVA ?? undefined;
-
         extracted = {
-          invoiceNumber: parsed.invoiceNumber || "",
-          invoiceDate: parsed.date || "",
-          supplierName: parsed.supplier || "",
-          totalHT,
-          totalTVA,
-          totalTTC,
-          transitFees: parsed.transitFees ?? undefined,
-
-          billingCountry: parsed.billingCountry || undefined,
-          vatExemptionMention: parsed.vatExemptionMention || undefined,
-
-          lineItems: Array.isArray(parsed.lineItems) ? parsed.lineItems : undefined,
-          rawText: typeof parsed.rawText === "string" ? parsed.rawText : undefined,
+          invoiceNumber: parsed.invoiceNumber || null,
+          invoiceDate: parsed.date || null,
+          supplierName: parsed.supplier || null,
+          totalHT: parsed.totalHT ?? null,
+          totalTVA: parsed.totalTVA ?? null,
+          totalTTC: parsed.totalTTC ?? null,
+          transitFees: parsed.transitFees ?? null,
+          billingCountry: parsed.billingCountry || null,
+          vatExemptionMention: parsed.vatExemptionMention || null,
+          lineItems: Array.isArray(parsed.lineItems) ? parsed.lineItems : [],
+          rawText: typeof parsed.rawText === "string" ? parsed.rawText : null,
         };
 
-        // fallback heuristiques si l’extracteur ne fournit pas le pays/mention
         if (!extracted.billingCountry) extracted.billingCountry = inferBillingCountryFromText(extracted.rawText);
         if (!extracted.vatExemptionMention) extracted.vatExemptionMention = inferVatExemptionMentionFromText(extracted.rawText);
       }
@@ -509,7 +462,6 @@ export default function InvoiceVerification() {
         extracted = parseCsvText(text);
       }
 
-      // ✅ enrich HS depuis produits (si HS manquant)
       if (extracted.lineItems && extracted.lineItems.length) {
         extracted.lineItems = await enrichHsCodesFromProducts(extracted.lineItems);
       }
@@ -521,11 +473,7 @@ export default function InvoiceVerification() {
         description: "Lignes produits détectées + enrichissement HS (si possible). Lance le contrôle.",
       });
     } catch (err) {
-      toast({
-        title: "Analyse impossible",
-        description: err instanceof Error ? err.message : String(err),
-        variant: "destructive",
-      });
+      toast({ title: "Analyse impossible", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setIsProcessing(false);
     }
@@ -543,7 +491,6 @@ export default function InvoiceVerification() {
       const transit = safeNumber(extractedData.transitFees);
       const totalHT = safeNumber(extractedData.totalHT);
 
-      // ✅ Vérif infos minimales
       if (!extractedData.invoiceNumber) {
         alerts.push("Numéro de facture non détecté.");
         hardError = true;
@@ -553,14 +500,7 @@ export default function InvoiceVerification() {
         hardError = true;
       }
 
-      // ✅ Lignes produits (obligatoire pour OM HS)
-      const lines = extractedData.lineItems || [];
-      if (zone === "DROM" && lines.length === 0) {
-        alerts.push("Destination DROM : aucune ligne produit détectée dans le PDF/CSV → OM théorique impossible.");
-        hardError = true;
-      }
-
-      // ✅ TVA / adresse de facturation
+      // ✅ TVA rules
       const billingCountry = (extractedData.billingCountry || "").trim();
       const billingKnown = billingCountry.length > 0;
       const billingIsFrance = billingKnown ? isFranceCountry(billingCountry) : null;
@@ -574,7 +514,6 @@ export default function InvoiceVerification() {
         vatReason = "Pays de facturation non détecté (adresse facturation).";
         alerts.push(vatReason);
       } else if (billingIsFrance === false) {
-        // hors France : TVA absente + mention obligatoire
         if (tva > 0.01) {
           vatOk = false;
           vatReason = "Facturation hors France : TVA détectée (attendu = TVA absente).";
@@ -588,7 +527,6 @@ export default function InvoiceVerification() {
           hardError = true;
         }
       } else if (billingIsFrance === true) {
-        // France : TVA doit être présente
         if (tva <= 0.01) {
           vatOk = false;
           vatReason = "Facturation France : TVA absente (attendu = TVA présente).";
@@ -598,6 +536,7 @@ export default function InvoiceVerification() {
       }
 
       // ✅ OM HS
+      const lines = extractedData.lineItems || [];
       let omSection: VerificationResult["om"] = {
         territoryCode,
         productsTotalHT: 0,
@@ -613,20 +552,22 @@ export default function InvoiceVerification() {
           alerts.push("Destination DROM : territory_code introuvable (GP/MQ/RE/YT/GF).");
           hardError = true;
         }
+        if (!lines.length) {
+          alerts.push("Destination DROM : aucune ligne produit détectée → OM théorique impossible.");
+          hardError = true;
+        }
 
-        // Base OM = montant HT ligne (prioritaire). Si une ligne n’a pas de montant => alerte.
-        const omCandidates = (lines || []).map((l, idx) => {
-          const hs = normalizeHsCode(l.hsCode || "");
+        const omCandidates = lines.map((l, idx) => {
+          const hs = normalizeDigits(l.hsCode || "");
           const hs4 = hs4FromHsCode(hs);
           const baseHT = safeNumber(l.amountHT);
           const description = (l.description || l.codeArticle || l.ean13 || `Ligne ${idx + 1}`).toString();
-
           return { idx, description, hs, hs4, baseHT };
         });
 
-        const missingAmounts = omCandidates.filter((l) => l.baseHT <= 0);
-        if (missingAmounts.length) {
-          alerts.push(`Montant HT ligne manquant pour ${missingAmounts.length} ligne(s) → OM ligne impossible.`);
+        const missingBase = omCandidates.filter((l) => l.baseHT <= 0);
+        if (missingBase.length) {
+          alerts.push(`Montant HT ligne manquant pour ${missingBase.length} ligne(s) → OM ligne impossible.`);
           hardError = true;
         }
 
@@ -637,23 +578,15 @@ export default function InvoiceVerification() {
         }
 
         const productsTotal = omCandidates.reduce((s, l) => s + safeNumber(l.baseHT), 0);
-        if (productsTotal > 0 && totalHT > 0) {
-          const diff = productsTotal - totalHT;
-          const tolerance = Math.max(5, 0.01 * totalHT);
-          if (Math.abs(diff) > tolerance) {
-            alerts.push(
-              `Somme lignes HT (${formatCurrency(productsTotal)}) ≠ Total HT (${formatCurrency(totalHT)})`,
-            );
-          }
-        }
 
         const hs4List = omCandidates.map((l) => l.hs4).filter(Boolean);
         const rates = territoryCode ? await fetchOmRatesByHs4(territoryCode, hs4List) : new Map<string, OmRateRow>();
 
         const omLines: OmLine[] = omCandidates.map((l) => {
           const rateRow = l.hs4 ? rates.get(l.hs4) : undefined;
-          const om_rate = safeNumber(rateRow?.om_rate ?? 0);
-          const omr_rate = safeNumber(rateRow?.omr_rate ?? 0);
+
+          const om_rate = normalizeRate(safeNumber(rateRow?.om_rate ?? 0));
+          const omr_rate = normalizeRate(safeNumber(rateRow?.omr_rate ?? 0));
           const totalRate = om_rate + omr_rate;
 
           const missingRate = !!l.hs4 && !rateRow;
@@ -682,13 +615,10 @@ export default function InvoiceVerification() {
 
         const omTheoretical = omLines.reduce((s, l) => s + safeNumber(l.omAmount), 0);
 
-        // ✅ Règle demandée
         let verdict: InvoiceVerdict = "favorable";
         if (omTheoretical < transit) {
           verdict = "defavorable";
-          alerts.push(
-            `Facture défavorable : OM théorique (${formatCurrency(omTheoretical)}) < transit facturé (${formatCurrency(transit)}).`,
-          );
+          alerts.push(`Facture défavorable : OM théorique (${formatCurrency(omTheoretical)}) < transit facturé (${formatCurrency(transit)}).`);
           hardError = true;
         }
 
@@ -703,7 +633,7 @@ export default function InvoiceVerification() {
         };
       }
 
-      // ✅ Transit vs estimation “référence” (ton existant)
+      // ✅ Référence transit / charges (optionnel)
       const bd = expectedBreakdown;
       let transitEstimatedHT = 0;
       let supplierChargesHT = 0;
@@ -714,14 +644,14 @@ export default function InvoiceVerification() {
           .filter((l) => l.category === "prestation" && l.payer === "Fournisseur")
           .reduce((s, l) => s + safeNumber(l.amount), 0);
 
-        supplierChargesHT = safeNumber(bd.totalFournisseur);
-        taxesNonRecup = safeNumber(bd.totalTaxesNonRecuperables);
+        supplierChargesHT = safeNumber((bd as any).totalFournisseur);
+        taxesNonRecup = safeNumber((bd as any).totalTaxesNonRecuperables);
 
         const delta = transit - transitEstimatedHT;
         const denom = Math.max(1, transitEstimatedHT);
         const deltaPct = (delta / denom) * 100;
-        const toleranceEuro = Math.max(50, 0.15 * denom);
 
+        const toleranceEuro = Math.max(50, 0.15 * denom);
         if (Math.abs(delta) > toleranceEuro) {
           alerts.push(`Transit incohérent vs estimation: écart ${formatCurrency(delta)} (${deltaPct.toFixed(1)}%).`);
         }
@@ -729,7 +659,6 @@ export default function InvoiceVerification() {
         alerts.push("Impossible de calculer l’attendu (références / base invalide).");
       }
 
-      // Statut global
       let status: "ok" | "warning" | "error" = "ok";
       if (hardError) status = "error";
       else if (alerts.length > 0) status = "warning";
@@ -785,15 +714,11 @@ export default function InvoiceVerification() {
         variant: status === "ok" ? "default" : "destructive",
       });
     } catch (err) {
-      toast({
-        title: "Erreur contrôle",
-        description: err instanceof Error ? err.message : String(err),
-        variant: "destructive",
-      });
+      toast({ title: "Erreur contrôle", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setIsVerifying(false);
     }
-  }, [extractedData, expectedBreakdown, destination, incoterm, transportMode, zone, territoryCode, currentFile?.name, toast, upsert]);
+  }, [extractedData, expectedBreakdown, zone, territoryCode, destination, toast, upsert, currentFile?.name]);
 
   const verdictBadge = (v?: InvoiceVerdict) => {
     if (v === "defavorable") return { label: "Défavorable", cls: "bg-status-risk text-white" };
@@ -804,28 +729,24 @@ export default function InvoiceVerification() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <FileSearch className="h-6 w-6 text-primary" />
             Vérification facture (PDF / CSV)
           </h1>
-          <p className="mt-1 text-muted-foreground">
-            Détection lignes produits + HS (auto) • OM théorique vs transit • Contrôle TVA (pays facturation)
-          </p>
+          <p className="mt-1 text-muted-foreground">Détection lignes + HS • OM théorique vs transit • Contrôle TVA (pays facturation)</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left */}
+          {/* LEFT */}
           <div className="space-y-6">
-            {/* Upload */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Upload className="h-5 w-5" />
                   Import facture (PDF ou CSV)
                 </CardTitle>
-                <CardDescription>La page analyse et détecte automatiquement les lignes produits</CardDescription>
+                <CardDescription>Analyse automatique : lignes produits + montants + HS (si possible)</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
@@ -847,15 +768,19 @@ export default function InvoiceVerification() {
                 )}
 
                 {extractedData && (
-                  <Button onClick={runVerification} disabled={isVerifying} className="w-full" variant="default">
+                  <Button onClick={runVerification} disabled={isVerifying} className="w-full">
                     <CheckCircle className="h-4 w-4 mr-2" />
                     {isVerifying ? "Contrôle..." : "Lancer le contrôle"}
                   </Button>
                 )}
+
+                <Button variant="outline" onClick={resetForm} className="w-full">
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Réinitialiser
+                </Button>
               </CardContent>
             </Card>
 
-            {/* Contexte export */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -872,35 +797,43 @@ export default function InvoiceVerification() {
                       Destination
                     </Label>
                     <Select value={destination} onValueChange={(v) => setDestination(v as Destination)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         {destinations.map((d) => (
-                          <SelectItem key={d} value={d}>{d}</SelectItem>
+                          <SelectItem key={d} value={d}>
+                            {d}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     <div className="flex gap-2 items-center">
-                      <Badge variant={zone === "UE" ? "default" : zone === "DROM" ? "secondary" : "outline"}>
-                        Zone {zone}
-                      </Badge>
-                      {zone === "DROM" && (
-                        <Badge variant="outline" className="border-primary/30 text-primary">
-                          Territory {territoryCode ?? "?"}
-                        </Badge>
-                      )}
+                      <Badge variant={zone === "UE" ? "default" : zone === "DROM" ? "secondary" : "outline"}>Zone {zone}</Badge>
+                      {zone === "DROM" && <Badge variant="outline" className="border-primary/30 text-primary">Territory {territoryCode ?? "?"}</Badge>}
                     </div>
                   </div>
 
                   <div className="space-y-2">
                     <Label>Incoterm</Label>
                     <Select value={incoterm} onValueChange={(v) => setIncoterm(v as Incoterm)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         {incoterms.map((i) => (
-                          <SelectItem key={i} value={i}>{i}</SelectItem>
+                          <SelectItem key={i} value={i}>
+                            {i}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {incoterm === "EXW" && "Client assume tous les frais"}
+                      {incoterm === "FCA" && "Fournisseur gère la remise transporteur"}
+                      {incoterm === "DAP" && "Fournisseur livre, client gère import"}
+                      {incoterm === "DDP" && "Fournisseur assume tout"}
+                    </p>
                   </div>
                 </div>
 
@@ -911,10 +844,14 @@ export default function InvoiceVerification() {
                       Transport
                     </Label>
                     <Select value={transportMode} onValueChange={(v) => setTransportMode(v as TransportMode)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         {transportModes.map((t) => (
-                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                          <SelectItem key={t} value={t}>
+                            {t}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -923,7 +860,9 @@ export default function InvoiceVerification() {
                   <div className="space-y-2">
                     <Label>Type produit (taxes)</Label>
                     <Select value={productType} onValueChange={(v) => setProductType(v as ProductType)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="lppr">LPPR</SelectItem>
                         <SelectItem value="standard">Standard</SelectItem>
@@ -945,22 +884,16 @@ export default function InvoiceVerification() {
 
                 <p className="text-xs text-muted-foreground flex items-start gap-2">
                   <Info className="h-4 w-4 mt-0.5" />
-                  OM (DROM) = calcul HS4 via <span className="font-medium">om_rates</span>. Si le PDF ne fournit pas de lignes produits, il faut enrichir l’extracteur.
+                  OM (DROM) = calcul HS4 via <span className="font-medium">om_rates</span>. Taux normalisés (12.5 → 0.125).
                 </p>
-
-                <Button variant="outline" onClick={resetForm} className="w-full">
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Réinitialiser
-                </Button>
               </CardContent>
             </Card>
 
-            {/* Données extraites */}
             {extractedData && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Données détectées</CardTitle>
-                  <CardDescription>Informations issues du PDF/CSV (lecture seule)</CardDescription>
+                  <CardDescription>Lecture seule depuis le PDF/CSV</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm">
                   <div className="flex justify-between">
@@ -975,7 +908,9 @@ export default function InvoiceVerification() {
                     <span className="text-muted-foreground">Date</span>
                     <span className="font-medium">{extractedData.invoiceDate || "-"}</span>
                   </div>
+
                   <Separator />
+
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Total HT</span>
                     <span className="font-medium">{formatCurrency(safeNumber(extractedData.totalHT))}</span>
@@ -988,13 +923,16 @@ export default function InvoiceVerification() {
                     <span className="text-muted-foreground">Transit</span>
                     <span className="font-medium">{formatCurrency(safeNumber(extractedData.transitFees))}</span>
                   </div>
+
                   <Separator />
+
                   <div className="flex justify-between">
                     <span className="text-muted-foreground flex items-center gap-2">
                       <Globe className="h-4 w-4" /> Pays facturation
                     </span>
                     <span className="font-medium">{extractedData.billingCountry || "-"}</span>
                   </div>
+
                   {extractedData.vatExemptionMention && (
                     <div className="text-xs text-muted-foreground">
                       <span className="font-medium text-foreground">Mention :</span> {extractedData.vatExemptionMention}
@@ -1005,11 +943,10 @@ export default function InvoiceVerification() {
             )}
           </div>
 
-          {/* Right */}
+          {/* RIGHT */}
           <div className="space-y-6">
             {verificationResult ? (
               <>
-                {/* TVA check */}
                 {verificationResult.vatCheck && (
                   <Card className={verificationResult.vatCheck.ok ? "border-status-ok/50" : "border-status-risk/50"}>
                     <CardHeader>
@@ -1024,22 +961,17 @@ export default function InvoiceVerification() {
                         Pays: {verificationResult.vatCheck.billingCountry ?? "Non détecté"} • TVA: {formatCurrency(verificationResult.vatCheck.tvaAmount)}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="text-sm text-muted-foreground">
-                      {verificationResult.vatCheck.reason}
-                    </CardContent>
+                    <CardContent className="text-sm text-muted-foreground">{verificationResult.vatCheck.reason}</CardContent>
                   </Card>
                 )}
 
-                {/* Verdict OM vs Transit */}
                 {verificationResult.om && (
                   <Card className={verificationResult.om.verdict === "defavorable" ? "border-status-risk/50" : "border-status-ok/50"}>
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center gap-2">
                         <Scale className="h-5 w-5" />
                         OM théorique vs Transit
-                        <Badge className={verdictBadge(verificationResult.om.verdict).cls}>
-                          {verdictBadge(verificationResult.om.verdict).label}
-                        </Badge>
+                        <Badge className={verdictBadge(verificationResult.om.verdict).cls}>{verdictBadge(verificationResult.om.verdict).label}</Badge>
                       </CardTitle>
                       <CardDescription>
                         Destination {destination} • Zone {zone}
@@ -1048,9 +980,7 @@ export default function InvoiceVerification() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {zone !== "DROM" ? (
-                        <div className="p-4 rounded-lg bg-muted/50 text-sm text-muted-foreground">
-                          OM non applicable (destination hors DROM).
-                        </div>
+                        <div className="p-4 rounded-lg bg-muted/50 text-sm text-muted-foreground">OM non applicable (destination hors DROM).</div>
                       ) : (
                         <>
                           <div className="grid grid-cols-2 gap-4">
@@ -1078,13 +1008,10 @@ export default function InvoiceVerification() {
                                 {verificationResult.om.deltaTransitMinusOM >= 0 ? "+" : ""}
                                 {formatCurrency(verificationResult.om.deltaTransitMinusOM)}
                               </p>
-                              <p className="text-xs text-muted-foreground">
-                                Base lignes HT : {formatCurrency(verificationResult.om.productsTotalHT)}
-                              </p>
+                              <p className="text-xs text-muted-foreground">Base lignes HT : {formatCurrency(verificationResult.om.productsTotalHT)}</p>
                             </div>
                           </div>
 
-                          {/* Détail OM */}
                           {verificationResult.om.lines.length > 0 && (
                             <div className="space-y-2">
                               <p className="text-sm font-medium">Lignes détectées (HS / OM)</p>
@@ -1106,10 +1033,12 @@ export default function InvoiceVerification() {
                                           {l.year ? ` • ${l.year}` : ""}
                                         </p>
                                       </div>
+
                                       <div className="text-right shrink-0">
                                         <p className="text-sm text-muted-foreground">Base</p>
                                         <p className="font-medium">{formatCurrency(l.baseHT)}</p>
                                       </div>
+
                                       <div className="text-right shrink-0">
                                         <p className="text-sm text-muted-foreground">OM</p>
                                         <p className="font-bold">{formatCurrency(l.omAmount)}</p>
@@ -1126,100 +1055,6 @@ export default function InvoiceVerification() {
                   </Card>
                 )}
 
-                {/* Transit & charges (référence) */}
-                {verificationResult.analysis && (
-                  <Card
-                    className={
-                      verificationResult.analysis.status === "ok"
-                        ? "border-status-ok/50"
-                        : verificationResult.analysis.status === "warning"
-                        ? "border-status-warning/50"
-                        : "border-status-risk/50"
-                    }
-                  >
-                    <CardHeader>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <TrendingUp className="h-5 w-5" />
-                        Transit & charges (référence)
-                        <Badge
-                          variant={verificationResult.analysis.status === "ok" ? "default" : "destructive"}
-                          className={
-                            verificationResult.analysis.status === "ok"
-                              ? "bg-status-ok text-white"
-                              : verificationResult.analysis.status === "warning"
-                              ? "bg-status-warning text-white"
-                              : "bg-status-risk text-white"
-                          }
-                        >
-                          {verificationResult.analysis.status === "ok"
-                            ? "OK"
-                            : verificationResult.analysis.status === "warning"
-                            ? "Attention"
-                            : "Alerte"}
-                        </Badge>
-                      </CardTitle>
-                      <CardDescription>
-                        Destination {destination} • Incoterm {incoterm} • {transportMode} • Zone {zone}
-                      </CardDescription>
-                    </CardHeader>
-
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="p-4 bg-muted rounded-lg">
-                          <p className="text-xs text-muted-foreground mb-1">Transit facturé</p>
-                          <p className="text-xl font-bold">{formatCurrency(verificationResult.analysis.transitActualHT)}</p>
-                        </div>
-                        <div className="p-4 bg-muted rounded-lg">
-                          <p className="text-xs text-muted-foreground mb-1">Transit estimé</p>
-                          <p className="text-xl font-bold">{formatCurrency(verificationResult.analysis.transitEstimatedHT)}</p>
-                        </div>
-                      </div>
-
-                      <div
-                        className={`p-4 rounded-lg flex items-center justify-between ${
-                          Math.abs(verificationResult.analysis.transitDeltaHT) >
-                          Math.max(50, 0.15 * Math.max(1, verificationResult.analysis.transitEstimatedHT))
-                            ? "bg-status-warning/10"
-                            : "bg-status-ok/10"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          {verificationResult.analysis.transitDeltaHT < 0 ? (
-                            <TrendingDown className="h-5 w-5 text-status-ok" />
-                          ) : (
-                            <TrendingUp className="h-5 w-5 text-status-warning" />
-                          )}
-                          <span className="font-medium">Écart transit</span>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold">
-                            {verificationResult.analysis.transitDeltaHT >= 0 ? "+" : ""}
-                            {formatCurrency(verificationResult.analysis.transitDeltaHT)}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {verificationResult.analysis.transitDeltaPercent >= 0 ? "+" : ""}
-                            {verificationResult.analysis.transitDeltaPercent.toFixed(1)}%
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="p-4 rounded-lg bg-muted/50">
-                          <p className="text-xs text-muted-foreground">Charges fournisseur estimées</p>
-                          <p className="text-lg font-bold">{formatCurrency(verificationResult.analysis.supplierChargesHT)}</p>
-                        </div>
-                        <div className="p-4 rounded-lg bg-[hsl(var(--status-risk))]/5">
-                          <p className="text-xs text-muted-foreground">Taxes non récup (estim.)</p>
-                          <p className="text-lg font-bold text-[hsl(var(--status-risk))]">
-                            {formatCurrency(verificationResult.analysis.taxesNonRecup)}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Alertes */}
                 {verificationResult.alerts.length > 0 && (
                   <Card className="border-status-warning/50">
                     <CardHeader>
@@ -1245,16 +1080,14 @@ export default function InvoiceVerification() {
               <Card className="h-full flex items-center justify-center min-h-[400px]">
                 <CardContent className="text-center">
                   <FileSearch className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-                  <p className="text-muted-foreground">
-                    Importez un PDF/CSV puis lancez l’analyse et le contrôle.
-                  </p>
+                  <p className="text-muted-foreground">Importez un PDF/CSV puis lancez l’analyse et le contrôle.</p>
                 </CardContent>
               </Card>
             )}
           </div>
         </div>
 
-        {/* Stats tracker */}
+        {/* Tracker */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
@@ -1267,6 +1100,7 @@ export default function InvoiceVerification() {
               </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
@@ -1275,13 +1109,12 @@ export default function InvoiceVerification() {
               <div>
                 <p className="text-sm text-muted-foreground">Marge moyenne (HT - transit)</p>
                 <p className="text-xl font-bold">
-                  {items.length
-                    ? `${(items.reduce((s, i) => s + (i.marginPercent || 0), 0) / items.length).toFixed(1)}%`
-                    : "-"}
+                  {items.length ? `${(items.reduce((s, i) => s + (i.marginPercent || 0), 0) / items.length).toFixed(1)}%` : "-"}
                 </p>
               </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-status-ok/10">
@@ -1291,9 +1124,9 @@ export default function InvoiceVerification() {
                 <p className="text-sm text-muted-foreground">Transit moyen</p>
                 <p className="text-xl font-bold">
                   {items.length
-                    ? `${new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(
+                    ? new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(
                         items.reduce((s, i) => s + (i.transitFees || 0), 0) / items.length || 0,
-                      )}`
+                      )
                     : "-"}
                 </p>
               </div>
