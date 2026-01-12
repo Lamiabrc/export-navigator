@@ -8,7 +8,6 @@ import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { isMissingTableError } from "@/domain/calc";
 import worldMap from "@/assets/world-map.svg";
 import { TERRITORY_PCT } from "@/domain/geo/territoryPct";
-
 import {
   NeonSurface,
   NeonKpiCard,
@@ -20,7 +19,6 @@ import {
 type Destination = {
   code: string;
   name: string;
-  // lat/lon gardés seulement en fallback si un code n’a pas d’ancre TERRITORY_PCT
   lat: number;
   lon: number;
   color: string;
@@ -53,64 +51,78 @@ type CompetitionRow = {
   status: "premium" | "aligned" | "underpriced" | "no_data";
 };
 
-const MAP_WIDTH = 1010;
-const MAP_HEIGHT = 666;
+const MAP_WIDTH = 1010; // matches svg width
+const MAP_HEIGHT = 666; // matches svg height
 
 const DESTINATIONS: Destination[] = [
   { code: "FR", name: "Metropole", lat: 44.0, lon: 2.0, color: "#38bdf8" },
+
   { code: "GP", name: "Guadeloupe", lat: 16.265, lon: -61.551, color: "#fb7185" },
   { code: "MQ", name: "Martinique", lat: 14.6415, lon: -61.0242, color: "#f59e0b" },
   { code: "GF", name: "Guyane", lat: 4.0, lon: -53.0, color: "#22c55e" },
   { code: "RE", name: "Reunion", lat: -21.1151, lon: 55.5364, color: "#a855f7" },
   { code: "YT", name: "Mayotte", lat: -12.8275, lon: 45.1662, color: "#38bdf8" },
+
+  // territoires “bonus” (fallback projection si pas d’ancre)
   { code: "SPM", name: "Saint-Pierre-et-Miquelon", lat: 46.8852, lon: -56.3159, color: "#0ea5e9" },
   { code: "BL", name: "Saint-Barthelemy", lat: 17.9, lon: -62.85, color: "#ec4899" },
   { code: "MF", name: "Saint-Martin", lat: 18.0708, lon: -63.0501, color: "#10b981" },
 ];
 
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+const OVERSEAS_CODES = ["GP", "MQ", "GF", "RE", "YT", "SPM", "BL", "MF"];
 
 const formatMoney = (n: number | null | undefined) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
+  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(
+    Number(n || 0),
+  );
+
+// 👉 IMPORTANT : on projette dans le même viewBox que la carte (0..MAP_WIDTH / 0..MAP_HEIGHT)
+const MAP_INSET = { left: 0, right: 0, top: 0, bottom: 0 };
+
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 /**
- * ✅ Positionnement calé sur TON SVG (world-map.svg)
- * - si code présent dans TERRITORY_PCT -> position exacte
- * - sinon fallback lat/lon (moins précis)
+ * ✅ SOURCE DE VÉRITÉ PRIORITAIRE : TERRITORY_PCT
+ * - FR (Métropole) => utilise HUB_FR (ancre calibrée sur la carte)
+ * - GP/MQ/GF/RE/YT => ancre calibrée
+ * - le reste => fallback projection (approximatif)
  */
-const anchorXY = (code: string) => {
-  const key = code === "FR" ? "HUB_FR" : code;
-  const pct = (TERRITORY_PCT as any)[key] as { x: number; y: number } | undefined;
+function fromPct(code: string) {
+  const pctKey = code === "FR" ? "HUB_FR" : code;
+  const pct = (TERRITORY_PCT as any)[pctKey];
   if (!pct) return null;
-  return { x: (pct.x / 100) * MAP_WIDTH, y: (pct.y / 100) * MAP_HEIGHT };
-};
+  return {
+    x: (pct.x / 100) * MAP_WIDTH,
+    y: (pct.y / 100) * MAP_HEIGHT,
+  };
+}
 
-const fallbackProject = (lat: number, lon: number) => {
-  const x = ((lon + 180) / 360) * MAP_WIDTH;
-  const y = ((90 - lat) / 180) * MAP_HEIGHT;
+// fallback (approx) pour SPM/BL/MF si pas d’ancre
+function projectFallback(lat: number, lon: number) {
+  const x = ((lon + 180) / 360) * (MAP_WIDTH - MAP_INSET.left - MAP_INSET.right) + MAP_INSET.left;
+  const y = ((90 - lat) / 180) * (MAP_HEIGHT - MAP_INSET.top - MAP_INSET.bottom) + MAP_INSET.top;
   return { x, y };
-};
+}
 
+const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
+
+/**
+ * ✅ Arc “propre” : courbure perpendiculaire (et pas juste un midY)
+ * - vers l’Ouest (Antilles) => arc remonte (plus “naturel” visuellement)
+ * - vers l’Est (Réunion/Mayotte) => arc descend
+ */
 const buildArc = (a: { x: number; y: number }, b: { x: number; y: number }) => {
-  // arc “airline” : courbe via normale, puis on choisit la version qui monte (cy le plus petit)
   const mx = (a.x + b.x) / 2;
   const my = (a.y + b.y) / 2;
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const len = Math.hypot(dx, dy) || 1;
-
   const nx = -dy / len;
   const ny = dx / len;
 
-  const bend = clamp(len * 0.22, 40, 180);
-
-  const cx1 = mx + nx * bend;
-  const cy1 = my + ny * bend;
-  const cx2 = mx - nx * bend;
-  const cy2 = my - ny * bend;
-
-  const cx = cy1 < cy2 ? cx1 : cx2;
-  const cy = cy1 < cy2 ? cy1 : cy2;
+  const bend = clamp(len * 0.22, 28, 160);
+  const cx = mx + nx * bend;
+  const cy = my + ny * bend;
 
   return `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`;
 };
@@ -181,10 +193,10 @@ export default function ControlTower() {
         }
 
         const filteredSales = (salesRes.data || []).filter((row) =>
-          variables.territory_code ? row.territory_code === variables.territory_code : true
+          variables.territory_code ? row.territory_code === variables.territory_code : true,
         );
         const filteredCosts = (costData || []).filter((row: any) =>
-          variables.territory_code ? row.destination === variables.territory_code : true
+          variables.territory_code ? row.destination === variables.territory_code : true,
         );
 
         setSales(filteredSales as SalesRow[]);
@@ -310,14 +322,18 @@ export default function ControlTower() {
 
   const selected = variables.territory_code || hovered || "FR";
 
+  /**
+   * ✅ NODES : on place FR + DROM via TERRITORY_PCT (calibré),
+   * et on fallback en projection pour le reste.
+   */
   const nodes = React.useMemo(
     () =>
       DESTINATIONS.map((d) => {
-        const a = anchorXY(d.code);
-        const pos = a ?? fallbackProject(d.lat, d.lon);
-        return { ...d, x: pos.x, y: pos.y };
+        const anchored = fromPct(d.code);
+        const base = anchored || projectFallback(d.lat, d.lon);
+        return { ...d, x: base.x, y: base.y };
       }),
-    []
+    [],
   );
 
   const metropole = nodes.find((n) => n.code === "FR")!;
@@ -339,7 +355,7 @@ export default function ControlTower() {
       const ty = MAP_HEIGHT / 2 - centerY * scale;
       return { scale, tx, ty };
     },
-    [nodes]
+    [nodes],
   );
 
   const zoomCss = React.useMemo(
@@ -347,21 +363,21 @@ export default function ControlTower() {
       transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`,
       transformOrigin: "0 0",
     }),
-    [viewport.scale, viewport.tx, viewport.ty]
+    [viewport.scale, viewport.tx, viewport.ty],
   );
-
-  const territoryCodes = ["GP", "MQ", "GF", "RE", "YT", "SPM", "BL", "MF"];
 
   const salesByTerritory = React.useMemo(() => {
     const agg: Record<string, { route: string; volume: number; ca: number; marge: number }> = {};
     sales.forEach((s) => {
       const raw = s.territory_code || "FR";
-      const code = territoryCodes.includes(raw) ? raw : "FR";
+      const code = OVERSEAS_CODES.includes(raw) ? raw : "FR";
       if (!agg[code]) agg[code] = { route: `FR→${code}`, volume: 0, ca: 0, marge: 0 };
+
       const ca = s.amount_ht || 0;
       const relatedCosts = costs
         .filter((c) => (c.destination || "FR") === code)
         .reduce((t, c) => t + (c.amount || 0), 0);
+
       agg[code].volume += 1;
       agg[code].ca += ca;
       agg[code].marge += ca - relatedCosts;
@@ -381,7 +397,7 @@ export default function ControlTower() {
       .filter(([code]) => code !== "FR")
       .sort((a, b) => b[1].ca - a[1].ca || b[1].volume - a[1].volume);
     const base = ordered.slice(0, 5).map(([code]) => code);
-    if (!base.length) return new Set(territoryCodes);
+    if (!base.length) return new Set(["GP", "MQ", "GF", "RE", "YT"]);
     return new Set(base);
   }, [salesByTerritory]);
 
@@ -407,14 +423,14 @@ export default function ControlTower() {
 
   const donuts = React.useMemo(() => {
     const total = totals.totalSalesHt || 1;
-    const dromCa = territoryCodes.reduce((s, code) => s + (salesByTerritory[code]?.ca || 0), 0);
-    const dromMarge = territoryCodes.reduce((s, code) => s + (salesByTerritory[code]?.marge || 0), 0);
-    const dromVol = territoryCodes.reduce((s, code) => s + (salesByTerritory[code]?.volume || 0), 0);
+    const domCa = OVERSEAS_CODES.reduce((s, code) => s + (salesByTerritory[code]?.ca || 0), 0);
+    const domMarge = OVERSEAS_CODES.reduce((s, code) => s + (salesByTerritory[code]?.marge || 0), 0);
+    const domVol = OVERSEAS_CODES.reduce((s, code) => s + (salesByTerritory[code]?.volume || 0), 0);
     const totalVol = Object.values(salesByTerritory).reduce((s, r) => s + r.volume, 0) || 1;
     return {
-      dromCaPct: Math.min(100, Math.max(0, (dromCa / total) * 100)),
-      dromMargePct: totals.totalSalesHt > 0 ? Math.min(100, Math.max(0, (dromMarge / totals.totalSalesHt) * 100 + 50)) : 50,
-      dromVolPct: Math.min(100, Math.max(0, (dromVol / totalVol) * 100)),
+      dromCaPct: Math.min(100, Math.max(0, (domCa / total) * 100)),
+      dromMargePct: totals.totalSalesHt > 0 ? Math.min(100, Math.max(0, (domMarge / totals.totalSalesHt) * 100 + 50)) : 50,
+      dromVolPct: Math.min(100, Math.max(0, (domVol / totalVol) * 100)),
       onTime: 72,
       deltaCa: 1.2,
       deltaMarge: 0.5,
@@ -433,6 +449,7 @@ export default function ControlTower() {
 
   const actions = ["Ouvrir Explore", "Optimiser incoterm", "Importer CSV coûts"];
 
+  // ✅ Wheel zoom (passive:false)
   React.useEffect(() => {
     const el = zoomLayerRef.current;
     if (!el) return;
@@ -501,6 +518,7 @@ export default function ControlTower() {
           </div>
         </div>
 
+        {/* Ligne 1 : carte + donuts */}
         <div className="grid grid-cols-12 gap-3">
           <div className="col-span-12 lg:col-span-8">
             <NeonSurface className="h-[460px] relative overflow-hidden">
@@ -520,6 +538,7 @@ export default function ControlTower() {
                 <NeonKpiCard label="Ventes (30j)" value={sales.length.toString()} delta={sales.length ? 1.1 : -0.2} accent="var(--chart-4)" />
               </div>
 
+              {/* ✅ FIX : conteneur interactions (pas transformé) + layer map (transformé) */}
               <div
                 ref={zoomLayerRef}
                 className="absolute inset-0 bg-gradient-to-br from-slate-900/60 via-slate-900/40 to-cyan-900/20 rounded-xl border border-cyan-500/20 shadow-[0_0_40px_rgba(34,211,238,0.15)]"
@@ -540,17 +559,13 @@ export default function ControlTower() {
                   draggingRef.current = null;
                 }}
               >
+                {/* Layer transformé (carte + points + arcs) */}
                 <div className="absolute inset-0" style={zoomCss}>
-                  <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 w-full h-full">
-                    <style>{`
-                      .arc-neon {
-                        stroke-linecap: round;
-                        stroke-dasharray: 10 14;
-                        animation: arcDash 1.2s linear infinite;
-                      }
-                      @keyframes arcDash { to { stroke-dashoffset: -48; } }
-                    `}</style>
-
+                  <svg
+                    viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
+                    preserveAspectRatio="xMidYMid meet"
+                    className="absolute inset-0 w-full h-full"
+                  >
                     <defs>
                       <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
                         <feGaussianBlur stdDeviation="6" result="coloredBlur" />
@@ -560,6 +575,16 @@ export default function ControlTower() {
                         </feMerge>
                       </filter>
                     </defs>
+
+                    <style>
+                      {`
+                        .arc-neon {
+                          stroke-dasharray: 7 11;
+                          animation: dash 1.2s linear infinite;
+                        }
+                        @keyframes dash { to { stroke-dashoffset: -36; } }
+                      `}
+                    </style>
 
                     <image
                       href={worldMap}
@@ -578,11 +603,10 @@ export default function ControlTower() {
                         const path = buildArc(metropole, node);
                         const isActive = selected === node.code;
                         const isHover = hovered === node.code;
+                        const strokeWidth = isActive || isHover ? 2.8 : 1.35;
 
                         const territoryData = salesByTerritory[node.code];
                         const hasFlow = (territoryData?.ca || 0) > 0;
-
-                        const strokeWidth = isActive || isHover ? 2.8 : 1.4;
                         const showLabel = topLabels.has(node.code);
 
                         return (
@@ -593,21 +617,21 @@ export default function ControlTower() {
                                 fill="none"
                                 stroke={node.color}
                                 strokeWidth={strokeWidth}
-                                strokeOpacity={isActive || isHover ? 0.95 : 0.35}
-                                className="arc-neon transition-all duration-300"
+                                strokeOpacity={isActive || isHover ? 0.92 : 0.28}
+                                className="arc-neon"
                                 vectorEffect="non-scaling-stroke"
                                 filter="url(#glow)"
                                 pointerEvents="none"
                               />
                             ) : null}
 
-                            <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={hasFlow ? 0.35 : 0.15} />
+                            <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={hasFlow ? 0.35 : 0.12} />
                             <circle
                               cx={node.x}
                               cy={node.y}
                               r={isActive || isHover ? 7 : 5.5}
                               fill={node.color}
-                              opacity={hasFlow ? 0.95 : 0.35}
+                              opacity={hasFlow ? 0.9 : 0.28}
                               className="cursor-pointer"
                               onMouseEnter={(evt) => {
                                 setHovered(node.code);
@@ -626,7 +650,7 @@ export default function ControlTower() {
                             />
 
                             {showLabel ? (
-                              <text x={node.x + 12} y={node.y - 8} className="text-xs font-semibold fill-cyan-100 drop-shadow">
+                              <text x={node.x + 12} y={node.y - 10} className="text-xs font-semibold fill-cyan-100 drop-shadow">
                                 {node.name}
                               </text>
                             ) : null}
@@ -643,7 +667,6 @@ export default function ControlTower() {
                       animate={{ scale: 1, opacity: 1 }}
                       transition={{ duration: 0.4 }}
                       className="cursor-pointer"
-                      filter="url(#glow)"
                       onMouseEnter={(evt) => {
                         setHovered("FR");
                         setTooltipPos({ x: evt.clientX, y: evt.clientY });
@@ -660,12 +683,13 @@ export default function ControlTower() {
                       }}
                     />
 
-                    <text x={metropole.x + 14} y={metropole.y - 14} className="text-sm font-bold fill-cyan-100 drop-shadow">
+                    <text x={metropole.x + 18} y={metropole.y + 4} className="text-sm font-bold fill-cyan-100 drop-shadow">
                       Metropole
                     </text>
                   </svg>
                 </div>
 
+                {/* Légende (fixe, NON affectée par le zoom/pan) */}
                 <div className="absolute bottom-3 left-3 z-30 rounded-lg border border-cyan-500/30 bg-slate-900/70 px-3 py-2 text-xs text-cyan-50 shadow-lg">
                   <div className="font-semibold text-cyan-100 mb-1">Légende DOM-TOM</div>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1">
@@ -689,12 +713,13 @@ export default function ControlTower() {
                 </div>
               ) : null}
 
+              {/* Tooltip en position FIXED (pas dépendant du conteneur) */}
               {hovered && tooltipPos ? (
                 <div
                   className="pointer-events-none fixed z-[9999] rounded-lg border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-slate-100 shadow-xl"
                   style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 30 }}
                 >
-                  <div className="font-semibold">{hovered === "FR" ? "Hub" : hovered}</div>
+                  <div className="font-semibold">{hovered === "FR" ? "Metropole" : hovered}</div>
                   <div className="text-slate-300">
                     CA HT: {formatMoney(salesByTerritory[hovered]?.ca || 0)}
                     <br />
@@ -715,6 +740,7 @@ export default function ControlTower() {
           </div>
         </div>
 
+        {/* Ligne 2 : barres + mini DOM + courbe */}
         <div className="grid grid-cols-12 gap-3">
           <div className="col-span-12 md:col-span-4">
             <NeonBarCard title="Top routes par volume" data={topRoutes} dataKey="volume" labelKey="route" />
@@ -758,6 +784,7 @@ export default function ControlTower() {
           </div>
         </div>
 
+        {/* Ligne 3 : alertes + actions */}
         <div className="grid grid-cols-12 gap-3">
           <div className="col-span-12 md:col-span-6">
             <NeonSurface>
@@ -796,7 +823,11 @@ export default function ControlTower() {
           </div>
         </div>
 
-        {error ? <div className="text-sm text-rose-300">Erreur chargement données : {error}. Affichage des données démo si disponibles.</div> : null}
+        {error ? (
+          <div className="text-sm text-rose-300">
+            Erreur chargement données : {error}. Affichage des données démo si disponibles.
+          </div>
+        ) : null}
         {warning ? <div className="text-sm text-amber-200">{warning}</div> : null}
       </div>
     </MainLayout>
