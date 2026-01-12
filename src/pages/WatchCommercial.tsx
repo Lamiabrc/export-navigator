@@ -628,7 +628,7 @@ export default function WatchCommercial() {
               <div className="rounded-xl border border-amber-400/15 bg-slate-950/40 p-3">
                 <div className="text-xs text-slate-400">À baisser (premium)</div>
                 <div className="text-2xl font-bold text-amber-200">{summary.premium}</div>
-                <div className="text-xs text-slate-400">> +5% vs best</div>
+                <div className="text-xs text-slate-400">&gt; +5% vs best</div>
               </div>
               <div className="rounded-xl border border-emerald-400/15 bg-slate-950/40 p-3">
                 <div className="text-xs text-slate-400">À monter (sous-pricé)</div>
