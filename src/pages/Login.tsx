@@ -17,7 +17,6 @@ function getErrorMessage(err: unknown): string {
   if (!err) return "Une erreur inconnue est survenue.";
   if (typeof err === "string") return err;
   if (err instanceof Error) return err.message;
-  // Supabase-like errors sometimes have { message }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const anyErr = err as any;
   if (typeof anyErr?.message === "string") return anyErr.message;
@@ -40,9 +39,6 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  // ✅ Supporte:
-  // - /login?next=/control-tower
-  // - navigate("/login", { state: { from: location } })
   const nextPath = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const qNext = params.get("next");
@@ -53,7 +49,6 @@ export default function Login() {
     const stateFromSearch = stateAny?.from?.search || "";
     const stateNext = stateAny?.next;
 
-    // Priorité : querystring next > state.from > state.next > fallback
     if (qNext) return safeNextPath(qNext, "/hub");
     if (stateFromPath) return safeNextPath(`${stateFromPath}${stateFromSearch}`, "/hub");
     if (stateNext) return safeNextPath(stateNext, "/hub");
@@ -95,7 +90,6 @@ export default function Login() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-slate-950 text-slate-50">
-      {/* VISUEL GAUCHE */}
       <div className="relative hidden lg:block">
         <img
           src="/assets/sea-login.jpg"
@@ -119,7 +113,6 @@ export default function Login() {
         </div>
       </div>
 
-      {/* LOGIN */}
       <div className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md space-y-6">
           <BrandLogo
