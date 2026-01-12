@@ -8,6 +8,7 @@ import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { isMissingTableError } from "@/domain/calc";
 import worldMap from "@/assets/world-map.svg";
 import { TERRITORY_PCT } from "@/domain/geo/territoryPct";
+
 import {
   NeonSurface,
   NeonKpiCard,
@@ -19,6 +20,7 @@ import {
 type Destination = {
   code: string;
   name: string;
+  // lat/lon gardés seulement en fallback si un code n’a pas d’ancre TERRITORY_PCT
   lat: number;
   lon: number;
   color: string;
@@ -51,8 +53,8 @@ type CompetitionRow = {
   status: "premium" | "aligned" | "underpriced" | "no_data";
 };
 
-const MAP_WIDTH = 1010; // matches svg width
-const MAP_HEIGHT = 666; // matches svg height
+const MAP_WIDTH = 1010;
+const MAP_HEIGHT = 666;
 
 const DESTINATIONS: Destination[] = [
   { code: "FR", name: "Metropole", lat: 44.0, lon: 2.0, color: "#38bdf8" },
@@ -66,38 +68,51 @@ const DESTINATIONS: Destination[] = [
   { code: "MF", name: "Saint-Martin", lat: 18.0708, lon: -63.0501, color: "#10b981" },
 ];
 
-const formatMoney = (n: number | null | undefined) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(
-    Number(n || 0)
-  );
-
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-const MAP_INSET = { left: 0, right: 0, top: 0, bottom: 0 };
+const formatMoney = (n: number | null | undefined) =>
+  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
 
-// fallback (pour SPM/BL/MF si tu n’as pas d’anchor pct)
-const projectLatLon = (lat: number, lon: number) => {
-  const x = ((lon + 180) / 360) * (MAP_WIDTH - MAP_INSET.left - MAP_INSET.right) + MAP_INSET.left;
-  const y = ((90 - lat) / 180) * (MAP_HEIGHT - MAP_INSET.top - MAP_INSET.bottom) + MAP_INSET.top;
+/**
+ * ✅ Positionnement calé sur TON SVG (world-map.svg)
+ * - si code présent dans TERRITORY_PCT -> position exacte
+ * - sinon fallback lat/lon (moins précis)
+ */
+const anchorXY = (code: string) => {
+  const key = code === "FR" ? "HUB_FR" : code;
+  const pct = (TERRITORY_PCT as any)[key] as { x: number; y: number } | undefined;
+  if (!pct) return null;
+  return { x: (pct.x / 100) * MAP_WIDTH, y: (pct.y / 100) * MAP_HEIGHT };
+};
+
+const fallbackProject = (lat: number, lon: number) => {
+  const x = ((lon + 180) / 360) * MAP_WIDTH;
+  const y = ((90 - lat) / 180) * MAP_HEIGHT;
   return { x, y };
 };
 
-// ✅ Position “calibrée carte” : si dispo dans TERRITORY_PCT on l’utilise
-const projectOnMap = (code: string, lat: number, lon: number) => {
-  const key = code === "FR" ? "HUB_FR" : code;
-  const pct = (TERRITORY_PCT as any)[key];
-  if (pct?.x != null && pct?.y != null) {
-    return { x: (pct.x / 100) * MAP_WIDTH, y: (pct.y / 100) * MAP_HEIGHT };
-  }
-  return projectLatLon(lat, lon);
-};
-
-const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
-
 const buildArc = (a: { x: number; y: number }, b: { x: number; y: number }) => {
-  const midX = (a.x + b.x) / 2;
-  const midY = Math.min(a.y, b.y) - distance(a, b) * 0.18;
-  return `M ${a.x} ${a.y} Q ${midX} ${midY} ${b.x} ${b.y}`;
+  // arc “airline” : courbe via normale, puis on choisit la version qui monte (cy le plus petit)
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+
+  const nx = -dy / len;
+  const ny = dx / len;
+
+  const bend = clamp(len * 0.22, 40, 180);
+
+  const cx1 = mx + nx * bend;
+  const cy1 = my + ny * bend;
+  const cx2 = mx - nx * bend;
+  const cy2 = my - ny * bend;
+
+  const cx = cy1 < cy2 ? cx1 : cx2;
+  const cy = cy1 < cy2 ? cy1 : cy2;
+
+  return `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`;
 };
 
 export default function ControlTower() {
@@ -113,21 +128,10 @@ export default function ControlTower() {
   const [hovered, setHovered] = React.useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = React.useState<{ x: number; y: number } | null>(null);
   const [zoomTarget, setZoomTarget] = React.useState<"none" | "antilles">("none");
+  const [viewport, setViewport] = React.useState<{ scale: number; tx: number; ty: number }>({ scale: 1, tx: 0, ty: 0 });
 
-  // ✅ NEW: pan/zoom via SVG viewBox (unités cohérentes)
-  const baseViewBox = React.useMemo(() => ({ x: 0, y: 0, w: MAP_WIDTH, h: MAP_HEIGHT }), []);
-  const [viewBox, setViewBox] = React.useState(baseViewBox);
-
-  const draggingRef = React.useRef<{
-    startX: number;
-    startY: number;
-    startBox: { x: number; y: number; w: number; h: number };
-    rectW: number;
-    rectH: number;
-  } | null>(null);
-
+  const draggingRef = React.useRef<{ startX: number; startY: number; startTx: number; startTy: number } | null>(null);
   const zoomLayerRef = React.useRef<HTMLDivElement | null>(null);
-  const svgRef = React.useRef<SVGSVGElement | null>(null);
 
   React.useEffect(() => {
     let active = true;
@@ -306,33 +310,64 @@ export default function ControlTower() {
 
   const selected = variables.territory_code || hovered || "FR";
 
-  // ✅ nodes alignés carte (FR + DROM via TERRITORY_PCT)
   const nodes = React.useMemo(
     () =>
       DESTINATIONS.map((d) => {
-        const p = projectOnMap(d.code, d.lat, d.lon);
-        return { ...d, x: p.x, y: p.y };
+        const a = anchorXY(d.code);
+        const pos = a ?? fallbackProject(d.lat, d.lon);
+        return { ...d, x: pos.x, y: pos.y };
       }),
     []
   );
 
   const metropole = nodes.find((n) => n.code === "FR")!;
 
-  const dromCodes = ["GP", "MQ", "GF", "RE", "YT"];
+  const computeZoomForSubset = React.useCallback(
+    (codes: string[]) => {
+      const subset = nodes.filter((n) => codes.includes(n.code));
+      if (!subset.length) return { scale: 1, tx: 0, ty: 0 };
+      const minX = Math.min(...subset.map((n) => n.x));
+      const maxX = Math.max(...subset.map((n) => n.x));
+      const minY = Math.min(...subset.map((n) => n.y));
+      const maxY = Math.max(...subset.map((n) => n.y));
+      const bboxW = maxX - minX || 1;
+      const bboxH = maxY - minY || 1;
+      const scale = Math.min(4, Math.min(MAP_WIDTH / (bboxW * 2.4), MAP_HEIGHT / (bboxH * 2.4)));
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const tx = MAP_WIDTH / 2 - centerX * scale;
+      const ty = MAP_HEIGHT / 2 - centerY * scale;
+      return { scale, tx, ty };
+    },
+    [nodes]
+  );
+
+  const zoomCss = React.useMemo(
+    () => ({
+      transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`,
+      transformOrigin: "0 0",
+    }),
+    [viewport.scale, viewport.tx, viewport.ty]
+  );
+
+  const territoryCodes = ["GP", "MQ", "GF", "RE", "YT", "SPM", "BL", "MF"];
 
   const salesByTerritory = React.useMemo(() => {
     const agg: Record<string, { route: string; volume: number; ca: number; marge: number }> = {};
     sales.forEach((s) => {
-      const code = dromCodes.includes(s.territory_code || "") ? (s.territory_code as string) : "FR";
+      const raw = s.territory_code || "FR";
+      const code = territoryCodes.includes(raw) ? raw : "FR";
       if (!agg[code]) agg[code] = { route: `FR→${code}`, volume: 0, ca: 0, marge: 0 };
       const ca = s.amount_ht || 0;
-      const relatedCosts = costs.filter((c) => (c.destination || "FR") === code).reduce((t, c) => t + (c.amount || 0), 0);
+      const relatedCosts = costs
+        .filter((c) => (c.destination || "FR") === code)
+        .reduce((t, c) => t + (c.amount || 0), 0);
       agg[code].volume += 1;
       agg[code].ca += ca;
       agg[code].marge += ca - relatedCosts;
     });
     return agg;
-  }, [sales, costs, dromCodes]);
+  }, [sales, costs]);
 
   const topRoutes = React.useMemo(() => {
     return Object.values(salesByTerritory)
@@ -346,50 +381,9 @@ export default function ControlTower() {
       .filter(([code]) => code !== "FR")
       .sort((a, b) => b[1].ca - a[1].ca || b[1].volume - a[1].volume);
     const base = ordered.slice(0, 5).map(([code]) => code);
-    if (!base.length) return new Set(["GP", "MQ", "GF", "RE", "YT"]);
+    if (!base.length) return new Set(territoryCodes);
     return new Set(base);
   }, [salesByTerritory]);
-
-  // ✅ NEW: “fit viewBox” (centrage qui marche)
-  const computeViewBoxForSubset = React.useCallback(
-    (codes: string[]) => {
-      const subset = nodes.filter((n) => codes.includes(n.code));
-      if (!subset.length) return baseViewBox;
-
-      const minX = Math.min(...subset.map((n) => n.x));
-      const maxX = Math.max(...subset.map((n) => n.x));
-      const minY = Math.min(...subset.map((n) => n.y));
-      const maxY = Math.max(...subset.map((n) => n.y));
-
-      const cx = (minX + maxX) / 2;
-      const cy = (minY + maxY) / 2;
-
-      const pad = 0.55; // + grand = plus d’air autour
-      let w = Math.max(1, maxX - minX) * (1 + pad);
-      let h = Math.max(1, maxY - minY) * (1 + pad);
-
-      // garder le ratio de la carte (sinon letterbox chelou)
-      const ar = MAP_WIDTH / MAP_HEIGHT;
-      const boxAr = w / h;
-      if (boxAr > ar) h = w / ar;
-      else w = h * ar;
-
-      // limiter zoom (min ~ x5)
-      const minW = MAP_WIDTH / 5;
-      w = clamp(w, minW, MAP_WIDTH);
-      h = w / ar;
-
-      let x = cx - w / 2;
-      let y = cy - h / 2;
-
-      // clamp dans la carte
-      x = clamp(x, 0, MAP_WIDTH - w);
-      y = clamp(y, 0, MAP_HEIGHT - h);
-
-      return { x, y, w, h };
-    },
-    [nodes, baseViewBox]
-  );
 
   const timeseries = React.useMemo(() => {
     const bucket: Record<string, { label: string; sales: number; costs: number }> = {};
@@ -413,9 +407,9 @@ export default function ControlTower() {
 
   const donuts = React.useMemo(() => {
     const total = totals.totalSalesHt || 1;
-    const dromCa = dromCodes.reduce((s, code) => s + (salesByTerritory[code]?.ca || 0), 0);
-    const dromMarge = dromCodes.reduce((s, code) => s + (salesByTerritory[code]?.marge || 0), 0);
-    const dromVol = dromCodes.reduce((s, code) => s + (salesByTerritory[code]?.volume || 0), 0);
+    const dromCa = territoryCodes.reduce((s, code) => s + (salesByTerritory[code]?.ca || 0), 0);
+    const dromMarge = territoryCodes.reduce((s, code) => s + (salesByTerritory[code]?.marge || 0), 0);
+    const dromVol = territoryCodes.reduce((s, code) => s + (salesByTerritory[code]?.volume || 0), 0);
     const totalVol = Object.values(salesByTerritory).reduce((s, r) => s + r.volume, 0) || 1;
     return {
       dromCaPct: Math.min(100, Math.max(0, (dromCa / total) * 100)),
@@ -427,7 +421,7 @@ export default function ControlTower() {
       deltaVol: -0.3,
       deltaOnTime: 1.1,
     };
-  }, [dromCodes, salesByTerritory, totals.totalSalesHt]);
+  }, [salesByTerritory, totals.totalSalesHt]);
 
   const alerts = React.useMemo(() => {
     const list: { label: string; severity: "warning" }[] = [];
@@ -439,41 +433,25 @@ export default function ControlTower() {
 
   const actions = ["Ouvrir Explore", "Optimiser incoterm", "Importer CSV coûts"];
 
-  // ✅ Wheel zoom (passive:false) sur viewBox (cohérent)
   React.useEffect(() => {
     const el = zoomLayerRef.current;
     if (!el) return;
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const svg = svgRef.current;
-      if (!svg) return;
 
-      const rect = svg.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
+      const delta = -e.deltaY * 0.0015;
+      const rect = el.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
 
-      const px = (e.clientX - rect.left) / rect.width;
-      const py = (e.clientY - rect.top) / rect.height;
-
-      const zoomIn = e.deltaY < 0;
-      const factor = zoomIn ? 1.12 : 1 / 1.12;
-
-      setViewBox((prev) => {
-        const ar = MAP_WIDTH / MAP_HEIGHT;
-
-        const cx = prev.x + px * prev.w;
-        const cy = prev.y + py * prev.h;
-
-        const nextW = clamp(prev.w / factor, MAP_WIDTH / 5, MAP_WIDTH);
-        const nextH = nextW / ar;
-
-        let nextX = cx - px * nextW;
-        let nextY = cy - py * nextH;
-
-        nextX = clamp(nextX, 0, MAP_WIDTH - nextW);
-        nextY = clamp(nextY, 0, MAP_HEIGHT - nextH);
-
-        return { x: nextX, y: nextY, w: nextW, h: nextH };
+      setViewport((prev) => {
+        const nextScale = Math.min(5, Math.max(1, prev.scale * (1 + delta)));
+        const sx = (cx - prev.tx) / prev.scale;
+        const sy = (cy - prev.ty) / prev.scale;
+        const tx = cx - sx * nextScale;
+        const ty = cy - sy * nextScale;
+        return { scale: nextScale, tx, ty };
       });
     };
 
@@ -506,24 +484,16 @@ export default function ControlTower() {
                 onClick={() => {
                   if (zoomTarget === "antilles") {
                     setZoomTarget("none");
-                    setViewBox(baseViewBox);
+                    setViewport({ scale: 1, tx: 0, ty: 0 });
                   } else {
                     setZoomTarget("antilles");
-                    // ✅ ici c’est un vrai “fit”
-                    setViewBox(computeViewBoxForSubset(["GP", "MQ", "GF", "RE", "YT"]));
+                    setViewport(computeZoomForSubset(["GP", "MQ", "BL", "MF", "GF"]));
                   }
                 }}
               >
                 {zoomTarget === "antilles" ? "Vue globale" : "Zoom Antilles"}
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setVariable("territory_code", null);
-                  setViewBox(baseViewBox);
-                  setZoomTarget("none");
-                }}
-              >
+              <Button variant="outline" onClick={() => setVariable("territory_code", null)}>
                 Reset territoire
               </Button>
               <Button onClick={() => navigate("/explore")}>Ouvrir Explore</Button>
@@ -531,7 +501,6 @@ export default function ControlTower() {
           </div>
         </div>
 
-        {/* Ligne 1 : carte + donuts */}
         <div className="grid grid-cols-12 gap-3">
           <div className="col-span-12 lg:col-span-8">
             <NeonSurface className="h-[460px] relative overflow-hidden">
@@ -551,39 +520,18 @@ export default function ControlTower() {
                 <NeonKpiCard label="Ventes (30j)" value={sales.length.toString()} delta={sales.length ? 1.1 : -0.2} accent="var(--chart-4)" />
               </div>
 
-              {/* ✅ Pan (mouse drag) sur viewBox */}
               <div
                 ref={zoomLayerRef}
-                className="absolute inset-0 bg-gradient-to-br from-slate-900/60 via-slate-900/40 to-cyan-900/20 rounded-xl border border-cyan-500/20 shadow-[0_0_40px_rgba(34,211,238,0.15)] cursor-grab active:cursor-grabbing"
+                className="absolute inset-0 bg-gradient-to-br from-slate-900/60 via-slate-900/40 to-cyan-900/20 rounded-xl border border-cyan-500/20 shadow-[0_0_40px_rgba(34,211,238,0.15)]"
                 onMouseDown={(e) => {
-                  const svg = svgRef.current;
-                  if (!svg) return;
-                  const rect = svg.getBoundingClientRect();
-                  draggingRef.current = {
-                    startX: e.clientX,
-                    startY: e.clientY,
-                    startBox: viewBox,
-                    rectW: rect.width || 1,
-                    rectH: rect.height || 1,
-                  };
+                  draggingRef.current = { startX: e.clientX, startY: e.clientY, startTx: viewport.tx, startTy: viewport.ty };
                 }}
                 onMouseMove={(e) => {
                   if (!draggingRef.current) return;
-                  const d = draggingRef.current;
-
-                  const dx = e.clientX - d.startX;
-                  const dy = e.clientY - d.startY;
-
-                  const dxV = (dx / d.rectW) * d.startBox.w;
-                  const dyV = (dy / d.rectH) * d.startBox.h;
-
-                  let x = d.startBox.x - dxV;
-                  let y = d.startBox.y - dyV;
-
-                  x = clamp(x, 0, MAP_WIDTH - d.startBox.w);
-                  y = clamp(y, 0, MAP_HEIGHT - d.startBox.h);
-
-                  setViewBox({ ...d.startBox, x, y });
+                  const { startX, startY, startTx, startTy } = draggingRef.current;
+                  const dx = e.clientX - startX;
+                  const dy = e.clientY - startY;
+                  setViewport((prev) => ({ ...prev, tx: startTx + dx, ty: startTy + dy }));
                 }}
                 onMouseUp={() => {
                   draggingRef.current = null;
@@ -592,124 +540,132 @@ export default function ControlTower() {
                   draggingRef.current = null;
                 }}
               >
-                {/* ✅ SVG unique + viewBox dynamique */}
-                <svg
-                  ref={svgRef}
-                  viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
-                  preserveAspectRatio="xMidYMid meet"
-                  className="absolute inset-0 w-full h-full"
-                >
-                  <defs>
-                    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                      <feGaussianBlur stdDeviation="6" result="coloredBlur" />
-                      <feMerge>
-                        <feMergeNode in="coloredBlur" />
-                        <feMergeNode in="SourceGraphic" />
-                      </feMerge>
-                    </filter>
-                  </defs>
+                <div className="absolute inset-0" style={zoomCss}>
+                  <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 w-full h-full">
+                    <style>{`
+                      .arc-neon {
+                        stroke-linecap: round;
+                        stroke-dasharray: 10 14;
+                        animation: arcDash 1.2s linear infinite;
+                      }
+                      @keyframes arcDash { to { stroke-dashoffset: -48; } }
+                    `}</style>
 
-                  <image
-                    href={worldMap}
-                    x="0"
-                    y="0"
-                    width={MAP_WIDTH}
-                    height={MAP_HEIGHT}
-                    preserveAspectRatio="xMidYMid meet"
-                    opacity="0.4"
-                    style={{ pointerEvents: "none", filter: "invert(1) saturate(1.2) contrast(1.05)" }}
-                  />
+                    <defs>
+                      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur stdDeviation="6" result="coloredBlur" />
+                        <feMerge>
+                          <feMergeNode in="coloredBlur" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
+                    </defs>
 
-                  {nodes
-                    .filter((n) => n.code !== "FR")
-                    .map((node) => {
-                      const path = buildArc(metropole, node);
-                      const isActive = selected === node.code;
-                      const isHover = hovered === node.code;
-                      const strokeWidth = isActive || isHover ? 2.6 : 1.2;
-                      const territoryData = salesByTerritory[node.code];
-                      const hasFlow = (territoryData?.ca || 0) > 0;
-                      const showLabel = topLabels.has(node.code);
+                    <image
+                      href={worldMap}
+                      x="0"
+                      y="0"
+                      width={MAP_WIDTH}
+                      height={MAP_HEIGHT}
+                      preserveAspectRatio="xMidYMid meet"
+                      opacity="0.4"
+                      style={{ pointerEvents: "none", filter: "invert(1) saturate(1.2) contrast(1.05)" }}
+                    />
 
-                      return (
-                        <g key={node.code}>
-                          {hasFlow ? (
-                            <path
-                              d={path}
-                              fill="none"
-                              stroke={node.color}
-                              strokeWidth={strokeWidth}
-                              strokeOpacity={isActive || isHover ? 0.9 : 0.25}
-                              className="transition-all duration-300"
-                              vectorEffect="non-scaling-stroke"
-                              filter="url(#glow)"
+                    {nodes
+                      .filter((n) => n.code !== "FR")
+                      .map((node) => {
+                        const path = buildArc(metropole, node);
+                        const isActive = selected === node.code;
+                        const isHover = hovered === node.code;
+
+                        const territoryData = salesByTerritory[node.code];
+                        const hasFlow = (territoryData?.ca || 0) > 0;
+
+                        const strokeWidth = isActive || isHover ? 2.8 : 1.4;
+                        const showLabel = topLabels.has(node.code);
+
+                        return (
+                          <g key={node.code}>
+                            {hasFlow ? (
+                              <path
+                                d={path}
+                                fill="none"
+                                stroke={node.color}
+                                strokeWidth={strokeWidth}
+                                strokeOpacity={isActive || isHover ? 0.95 : 0.35}
+                                className="arc-neon transition-all duration-300"
+                                vectorEffect="non-scaling-stroke"
+                                filter="url(#glow)"
+                                pointerEvents="none"
+                              />
+                            ) : null}
+
+                            <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={hasFlow ? 0.35 : 0.15} />
+                            <circle
+                              cx={node.x}
+                              cy={node.y}
+                              r={isActive || isHover ? 7 : 5.5}
+                              fill={node.color}
+                              opacity={hasFlow ? 0.95 : 0.35}
+                              className="cursor-pointer"
+                              onMouseEnter={(evt) => {
+                                setHovered(node.code);
+                                setTooltipPos({ x: evt.clientX, y: evt.clientY });
+                              }}
+                              onMouseMove={(evt) => setTooltipPos({ x: evt.clientX, y: evt.clientY })}
+                              onMouseLeave={() => {
+                                setHovered(null);
+                                setTooltipPos(null);
+                              }}
+                              onClick={() => setVariable("territory_code", node.code)}
+                              onDoubleClick={() => {
+                                setVariable("territory_code", node.code);
+                                navigate("/explore");
+                              }}
                             />
-                          ) : null}
 
-                          <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={hasFlow ? 0.35 : 0.15} />
-                          <circle
-                            cx={node.x}
-                            cy={node.y}
-                            r={isActive || isHover ? 7 : 5.5}
-                            fill={node.color}
-                            opacity={hasFlow ? 0.9 : 0.35}
-                            className="cursor-pointer"
-                            onMouseEnter={(evt) => {
-                              setHovered(node.code);
-                              setTooltipPos({ x: evt.clientX, y: evt.clientY });
-                            }}
-                            onMouseMove={(evt) => setTooltipPos({ x: evt.clientX, y: evt.clientY })}
-                            onMouseLeave={() => {
-                              setHovered(null);
-                              setTooltipPos(null);
-                            }}
-                            onClick={() => setVariable("territory_code", node.code)}
-                            onDoubleClick={() => {
-                              setVariable("territory_code", node.code);
-                              navigate("/explore");
-                            }}
-                          />
+                            {showLabel ? (
+                              <text x={node.x + 12} y={node.y - 8} className="text-xs font-semibold fill-cyan-100 drop-shadow">
+                                {node.name}
+                              </text>
+                            ) : null}
+                          </g>
+                        );
+                      })}
 
-                          {showLabel ? (
-                            <text x={node.x + 12} y={node.y - 8} className="text-xs font-semibold fill-cyan-100 drop-shadow">
-                              {node.name}
-                            </text>
-                          ) : null}
-                        </g>
-                      );
-                    })}
+                    <motion.circle
+                      cx={metropole.x}
+                      cy={metropole.y}
+                      r={hovered === "FR" || selected === "FR" ? 15 : 12}
+                      fill="#0ea5e9"
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ duration: 0.4 }}
+                      className="cursor-pointer"
+                      filter="url(#glow)"
+                      onMouseEnter={(evt) => {
+                        setHovered("FR");
+                        setTooltipPos({ x: evt.clientX, y: evt.clientY });
+                      }}
+                      onMouseMove={(evt) => setTooltipPos({ x: evt.clientX, y: evt.clientY })}
+                      onMouseLeave={() => {
+                        setHovered(null);
+                        setTooltipPos(null);
+                      }}
+                      onClick={() => setVariable("territory_code", "FR")}
+                      onDoubleClick={() => {
+                        setVariable("territory_code", null);
+                        navigate("/explore");
+                      }}
+                    />
 
-                  <motion.circle
-                    cx={metropole.x}
-                    cy={metropole.y}
-                    r={hovered === "FR" || selected === "FR" ? 15 : 12}
-                    fill="#0ea5e9"
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 0.4 }}
-                    className="cursor-pointer"
-                    onMouseEnter={(evt) => {
-                      setHovered("FR");
-                      setTooltipPos({ x: evt.clientX, y: evt.clientY });
-                    }}
-                    onMouseMove={(evt) => setTooltipPos({ x: evt.clientX, y: evt.clientY })}
-                    onMouseLeave={() => {
-                      setHovered(null);
-                      setTooltipPos(null);
-                    }}
-                    onClick={() => setVariable("territory_code", "FR")}
-                    onDoubleClick={() => {
-                      setVariable("territory_code", null);
-                      navigate("/explore");
-                    }}
-                  />
+                    <text x={metropole.x + 14} y={metropole.y - 14} className="text-sm font-bold fill-cyan-100 drop-shadow">
+                      Metropole
+                    </text>
+                  </svg>
+                </div>
 
-                  <text x={metropole.x + 18} y={metropole.y + 4} className="text-sm font-bold fill-cyan-100 drop-shadow">
-                    Metropole
-                  </text>
-                </svg>
-
-                {/* Légende (fixe) */}
                 <div className="absolute bottom-3 left-3 z-30 rounded-lg border border-cyan-500/30 bg-slate-900/70 px-3 py-2 text-xs text-cyan-50 shadow-lg">
                   <div className="font-semibold text-cyan-100 mb-1">Légende DOM-TOM</div>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1">
@@ -733,7 +689,6 @@ export default function ControlTower() {
                 </div>
               ) : null}
 
-              {/* Tooltip FIXED */}
               {hovered && tooltipPos ? (
                 <div
                   className="pointer-events-none fixed z-[9999] rounded-lg border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-slate-100 shadow-xl"
@@ -760,7 +715,6 @@ export default function ControlTower() {
           </div>
         </div>
 
-        {/* Ligne 2 : barres + mini DOM + courbe */}
         <div className="grid grid-cols-12 gap-3">
           <div className="col-span-12 md:col-span-4">
             <NeonBarCard title="Top routes par volume" data={topRoutes} dataKey="volume" labelKey="route" />
@@ -804,7 +758,6 @@ export default function ControlTower() {
           </div>
         </div>
 
-        {/* Ligne 3 : alertes + actions */}
         <div className="grid grid-cols-12 gap-3">
           <div className="col-span-12 md:col-span-6">
             <NeonSurface>
@@ -843,11 +796,7 @@ export default function ControlTower() {
           </div>
         </div>
 
-        {error ? (
-          <div className="text-sm text-rose-300">
-            Erreur chargement données : {error}. Affichage des données démo si disponibles.
-          </div>
-        ) : null}
+        {error ? <div className="text-sm text-rose-300">Erreur chargement données : {error}. Affichage des données démo si disponibles.</div> : null}
         {warning ? <div className="text-sm text-amber-200">{warning}</div> : null}
       </div>
     </MainLayout>
