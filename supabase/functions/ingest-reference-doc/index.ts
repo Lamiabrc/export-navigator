@@ -1,5 +1,6 @@
+// supabase/functions/ingest-reference-docs/index.ts
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import * as pdfjs from "https://esm.sh/pdfjs-dist@4.2.67/legacy/build/pdf.mjs";
+import * as pdfjs from "https://esm.sh/pdfjs-dist@4.6.82/legacy/build/pdf.mjs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,12 +9,12 @@ const corsHeaders = {
 };
 
 type Body = {
-  document_id: string;
-  bucket?: string; // défaut: reference-docs
-  max_chars?: number; // chunk size
-  overlap?: number;
-  embedding_model?: string;
-  max_pages?: number;
+  bucket_id?: string;
+  object_paths?: string[];          // si tu veux forcer une liste
+  doc_type?: string;               // default: reglementaire
+  max_chars?: number;              // default: 1200
+  overlap?: number;                // default: 150
+  embedding_model?: string;        // default: text-embedding-3-small
 };
 
 function json(status: number, data: unknown) {
@@ -21,15 +22,6 @@ function json(status: number, data: unknown) {
     status,
     headers: { "content-type": "application/json; charset=utf-8", ...corsHeaders },
   });
-}
-
-function norm(s: string) {
-  return s
-    .toLowerCase()
-    .replace(/\.pdf$/i, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
 }
 
 function chunkText(text: string, maxChars = 1200, overlap = 150) {
@@ -47,49 +39,33 @@ function chunkText(text: string, maxChars = 1200, overlap = 150) {
   return chunks;
 }
 
-async function resolveObjectPathFromTitle(supabase: any, bucket: string, title: string) {
-  const target = norm(title);
-  const { data, error } = await supabase.storage.from(bucket).list("", { limit: 200, offset: 0 });
-  if (error) throw new Error(`storage.list failed: ${error.message}`);
-  const files = (data ?? []).filter((x: any) => (x.name || "").toLowerCase().endsWith(".pdf"));
-
-  // 1) match exact sur normalisation
-  for (const f of files) {
-    if (norm(f.name) === target) return f.name;
-  }
-  // 2) match "startsWith" (cas des suffixes type .00342)
-  for (const f of files) {
-    const fn = norm(f.name);
-    if (fn.startsWith(target) || target.startsWith(fn)) return f.name;
-  }
-  // 3) match "contains"
-  for (const f of files) {
-    const fn = norm(f.name);
-    if (fn.includes(target) || target.includes(fn)) return f.name;
-  }
-  return null;
+function titleFromObjectPath(path: string) {
+  const base = path.split("/").pop() || path;
+  const noExt = base.replace(/\.pdf$/i, "");
+  return noExt
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-async function extractTextFromPdfBytes(bytes: Uint8Array, maxPages = 200) {
-  // Important: désactive le worker (edge runtime)
-  const loadingTask = pdfjs.getDocument({ data: bytes, disableWorker: true } as any);
+async function extractTextFromPdfBytes(bytes: Uint8Array) {
+  const loadingTask = pdfjs.getDocument({ data: bytes });
   const pdf = await loadingTask.promise;
 
-  const pageCount = Math.min(pdf.numPages, maxPages);
-  let out = "";
-  for (let i = 1; i <= pageCount; i++) {
-    const page = await pdf.getPage(i);
+  const parts: string[] = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
     const content = await page.getTextContent();
     const pageText = (content.items as any[])
-      .map((it) => String(it.str ?? "").trim())
-      .filter(Boolean)
+      .map((it) => (typeof it.str === "string" ? it.str : ""))
       .join(" ");
-    out += `\n\n[PAGE ${i}/${pdf.numPages}]\n${pageText}`;
+    parts.push(pageText);
   }
-  return { text: out.trim(), pages_extracted: pageCount, pages_total: pdf.numPages };
+  return parts.join("\n\n");
 }
 
-async function embedMany(apiKey: string, model: string, inputs: string[]) {
+async function embedManyOpenAI(apiKey: string, model: string, inputs: string[]) {
   const res = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
@@ -97,10 +73,24 @@ async function embedMany(apiKey: string, model: string, inputs: string[]) {
   });
   if (!res.ok) throw new Error(await res.text());
   const data = await res.json();
-  const arr = data.data as { embedding: number[]; index: number }[];
-  // retourne dans l’ordre d’entrée
-  const byIndex = new Map(arr.map((x) => [x.index, x.embedding]));
-  return inputs.map((_, i) => byIndex.get(i));
+  return (data.data || []).map((d: any) => d.embedding as number[]);
+}
+
+async function insertChunksWithOptionalEmbedding(supabase: any, rows: any[]) {
+  // Tentative 1 : avec embedding
+  const { error: e1 } = await supabase.from("document_chunks").insert(rows);
+  if (!e1) return { ok: true, usedEmbedding: true };
+
+  // Si colonne embedding absente → retry sans
+  const msg = String(e1?.message || "").toLowerCase();
+  if (msg.includes("embedding") && msg.includes("does not exist")) {
+    const rowsNoEmb = rows.map(({ embedding, ...rest }) => rest);
+    const { error: e2 } = await supabase.from("document_chunks").insert(rowsNoEmb);
+    if (!e2) return { ok: true, usedEmbedding: false };
+    throw e2;
+  }
+
+  throw e1;
 }
 
 Deno.serve(async (req) => {
@@ -112,138 +102,121 @@ Deno.serve(async (req) => {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return json(500, { error: "Missing supabase env" });
-  if (!OPENAI_API_KEY) return json(500, { error: "Missing OPENAI_API_KEY (needed for embeddings)" });
 
-  const EMB_MODEL = Deno.env.get("OPENAI_EMBEDDING_MODEL") ?? "text-embedding-3-small";
+  // Sécurité minimale: exiger un JWT utilisateur (invoke depuis ton app)
+  const authHeader = req.headers.get("authorization") || "";
+  if (!authHeader.toLowerCase().startsWith("bearer ")) {
+    return json(401, { error: "Missing Authorization bearer token" });
+  }
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-  let body: Body;
-  try {
-    body = await req.json();
-  } catch {
-    return json(400, { error: "Invalid JSON body" });
-  }
-  if (!body?.document_id) return json(400, { error: "document_id is required" });
+  let body: Body = {};
+  try { body = await req.json(); } catch { /* ok */ }
 
-  const bucket = body.bucket ?? "reference-docs";
+  const bucketId = body.bucket_id || "reference-docs";
+  const docType = body.doc_type || "reglementaire";
   const maxChars = body.max_chars ?? 1200;
   const overlap = body.overlap ?? 150;
-  const embModel = body.embedding_model ?? EMB_MODEL;
-  const maxPages = body.max_pages ?? 200;
+  const embModel = body.embedding_model || "text-embedding-3-small";
 
-  // 1) charge le document (title requis pour retrouver le PDF)
-  const { data: doc, error: docErr } = await supabase
-    .from("documents")
-    .select("id,title")
-    .eq("id", body.document_id)
-    .single();
+  const warnings: string[] = [];
+  if (!OPENAI_API_KEY) warnings.push("OPENAI_API_KEY manquant: chunks créés mais RAG vectoriel impossible.");
 
-  if (docErr || !doc) return json(404, { error: "Document not found", details: docErr?.message });
+  // 1) Liste des PDFs
+  let objectPaths: string[] = [];
+  if (body.object_paths?.length) {
+    objectPaths = body.object_paths;
+  } else {
+    const { data, error } = await supabase.storage.from(bucketId).list("", { limit: 1000 });
+    if (error) return json(500, { error: "Storage list failed", details: error.message });
 
-  // 2) résout le fichier PDF dans Storage à partir du title
-  const objectPath = await resolveObjectPathFromTitle(supabase, bucket, doc.title ?? "");
-  if (!objectPath) {
-    await supabase.from("documents").update({ status: "error" }).eq("id", body.document_id);
-    return json(400, { error: `Cannot map document.title to a PDF in bucket '${bucket}'`, title: doc.title });
+    objectPaths = (data || [])
+      .map((o: any) => o.name)
+      .filter((n: string) => n && n.toLowerCase().endsWith(".pdf"));
   }
 
-  // 3) download PDF
-  const { data: blob, error: dlErr } = await supabase.storage.from(bucket).download(objectPath);
-  if (dlErr || !blob) {
-    await supabase.from("documents").update({ status: "error" }).eq("id", body.document_id);
-    return json(500, { error: "Storage download failed", details: dlErr?.message, objectPath });
-  }
-  const bytes = new Uint8Array(await blob.arrayBuffer());
+  // 2) Ingest chaque PDF
+  const results: any[] = [];
 
-  // 4) extract_text
-  let extractedText = "";
-  let pages_extracted = 0;
-  let pages_total = 0;
+  for (const object_path of objectPaths) {
+    const title = titleFromObjectPath(object_path);
 
-  try {
-    const parsed = await extractTextFromPdfBytes(bytes, maxPages);
-    extractedText = parsed.text;
-    pages_extracted = parsed.pages_extracted;
-    pages_total = parsed.pages_total;
-  } catch (e: any) {
-    await supabase.from("documents").update({ status: "error" }).eq("id", body.document_id);
-    return json(500, { error: "PDF parse failed", details: String(e), objectPath });
-  }
+    try {
+      // Upsert doc
+      // NOTE: on suppose que documents a: id(uuid), title, doc_type, status, object_path, extracted_text
+      const { data: doc, error: upErr } = await supabase
+        .from("documents")
+        .upsert({ title, doc_type: docType, status: "uploaded", object_path }, { onConflict: "title" })
+        .select("id,title,object_path")
+        .maybeSingle();
 
-  if (!extractedText || extractedText.length < 200) {
-    await supabase.from("documents").update({ status: "error" }).eq("id", body.document_id);
-    return json(400, { error: "Extracted text too small (likely empty PDF text layer)", objectPath });
-  }
+      if (upErr) throw upErr;
+      const document_id = doc?.id;
+      if (!document_id) throw new Error("Upsert documents failed (no id)");
 
-  await supabase
-    .from("documents")
-    .update({ extracted_text: extractedText, status: "parsed" })
-    .eq("id", body.document_id);
+      // Download pdf
+      const { data: file, error: dlErr } = await supabase.storage.from(bucketId).download(object_path);
+      if (dlErr || !file) throw new Error(`Download failed: ${dlErr?.message || "no file"}`);
 
-  // 5) chunks (reset)
-  await supabase.from("document_chunks").delete().eq("document_id", body.document_id);
+      const bytes = new Uint8Array(await file.arrayBuffer());
 
-  const chunks = chunkText(extractedText, maxChars, overlap);
-  const chunkRows = chunks.map((content, idx) => ({
-    document_id: body.document_id,
-    chunk_index: idx,
-    content,
-    meta: { maxChars, overlap, objectPath, bucket, pages_extracted, pages_total },
-  }));
+      // Extract text
+      const extracted_text = await extractTextFromPdfBytes(bytes);
+      const extracted_len = extracted_text?.length || 0;
 
-  if (!chunkRows.length) {
-    await supabase.from("documents").update({ status: "error", chunks: 0 }).eq("id", body.document_id);
-    return json(500, { error: "Chunking produced 0 chunks", objectPath });
-  }
+      await supabase
+        .from("documents")
+        .update({ extracted_text, status: extracted_len ? "parsed" : "error" })
+        .eq("id", document_id);
 
-  const { data: inserted, error: insErr } = await supabase
-    .from("document_chunks")
-    .insert(chunkRows)
-    .select("id,chunk_index,content");
+      if (!extracted_len) {
+        results.push({ document_id, title, object_path, ok: false, step: "extract", extracted_len: 0 });
+        continue;
+      }
 
-  if (insErr) {
-    await supabase.from("documents").update({ status: "error" }).eq("id", body.document_id);
-    return json(500, { error: "Insert chunks failed", details: insErr.message });
-  }
+      // Delete old chunks
+      await supabase.from("document_chunks").delete().eq("document_id", document_id);
 
-  await supabase
-    .from("documents")
-    .update({ status: "chunked", chunks: chunkRows.length })
-    .eq("id", body.document_id);
+      // Chunk
+      const chunks = chunkText(extracted_text, maxChars, overlap);
 
-  // 6) embeddings (batch)
-  const rows = inserted ?? [];
-  const batchSize = 64;
+      // Embeddings (batch)
+      const embeddings: (number[] | null)[] = new Array(chunks.length).fill(null);
+      if (OPENAI_API_KEY) {
+        const batchSize = 64;
+        for (let i = 0; i < chunks.length; i += batchSize) {
+          const slice = chunks.slice(i, i + batchSize);
+          const embs = await embedManyOpenAI(OPENAI_API_KEY, embModel, slice);
+          for (let j = 0; j < embs.length; j++) embeddings[i + j] = embs[j];
+        }
+      }
 
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize);
-    const inputs = batch.map((r: any) => String(r.content ?? ""));
-    const vectors = await embedMany(OPENAI_API_KEY, embModel, inputs);
+      const rows = chunks.map((content, idx) => ({
+        document_id,
+        chunk_index: idx,
+        content,
+        embedding: embeddings[idx],
+        meta: { maxChars, overlap, object_path, title, embedding_model: OPENAI_API_KEY ? embModel : null },
+      }));
 
-    const upserts = batch.map((r: any, idx: number) => ({
-      id: r.id,
-      embedding: vectors[idx],
-    }));
+      const inserted = await insertChunksWithOptionalEmbedding(supabase, rows);
 
-    const { error: upErr } = await supabase.from("document_chunks").upsert(upserts, { onConflict: "id" });
-    if (upErr) {
-      await supabase.from("documents").update({ status: "error" }).eq("id", body.document_id);
-      return json(500, { error: "Embedding upsert failed", details: upErr.message });
+      await supabase.from("documents").update({ status: "chunked" }).eq("id", document_id);
+
+      results.push({
+        document_id,
+        title,
+        object_path,
+        ok: true,
+        extracted_len,
+        chunks: rows.length,
+        embedding: inserted.usedEmbedding,
+      });
+    } catch (e: any) {
+      results.push({ object_path, title, ok: false, error: e?.message || String(e) });
     }
   }
 
-  await supabase.from("documents").update({ status: "ready" }).eq("id", body.document_id);
-
-  return json(200, {
-    ok: true,
-    document_id: body.document_id,
-    bucket,
-    objectPath,
-    pages_extracted,
-    pages_total,
-    extracted_chars: extractedText.length,
-    chunks: chunkRows.length,
-    embedding_model: embModel,
-  });
+  return json(200, { ok: true, bucket_id: bucketId, processed: results.length, results, warnings });
 });
