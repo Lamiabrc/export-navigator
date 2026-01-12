@@ -14,7 +14,6 @@ import {
   FileText,
   Upload,
   MapPin,
-  Truck,
   TrendingDown,
   TrendingUp,
   Euro,
@@ -26,7 +25,7 @@ import {
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getZoneFromDestination } from "@/data/referenceRates";
-import type { Destination, Incoterm, TransportMode } from "@/types";
+import type { Destination } from "@/types";
 
 import { extractInvoiceFromPdf, type ParsedInvoice } from "@/lib/pdf/extractInvoice";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,9 +57,6 @@ const destinations: Destination[] = [
   "Suisse",
 ];
 
-const incoterms: Incoterm[] = ["EXW", "FCA", "DAP", "DDP"];
-const transportModes: TransportMode[] = ["Routier", "Maritime", "Aerien", "Express", "Ferroviaire"];
-
 type TerritoryCode = "GP" | "MQ" | "GF" | "RE" | "YT";
 type DetectionSource = "line_items" | "raw_text" | "none";
 type Verdict = "favorable" | "defavorable" | "na";
@@ -89,15 +85,20 @@ type VerificationResult = {
   zone: string;
   territory: TerritoryCode | null;
 
-  // IMPORTANT : dans ton contexte, OM facturé = transit facturé
+  // IMPORTANT : dans ton contexte, OM facturé = frais de transit/transport facturés
   omBilled: number | null; // == transit
   omBilledDetectionSource: DetectionSource;
 
   omTheoreticalTotal: number | null;
-
   verdictOm: Verdict; // Défavorable si OM facturé (transit) < OM théorique
 
   alerts: string[];
+};
+
+type DestinationHint = {
+  destination: Destination;
+  confidence: "high" | "medium";
+  evidence: string; // preuve affichable
 };
 
 function safeNum(n: any): number {
@@ -131,22 +132,27 @@ function getTerritoryCodeFromDestination(dest: Destination): TerritoryCode | nul
   return null;
 }
 
-function detectDestinationFromText(text: string): Destination | null {
+function detectDestinationHint(text: string): DestinationHint | null {
   const t = (text || "").toUpperCase();
+
+  // Preuve forte : code postal DOM
   const m = t.match(/97(1|2|3|4|6)\d{2}/);
   if (m) {
     const prefix = m[0].slice(0, 3);
-    if (prefix === "971") return "Guadeloupe";
-    if (prefix === "972") return "Martinique";
-    if (prefix === "973") return "Guyane";
-    if (prefix === "974") return "Reunion";
-    if (prefix === "976") return "Mayotte";
+    if (prefix === "971") return { destination: "Guadeloupe", confidence: "high", evidence: "Code postal 971xx détecté" };
+    if (prefix === "972") return { destination: "Martinique", confidence: "high", evidence: "Code postal 972xx détecté" };
+    if (prefix === "973") return { destination: "Guyane", confidence: "high", evidence: "Code postal 973xx détecté" };
+    if (prefix === "974") return { destination: "Reunion", confidence: "high", evidence: "Code postal 974xx détecté" };
+    if (prefix === "976") return { destination: "Mayotte", confidence: "high", evidence: "Code postal 976xx détecté" };
   }
-  if (t.includes("GUADELOUPE")) return "Guadeloupe";
-  if (t.includes("MARTINIQUE") || t.includes("LE LAMENTIN")) return "Martinique";
-  if (t.includes("GUYANE")) return "Guyane";
-  if (t.includes("RÉUNION") || t.includes("REUNION")) return "Reunion";
-  if (t.includes("MAYOTTE")) return "Mayotte";
+
+  // Preuve moyenne : mots-clés
+  if (t.includes("GUADELOUPE")) return { destination: "Guadeloupe", confidence: "medium", evidence: "Mot-clé GUADELOUPE détecté" };
+  if (t.includes("MARTINIQUE") || t.includes("LE LAMENTIN")) return { destination: "Martinique", confidence: "medium", evidence: "Mot-clé MARTINIQUE / LAMENTIN détecté" };
+  if (t.includes("GUYANE")) return { destination: "Guyane", confidence: "medium", evidence: "Mot-clé GUYANE détecté" };
+  if (t.includes("RÉUNION") || t.includes("REUNION")) return { destination: "Reunion", confidence: "medium", evidence: "Mot-clé REUNION détecté" };
+  if (t.includes("MAYOTTE")) return { destination: "Mayotte", confidence: "medium", evidence: "Mot-clé MAYOTTE détecté" };
+
   return null;
 }
 
@@ -231,9 +237,13 @@ export default function InvoiceVerification() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [parsed, setParsed] = useState<ParsedInvoice | null>(null);
 
+  // Destination réellement utilisée pour le calcul OM
   const [destination, setDestination] = useState<Destination>("Martinique");
-  const [incoterm, setIncoterm] = useState<Incoterm>("DAP");
-  const [transportMode, setTransportMode] = useState<TransportMode>("Maritime");
+
+  // Transparence : d’où vient la destination affichée ?
+  const [destinationSource, setDestinationSource] = useState<"default" | "auto" | "manual">("default");
+  const [destinationEvidence, setDestinationEvidence] = useState<string | null>(null);
+  const [destinationConfidence, setDestinationConfidence] = useState<"high" | "medium" | "none">("none");
 
   const [omLines, setOmLines] = useState<OmComputedLine[]>([]);
   const [result, setResult] = useState<VerificationResult | null>(null);
@@ -247,9 +257,11 @@ export default function InvoiceVerification() {
     setParsed(null);
     setOmLines([]);
     setResult(null);
+
     setDestination("Martinique");
-    setIncoterm("DAP");
-    setTransportMode("Maritime");
+    setDestinationSource("default");
+    setDestinationEvidence(null);
+    setDestinationConfidence("none");
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -272,6 +284,11 @@ export default function InvoiceVerification() {
     setParsed(null);
     setOmLines([]);
     setResult(null);
+
+    // on remet la destination “à confirmer” tant qu’on n’a pas de preuve
+    setDestinationSource("default");
+    setDestinationEvidence(null);
+    setDestinationConfidence("none");
   };
 
   const analyzeFile = useCallback(async () => {
@@ -284,10 +301,21 @@ export default function InvoiceVerification() {
 
       setParsed(invoice);
 
-      const autoDest = detectDestinationFromText((invoice as any).rawText || "");
-      if (autoDest) setDestination(autoDest);
+      // Détection destination avec preuve
+      const hint = detectDestinationHint((invoice as any).rawText || "");
+      if (hint) {
+        setDestination(hint.destination);
+        setDestinationSource("auto");
+        setDestinationEvidence(hint.evidence);
+        setDestinationConfidence(hint.confidence);
+      } else {
+        // Pas de preuve : on garde la valeur actuelle MAIS on le dit explicitement
+        setDestinationSource("default");
+        setDestinationEvidence("Aucune preuve trouvée dans la facture (CP DOM / mots-clés)");
+        setDestinationConfidence("none");
+      }
 
-      toast({ title: "Analyse terminée", description: "Lignes + totaux détectés. Lance le contrôle." });
+      toast({ title: "Analyse terminée", description: "Données détectées. Vérifie la destination de calcul OM puis lance le contrôle." });
     } catch (err) {
       toast({
         title: "Analyse impossible",
@@ -396,9 +424,15 @@ export default function InvoiceVerification() {
     const inv: any = parsed;
     const alerts: string[] = [];
 
+    // Transparence : destination par défaut sans preuve -> on alerte
+    if (destinationSource === "default") {
+      alerts.push(`Destination non prouvée dans le document : valeur par défaut à confirmer (${destination}).`);
+    }
+
     const z = getZoneFromDestination(destination);
     const terr = getTerritoryCodeFromDestination(destination);
 
+    // TVA / pays facturation (si fourni par extractInvoice)
     const billingCountry: string | null = inv.billingCountry ?? null;
     const tva = safeNum(inv.totalTVA);
     const hasMention = !!inv.vatExemptionMention;
@@ -407,20 +441,18 @@ export default function InvoiceVerification() {
       if (tva > 0.01) alerts.push(`Facturation ${billingCountry} : TVA présente (${formatCurrency(tva)}) alors qu’attendu = TVA absente.`);
       if (!hasMention) alerts.push(`Facturation ${billingCountry} : mention d’exonération/autoliquidation absente (attendue).`);
     }
-
     if (billingCountry === "France") {
       if (tva <= 0.01 && !hasMention) {
         alerts.push("Facturation France : TVA absente sans mention d’exonération/autoliquidation.");
       }
     }
 
+    // OM facturé = transit
     const transit: number | null = inv.transitFees ?? null;
     const transitSource: DetectionSource = (inv.transitDetectionSource as DetectionSource) || (transit ? "raw_text" : "none");
+    if (transit === null || transit <= 0) alerts.push("Frais de transit / transport non détectés sur la facture (ou non présents).");
 
-    if (transit === null || transit <= 0) {
-      alerts.push("Frais de transit / transport non détectés sur la facture (ou non présents).");
-    }
-
+    // OM théorique (DROM uniquement)
     let omTheoreticalTotal: number | null = null;
     if (z === "DROM" && terr) {
       const computed = await buildOmLines(parsed, destination);
@@ -483,7 +515,7 @@ export default function InvoiceVerification() {
       description: alerts.length ? `${alerts.length} message(s)` : "Aucune anomalie détectée",
       variant: alerts.length ? "destructive" : "default",
     });
-  }, [parsed, destination, buildOmLines, toast, upsert, currentFile]);
+  }, [parsed, destination, destinationSource, buildOmLines, toast, upsert, currentFile]);
 
   useEffect(() => {
     setOmLines([]);
@@ -533,6 +565,30 @@ export default function InvoiceVerification() {
     "hsl(var(--foreground))",
     "hsl(var(--border))",
   ];
+
+  const hs4Count = hs4List.length;
+
+  const destinationBadge = useMemo(() => {
+    if (destinationSource === "auto") {
+      return (
+        <Badge variant="default" className="bg-status-ok text-white">
+          Auto • {destinationConfidence}
+        </Badge>
+      );
+    }
+    if (destinationSource === "manual") {
+      return (
+        <Badge variant="secondary">
+          Manuel
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline">
+        Par défaut • à confirmer
+      </Badge>
+    );
+  }, [destinationSource, destinationConfidence]);
 
   return (
     <MainLayout>
@@ -594,69 +650,67 @@ export default function InvoiceVerification() {
 
                 <p className="text-xs text-muted-foreground flex items-start gap-2">
                   <Info className="h-4 w-4 mt-0.5" />
-                  Aucun champ manuel : tout vient du PDF/CSV. Tu peux seulement ajuster le contexte si la destination n’est pas fiable.
+                  Aucun champ manuel “facture” : tout vient du PDF/CSV. La destination ci-dessous sert uniquement au calcul OM.
                 </p>
               </CardContent>
             </Card>
 
+            {/* ✅ CONTEXTE : on ne ment plus / on explique */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <MapPin className="h-5 w-5" />
-                  Contexte (si détection incertaine)
+                  Destination utilisée pour le calcul OM
+                  {destinationBadge}
                 </CardTitle>
-                <CardDescription>La destination impacte l’OM. Par défaut, on tente de la déduire du PDF (ex: 972xx = Martinique).</CardDescription>
+                <CardDescription>
+                  L’OM théorique dépend de la destination. On n’affiche “Auto” que si on trouve une preuve (ex : CP 972xx).
+                </CardDescription>
               </CardHeader>
 
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4" />
-                      Destination
-                    </Label>
-                    <Select value={destination} onValueChange={(v) => setDestination(v as Destination)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {destinations.map((d) => (
-                          <SelectItem key={d} value={d}>{d}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+              <CardContent className="space-y-3">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Destination
+                  </Label>
 
-                    <div className="flex gap-2">
-                      <Badge variant={zone === "UE" ? "default" : zone === "DROM" ? "secondary" : "outline"}>
-                        Zone {zone}
-                      </Badge>
-                      {territory && <Badge variant="outline">Territory {territory}</Badge>}
-                    </div>
+                  <Select
+                    value={destination}
+                    onValueChange={(v) => {
+                      setDestination(v as Destination);
+                      setDestinationSource("manual");
+                    }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {destinations.map((d) => (
+                        <SelectItem key={d} value={d}>{d}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge variant={zone === "UE" ? "default" : zone === "DROM" ? "secondary" : "outline"}>
+                      Zone {zone}
+                    </Badge>
+                    {territory && <Badge variant="outline">Territory {territory}</Badge>}
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                      <Truck className="h-4 w-4" />
-                      Transport
-                    </Label>
-                    <Select value={transportMode} onValueChange={(v) => setTransportMode(v as TransportMode)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {transportModes.map((t) => (
-                          <SelectItem key={t} value={t}>{t}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Label className="mt-3 block">Incoterm</Label>
-                    <Select value={incoterm} onValueChange={(v) => setIncoterm(v as Incoterm)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {incoterms.map((i) => (
-                          <SelectItem key={i} value={i}>{i}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-medium">Preuve :</span> {destinationEvidence || "-"}
                   </div>
                 </div>
+
+                {zone === "DROM" && destinationSource === "default" && (
+                  <div className="p-3 rounded-lg bg-status-warning/10 text-sm flex gap-2">
+                    <AlertTriangle className="h-4 w-4 text-status-warning mt-0.5" />
+                    <div>
+                      La destination n’a pas été prouvée dans la facture : le calcul OM peut être faux.
+                      Choisis la bonne destination avant de lancer le contrôle.
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -722,7 +776,7 @@ export default function InvoiceVerification() {
 
                     <div className="text-xs text-muted-foreground">
                       <span className="font-medium">Lignes :</span> {(((parsed as any).lineItems || []) as any[]).length}
-                      {hs4List.length ? ` • HS4 distincts : ${hs4List.length}` : ""}
+                      {hs4Count ? ` • HS4 distincts : ${hs4Count}` : ""}
                     </div>
                   </>
                 )}
@@ -770,7 +824,7 @@ export default function InvoiceVerification() {
                       <Badge variant={verdictUi(result.verdictOm).badge}>{verdictUi(result.verdictOm).label}</Badge>
                     </CardTitle>
                     <CardDescription>
-                      Destination {result.destination} • Zone {result.zone} • Incoterm {incoterm} • {transportMode}
+                      Destination {result.destination} • Zone {result.zone}
                     </CardDescription>
                   </CardHeader>
 
