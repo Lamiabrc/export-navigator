@@ -24,6 +24,11 @@ function getErrorMessage(err: unknown): string {
   return "Une erreur est survenue. Réessaie.";
 }
 
+function safeNextPath(candidate: unknown, fallback = "/hub") {
+  const v = typeof candidate === "string" ? candidate : "";
+  return v && v.startsWith("/") ? v : fallback;
+}
+
 export default function Login() {
   const { signIn, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -35,12 +40,25 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  // Permet de faire /welcome?next=/hub ou /login?next=/hub
+  // ✅ Supporte:
+  // - /login?next=/control-tower
+  // - navigate("/login", { state: { from: location } })
   const nextPath = useMemo(() => {
     const params = new URLSearchParams(location.search);
-    const next = params.get("next");
-    return next && next.startsWith("/") ? next : "/hub";
-  }, [location.search]);
+    const qNext = params.get("next");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stateAny = location.state as any;
+    const stateFromPath = stateAny?.from?.pathname;
+    const stateFromSearch = stateAny?.from?.search || "";
+    const stateNext = stateAny?.next;
+
+    // Priorité : querystring next > state.from > state.next > fallback
+    if (qNext) return safeNextPath(qNext, "/hub");
+    if (stateFromPath) return safeNextPath(`${stateFromPath}${stateFromSearch}`, "/hub");
+    if (stateNext) return safeNextPath(stateNext, "/hub");
+    return "/hub";
+  }, [location.search, location.state]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -72,8 +90,6 @@ export default function Login() {
   };
 
   const goForgotPassword = () => {
-    // tu peux aussi passer l’email en query si tu veux
-    // navigate(`/forgot-password?email=${encodeURIComponent(email.trim().toLowerCase())}`);
     navigate("/forgot-password");
   };
 
@@ -158,10 +174,7 @@ export default function Login() {
                     Mot de passe oublié / Première connexion
                   </button>
 
-                  {/* Si tu veux, tu peux afficher la destination */}
-                  <span className="text-xs text-slate-500">
-                    → {nextPath}
-                  </span>
+                  <span className="text-xs text-slate-500">→ {nextPath}</span>
                 </div>
 
                 {error && (
