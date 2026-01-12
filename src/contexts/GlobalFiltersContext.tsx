@@ -1,9 +1,16 @@
 import React from "react";
-import { useLocation } from "react-router-dom";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 
-export type TimeRangePreset = "last_7d" | "last_14d" | "last_30d" | "last_90d" | "this_month" | "previous_month" | "ytd" | "custom";
+export type TimeRangePreset =
+  | "last_7d"
+  | "last_14d"
+  | "last_30d"
+  | "last_90d"
+  | "this_month"
+  | "previous_month"
+  | "ytd"
+  | "custom";
 
 export type TimeRangeValue = {
   preset: TimeRangePreset;
@@ -23,15 +30,6 @@ export type GlobalVariables = {
   product_id?: string | null;
 };
 
-export type SavedView = {
-  id: string;
-  name: string;
-  route: string;
-  timeRange: TimeRangeValue;
-  variables: GlobalVariables;
-  createdAt: number;
-};
-
 type AutoRefreshState = {
   enabled: boolean;
   intervalMs: number;
@@ -39,8 +37,8 @@ type AutoRefreshState = {
 
 type Lookups = {
   territories: { code: string; label?: string | null }[];
-  clients: { id: string; name?: string | null }[];
-  products: { id: string; label?: string | null }[];
+  clients: { id: string; label: string }[]; // résultats de recherche
+  products: { id: string; label: string }[]; // résultats de recherche
 };
 
 type GlobalFiltersState = {
@@ -53,21 +51,32 @@ type GlobalFiltersContextValue = {
   timeRange: TimeRangeValue;
   resolvedRange: ResolvedTimeRange;
   setTimeRange: (value: TimeRangeValue) => void;
+
   variables: GlobalVariables;
   setVariable: <K extends keyof GlobalVariables>(key: K, value: GlobalVariables[K]) => void;
+
   resetFilters: () => void;
+
   autoRefresh: AutoRefreshState;
   setAutoRefresh: (value: AutoRefreshState) => void;
+
   refreshNow: () => void;
   lastRefreshAt: number | null;
   refreshToken: number;
-  savedViews: SavedView[];
-  saveView: (name: string, routeOverride?: string) => SavedView | null;
-  applyView: (id: string) => SavedView | null;
-  deleteView: (id: string) => void;
-  activeViewId: string | null;
+
   lookups: Lookups;
   lookupsLoading: boolean;
+
+  searchingClients: boolean;
+  searchingProducts: boolean;
+  searchClients: (term: string) => Promise<void>;
+  searchProducts: (term: string) => Promise<void>;
+
+  labels: {
+    territory_label: string | null;
+    client_label: string | null;
+    product_label: string | null;
+  };
 };
 
 const FALLBACK_TERRITORIES: Lookups["territories"] = [
@@ -123,70 +132,35 @@ const resolveTimeRange = (range: TimeRangeValue): ResolvedTimeRange => {
     last_7d: () => {
       const from = new Date(normalizedEnd);
       from.setDate(from.getDate() - 6);
-      return {
-        preset: "last_7d",
-        from: formatDate(from),
-        to: formatDate(normalizedEnd),
-        label: "7 derniers jours",
-      };
+      return { preset: "last_7d", from: formatDate(from), to: formatDate(normalizedEnd), label: "7 derniers jours" };
     },
     last_14d: () => {
       const from = new Date(normalizedEnd);
       from.setDate(from.getDate() - 13);
-      return {
-        preset: "last_14d",
-        from: formatDate(from),
-        to: formatDate(normalizedEnd),
-        label: "14 derniers jours",
-      };
+      return { preset: "last_14d", from: formatDate(from), to: formatDate(normalizedEnd), label: "14 derniers jours" };
     },
     last_30d: () => {
       const from = new Date(normalizedEnd);
       from.setDate(from.getDate() - 29);
-      return {
-        preset: "last_30d",
-        from: formatDate(from),
-        to: formatDate(normalizedEnd),
-        label: "30 jours",
-      };
+      return { preset: "last_30d", from: formatDate(from), to: formatDate(normalizedEnd), label: "30 jours" };
     },
     last_90d: () => {
       const from = new Date(normalizedEnd);
       from.setDate(from.getDate() - 89);
-      return {
-        preset: "last_90d",
-        from: formatDate(from),
-        to: formatDate(normalizedEnd),
-        label: "90 jours",
-      };
+      return { preset: "last_90d", from: formatDate(from), to: formatDate(normalizedEnd), label: "90 jours" };
     },
     this_month: () => {
       const from = new Date(normalizedEnd.getFullYear(), normalizedEnd.getMonth(), 1);
-      return {
-        preset: "this_month",
-        from: formatDate(from),
-        to: formatDate(normalizedEnd),
-        label: "Mois en cours",
-      };
+      return { preset: "this_month", from: formatDate(from), to: formatDate(normalizedEnd), label: "Mois en cours" };
     },
     previous_month: () => {
       const startPrev = new Date(normalizedEnd.getFullYear(), normalizedEnd.getMonth() - 1, 1);
       const endPrev = new Date(normalizedEnd.getFullYear(), normalizedEnd.getMonth(), 0);
-      return {
-        preset: "previous_month",
-        from: formatDate(startPrev),
-        to: formatDate(endPrev),
-        label: "Mois precedent",
-      };
+      return { preset: "previous_month", from: formatDate(startPrev), to: formatDate(endPrev), label: "Mois precedent" };
     },
     ytd: () => {
       const from = new Date(normalizedEnd.getFullYear(), 0, 1);
-      return {
-        preset: "ytd",
-        from: formatDate(from),
-        to: formatDate(normalizedEnd),
-        label: "YTD",
-      };
+      return { preset: "ytd", from: formatDate(from), to: formatDate(normalizedEnd), label: "YTD" };
     },
   };
 
@@ -194,31 +168,38 @@ const resolveTimeRange = (range: TimeRangeValue): ResolvedTimeRange => {
   return resolver();
 };
 
+function sanitizeForOr(term: string) {
+  // évite de casser supabase .or("...") avec des caractères structurants
+  return term.trim().replace(/[,%()]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 export function GlobalFiltersProvider({ children }: { children: React.ReactNode }) {
-  const location = useLocation();
-
-  const { value: storedFilters, setValue: setStoredFilters } = useLocalStorage<GlobalFiltersState>(
-    "global-filters",
-    {
-      timeRange: defaultTimeRange,
-      variables: {},
-      autoRefresh: defaultAutoRefresh,
-    }
-  );
-
-  const { value: savedViews, setValue: setSavedViews } = useLocalStorage<SavedView[]>("global-saved-views", []);
+  const { value: storedFilters, setValue: setStoredFilters } = useLocalStorage<GlobalFiltersState>("global-filters", {
+    timeRange: defaultTimeRange,
+    variables: {},
+    autoRefresh: defaultAutoRefresh,
+  });
 
   const [timeRange, setTimeRange] = React.useState<TimeRangeValue>(storedFilters.timeRange || defaultTimeRange);
   const [variables, setVariables] = React.useState<GlobalVariables>(storedFilters.variables || {});
-  const [autoRefresh, setAutoRefresh] = React.useState<AutoRefreshState>(
-    storedFilters.autoRefresh || defaultAutoRefresh
-  );
+  const [autoRefresh, setAutoRefresh] = React.useState<AutoRefreshState>(storedFilters.autoRefresh || defaultAutoRefresh);
+
   const [refreshToken, setRefreshToken] = React.useState(0);
   const [lastRefreshAt, setLastRefreshAt] = React.useState<number | null>(null);
-  const [activeViewId, setActiveViewId] = React.useState<string | null>(null);
 
-  const [lookups, setLookups] = React.useState<Lookups>({ territories: FALLBACK_TERRITORIES, clients: [], products: [] });
+  const [lookups, setLookups] = React.useState<Lookups>({
+    territories: FALLBACK_TERRITORIES,
+    clients: [],
+    products: [],
+  });
   const [lookupsLoading, setLookupsLoading] = React.useState(false);
+
+  const [searchingClients, setSearchingClients] = React.useState(false);
+  const [searchingProducts, setSearchingProducts] = React.useState(false);
+
+  // cache id -> label pour ne jamais afficher d’UUID dans l’UI
+  const clientCacheRef = React.useRef<Record<string, string>>({});
+  const productCacheRef = React.useRef<Record<string, string>>({});
 
   React.useEffect(() => {
     setStoredFilters({ timeRange, variables, autoRefresh });
@@ -247,55 +228,15 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
   const resetFilters = React.useCallback(() => {
     setTimeRange(defaultTimeRange);
     setVariables({});
-    setActiveViewId(null);
     setAutoRefresh(defaultAutoRefresh);
     refreshNow();
   }, [refreshNow]);
 
-  const saveView = React.useCallback(
-    (name: string, routeOverride?: string): SavedView | null => {
-      const trimmed = name.trim();
-      if (!trimmed) return null;
-      const newView: SavedView = {
-        id: crypto.randomUUID ? crypto.randomUUID() : `view-${Date.now()}`,
-        name: trimmed,
-        route: routeOverride || location.pathname,
-        timeRange,
-        variables,
-        createdAt: Date.now(),
-      };
-      setSavedViews((prev) => [newView, ...prev.filter((v) => v.name !== trimmed)]);
-      setActiveViewId(newView.id);
-      return newView;
-    },
-    [location.pathname, setSavedViews, timeRange, variables]
-  );
-
-  const applyView = React.useCallback(
-    (id: string): SavedView | null => {
-      const view = savedViews.find((v) => v.id === id);
-      if (!view) return null;
-      setTimeRange(view.timeRange);
-      setVariables(view.variables || {});
-      setActiveViewId(view.id);
-      refreshNow();
-      return view;
-    },
-    [refreshNow, savedViews]
-  );
-
-  const deleteView = React.useCallback(
-    (id: string) => {
-      setSavedViews((prev) => prev.filter((v) => v.id !== id));
-      if (activeViewId === id) setActiveViewId(null);
-    },
-    [activeViewId, setSavedViews]
-  );
-
+  // Territories (1 fois)
   React.useEffect(() => {
     let isMounted = true;
     if (!SUPABASE_ENV_OK) {
-      setLookups({ territories: FALLBACK_TERRITORIES, clients: [], products: [] });
+      setLookups((prev) => ({ ...prev, territories: FALLBACK_TERRITORIES }));
       return () => {
         isMounted = false;
       };
@@ -304,22 +245,16 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
     const load = async () => {
       setLookupsLoading(true);
       try {
-        const [{ data: territories }, { data: clients }, { data: products }] = await Promise.all([
-          supabase.from("territories").select("code,label").order("label", { ascending: true }),
-          supabase.from("clients").select("id,name").order("name", { ascending: true }).limit(500),
-          supabase.from("products").select("id,libelle_article").order("libelle_article", { ascending: true }).limit(500),
-        ]);
-
+        const { data, error } = await supabase.from("territories").select("code,label").order("label", { ascending: true });
+        if (error) throw error;
         if (!isMounted) return;
-
-        setLookups({
-          territories: (territories as any[])?.length ? (territories as any[]) : FALLBACK_TERRITORIES,
-          clients: (clients as any[]) ?? [],
-          products: ((products as any[]) ?? []).map((p: any) => ({ id: p.id, label: p.libelle_article })),
-        });
+        setLookups((prev) => ({
+          ...prev,
+          territories: (data as any[])?.length ? (data as any[]) : FALLBACK_TERRITORIES,
+        }));
       } catch (err) {
-        console.error("[filters] lookups error", err);
-        if (isMounted) setLookups({ territories: FALLBACK_TERRITORIES, clients: [], products: [] });
+        console.error("[global-filters] territories error", err);
+        if (isMounted) setLookups((prev) => ({ ...prev, territories: FALLBACK_TERRITORIES }));
       } finally {
         if (isMounted) setLookupsLoading(false);
       }
@@ -331,25 +266,153 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
     };
   }, []);
 
+  const searchClients = React.useCallback(async (term: string) => {
+    if (!SUPABASE_ENV_OK) return;
+    const t = sanitizeForOr(term);
+
+    setSearchingClients(true);
+    try {
+      const q = supabase.from("clients").select("id,name");
+
+      const { data, error } =
+        t.length >= 2
+          ? await q.ilike("name", `%${t}%`).order("name", { ascending: true }).limit(30)
+          : await q.order("name", { ascending: true }).limit(30);
+
+      if (error) throw error;
+
+      const rows = ((data as any[]) ?? [])
+        .map((c) => ({ id: String(c.id), label: String(c.name ?? "") }))
+        .filter((x) => x.label);
+
+      for (const r of rows) clientCacheRef.current[r.id] = r.label;
+      setLookups((prev) => ({ ...prev, clients: rows }));
+    } catch (err) {
+      console.error("[global-filters] searchClients error", err);
+      setLookups((prev) => ({ ...prev, clients: [] }));
+    } finally {
+      setSearchingClients(false);
+    }
+  }, []);
+
+  const searchProducts = React.useCallback(async (term: string) => {
+    if (!SUPABASE_ENV_OK) return;
+    const t = sanitizeForOr(term);
+
+    setSearchingProducts(true);
+    try {
+      const q = supabase.from("products").select("id,libelle_article,code_article");
+
+      const { data, error } =
+        t.length >= 2
+          ? await q
+              .or(`libelle_article.ilike.%${t}%,code_article.ilike.%${t}%`)
+              .order("libelle_article", { ascending: true })
+              .limit(30)
+          : await q.order("libelle_article", { ascending: true }).limit(30);
+
+      if (error) throw error;
+
+      const rows = ((data as any[]) ?? [])
+        .map((p) => {
+          const id = String(p.id);
+          const code = p.code_article ? String(p.code_article) : "";
+          const lib = p.libelle_article ? String(p.libelle_article) : "";
+          const label = code ? `${code} — ${lib}` : lib;
+          return { id, label };
+        })
+        .filter((x) => x.label);
+
+      for (const r of rows) productCacheRef.current[r.id] = r.label;
+      setLookups((prev) => ({ ...prev, products: rows }));
+    } catch (err) {
+      console.error("[global-filters] searchProducts error", err);
+      setLookups((prev) => ({ ...prev, products: [] }));
+    } finally {
+      setSearchingProducts(false);
+    }
+  }, []);
+
+  // hydrate les labels si on a juste un id (rechargement / navigation)
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!SUPABASE_ENV_OK) return;
+
+    const run = async () => {
+      const clientId = variables.client_id || null;
+      const productId = variables.product_id || null;
+
+      try {
+        if (clientId && !clientCacheRef.current[clientId]) {
+          const { data } = await supabase.from("clients").select("id,name").eq("id", clientId).maybeSingle();
+          if (!cancelled && data?.id) clientCacheRef.current[String(data.id)] = String((data as any).name ?? "");
+        }
+
+        if (productId && !productCacheRef.current[productId]) {
+          const { data } = await supabase
+            .from("products")
+            .select("id,libelle_article,code_article")
+            .eq("id", productId)
+            .maybeSingle();
+
+          if (!cancelled && data?.id) {
+            const code = (data as any).code_article ? String((data as any).code_article) : "";
+            const lib = (data as any).libelle_article ? String((data as any).libelle_article) : "";
+            productCacheRef.current[String(data.id)] = code ? `${code} — ${lib}` : lib;
+          }
+        }
+      } catch (e) {
+        console.error("[global-filters] hydrate labels error", e);
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [variables.client_id, variables.product_id]);
+
+  const labels = React.useMemo(() => {
+    const territory = variables.territory_code
+      ? (lookups.territories.find((t) => t.code === variables.territory_code)?.label ?? variables.territory_code)
+      : null;
+
+    const client = variables.client_id ? clientCacheRef.current[variables.client_id] ?? null : null;
+    const product = variables.product_id ? productCacheRef.current[variables.product_id] ?? null : null;
+
+    return {
+      territory_label: territory ?? null,
+      client_label: client,
+      product_label: product,
+    };
+  }, [lookups.territories, variables.territory_code, variables.client_id, variables.product_id]);
+
   const value: GlobalFiltersContextValue = {
     timeRange,
     resolvedRange,
     setTimeRange,
+
     variables,
     setVariable,
+
     resetFilters,
+
     autoRefresh,
     setAutoRefresh,
+
     refreshNow,
     lastRefreshAt,
     refreshToken,
-    savedViews,
-    saveView,
-    applyView,
-    deleteView,
-    activeViewId,
+
     lookups,
     lookupsLoading,
+
+    searchingClients,
+    searchingProducts,
+    searchClients,
+    searchProducts,
+
+    labels,
   };
 
   return <GlobalFiltersContext.Provider value={value}>{children}</GlobalFiltersContext.Provider>;
