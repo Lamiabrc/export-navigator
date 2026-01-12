@@ -31,6 +31,7 @@ function RemotePicker({
   onSearch,
   onSelect,
   onClear,
+  buttonClassName,
 }: {
   label: string;
   placeholder: string;
@@ -41,6 +42,7 @@ function RemotePicker({
   onSearch: (term: string) => void;
   onSelect: (value: string) => void;
   onClear: () => void;
+  buttonClassName?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [term, setTerm] = React.useState("");
@@ -58,12 +60,12 @@ function RemotePicker({
   }, [open]);
 
   return (
-    <div className="min-w-[220px]">
+    <div className="min-w-[200px]">
       <Label className="text-xs text-muted-foreground">{label}</Label>
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" className="w-full justify-between">
+          <Button variant="outline" className={`w-full justify-between ${buttonClassName || ""}`}>
             <span className="truncate">{selectedLabel || (value ? value : placeholder)}</span>
             <span className="text-muted-foreground">{loading ? "…" : "▾"}</span>
           </Button>
@@ -125,26 +127,12 @@ function RemotePicker({
   );
 }
 
-export default function GlobalFilterControls() {
-  const {
-    timeRange,
-    resolvedRange,
-    setTimeRange,
-    variables,
-    setVariable,
-    resetFilters,
-    autoRefresh,
-    setAutoRefresh,
-    refreshNow,
-    lastRefreshAt,
-    lookups,
-    lookupsLoading,
-    searchingClients,
-    searchingProducts,
-    searchClients,
-    searchProducts,
-    labels,
-  } = useGlobalFilters();
+/**
+ * ✅ Export COMPAT demandé par MainLayout.tsx
+ * TimeRangePicker = UI compacte (popover) qui modifie le timeRange et déclenche refreshNow()
+ */
+export function TimeRangePicker(props: { className?: string } = {}) {
+  const { timeRange, resolvedRange, setTimeRange, refreshNow } = useGlobalFilters();
 
   const [customFrom, setCustomFrom] = React.useState(timeRange.from ?? "");
   const [customTo, setCustomTo] = React.useState(timeRange.to ?? "");
@@ -154,7 +142,7 @@ export default function GlobalFilterControls() {
     setCustomTo(timeRange.to ?? "");
   }, [timeRange.from, timeRange.to]);
 
-  const timePresets: { value: TimeRangePreset; label: string }[] = [
+  const presets: { value: TimeRangePreset; label: string }[] = [
     { value: "last_7d", label: "7 jours" },
     { value: "last_14d", label: "14 jours" },
     { value: "last_30d", label: "30 jours" },
@@ -165,11 +153,6 @@ export default function GlobalFilterControls() {
     { value: "custom", label: "Personnalisé" },
   ];
 
-  const clientOptions: Option[] = (lookups.clients ?? []).map((c) => ({ value: c.id, label: c.label }));
-  const productOptions: Option[] = (lookups.products ?? []).map((p) => ({ value: p.id, label: p.label }));
-
-  const fmtLast = lastRefreshAt ? new Date(lastRefreshAt).toLocaleString("fr-FR") : null;
-
   const applyCustom = () => {
     if (!customFrom || !customTo) return;
     const v: TimeRangeValue = { preset: "custom", from: customFrom, to: customTo };
@@ -178,172 +161,239 @@ export default function GlobalFilterControls() {
   };
 
   return (
-    <div className="w-full rounded-xl border bg-background p-3">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col xl:flex-row xl:items-end gap-3">
-          {/* Période */}
-          <div className="min-w-[220px]">
-            <Label className="text-xs text-muted-foreground">Période</Label>
-            <Select
-              value={timeRange.preset}
-              onValueChange={(v) => {
-                const preset = v as TimeRangePreset;
-                if (preset === "custom") {
-                  setTimeRange({ preset: "custom", from: customFrom || undefined, to: customTo || undefined });
-                } else {
-                  setTimeRange({ preset });
-                  refreshNow();
-                }
-              }}
-            >
-              <SelectTrigger className="justify-between">
-                <SelectValue placeholder="Période" />
-              </SelectTrigger>
-              <SelectContent>
-                {timePresets.map((p) => (
-                  <SelectItem key={p.value} value={p.value}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+    <div className={props.className}>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="gap-2 justify-between">
+            <CalendarClock className="h-4 w-4" />
+            <span className="hidden md:inline">Période :</span>
+            <span className="font-medium">{resolvedRange.label}</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[360px] p-3">
+          <Label className="text-xs text-muted-foreground">Période</Label>
+          <Select
+            value={timeRange.preset}
+            onValueChange={(v) => {
+              const preset = v as TimeRangePreset;
+              if (preset === "custom") {
+                setTimeRange({ preset: "custom", from: customFrom || undefined, to: customTo || undefined });
+                return;
+              }
+              setTimeRange({ preset });
+              refreshNow();
+            }}
+          >
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Période" />
+            </SelectTrigger>
+            <SelectContent>
+              {presets.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-              <CalendarClock className="h-4 w-4" />
-              <span>{resolvedRange.label}</span>
-            </div>
-          </div>
-
-          {/* Custom dates */}
           {timeRange.preset === "custom" ? (
-            <div className="flex flex-wrap items-end gap-2">
-              <div>
-                <Label className="text-xs text-muted-foreground">Du</Label>
-                <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+            <div className="mt-3 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Du</Label>
+                  <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Au</Label>
+                  <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+                </div>
               </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Au</Label>
-                <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
-              </div>
-              <Button type="button" onClick={applyCustom} className="gap-2">
+              <Button type="button" onClick={applyCustom} className="w-full gap-2">
                 <RotateCw className="h-4 w-4" />
                 Appliquer
               </Button>
             </div>
-          ) : null}
+          ) : (
+            <div className="mt-2 text-xs text-muted-foreground">
+              {resolvedRange.from} → {resolvedRange.to}
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
 
-          {/* Territoire */}
-          <div className="min-w-[220px]">
-            <Label className="text-xs text-muted-foreground">Territoire</Label>
-            <Select
-              value={variables.territory_code ?? ""}
-              onValueChange={(v) => {
-                setVariable("territory_code", v || null);
-                refreshNow();
-              }}
-              disabled={lookupsLoading}
-            >
-              <SelectTrigger className="justify-between">
-                <SelectValue placeholder="Tous territoires" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Tous</SelectItem>
-                {lookups.territories.map((t) => (
-                  <SelectItem key={t.code} value={t.code}>
-                    {t.label || t.code}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+/**
+ * ✅ Export COMPAT demandé par MainLayout.tsx
+ */
+export function RefreshNowButton(props: { className?: string } = {}) {
+  const { refreshNow } = useGlobalFilters();
+  return (
+    <Button variant="outline" onClick={refreshNow} className={`gap-2 ${props.className || ""}`}>
+      <RefreshCw className="h-4 w-4" />
+      <span className="hidden md:inline">Refresh</span>
+    </Button>
+  );
+}
 
-            {labels.territory_label ? (
-              <div className="mt-1">
-                <Badge variant="secondary" className="text-xs">
-                  {labels.territory_label}
-                </Badge>
-              </div>
-            ) : null}
-          </div>
+/**
+ * ✅ Export COMPAT demandé par MainLayout.tsx
+ */
+export function AutoRefreshControl(props: { className?: string } = {}) {
+  const { autoRefresh, setAutoRefresh, lastRefreshAt } = useGlobalFilters();
+  const fmtLast = lastRefreshAt ? new Date(lastRefreshAt).toLocaleString("fr-FR") : null;
 
-          {/* Client remote (recherche) */}
-          <RemotePicker
-            label="Client"
-            placeholder="Tous clients"
-            value={variables.client_id ?? null}
-            selectedLabel={labels.client_label}
-            options={clientOptions}
-            loading={searchingClients}
-            onSearch={(t) => void searchClients(t)}
-            onSelect={(id) => {
-              setVariable("client_id", id);
-              refreshNow();
-            }}
-            onClear={() => {
-              setVariable("client_id", null);
-              refreshNow();
-            }}
-          />
+  return (
+    <div className={`flex items-center gap-2 ${props.className || ""}`}>
+      <Switch
+        checked={autoRefresh.enabled}
+        onCheckedChange={(checked) => setAutoRefresh({ ...autoRefresh, enabled: checked })}
+      />
+      <span className="text-sm hidden lg:inline">Auto</span>
 
-          {/* Produit remote (recherche) */}
-          <RemotePicker
-            label="Produit"
-            placeholder="Tous produits"
-            value={variables.product_id ?? null}
-            selectedLabel={labels.product_label}
-            options={productOptions}
-            loading={searchingProducts}
-            onSearch={(t) => void searchProducts(t)}
-            onSelect={(id) => {
-              setVariable("product_id", id);
-              refreshNow();
-            }}
-            onClear={() => {
-              setVariable("product_id", null);
-              refreshNow();
-            }}
-          />
+      <Select
+        value={String(autoRefresh.intervalMs)}
+        onValueChange={(v) => setAutoRefresh({ ...autoRefresh, intervalMs: Number(v) })}
+        disabled={!autoRefresh.enabled}
+      >
+        <SelectTrigger className="w-[120px]">
+          <SelectValue placeholder="Intervalle" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="60000">1 min</SelectItem>
+          <SelectItem value="120000">2 min</SelectItem>
+          <SelectItem value="300000">5 min</SelectItem>
+          <SelectItem value="900000">15 min</SelectItem>
+        </SelectContent>
+      </Select>
 
-          {/* Actions */}
-          <div className="flex items-end gap-2 ml-auto">
-            <Button variant="outline" onClick={refreshNow} className="gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Refresh
-            </Button>
-            <Button variant="ghost" onClick={resetFilters}>
-              Reset
-            </Button>
-          </div>
+      {fmtLast ? <span className="text-xs text-muted-foreground hidden xl:inline">Dernier: {fmtLast}</span> : null}
+    </div>
+  );
+}
+
+/**
+ * ✅ Bonus exports (si tu veux les utiliser dans MainLayout ou ailleurs)
+ */
+export function TerritoryPicker(props: { className?: string } = {}) {
+  const { variables, setVariable, refreshNow, lookups, lookupsLoading, labels } = useGlobalFilters();
+
+  return (
+    <div className={props.className}>
+      <Select
+        value={variables.territory_code ?? ""}
+        onValueChange={(v) => {
+          setVariable("territory_code", v || null);
+          refreshNow();
+        }}
+        disabled={lookupsLoading}
+      >
+        <SelectTrigger className="w-[200px]">
+          <SelectValue placeholder="Tous territoires" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">Tous</SelectItem>
+          {lookups.territories.map((t) => (
+            <SelectItem key={t.code} value={t.code}>
+              {t.label || t.code}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {labels.territory_label ? (
+        <div className="mt-1">
+          <Badge variant="secondary" className="text-xs">
+            {labels.territory_label}
+          </Badge>
         </div>
+      ) : null}
+    </div>
+  );
+}
 
-        {/* Auto refresh */}
-        <div className="flex flex-col md:flex-row md:items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Switch
-              checked={autoRefresh.enabled}
-              onCheckedChange={(checked) => setAutoRefresh({ ...autoRefresh, enabled: checked })}
-            />
-            <span className="text-sm">Auto-refresh</span>
+export function ClientPicker(props: { className?: string } = {}) {
+  const { variables, setVariable, refreshNow, lookups, searchingClients, searchClients, labels } = useGlobalFilters();
+  const options: Option[] = (lookups.clients ?? []).map((c) => ({ value: c.id, label: c.label }));
 
-            <Select
-              value={String(autoRefresh.intervalMs)}
-              onValueChange={(v) => setAutoRefresh({ ...autoRefresh, intervalMs: Number(v) })}
-              disabled={!autoRefresh.enabled}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Intervalle" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="60000">1 min</SelectItem>
-                <SelectItem value="120000">2 min</SelectItem>
-                <SelectItem value="300000">5 min</SelectItem>
-                <SelectItem value="900000">15 min</SelectItem>
-              </SelectContent>
-            </Select>
+  return (
+    <div className={props.className}>
+      <RemotePicker
+        label="Client"
+        placeholder="Tous clients"
+        value={variables.client_id ?? null}
+        selectedLabel={labels.client_label}
+        options={options}
+        loading={searchingClients}
+        onSearch={(t) => void searchClients(t)}
+        onSelect={(id) => {
+          setVariable("client_id", id);
+          refreshNow();
+        }}
+        onClear={() => {
+          setVariable("client_id", null);
+          refreshNow();
+        }}
+      />
+    </div>
+  );
+}
 
-            {fmtLast ? <span className="text-xs text-muted-foreground">Dernier: {fmtLast}</span> : null}
-          </div>
+export function ProductPicker(props: { className?: string } = {}) {
+  const { variables, setVariable, refreshNow, lookups, searchingProducts, searchProducts, labels } = useGlobalFilters();
+  const options: Option[] = (lookups.products ?? []).map((p) => ({ value: p.id, label: p.label }));
+
+  return (
+    <div className={props.className}>
+      <RemotePicker
+        label="Produit"
+        placeholder="Tous produits"
+        value={variables.product_id ?? null}
+        selectedLabel={labels.product_label}
+        options={options}
+        loading={searchingProducts}
+        onSearch={(t) => void searchProducts(t)}
+        onSelect={(id) => {
+          setVariable("product_id", id);
+          refreshNow();
+        }}
+        onClear={() => {
+          setVariable("product_id", null);
+          refreshNow();
+        }}
+      />
+    </div>
+  );
+}
+
+export function ResetFiltersButton(props: { className?: string } = {}) {
+  const { resetFilters } = useGlobalFilters();
+  return (
+    <Button variant="ghost" onClick={resetFilters} className={props.className}>
+      Reset
+    </Button>
+  );
+}
+
+/**
+ * Version “barre complète” (si une page veut afficher tout d’un coup)
+ */
+export function GlobalFilterControls() {
+  return (
+    <div className="w-full rounded-xl border bg-background p-3">
+      <div className="flex flex-col xl:flex-row xl:items-end gap-3">
+        <TimeRangePicker />
+        <TerritoryPicker />
+        <ClientPicker />
+        <ProductPicker />
+        <div className="flex items-end gap-2 ml-auto">
+          <AutoRefreshControl />
+          <RefreshNowButton />
+          <ResetFiltersButton />
         </div>
       </div>
     </div>
   );
 }
+
+export default GlobalFilterControls;
