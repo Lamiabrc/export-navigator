@@ -42,14 +42,9 @@ import {
 } from "recharts";
 
 /**
- * ✅ IMPORTANT
- * - Cette page utilise v_export_pricing comme source principale.
- * - Elle essaie ENSUITE de surcharger le "prix Orliman" depuis une table de prix estimés (HT/TTC).
- * - Puis elle calcule la "Reco TTC" à partir d’un PRIX HT (pas à partir d’un TTC, sinon double TVA).
- *
- * 👉 Change ce nom si ta table est différente.
+ * ✅ Table des prix produits estimés
  */
-const PRICE_EST_TABLE = "product_price_estimates";
+const PRICE_EST_TABLE = "product_prices";
 
 type CompetitorPrice = { name: string; price: number };
 
@@ -70,11 +65,11 @@ type BaseRow = {
   competitors: CompetitorPrice[];
   bestCompetitor: CompetitorPrice | null;
 
-  // prix Orliman utilisé pour comparaison (TTC)
+  // prix Orliman utilisé (TTC)
   ourPriceTtc: number | null;
   ourPriceSource: "estimate" | "plv" | "none";
 
-  // prix HT utilisé pour reco TTC (idéalement depuis table estimée)
+  // base HT pour reco TTC
   baseHtForReco: number | null;
   baseHtSource: "estimate_ht" | "derived_from_ttc" | "none";
 
@@ -88,13 +83,11 @@ type BaseRow = {
   vatRate: number | null;
   omRate: number | null;
   omrRate: number | null;
+  omYear: number | null;
 
   // LPPR
   lpprMetropole: number | null;
   lpprDrom: number | null;
-
-  // infos debug / affichage
-  omYear: number | null;
 };
 
 type PositionRow = BaseRow & {
@@ -103,8 +96,6 @@ type PositionRow = BaseRow & {
 };
 
 const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
-
-// Recharts palette (tu l’avais déjà)
 const BAR_PALETTE = ["#0ea5e9", "#a855f7", "#f97316", "#22c55e", "#e11d48"];
 
 function toNum(v: unknown): number | null {
@@ -128,7 +119,6 @@ function pct(part: number, total: number) {
 
 function hs4FromHs(hs: string | null | undefined) {
   if (!hs) return null;
-  // garde digits, prend 4 premiers
   const digits = String(hs).replace(/[^\d]/g, "");
   if (digits.length < 4) return null;
   return digits.slice(0, 4);
@@ -160,15 +150,7 @@ function chunkArray<T>(arr: T[], size: number) {
   return out;
 }
 
-/**
- * Essayez de lire des "prix estimés" (HT/TTC) de façon robuste,
- * car les colonnes peuvent varier selon ton schema.
- *
- * Attendu idéal :
- * - sku (ou code_article)
- * - territory_code
- * - price_ht / price_ttc (ou ht/ttc)
- */
+// --- robust pickers pour product_prices (colonnes peuvent varier)
 function pickSku(row: any): string | null {
   return (
     (typeof row?.sku === "string" && row.sku) ||
@@ -177,7 +159,6 @@ function pickSku(row: any): string | null {
     null
   );
 }
-
 function pickTerritory(row: any): string | null {
   const t =
     (typeof row?.territory_code === "string" && row.territory_code) ||
@@ -186,7 +167,6 @@ function pickTerritory(row: any): string | null {
     null;
   return t ? String(t).toUpperCase() : null;
 }
-
 function pickHt(row: any): number | null {
   return (
     toNum(row?.price_ht) ??
@@ -196,7 +176,6 @@ function pickHt(row: any): number | null {
     null
   );
 }
-
 function pickTtc(row: any): number | null {
   return (
     toNum(row?.price_ttc) ??
@@ -207,7 +186,57 @@ function pickTtc(row: any): number | null {
   );
 }
 
-export default function CompetitionPage() {
+async function fetchProductPricesBySkuList(params: {
+  territory: string;
+  skus: string[];
+}) {
+  const { territory, skus } = params;
+  const skuChunks = chunkArray(skus, 500);
+  const out: any[] = [];
+
+  // 1) Essais “propres” (filtrés par territoire) : territory_code / territory
+  const attempts = [
+    { terrCol: "territory_code", skuCol: "sku" },
+    { terrCol: "territory_code", skuCol: "code_article" },
+    { terrCol: "territory", skuCol: "sku" },
+    { terrCol: "territory", skuCol: "code_article" },
+  ] as const;
+
+  for (const a of attempts) {
+    try {
+      out.length = 0;
+      for (const ch of skuChunks) {
+        const qb: any = supabase
+          .from(PRICE_EST_TABLE)
+          .select("*")
+          .eq(a.terrCol, territory);
+        const res = await qb.in(a.skuCol, ch);
+
+        if (res.error) throw res.error;
+        (res.data || []).forEach((x: any) => out.push(x));
+      }
+      // si on a trouvé des lignes, on stop
+      if (out.length) return out;
+      // sinon on continue (peut être table vide pour ce territoire)
+      // mais au moins la requête a fonctionné
+      return out;
+    } catch {
+      // on tente la prochaine variante
+    }
+  }
+
+  // 2) Fallback : sans filtre territoire (au cas où colonne absente), on limite large
+  try {
+    const res = await supabase.from(PRICE_EST_TABLE).select("*").limit(5000);
+    if (!res.error) return res.data || [];
+  } catch {
+    // ignore
+  }
+
+  return [];
+}
+
+export default function WatchCommercial() {
   const { variables } = useGlobalFilters();
 
   const [baseRows, setBaseRows] = React.useState<BaseRow[]>([]);
@@ -235,9 +264,7 @@ export default function CompetitionPage() {
     if (variables.territory_code) setTerritory(variables.territory_code);
   }, [variables.territory_code]);
 
-  /**
-   * ✅ LOAD DB : ne dépend PAS de extraFees (sinon reload à chaque saisie).
-   */
+  // ✅ LOAD DB : dépend seulement de territory
   React.useEffect(() => {
     let active = true;
 
@@ -251,7 +278,7 @@ export default function CompetitionPage() {
       setError(null);
 
       try {
-        // 1) Vue pricing principale (source de base)
+        // 1) Vue pricing principale
         const { data: viewData, error: viewError } = await supabase
           .from("v_export_pricing")
           .select("*")
@@ -262,13 +289,10 @@ export default function CompetitionPage() {
         if (viewError) throw viewError;
 
         const rows0 = (viewData || []).filter((r: any) => r?.sku);
-
         const skus = Array.from(new Set(rows0.map((r: any) => String(r.sku)).filter(Boolean)));
-
-        // 2) LPPR + coefficients majoration
-        // ⚠️ .in() peut bloquer si trop de valeurs → chunk
         const skuChunks = chunkArray(skus, 500);
 
+        // 2) LPPR + coeff
         const productsData: any[] = [];
         for (const ch of skuChunks) {
           const res = await supabase
@@ -280,9 +304,11 @@ export default function CompetitionPage() {
           (res.data || []).forEach((x: any) => productsData.push(x));
         }
 
-        const coefRes = await supabase.from("lpp_majoration_coefficients").select("territory_code, coef");
+        const coefRes = await supabase
+          .from("lpp_majoration_coefficients")
+          .select("territory_code, coef");
+
         if (coefRes.error) console.warn("LPPR coef fetch error", coefRes.error);
-        const lpprCoefData = coefRes.data || [];
 
         const lpprMap = new Map<string, number>();
         (productsData || []).forEach((p: any) => {
@@ -292,16 +318,15 @@ export default function CompetitionPage() {
         });
 
         const coefMap = new Map<string, number>();
-        (lpprCoefData || []).forEach((c: any) => {
+        (coefRes.data || []).forEach((c: any) => {
           if (c.territory_code && Number.isFinite(Number(c.coef))) {
             coefMap.set(String(c.territory_code).toUpperCase(), Number(c.coef));
           }
         });
 
-        // 3) TVA + OM/OMR
+        // 3) TVA + OM/OMR (✅ colonnes attendues: hs4, om_rate, omr_rate)
         const [vatRes, omRes] = await Promise.all([
           supabase.from("vat_rates").select("territory_code, rate"),
-          // ✅ schéma attendu côté toi : territory_code, hs4, om_rate, omr_rate, year
           supabase.from("om_rates").select("territory_code, hs4, om_rate, omr_rate, year"),
         ]);
 
@@ -315,7 +340,7 @@ export default function CompetitionPage() {
           if (code && rate !== null) vatMap.set(code, rate);
         });
 
-        // OM/OMR : on garde la ligne la plus récente (max year) par (territory, hs4)
+        // garder la ligne la plus récente par (territory, hs4)
         const omMap = new Map<string, { om: number | null; omr: number | null; year: number | null }>();
         (omRes.data || []).forEach((o: any) => {
           const code = String(o.territory_code || "").toUpperCase();
@@ -328,57 +353,22 @@ export default function CompetitionPage() {
           const nextYear = year ?? -1;
 
           if (!cur || nextYear >= curYear) {
-            omMap.set(key, {
-              om: toNum(o.om_rate),
-              omr: toNum(o.omr_rate),
-              year,
-            });
+            omMap.set(key, { om: toNum(o.om_rate), omr: toNum(o.omr_rate), year });
           }
         });
 
-        // 4) Prix estimés (table custom) — on essaye, sinon fallback silencieux
+        // 4) Prix estimés (product_prices)
+        const priceEstRows = await fetchProductPricesBySkuList({ territory, skus });
         const priceEstMap = new Map<string, { ht: number | null; ttc: number | null }>();
 
-        try {
-          // tentative “propre” : territory_code + sku
-          let estRows: any[] = [];
-
-          // on essaye plusieurs patterns (colonnes inconnues)
-          const tryQueries: Array<() => Promise<{ data: any[] | null; error: any }>> = [
-            () => supabase.from(PRICE_EST_TABLE).select("*").eq("territory_code", territory).in("sku", skus.slice(0, 500)),
-            () => supabase.from(PRICE_EST_TABLE).select("*").eq("territory_code", territory).in("code_article", skus.slice(0, 500)),
-            () => supabase.from(PRICE_EST_TABLE).select("*").eq("territory_code", territory).limit(5000),
-            () => supabase.from(PRICE_EST_TABLE).select("*").limit(5000),
-          ];
-
-          let lastErr: any = null;
-          for (const q of tryQueries) {
-            const res = await q();
-            if (!res.error) {
-              estRows = (res.data || []) as any[];
-              lastErr = null;
-              break;
-            }
-            lastErr = res.error;
-          }
-          if (lastErr) {
-            // table absente ou colonnes différentes : on ignore
-            console.warn("Price estimate fetch skipped:", lastErr?.message || lastErr);
-          }
-
-          for (const r of estRows) {
-            const sku = pickSku(r);
-            const terr = pickTerritory(r) || territory.toUpperCase();
-            if (!sku) continue;
-
-            const key = `${terr}:${sku}`;
-            priceEstMap.set(key, { ht: pickHt(r), ttc: pickTtc(r) });
-          }
-        } catch (e) {
-          console.warn("Price estimate fetch skipped:", e);
+        for (const r of priceEstRows) {
+          const sku = pickSku(r);
+          const terr = pickTerritory(r) || territory.toUpperCase();
+          if (!sku) continue;
+          priceEstMap.set(`${terr}:${sku}`, { ht: pickHt(r), ttc: pickTtc(r) });
         }
 
-        // 5) Mapping rows (sans extraFee / reco finale dépendante)
+        // 5) Mapping final
         const mapped: BaseRow[] = rows0.map((r: any) => {
           const sku = String(r.sku);
           const label = (r.label ?? null) as string | null;
@@ -387,7 +377,6 @@ export default function CompetitionPage() {
           const plvMetropoleTtc = toNum(r.plv_metropole_ttc);
           const plvOmTtc = toNum(r.plv_om_ttc);
 
-          // concurrents
           const competitorsAll = [
             { name: "Thuasne", price: toNum(r.thuasne_price_ttc) },
             { name: "Donjoy", price: toNum(r.donjoy_price_ttc) },
@@ -403,19 +392,15 @@ export default function CompetitionPage() {
               ? competitors.reduce((m, c) => (c.price < m.price ? c : m), competitors[0])
               : null;
 
-          // HS
           const hsCode = (r.hs_code ? String(r.hs_code) : null) as string | null;
           const hs4 = hs4FromHs(hsCode);
 
-          // prix Orliman TTC de base (vue)
           const plvFallbackTtc =
             terr === "FR"
               ? plvMetropoleTtc
               : (plvOmTtc ?? plvMetropoleTtc);
 
-          // prix estimés (si dispo) — on surcharge si on trouve
-          const estKey = `${terr}:${sku}`;
-          const est = priceEstMap.get(estKey) || null;
+          const est = priceEstMap.get(`${terr}:${sku}`) || null;
 
           const ourPriceTtc = (est?.ttc ?? plvFallbackTtc) ?? null;
           const ourPriceSource: BaseRow["ourPriceSource"] =
@@ -427,7 +412,6 @@ export default function CompetitionPage() {
 
           const vatRate = vatMap.get(terr) ?? null;
 
-          // base HT pour reco : priorité HT estimé, sinon dérivé depuis TTC (si TVA connue)
           let baseHtForReco: number | null = est?.ht ?? null;
           let baseHtSource: BaseRow["baseHtSource"] = baseHtForReco !== null ? "estimate_ht" : "none";
 
@@ -437,21 +421,19 @@ export default function CompetitionPage() {
           }
 
           const { gapPct, status } = computeStatusAndGap(ourPriceTtc, bestCompetitor);
-          const rank = ourPriceTtc !== null && competitors.length > 0 ? computeRank(ourPriceTtc, competitors) : null;
+          const rank =
+            ourPriceTtc !== null && competitors.length > 0 ? computeRank(ourPriceTtc, competitors) : null;
 
-          // LPPR
           const lpprBase = lpprMap.get(sku) ?? null;
           const coef = coefMap.get(terr) ?? 1;
           const lpprDrom = lpprBase !== null ? lpprBase * coef : null;
 
-          // OM/OMR (par hs4)
           let omRate: number | null = null;
           let omrRate: number | null = null;
           let omYear: number | null = null;
 
           if (hs4) {
-            const omKey = `${terr}:${hs4}`;
-            const omRow = omMap.get(omKey);
+            const omRow = omMap.get(`${terr}:${hs4}`);
             omRate = omRow?.om ?? null;
             omrRate = omRow?.omr ?? null;
             omYear = omRow?.year ?? null;
@@ -485,11 +467,10 @@ export default function CompetitionPage() {
             vatRate,
             omRate,
             omrRate,
+            omYear,
 
             lpprMetropole: lpprBase,
             lpprDrom,
-
-            omYear,
           };
         });
 
@@ -514,11 +495,7 @@ export default function CompetitionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [territory]);
 
-  /**
-   * ✅ DERIVE rows avec extraFees (pas de reload DB)
-   * Reco TTC = HT * (1 + (TVA + OM + OMR)/100) + extraFee
-   * (tu peux ajuster si tu veux un autre ordre de calcul)
-   */
+  // ✅ Reco TTC recalculée localement (sans reload DB)
   const rows: PositionRow[] = React.useMemo(() => {
     return baseRows.map((r) => {
       const extraFee = extraFees[r.territory] ?? 0;
@@ -600,13 +577,11 @@ export default function CompetitionPage() {
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.35em] text-cyan-300/90">
-              Concurrence & positionnement
-            </p>
+            <p className="text-xs uppercase tracking-[0.35em] text-cyan-300/90">Concurrence & positionnement</p>
             <h1 className="text-3xl font-bold text-slate-900">Dashboard concurrence</h1>
             <p className="text-sm text-slate-600">
-              Source: <span className="font-mono">v_export_pricing</span> + (optionnel){" "}
-              <span className="font-mono">{PRICE_EST_TABLE}</span> (prix estimés HT/TTC).
+              Source: <span className="font-mono">v_export_pricing</span> +{" "}
+              <span className="font-mono">{PRICE_EST_TABLE}</span> (prix estimés si dispo).
             </p>
           </div>
 
@@ -752,24 +727,9 @@ export default function CompetitionPage() {
                       <div className="font-mono text-xs text-muted-foreground">{selected.sku}</div>
                       <div className="text-lg font-semibold">{selected.label || "Produit"}</div>
                       <div className="text-sm text-muted-foreground">Territoire: {selected.territory}</div>
-
                       <div className="mt-1 text-xs text-muted-foreground">
-                        Prix Orliman:{" "}
-                        <span className="font-semibold">
-                          {selected.ourPriceSource === "estimate"
-                            ? "estimé"
-                            : selected.ourPriceSource === "plv"
-                            ? "PLV"
-                            : "n/a"}
-                        </span>{" "}
-                        · Base HT reco:{" "}
-                        <span className="font-semibold">
-                          {selected.baseHtSource === "estimate_ht"
-                            ? "HT estimé"
-                            : selected.baseHtSource === "derived_from_ttc"
-                            ? "dérivé TTC"
-                            : "n/a"}
-                        </span>
+                        Source prix: <span className="font-semibold">{selected.ourPriceSource}</span> · Base HT reco:{" "}
+                        <span className="font-semibold">{selected.baseHtSource}</span>
                       </div>
                     </div>
 
@@ -813,12 +773,11 @@ export default function CompetitionPage() {
 
                         <div className="text-xs text-muted-foreground">
                           TVA: {selected.vatRate ?? "n/a"}% · OM: {selected.omRate ?? "n/a"}% · OMR:{" "}
-                          {selected.omrRate ?? "n/a"}%{" "}
-                          {selected.omYear ? `· (année ${selected.omYear})` : ""}
+                          {selected.omrRate ?? "n/a"}% {selected.omYear ? `· (année ${selected.omYear})` : ""}
                         </div>
 
                         <div className="flex items-center justify-between">
-                          <div className="text-sm text-slate-700">Reco TTC (taxes + OM + fees)</div>
+                          <div className="text-sm text-slate-700">Reco TTC (taxes + OM/OMR + fees)</div>
                           <div className="text-sm font-semibold">{money(selected.recommendedTtc)}</div>
                         </div>
 
@@ -845,10 +804,7 @@ export default function CompetitionPage() {
                       <CardContent className="h-[220px]">
                         {priceBarsForSelected.length ? (
                           <ResponsiveContainer width="100%" height="100%">
-                            <BarChart
-                              data={priceBarsForSelected}
-                              margin={{ top: 8, right: 8, left: 0, bottom: 8 }}
-                            >
+                            <BarChart data={priceBarsForSelected} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis dataKey="name" />
                               <YAxis />
@@ -857,9 +813,7 @@ export default function CompetitionPage() {
                             </BarChart>
                           </ResponsiveContainer>
                         ) : (
-                          <div className="text-sm text-muted-foreground">
-                            Pas assez de données pour afficher un graphe.
-                          </div>
+                          <div className="text-sm text-muted-foreground">Pas assez de données pour afficher un graphe.</div>
                         )}
                       </CardContent>
                     </Card>
@@ -878,11 +832,7 @@ export default function CompetitionPage() {
                 <Skeleton className="h-full w-full" />
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={summary.rankCounts}
-                    layout="vertical"
-                    margin={{ top: 12, right: 24, left: 24, bottom: 12 }}
-                  >
+                  <BarChart data={summary.rankCounts} layout="vertical" margin={{ top: 12, right: 24, left: 24, bottom: 12 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" allowDecimals={false} />
                     <YAxis type="category" dataKey="rank" width={32} />
@@ -945,7 +895,7 @@ export default function CompetitionPage() {
                     <TableHead>SKU</TableHead>
                     <TableHead>Produit</TableHead>
                     <TableHead className="text-right">Prix Orliman (TTC)</TableHead>
-                    <TableHead className="text-right">Reco TTC (taxes/OM/fees)</TableHead>
+                    <TableHead className="text-right">Reco TTC (taxes/OM/OMR/fees)</TableHead>
                     <TableHead className="text-right">LPPR FR</TableHead>
                     <TableHead className="text-right">LPPR DROM</TableHead>
                     <TableHead>Best concurrent</TableHead>
