@@ -1,390 +1,349 @@
 import React from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { CalendarClock, Clock3, RefreshCw, Save, Layers, CheckCircle2, X, RotateCw } from "lucide-react";
+import { CalendarClock, RefreshCw, RotateCw, X } from "lucide-react";
+import { useGlobalFilters, TimeRangePreset, TimeRangeValue } from "@/contexts/GlobalFiltersContext";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useGlobalFilters, TimeRangePreset } from "@/contexts/GlobalFiltersContext";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const timePresets: { value: TimeRangePreset; label: string }[] = [
-  { value: "last_7d", label: "7j" },
-  { value: "last_14d", label: "14j" },
-  { value: "last_30d", label: "30j" },
-  { value: "last_90d", label: "90j" },
-  { value: "this_month", label: "Mois courant" },
-  { value: "previous_month", label: "Mois precedent" },
-  { value: "ytd", label: "YTD" },
-  { value: "custom", label: "Custom" },
-];
+function useDebounced<T>(value: T, delayMs = 250) {
+  const [v, setV] = React.useState(value);
+  React.useEffect(() => {
+    const id = window.setTimeout(() => setV(value), delayMs);
+    return () => window.clearTimeout(id);
+  }, [value, delayMs]);
+  return v;
+}
 
-const autoRefreshIntervals = [
-  { value: 15_000, label: "15s" },
-  { value: 30_000, label: "30s" },
-  { value: 60_000, label: "1 min" },
-  { value: 300_000, label: "5 min" },
-];
+type Option = { value: string; label: string };
 
-export function TimeRangePicker() {
-  const { timeRange, resolvedRange, setTimeRange } = useGlobalFilters();
+function RemotePicker({
+  label,
+  placeholder,
+  value,
+  selectedLabel,
+  options,
+  loading,
+  onSearch,
+  onSelect,
+  onClear,
+}: {
+  label: string;
+  placeholder: string;
+  value: string | null | undefined;
+  selectedLabel: string | null | undefined;
+  options: Option[];
+  loading: boolean;
+  onSearch: (term: string) => void;
+  onSelect: (value: string) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [term, setTerm] = React.useState("");
+  const debounced = useDebounced(term, 250);
 
-  const onPresetChange = (preset: TimeRangePreset) => {
-    if (preset === "custom") {
-      setTimeRange({ preset, from: resolvedRange.from, to: resolvedRange.to });
-    } else {
-      setTimeRange({ preset });
-    }
-  };
+  React.useEffect(() => {
+    if (!open) return;
+    onSearch(debounced);
+  }, [open, debounced, onSearch]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    onSearch(""); // charge une liste courte à l'ouverture
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-sm">
-        <CalendarClock className="h-4 w-4 text-muted-foreground" />
-        <Select value={timeRange.preset} onValueChange={(v) => onPresetChange(v as TimeRangePreset)}>
-          <SelectTrigger className="h-8 w-[140px] text-sm">
-            <SelectValue placeholder="Periode" />
-          </SelectTrigger>
-          <SelectContent>
-            {timePresets.map((p) => (
-              <SelectItem key={p.value} value={p.value}>
-                {p.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="text-xs text-muted-foreground min-w-[120px]">{resolvedRange.label}</div>
-      </div>
+    <div className="min-w-[220px]">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
 
-      {timeRange.preset === "custom" ? (
-        <div className="flex items-center gap-2">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="w-full justify-between">
+            <span className="truncate">{selectedLabel || (value ? value : placeholder)}</span>
+            <span className="text-muted-foreground">{loading ? "…" : "▾"}</span>
+          </Button>
+        </PopoverTrigger>
+
+        <PopoverContent align="start" className="w-[360px] p-3">
           <Input
-            type="date"
-            className="h-8"
-            value={timeRange.from ?? resolvedRange.from}
-            onChange={(e) => setTimeRange({ ...timeRange, from: e.target.value })}
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+            placeholder="Rechercher… (2 caractères conseillé)"
           />
-          <span className="text-muted-foreground text-xs">&rarr;</span>
-          <Input
-            type="date"
-            className="h-8"
-            value={timeRange.to ?? resolvedRange.to}
-            onChange={(e) => setTimeRange({ ...timeRange, to: e.target.value })}
-          />
-        </div>
-      ) : null}
+
+          <div className="mt-2 max-h-[260px] overflow-auto rounded-md border">
+            {loading ? (
+              <div className="p-3 text-sm text-muted-foreground">Recherche…</div>
+            ) : options.length === 0 ? (
+              <div className="p-3 text-sm text-muted-foreground">Aucun résultat.</div>
+            ) : (
+              options.map((opt) => {
+                const active = opt.value === value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      onSelect(opt.value);
+                      setOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-sm border-b last:border-b-0 hover:bg-muted/40 ${
+                      active ? "bg-muted/50 font-medium" : ""
+                    }`}
+                    title={opt.label}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          <div className="mt-2 flex justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setTerm("");
+                onClear();
+              }}
+              className="gap-2"
+            >
+              <X className="h-4 w-4" />
+              Effacer
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
 
-export function AutoRefreshControl() {
-  const { autoRefresh, setAutoRefresh } = useGlobalFilters();
+export default function GlobalFilterControls() {
+  const {
+    timeRange,
+    resolvedRange,
+    setTimeRange,
+    variables,
+    setVariable,
+    resetFilters,
+    autoRefresh,
+    setAutoRefresh,
+    refreshNow,
+    lastRefreshAt,
+    lookups,
+    lookupsLoading,
+    searchingClients,
+    searchingProducts,
+    searchClients,
+    searchProducts,
+    labels,
+  } = useGlobalFilters();
 
-  return (
-    <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-sm">
-      <Clock3 className="h-4 w-4 text-muted-foreground" />
-      <Switch
-        checked={autoRefresh.enabled}
-        onCheckedChange={(checked) => setAutoRefresh({ ...autoRefresh, enabled: checked })}
-        aria-label="Auto refresh"
-      />
-      <Select
-        value={String(autoRefresh.intervalMs)}
-        onValueChange={(v) => setAutoRefresh({ ...autoRefresh, intervalMs: Number(v) })}
-        disabled={!autoRefresh.enabled}
-      >
-        <SelectTrigger className="h-8 w-[100px] text-sm">
-          <SelectValue placeholder="Intervalle" />
-        </SelectTrigger>
-        <SelectContent>
-          {autoRefreshIntervals.map((opt) => (
-            <SelectItem key={opt.value} value={String(opt.value)}>
-              {opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
-}
+  const [customFrom, setCustomFrom] = React.useState(timeRange.from ?? "");
+  const [customTo, setCustomTo] = React.useState(timeRange.to ?? "");
 
-export function RefreshNowButton() {
-  const { refreshNow, lastRefreshAt } = useGlobalFilters();
-  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => {
+    setCustomFrom(timeRange.from ?? "");
+    setCustomTo(timeRange.to ?? "");
+  }, [timeRange.from, timeRange.to]);
 
-  const handleRefresh = async () => {
-    setBusy(true);
-    try {
-      refreshNow();
-    } finally {
-      setBusy(false);
-    }
-  };
+  const timePresets: { value: TimeRangePreset; label: string }[] = [
+    { value: "last_7d", label: "7 jours" },
+    { value: "last_14d", label: "14 jours" },
+    { value: "last_30d", label: "30 jours" },
+    { value: "last_90d", label: "90 jours" },
+    { value: "this_month", label: "Mois en cours" },
+    { value: "previous_month", label: "Mois précédent" },
+    { value: "ytd", label: "YTD" },
+    { value: "custom", label: "Personnalisé" },
+  ];
 
-  const label = lastRefreshAt
-    ? new Date(lastRefreshAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-    : "Now";
+  const clientOptions: Option[] = (lookups.clients ?? []).map((c) => ({ value: c.id, label: c.label }));
+  const productOptions: Option[] = (lookups.products ?? []).map((p) => ({ value: p.id, label: p.label }));
 
-  return (
-    <Button variant="outline" size="sm" className="gap-2" onClick={() => void handleRefresh()} disabled={busy}>
-      <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
-      Refresh
-      <Badge variant="secondary" className="ml-1">
-        {label}
-      </Badge>
-    </Button>
-  );
-}
+  const fmtLast = lastRefreshAt ? new Date(lastRefreshAt).toLocaleString("fr-FR") : null;
 
-export function SavedViewsMenu() {
-  const { savedViews, applyView, deleteView, saveView, activeViewId } = useGlobalFilters();
-  const [name, setName] = React.useState("");
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const onApply = (id: string) => {
-    const view = applyView(id);
-    if (view && view.route && view.route !== location.pathname) {
-      navigate(view.route);
-    }
-  };
-
-  const onSave = () => {
-    const view = saveView(name, location.pathname);
-    if (view) setName("");
+  const applyCustom = () => {
+    if (!customFrom || !customTo) return;
+    const v: TimeRangeValue = { preset: "custom", from: customFrom, to: customTo };
+    setTimeRange(v);
+    refreshNow();
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Layers className="h-4 w-4" />
-          Saved views
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-72" align="end">
-        <div className="px-2 py-2 space-y-2">
-          <Label htmlFor="save-view-input" className="text-xs text-muted-foreground">
-            Save current view
-          </Label>
-          <div className="flex gap-2">
-            <Input
-              id="save-view-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Nom"
-              className="h-8"
-            />
-            <Button size="sm" onClick={onSave} disabled={!name.trim()}>
-              <Save className="h-4 w-4" />
+    <div className="w-full rounded-xl border bg-background p-3">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col xl:flex-row xl:items-end gap-3">
+          {/* Période */}
+          <div className="min-w-[220px]">
+            <Label className="text-xs text-muted-foreground">Période</Label>
+            <Select
+              value={timeRange.preset}
+              onValueChange={(v) => {
+                const preset = v as TimeRangePreset;
+                if (preset === "custom") {
+                  setTimeRange({ preset: "custom", from: customFrom || undefined, to: customTo || undefined });
+                } else {
+                  setTimeRange({ preset });
+                  refreshNow();
+                }
+              }}
+            >
+              <SelectTrigger className="justify-between">
+                <SelectValue placeholder="Période" />
+              </SelectTrigger>
+              <SelectContent>
+                {timePresets.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <CalendarClock className="h-4 w-4" />
+              <span>{resolvedRange.label}</span>
+            </div>
+          </div>
+
+          {/* Custom dates */}
+          {timeRange.preset === "custom" ? (
+            <div className="flex flex-wrap items-end gap-2">
+              <div>
+                <Label className="text-xs text-muted-foreground">Du</Label>
+                <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Au</Label>
+                <Input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+              </div>
+              <Button type="button" onClick={applyCustom} className="gap-2">
+                <RotateCw className="h-4 w-4" />
+                Appliquer
+              </Button>
+            </div>
+          ) : null}
+
+          {/* Territoire */}
+          <div className="min-w-[220px]">
+            <Label className="text-xs text-muted-foreground">Territoire</Label>
+            <Select
+              value={variables.territory_code ?? ""}
+              onValueChange={(v) => {
+                setVariable("territory_code", v || null);
+                refreshNow();
+              }}
+              disabled={lookupsLoading}
+            >
+              <SelectTrigger className="justify-between">
+                <SelectValue placeholder="Tous territoires" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Tous</SelectItem>
+                {lookups.territories.map((t) => (
+                  <SelectItem key={t.code} value={t.code}>
+                    {t.label || t.code}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {labels.territory_label ? (
+              <div className="mt-1">
+                <Badge variant="secondary" className="text-xs">
+                  {labels.territory_label}
+                </Badge>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Client remote (recherche) */}
+          <RemotePicker
+            label="Client"
+            placeholder="Tous clients"
+            value={variables.client_id ?? null}
+            selectedLabel={labels.client_label}
+            options={clientOptions}
+            loading={searchingClients}
+            onSearch={(t) => void searchClients(t)}
+            onSelect={(id) => {
+              setVariable("client_id", id);
+              refreshNow();
+            }}
+            onClear={() => {
+              setVariable("client_id", null);
+              refreshNow();
+            }}
+          />
+
+          {/* Produit remote (recherche) */}
+          <RemotePicker
+            label="Produit"
+            placeholder="Tous produits"
+            value={variables.product_id ?? null}
+            selectedLabel={labels.product_label}
+            options={productOptions}
+            loading={searchingProducts}
+            onSearch={(t) => void searchProducts(t)}
+            onSelect={(id) => {
+              setVariable("product_id", id);
+              refreshNow();
+            }}
+            onClear={() => {
+              setVariable("product_id", null);
+              refreshNow();
+            }}
+          />
+
+          {/* Actions */}
+          <div className="flex items-end gap-2 ml-auto">
+            <Button variant="outline" onClick={refreshNow} className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+            <Button variant="ghost" onClick={resetFilters}>
+              Reset
             </Button>
           </div>
         </div>
-        <DropdownMenuSeparator />
-        {savedViews.length === 0 ? (
-          <DropdownMenuItem disabled className="text-xs">
-            Aucune vue enregistree
-          </DropdownMenuItem>
-        ) : (
-          savedViews.map((view) => (
-            <DropdownMenuItem key={view.id} className="flex items-center gap-2" onSelect={() => onApply(view.id)}>
-              <CheckCircle2 className={`h-4 w-4 ${activeViewId === view.id ? "text-primary" : "text-muted-foreground"}`} />
-              <div className="flex-1">
-                <div className="text-sm font-medium leading-tight">{view.name}</div>
-                <div className="text-[11px] text-muted-foreground truncate">
-                  {view.route} | {view.timeRange.preset}
-                </div>
-              </div>
-              <button
-                type="button"
-                className="text-muted-foreground hover:text-foreground"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteView(view.id);
-                }}
-                aria-label="Supprimer la vue"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </DropdownMenuItem>
-          ))
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
 
-export function VariablesBar() {
-  const { variables, setVariable, lookups, lookupsLoading, resetFilters, saveView } = useGlobalFilters();
-  const location = useLocation();
-  const [saveOpen, setSaveOpen] = React.useState(false);
-  const [saveName, setSaveName] = React.useState("");
+        {/* Auto refresh */}
+        <div className="flex flex-col md:flex-row md:items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={autoRefresh.enabled}
+              onCheckedChange={(checked) => setAutoRefresh({ ...autoRefresh, enabled: checked })}
+            />
+            <span className="text-sm">Auto-refresh</span>
 
-  const onSave = () => {
-    const view = saveView(saveName, location.pathname);
-    if (view) {
-      setSaveOpen(false);
-      setSaveName("");
-    }
-  };
+            <Select
+              value={String(autoRefresh.intervalMs)}
+              onValueChange={(v) => setAutoRefresh({ ...autoRefresh, intervalMs: Number(v) })}
+              disabled={!autoRefresh.enabled}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Intervalle" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="60000">1 min</SelectItem>
+                <SelectItem value="120000">2 min</SelectItem>
+                <SelectItem value="300000">5 min</SelectItem>
+                <SelectItem value="900000">15 min</SelectItem>
+              </SelectContent>
+            </Select>
 
-  return (
-    <div className="flex flex-col gap-3 border-t border-border/60 bg-muted/40 px-4 py-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Label className="text-xs text-muted-foreground">Variables</Label>
-        <Badge variant="outline" className="text-[11px]">
-          Global filters
-        </Badge>
-        {lookupsLoading ? <Badge variant="secondary">Loading...</Badge> : null}
-      </div>
-
-      <div className="grid gap-2 md:grid-cols-4 lg:grid-cols-5">
-        <Select
-          value={variables.territory_code ?? "all"}
-          onValueChange={(v) => setVariable("territory_code", v === "all" ? null : v)}
-        >
-          <SelectTrigger className="h-9">
-            <SelectValue placeholder="Territoire" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tous territoires</SelectItem>
-            {lookups.territories.map((t) => (
-              <SelectItem key={t.code} value={t.code}>
-                {t.label || t.code} ({t.code})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={variables.client_id ?? "all"}
-          onValueChange={(v) => setVariable("client_id", v === "all" ? null : v)}
-        >
-          <SelectTrigger className="h-9">
-            <SelectValue placeholder="Client" />
-          </SelectTrigger>
-          <SelectContent className="max-h-80">
-            <SelectItem value="all">Tous clients</SelectItem>
-
-            {lookups.clients.map((c: any) => {
-              const label = formatClientName(c);
-              const idShort = shortId(c?.id);
-              const showSecondLine = Boolean(c?.id) && label && label !== c?.id;
-
-              return (
-                <SelectItem key={c.id} value={c.id}>
-                  <div className="flex flex-col leading-tight">
-                    <div className="text-sm">{label}</div>
-                    {showSecondLine ? (
-                      <div className="text-[11px] text-muted-foreground">{idShort}</div>
-                    ) : null}
-                  </div>
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={variables.product_id ?? "all"}
-          onValueChange={(v) => setVariable("product_id", v === "all" ? null : v)}
-        >
-          <SelectTrigger className="h-9">
-            <SelectValue placeholder="Produit" />
-          </SelectTrigger>
-          <SelectContent className="max-h-80">
-            <SelectItem value="all">Tous produits</SelectItem>
-            {lookups.products.map((p: any) => {
-              const label = (p?.label || p?.name || p?.sku || p?.id) as string;
-              const idShort = shortId(p?.id);
-              const showSecondLine = Boolean(p?.id) && label && label !== p?.id;
-              return (
-                <SelectItem key={p.id} value={p.id}>
-                  <div className="flex flex-col leading-tight">
-                    <div className="text-sm">{label}</div>
-                    {showSecondLine ? (
-                      <div className="text-[11px] text-muted-foreground">{idShort}</div>
-                    ) : null}
-                  </div>
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
-
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={resetFilters} className="gap-2">
-            <RotateCw className="h-4 w-4" />
-            Reset
-          </Button>
-
-          <Popover open={saveOpen} onOpenChange={setSaveOpen}>
-            <PopoverTrigger asChild>
-              <Button size="sm" className="gap-2">
-                <Save className="h-4 w-4" />
-                Save view
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-64 space-y-2">
-              <Label htmlFor="save-view-inline" className="text-xs text-muted-foreground">
-                Nom de la vue
-              </Label>
-              <Input
-                id="save-view-inline"
-                value={saveName}
-                onChange={(e) => setSaveName(e.target.value)}
-                placeholder="Export DOM"
-              />
-              <Button size="sm" onClick={onSave} disabled={!saveName.trim()}>
-                Enregistrer
-              </Button>
-            </PopoverContent>
-          </Popover>
+            {fmtLast ? <span className="text-xs text-muted-foreground">Dernier: {fmtLast}</span> : null}
+          </div>
         </div>
       </div>
     </div>
   );
-}
-
-function looksLikeUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
-function shortId(id?: string | null) {
-  if (!id) return "";
-  if (!looksLikeUuid(id)) return id;
-  return `${id.slice(0, 8)}…${id.slice(-4)}`;
-}
-
-function formatClientName(c: any) {
-  const raw =
-    c?.name ||
-    c?.libelle_client ||
-    c?.label ||
-    c?.raison_sociale ||
-    c?.company_name ||
-    c?.client_name ||
-    c?.id ||
-    "Client";
-
-  if (typeof raw !== "string") return "Client";
-  if (!raw.trim()) return c?.id ? `Client ${shortId(c.id)}` : "Client";
-  if (looksLikeUuid(raw)) return `Client ${shortId(raw)}`;
-  return raw;
 }
