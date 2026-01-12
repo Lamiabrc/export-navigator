@@ -1,5 +1,5 @@
 import * as React from "react";
-import worldMap from "@/assets/world-map.svg";
+import worldMapRaw from "@/assets/world-map.svg?raw";
 import { TERRITORY_PCT } from "@/domain/geo/territoryPct";
 import { Button } from "@/components/ui/button";
 import { Minus, Plus, RotateCcw } from "lucide-react";
@@ -27,11 +27,6 @@ type Point = {
   data?: TerritoryData;
 };
 
-const BASE_W = 1010;
-// ✅ IMPORTANT: doit matcher la carte (world-map.svg) + TERRITORY_PCT
-// Dans tes autres fichiers tu es sur 666. Si ton SVG a un autre viewBox, mets cette valeur.
-const BASE_H = 666;
-
 const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
 
 const LABEL_OFFSETS: Record<string, { dx: number; dy: number }> = {
@@ -49,6 +44,20 @@ const css = `
 @keyframes dash { to { stroke-dashoffset: -24; } }
 `;
 
+function parseSvg(raw: string) {
+  // viewBox
+  const vbMatch = raw.match(/viewBox="([^"]+)"/i);
+  const vb = vbMatch?.[1]?.trim().split(/\s+/).map(Number) ?? [0, 0, 1010, 666];
+  const [vbX, vbY, vbW, vbH] = vb.length === 4 ? vb : [0, 0, 1010, 666];
+
+  // inner content (everything inside <svg ...>...</svg>)
+  const inner = raw
+    .replace(/^[\s\S]*?<svg[^>]*>/i, "")
+    .replace(/<\/svg>\s*$/i, "");
+
+  return { vbX, vbY, vbW, vbH, inner };
+}
+
 export function ExportMap({
   dataByTerritory,
   selectedTerritory,
@@ -57,10 +66,11 @@ export function ExportMap({
   mode = "overview",
 }: Props) {
   const svgRef = React.useRef<SVGSVGElement | null>(null);
-
   const [hover, setHover] = React.useState<{ code: string; x: number; y: number } | null>(null);
 
-  // Pan/Zoom (pointer events = plus fiable que mouse events)
+  const map = React.useMemo(() => parseSvg(worldMapRaw), []);
+
+  // Pan/Zoom
   const [scale, setScale] = React.useState(1);
   const [offset, setOffset] = React.useState({ x: 0, y: 0 });
   const panRef = React.useRef<{
@@ -77,22 +87,29 @@ export function ExportMap({
     []
   );
 
-  const toXY = React.useCallback((code: string) => {
-    const pct = (TERRITORY_PCT as any)[code];
-    if (!pct) return null;
-    return { x: (pct.x / 100) * BASE_W, y: (pct.y / 100) * BASE_H };
-  }, []);
+  // ✅ conversion % -> coordonnées EXACTES du viewBox du SVG
+  const toXY = React.useCallback(
+    (code: string) => {
+      const pct = (TERRITORY_PCT as any)[code];
+      if (!pct) return null;
+      return {
+        x: map.vbX + (pct.x / 100) * map.vbW,
+        y: map.vbY + (pct.y / 100) * map.vbH,
+      };
+    },
+    [map.vbH, map.vbW, map.vbX, map.vbY]
+  );
 
   const hub = toXY("HUB_FR");
 
   const points: Point[] = React.useMemo(() => {
     return Object.entries(TERRITORY_PCT as any)
       .filter(([code]) => code !== "HUB_FR")
-      .map(([code, pct]: any) => {
+      .map(([code, meta]: any) => {
         const pos = toXY(code);
         return {
           code,
-          name: pct.label || code,
+          name: meta.label || code,
           x: pos?.x ?? 0,
           y: pos?.y ?? 0,
           data: dataByTerritory[code],
@@ -123,10 +140,12 @@ export function ExportMap({
     return new Set(sorted.slice(0, 5));
   }, [visiblePoints]);
 
+  // ⚠️ on garde ton ordre (translate puis scale) :
+  // p' = (p + offset) * scale  => p = p'/scale - offset
   const transform = `translate(${offset.x},${offset.y}) scale(${scale})`;
-  const viewBox = `0 0 ${BASE_W} ${BASE_H}`;
+  const viewBox = `${map.vbX} ${map.vbY} ${map.vbW} ${map.vbH}`;
 
-  const hoveredPct = hover ? (TERRITORY_PCT as any)[hover.code] : undefined;
+  const hoveredMeta = hover ? (TERRITORY_PCT as any)[hover.code] : undefined;
   const hoveredData = hover ? dataByTerritory[hover.code] : undefined;
 
   const zoomIn = () => setScale((s) => clamp(s * 1.12, 0.85, 3.5));
@@ -166,12 +185,44 @@ export function ExportMap({
     }
   };
 
+  // ✅ Debug: Shift+clic sur la carte => log % exact à mettre dans TERRITORY_PCT
+  const debugClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!debug || !e.shiftKey) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return;
+
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+
+    const pSvg = pt.matrixTransform(ctm.inverse());
+
+    // enlever pan/zoom (ordre translate->scale)
+    const baseX = pSvg.x / scale - offset.x;
+    const baseY = pSvg.y / scale - offset.y;
+
+    const pctX = ((baseX - map.vbX) / map.vbW) * 100;
+    const pctY = ((baseY - map.vbY) / map.vbH) * 100;
+
+    const out = { x: Number(pctX.toFixed(1)), y: Number(pctY.toFixed(1)) };
+    // eslint-disable-next-line no-console
+    console.log("[ExportMap] SHIFT+click => TERRITORY_PCT =", out);
+
+    void navigator.clipboard?.writeText(`${out.x}, ${out.y}`).catch(() => {});
+  };
+
   return (
     <div className="relative h-[520px] w-full overflow-hidden rounded-2xl bg-slate-950/80 border border-slate-800">
       <style>{css}</style>
 
       <div className="absolute top-3 left-3 z-20 text-xs text-slate-300/85">
-        <div>Survole = infos • Clic = filtre • Double-clic = reset filtre</div>
+        <div>
+          Survole = infos • Clic = filtre • Double-clic = reset filtre
+          {debug ? <span className="ml-2 text-amber-300">• debug=1 : SHIFT+clic = récupère %</span> : null}
+        </div>
         <div className="text-slate-400">{dateRangeLabel}</div>
       </div>
 
@@ -201,20 +252,17 @@ export function ExportMap({
           panRef.current.active = false;
           panRef.current.pointerId = null;
         }}
+        onClick={debugClick}
       >
         <g transform={transform}>
-          {/* ✅ Fond: forcer le fill du repère (pas de letterbox) */}
-          <image
-            href={worldMap}
-            x={0}
-            y={0}
-            width={BASE_W}
-            height={BASE_H}
-            opacity={0.45}
-            preserveAspectRatio="none"
-            style={{ filter: "invert(1) saturate(1.2) contrast(1.05)", pointerEvents: "none" }}
+          {/* ✅ Fond INLINE : même repère que tes overlays */}
+          <g
+            style={{ filter: "invert(1) saturate(1.2) contrast(1.05)", opacity: 0.45, pointerEvents: "none" as any }}
+            // eslint-disable-next-line react/no-danger
+            dangerouslySetInnerHTML={{ __html: map.inner }}
           />
 
+          {/* Arcs */}
           {hasData && hub
             ? visiblePoints.map((p) => {
                 const ca = p.data?.ca_ht || 0;
@@ -237,6 +285,7 @@ export function ExportMap({
               })
             : null}
 
+          {/* Hub */}
           {hub ? (
             <g
               className="cursor-pointer"
@@ -255,6 +304,7 @@ export function ExportMap({
             </g>
           ) : null}
 
+          {/* Points */}
           {visiblePoints.map((p) => {
             const ca = p.data?.ca_ht || 0;
             const lines = p.data?.lines || 0;
@@ -340,14 +390,15 @@ export function ExportMap({
         </g>
       </svg>
 
-      {hover && hoveredPct ? (
+      {/* Tooltip */}
+      {hover && hoveredMeta ? (
         <div
           className="pointer-events-none fixed z-30 rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-2 shadow-xl text-xs text-slate-100"
           style={{ left: hover.x + 12, top: hover.y + 12, minWidth: 190 }}
         >
           <div className="flex items-center justify-between">
-            <span className="font-semibold">{hoveredPct.label || hoveredPct.code}</span>
-            <span className="text-[10px] text-slate-400">{hoveredPct.code}</span>
+            <span className="font-semibold">{hoveredMeta.label || hover.code}</span>
+            <span className="text-[10px] text-slate-400">{hover.code}</span>
           </div>
 
           <div className="mt-1 space-y-1">
