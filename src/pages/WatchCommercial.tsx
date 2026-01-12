@@ -1,11 +1,30 @@
 import * as React from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { cn } from "@/lib/utils";
@@ -22,84 +41,75 @@ import {
   LabelList,
 } from "recharts";
 
-type CsvRow = Record<string, string>;
+/**
+ * ✅ IMPORTANT
+ * - Cette page utilise v_export_pricing comme source principale.
+ * - Elle essaie ENSUITE de surcharger le "prix Orliman" depuis une table de prix estimés (HT/TTC).
+ * - Puis elle calcule la "Reco TTC" à partir d’un PRIX HT (pas à partir d’un TTC, sinon double TVA).
+ *
+ * 👉 Change ce nom si ta table est différente.
+ */
+const PRICE_EST_TABLE = "product_price_estimates";
 
 type CompetitorPrice = { name: string; price: number };
 
-type PositionRow = {
+type BaseRow = {
   sku: string;
   label: string | null;
   territory: string;
 
-  ourPrice: number | null;
+  // base Orliman (TTC) provenant de la vue
+  plvMetropoleTtc: number | null;
+  plvOmTtc: number | null;
+
+  // HS
+  hsCode: string | null;
+  hs4: string | null;
+
+  // prix concurrents
   competitors: CompetitorPrice[];
   bestCompetitor: CompetitorPrice | null;
 
-  gapPct: number | null; // vs best competitor
+  // prix Orliman utilisé pour comparaison (TTC)
+  ourPriceTtc: number | null;
+  ourPriceSource: "estimate" | "plv" | "none";
+
+  // prix HT utilisé pour reco TTC (idéalement depuis table estimée)
+  baseHtForReco: number | null;
+  baseHtSource: "estimate_ht" | "derived_from_ttc" | "none";
+
+  // métriques concurrence
+  gapPct: number | null;
   status: "premium" | "aligned" | "underpriced" | "no_data";
+  rank: number | null;
+  competitorCount: number;
 
-  rank: number | null; // position Orliman (1 = moins cher)
-  competitorCount: number; // nb concurrents avec prix
-
+  // taxes / OM / OMR (en %)
   vatRate: number | null;
   omRate: number | null;
+  omrRate: number | null;
+
+  // LPPR
   lpprMetropole: number | null;
   lpprDrom: number | null;
+
+  // infos debug / affichage
+  omYear: number | null;
+};
+
+type PositionRow = BaseRow & {
   extraFee: number;
   recommendedTtc: number | null;
 };
 
-function parseCsvLine(line: string): string[] {
-  // parser CSV simple mais robuste pour guillemets doubles
-  const out: string[] = [];
-  let cur = "";
-  let inQuotes = false;
+const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
 
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
+// Recharts palette (tu l’avais déjà)
+const BAR_PALETTE = ["#0ea5e9", "#a855f7", "#f97316", "#22c55e", "#e11d48"];
 
-    if (ch === '"') {
-      // "" -> "
-      if (inQuotes && line[i + 1] === '"') {
-        cur += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (ch === "," && !inQuotes) {
-      out.push(cur);
-      cur = "";
-      continue;
-    }
-
-    cur += ch;
-  }
-
-  out.push(cur);
-  return out;
-}
-
-function parseCsv(csv: string): CsvRow[] {
-  const trimmed = (csv || "").trim();
-  if (!trimmed || trimmed.startsWith("no_data")) return [];
-
-  const lines = trimmed.split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
-
-  const headers = parseCsvLine(lines[0]).map((h) => h.trim());
-  const rows: CsvRow[] = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const fields = parseCsvLine(lines[i]);
-    const row: CsvRow = {};
-    headers.forEach((h, idx) => (row[h] = fields[idx] ?? ""));
-    rows.push(row);
-  }
-
-  return rows;
+function toNum(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 const money = (n: number | null | undefined) => {
@@ -111,9 +121,17 @@ const money = (n: number | null | undefined) => {
   }).format(Number(n));
 };
 
-function num(v: any): number | null {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
+function pct(part: number, total: number) {
+  if (!total) return "0%";
+  return `${Math.round((part / total) * 100)}%`;
+}
+
+function hs4FromHs(hs: string | null | undefined) {
+  if (!hs) return null;
+  // garde digits, prend 4 premiers
+  const digits = String(hs).replace(/[^\d]/g, "");
+  if (digits.length < 4) return null;
+  return digits.slice(0, 4);
 }
 
 function computeRank(our: number, comps: CompetitorPrice[]) {
@@ -121,80 +139,84 @@ function computeRank(our: number, comps: CompetitorPrice[]) {
   return 1 + lower;
 }
 
-function computePosition(row: CsvRow, territoryFallback: string): PositionRow {
-  const territory = (row["territory_code"] || territoryFallback || "FR").toUpperCase();
-
-  const ourPrice =
-    territory === "FR"
-      ? num(row["plv_metropole_ttc"])
-      : (num(row["plv_om_ttc"]) ?? num(row["plv_metropole_ttc"]));
-
-  const competitorsAll = [
-    { name: "Thuasne", price: num(row["thuasne_price_ttc"]) },
-    { name: "Donjoy", price: num(row["donjoy_price_ttc"]) },
-    { name: "Gibaud", price: num(row["gibaud_price_ttc"]) },
-  ];
-
-  const competitors = competitorsAll
-    .filter((c) => c.price !== null)
-    .map((c) => ({ name: c.name, price: c.price as number }));
-
-  const bestCompetitor =
-    competitors.length > 0
-      ? competitors.reduce((m, c) => (c.price < m.price ? c : m), competitors[0])
-      : null;
-
+function computeStatusAndGap(ourPriceTtc: number | null, best: CompetitorPrice | null) {
   const gapPct =
-    ourPrice !== null && bestCompetitor
-      ? ((ourPrice - bestCompetitor.price) / bestCompetitor.price) * 100
+    ourPriceTtc !== null && best
+      ? ((ourPriceTtc - best.price) / best.price) * 100
       : null;
 
-  let status: PositionRow["status"] = "no_data";
+  let status: BaseRow["status"] = "no_data";
   if (gapPct !== null) {
     if (gapPct > 5) status = "premium";
     else if (gapPct < -5) status = "underpriced";
     else status = "aligned";
   }
-
-  const rank =
-    ourPrice !== null && competitors.length > 0 ? computeRank(ourPrice, competitors) : null;
-
-  return {
-    sku: row["sku"],
-    label: row["label"] || null,
-    territory,
-
-    ourPrice,
-    competitors,
-    bestCompetitor,
-
-    gapPct,
-    status,
-
-    rank,
-    competitorCount: competitors.length,
-  };
+  return { gapPct, status };
 }
 
-function pct(part: number, total: number) {
-  if (!total) return "0%";
-  return `${Math.round((part / total) * 100)}%`;
+function chunkArray<T>(arr: T[], size: number) {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
 }
 
-const BAR_PALETTE = ["#0ea5e9", "#a855f7", "#f97316", "#22c55e", "#e11d48"];
+/**
+ * Essayez de lire des "prix estimés" (HT/TTC) de façon robuste,
+ * car les colonnes peuvent varier selon ton schema.
+ *
+ * Attendu idéal :
+ * - sku (ou code_article)
+ * - territory_code
+ * - price_ht / price_ttc (ou ht/ttc)
+ */
+function pickSku(row: any): string | null {
+  return (
+    (typeof row?.sku === "string" && row.sku) ||
+    (typeof row?.code_article === "string" && row.code_article) ||
+    (typeof row?.product_sku === "string" && row.product_sku) ||
+    null
+  );
+}
+
+function pickTerritory(row: any): string | null {
+  const t =
+    (typeof row?.territory_code === "string" && row.territory_code) ||
+    (typeof row?.territory === "string" && row.territory) ||
+    (typeof row?.destination === "string" && row.destination) ||
+    null;
+  return t ? String(t).toUpperCase() : null;
+}
+
+function pickHt(row: any): number | null {
+  return (
+    toNum(row?.price_ht) ??
+    toNum(row?.ht) ??
+    toNum(row?.estimated_ht) ??
+    toNum(row?.plv_ht) ??
+    null
+  );
+}
+
+function pickTtc(row: any): number | null {
+  return (
+    toNum(row?.price_ttc) ??
+    toNum(row?.ttc) ??
+    toNum(row?.estimated_ttc) ??
+    toNum(row?.plv_ttc) ??
+    null
+  );
+}
 
 export default function CompetitionPage() {
   const { variables } = useGlobalFilters();
 
-  const [rows, setRows] = React.useState<PositionRow[]>([]);
+  const [baseRows, setBaseRows] = React.useState<BaseRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const [search, setSearch] = React.useState("");
   const [territory, setTerritory] = React.useState(variables.territory_code || "FR");
-
   const [selectedSku, setSelectedSku] = React.useState<string>("");
-  const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
 
   const [extraFees, setExtraFees] = React.useState<Record<string, number>>({
     GP: 0,
@@ -213,12 +235,15 @@ export default function CompetitionPage() {
     if (variables.territory_code) setTerritory(variables.territory_code);
   }, [variables.territory_code]);
 
+  /**
+   * ✅ LOAD DB : ne dépend PAS de extraFees (sinon reload à chaque saisie).
+   */
   React.useEffect(() => {
     let active = true;
 
     const load = async () => {
       if (!SUPABASE_ENV_OK) {
-        setError("Supabase non configure (SUPABASE_ENV_OK=false).");
+        setError("Supabase non configuré (SUPABASE_ENV_OK=false).");
         return;
       }
 
@@ -226,96 +251,257 @@ export default function CompetitionPage() {
       setError(null);
 
       try {
-        // 1) Vue pricing principale
+        // 1) Vue pricing principale (source de base)
         const { data: viewData, error: viewError } = await supabase
           .from("v_export_pricing")
           .select("*")
           .eq("territory_code", territory)
           .limit(3000);
+
         if (!active) return;
         if (viewError) throw viewError;
 
-        const skus = Array.from(new Set((viewData || []).map((r: any) => r.sku).filter(Boolean)));
+        const rows0 = (viewData || []).filter((r: any) => r?.sku);
 
-        // 2) LPPR + coefficients de majoration
-        const [prodRes, coefRes] = await Promise.all([
-          supabase.from("products").select("code_article, tarif_lppr_eur").in("code_article", skus),
-          supabase.from("lpp_majoration_coefficients").select("territory_code, coef"),
-        ]);
-        const productsData = prodRes?.data || [];
-        const lpprCoefData = coefRes?.data || [];
-        if (prodRes?.error) console.warn("LPPR fetch error", prodRes.error);
-        if (coefRes?.error) console.warn("LPPR coef fetch error", coefRes.error);
+        const skus = Array.from(new Set(rows0.map((r: any) => String(r.sku)).filter(Boolean)));
+
+        // 2) LPPR + coefficients majoration
+        // ⚠️ .in() peut bloquer si trop de valeurs → chunk
+        const skuChunks = chunkArray(skus, 500);
+
+        const productsData: any[] = [];
+        for (const ch of skuChunks) {
+          const res = await supabase
+            .from("products")
+            .select("code_article, tarif_lppr_eur")
+            .in("code_article", ch);
+
+          if (res.error) console.warn("LPPR fetch error", res.error);
+          (res.data || []).forEach((x: any) => productsData.push(x));
+        }
+
+        const coefRes = await supabase.from("lpp_majoration_coefficients").select("territory_code, coef");
+        if (coefRes.error) console.warn("LPPR coef fetch error", coefRes.error);
+        const lpprCoefData = coefRes.data || [];
+
         const lpprMap = new Map<string, number>();
         (productsData || []).forEach((p: any) => {
-          if (p.code_article && Number.isFinite(Number(p.tarif_lppr_eur))) lpprMap.set(p.code_article, Number(p.tarif_lppr_eur));
+          if (p.code_article && Number.isFinite(Number(p.tarif_lppr_eur))) {
+            lpprMap.set(String(p.code_article), Number(p.tarif_lppr_eur));
+          }
         });
+
         const coefMap = new Map<string, number>();
         (lpprCoefData || []).forEach((c: any) => {
-          if (c.territory_code && Number.isFinite(Number(c.coef))) coefMap.set(c.territory_code, Number(c.coef));
+          if (c.territory_code && Number.isFinite(Number(c.coef))) {
+            coefMap.set(String(c.territory_code).toUpperCase(), Number(c.coef));
+          }
         });
 
-        // 3) Taxes / OM
+        // 3) TVA + OM/OMR
         const [vatRes, omRes] = await Promise.all([
           supabase.from("vat_rates").select("territory_code, rate"),
-          supabase.from("om_rates").select("territory_code, hs_code, rate"),
+          // ✅ schéma attendu côté toi : territory_code, hs4, om_rate, omr_rate, year
+          supabase.from("om_rates").select("territory_code, hs4, om_rate, omr_rate, year"),
         ]);
-        const vatData = vatRes?.data || [];
-        const omData = omRes?.data || [];
-        if (vatRes?.error) console.warn("VAT fetch error", vatRes.error);
-        if (omRes?.error) console.warn("OM fetch error", omRes.error);
+
+        if (vatRes.error) console.warn("VAT fetch error", vatRes.error);
+        if (omRes.error) console.warn("OM fetch error", omRes.error);
+
         const vatMap = new Map<string, number>();
-        (vatData || []).forEach((v: any) => {
-          if (v.territory_code && Number.isFinite(Number(v.rate))) vatMap.set(v.territory_code, Number(v.rate));
-        });
-        const omMap = new Map<string, number>();
-        (omData || []).forEach((o: any) => {
-          const key = `${o.territory_code || ""}:${o.hs_code || ""}`;
-          if (o.territory_code && Number.isFinite(Number(o.rate))) omMap.set(key, Number(o.rate));
+        (vatRes.data || []).forEach((v: any) => {
+          const code = String(v.territory_code || "").toUpperCase();
+          const rate = toNum(v.rate);
+          if (code && rate !== null) vatMap.set(code, rate);
         });
 
-        // 4) Mapping des lignes
-        const mapped = (viewData || [])
-          .filter((r: any) => r.sku)
-          .map((r: any) =>
-            computePosition(
-              {
-                sku: r.sku,
-                label: r.label,
-                territory_code: r.territory_code,
-                plv_metropole_ttc: r.plv_metropole_ttc,
-                plv_om_ttc: r.plv_om_ttc,
-                thuasne_price_ttc: r.thuasne_price_ttc,
-                donjoy_price_ttc: r.donjoy_price_ttc,
-                gibaud_price_ttc: r.gibaud_price_ttc,
-                hs_code: r.hs_code,
-              } as CsvRow,
-              territory,
-            ),
-          )
-          .map((m, idx) => {
-            const vatRate = vatMap.get(m.territory) ?? null;
-            const hs = (viewData || [])[idx]?.hs_code || "";
-            const omKeyExact = `${m.territory}:${hs}`;
-            const omKeyTerritoryOnly = `${m.territory}:`;
-            const omRate = omMap.get(omKeyExact) ?? omMap.get(omKeyTerritoryOnly) ?? null;
-            const lpprBase = lpprMap.get(m.sku) ?? null;
-            const coef = coefMap.get(m.territory) ?? 1;
-            const lpprDrom = lpprBase !== null ? lpprBase * coef : null;
-            const extraFee = extraFees[m.territory] ?? 0;
-            const tax = m.ourPrice !== null && vatRate !== null ? (m.ourPrice * vatRate) / 100 : 0;
-            const om = m.ourPrice !== null && omRate !== null ? (m.ourPrice * omRate) / 100 : 0;
-            const recommendedTtc = m.ourPrice !== null ? m.ourPrice + tax + om + extraFee : null;
-            return { ...m, vatRate, omRate, lpprMetropole: lpprBase, lpprDrom, extraFee, recommendedTtc };
-          });
+        // OM/OMR : on garde la ligne la plus récente (max year) par (territory, hs4)
+        const omMap = new Map<string, { om: number | null; omr: number | null; year: number | null }>();
+        (omRes.data || []).forEach((o: any) => {
+          const code = String(o.territory_code || "").toUpperCase();
+          const hs4 = String(o.hs4 || "");
+          const key = `${code}:${hs4}`;
+          const year = toNum(o.year) ?? null;
 
-        setRows(mapped);
+          const cur = omMap.get(key);
+          const curYear = cur?.year ?? -1;
+          const nextYear = year ?? -1;
+
+          if (!cur || nextYear >= curYear) {
+            omMap.set(key, {
+              om: toNum(o.om_rate),
+              omr: toNum(o.omr_rate),
+              year,
+            });
+          }
+        });
+
+        // 4) Prix estimés (table custom) — on essaye, sinon fallback silencieux
+        const priceEstMap = new Map<string, { ht: number | null; ttc: number | null }>();
+
+        try {
+          // tentative “propre” : territory_code + sku
+          let estRows: any[] = [];
+
+          // on essaye plusieurs patterns (colonnes inconnues)
+          const tryQueries: Array<() => Promise<{ data: any[] | null; error: any }>> = [
+            () => supabase.from(PRICE_EST_TABLE).select("*").eq("territory_code", territory).in("sku", skus.slice(0, 500)),
+            () => supabase.from(PRICE_EST_TABLE).select("*").eq("territory_code", territory).in("code_article", skus.slice(0, 500)),
+            () => supabase.from(PRICE_EST_TABLE).select("*").eq("territory_code", territory).limit(5000),
+            () => supabase.from(PRICE_EST_TABLE).select("*").limit(5000),
+          ];
+
+          let lastErr: any = null;
+          for (const q of tryQueries) {
+            const res = await q();
+            if (!res.error) {
+              estRows = (res.data || []) as any[];
+              lastErr = null;
+              break;
+            }
+            lastErr = res.error;
+          }
+          if (lastErr) {
+            // table absente ou colonnes différentes : on ignore
+            console.warn("Price estimate fetch skipped:", lastErr?.message || lastErr);
+          }
+
+          for (const r of estRows) {
+            const sku = pickSku(r);
+            const terr = pickTerritory(r) || territory.toUpperCase();
+            if (!sku) continue;
+
+            const key = `${terr}:${sku}`;
+            priceEstMap.set(key, { ht: pickHt(r), ttc: pickTtc(r) });
+          }
+        } catch (e) {
+          console.warn("Price estimate fetch skipped:", e);
+        }
+
+        // 5) Mapping rows (sans extraFee / reco finale dépendante)
+        const mapped: BaseRow[] = rows0.map((r: any) => {
+          const sku = String(r.sku);
+          const label = (r.label ?? null) as string | null;
+          const terr = String(r.territory_code || territory).toUpperCase();
+
+          const plvMetropoleTtc = toNum(r.plv_metropole_ttc);
+          const plvOmTtc = toNum(r.plv_om_ttc);
+
+          // concurrents
+          const competitorsAll = [
+            { name: "Thuasne", price: toNum(r.thuasne_price_ttc) },
+            { name: "Donjoy", price: toNum(r.donjoy_price_ttc) },
+            { name: "Gibaud", price: toNum(r.gibaud_price_ttc) },
+          ];
+
+          const competitors = competitorsAll
+            .filter((c) => c.price !== null)
+            .map((c) => ({ name: c.name, price: c.price as number }));
+
+          const bestCompetitor =
+            competitors.length > 0
+              ? competitors.reduce((m, c) => (c.price < m.price ? c : m), competitors[0])
+              : null;
+
+          // HS
+          const hsCode = (r.hs_code ? String(r.hs_code) : null) as string | null;
+          const hs4 = hs4FromHs(hsCode);
+
+          // prix Orliman TTC de base (vue)
+          const plvFallbackTtc =
+            terr === "FR"
+              ? plvMetropoleTtc
+              : (plvOmTtc ?? plvMetropoleTtc);
+
+          // prix estimés (si dispo) — on surcharge si on trouve
+          const estKey = `${terr}:${sku}`;
+          const est = priceEstMap.get(estKey) || null;
+
+          const ourPriceTtc = (est?.ttc ?? plvFallbackTtc) ?? null;
+          const ourPriceSource: BaseRow["ourPriceSource"] =
+            est?.ttc !== null && est?.ttc !== undefined
+              ? "estimate"
+              : plvFallbackTtc !== null
+              ? "plv"
+              : "none";
+
+          const vatRate = vatMap.get(terr) ?? null;
+
+          // base HT pour reco : priorité HT estimé, sinon dérivé depuis TTC (si TVA connue)
+          let baseHtForReco: number | null = est?.ht ?? null;
+          let baseHtSource: BaseRow["baseHtSource"] = baseHtForReco !== null ? "estimate_ht" : "none";
+
+          if (baseHtForReco === null && ourPriceTtc !== null && vatRate !== null) {
+            baseHtForReco = ourPriceTtc / (1 + vatRate / 100);
+            baseHtSource = "derived_from_ttc";
+          }
+
+          const { gapPct, status } = computeStatusAndGap(ourPriceTtc, bestCompetitor);
+          const rank = ourPriceTtc !== null && competitors.length > 0 ? computeRank(ourPriceTtc, competitors) : null;
+
+          // LPPR
+          const lpprBase = lpprMap.get(sku) ?? null;
+          const coef = coefMap.get(terr) ?? 1;
+          const lpprDrom = lpprBase !== null ? lpprBase * coef : null;
+
+          // OM/OMR (par hs4)
+          let omRate: number | null = null;
+          let omrRate: number | null = null;
+          let omYear: number | null = null;
+
+          if (hs4) {
+            const omKey = `${terr}:${hs4}`;
+            const omRow = omMap.get(omKey);
+            omRate = omRow?.om ?? null;
+            omrRate = omRow?.omr ?? null;
+            omYear = omRow?.year ?? null;
+          }
+
+          return {
+            sku,
+            label,
+            territory: terr,
+
+            plvMetropoleTtc,
+            plvOmTtc,
+
+            hsCode,
+            hs4,
+
+            competitors,
+            bestCompetitor,
+
+            ourPriceTtc,
+            ourPriceSource,
+
+            baseHtForReco,
+            baseHtSource,
+
+            gapPct,
+            status,
+            rank,
+            competitorCount: competitors.length,
+
+            vatRate,
+            omRate,
+            omrRate,
+
+            lpprMetropole: lpprBase,
+            lpprDrom,
+
+            omYear,
+          };
+        });
+
+        if (!active) return;
+
+        setBaseRows(mapped);
         if (selectedSku && !mapped.some((m) => m.sku === selectedSku)) setSelectedSku("");
       } catch (err: any) {
-        console.error("Chargement v_export_pricing echoue", err);
+        console.error("Chargement concurrence échoué", err);
         if (!active) return;
         setError(err?.message || "Erreur chargement concurrence (v_export_pricing)");
-        setRows([]);
+        setBaseRows([]);
       } finally {
         if (active) setIsLoading(false);
       }
@@ -326,32 +512,35 @@ export default function CompetitionPage() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [territory, extraFees]);
+  }, [territory]);
+
+  /**
+   * ✅ DERIVE rows avec extraFees (pas de reload DB)
+   * Reco TTC = HT * (1 + (TVA + OM + OMR)/100) + extraFee
+   * (tu peux ajuster si tu veux un autre ordre de calcul)
+   */
+  const rows: PositionRow[] = React.useMemo(() => {
+    return baseRows.map((r) => {
+      const extraFee = extraFees[r.territory] ?? 0;
+      const vat = r.vatRate ?? 0;
+      const om = r.omRate ?? 0;
+      const omr = r.omrRate ?? 0;
+
+      const baseHt = r.baseHtForReco;
+      const recommendedTtc =
+        baseHt !== null
+          ? baseHt * (1 + (vat + om + omr) / 100) + extraFee
+          : null;
+
+      return { ...r, extraFee, recommendedTtc };
+    });
+  }, [baseRows, extraFees]);
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((r) => (r.sku + " " + (r.label || "")).toLowerCase().includes(q));
   }, [rows, search]);
-
-  const dromSummary = React.useMemo(() => {
-    return DROM_CODES.map((code) => {
-      const terrRows = rows.filter((r) => (r.territory || "").toUpperCase() === code);
-      const count = terrRows.length;
-      const finiteGaps = terrRows.filter((r) => Number.isFinite(r.gapPct)).map((r) => r.gapPct as number);
-      const avgGap = finiteGaps.length ? finiteGaps.reduce((s, g) => s + g, 0) / finiteGaps.length : null;
-      const best = terrRows
-        .filter((r) => Number.isFinite(r.gapPct))
-        .sort((a, b) => (a.gapPct as number) - (b.gapPct as number))[0];
-      return {
-        territory: code,
-        count,
-        avgGap: Number.isFinite(avgGap) ? avgGap : null,
-        bestLabel: best?.label || best?.sku || null,
-        bestGap: best?.gapPct ?? null,
-      };
-    });
-  }, [rows]);
 
   const selected = React.useMemo(() => {
     if (!selectedSku) return null;
@@ -367,7 +556,7 @@ export default function CompetitionPage() {
     const underpriced = base.filter((r) => r.status === "underpriced").length;
     const noData = base.filter((r) => r.status === "no_data").length;
 
-    const withGap = base.filter((r) => Number.isFinite(r.gapPct)).map((r) => r.gapPct as number);
+    const withGap = base.filter((r) => Number.isFinite(r.gapPct as number)).map((r) => r.gapPct as number);
     const avgGap = withGap.length ? withGap.reduce((a, b) => a + b, 0) / withGap.length : null;
 
     const ranks = base.filter((r) => r.rank !== null).map((r) => r.rank as number);
@@ -379,10 +568,29 @@ export default function CompetitionPage() {
     return { total, premium, aligned, underpriced, noData, avgGap, rankCounts };
   }, [filtered]);
 
+  const dromSummary = React.useMemo(() => {
+    return DROM_CODES.map((code) => {
+      const terrRows = rows.filter((r) => (r.territory || "").toUpperCase() === code);
+      const count = terrRows.length;
+      const finiteGaps = terrRows.filter((r) => Number.isFinite(r.gapPct as number)).map((r) => r.gapPct as number);
+      const avgGap = finiteGaps.length ? finiteGaps.reduce((s, g) => s + g, 0) / finiteGaps.length : null;
+      const best = terrRows
+        .filter((r) => Number.isFinite(r.gapPct as number))
+        .sort((a, b) => (a.gapPct as number) - (b.gapPct as number))[0];
+      return {
+        territory: code,
+        count,
+        avgGap: Number.isFinite(avgGap) ? avgGap : null,
+        bestLabel: best?.label || best?.sku || null,
+        bestGap: best?.gapPct ?? null,
+      };
+    });
+  }, [rows]);
+
   const priceBarsForSelected = React.useMemo(() => {
     if (!selected) return [];
     const bars: { name: string; price: number }[] = [];
-    if (selected.ourPrice !== null) bars.push({ name: "Orliman", price: selected.ourPrice });
+    if (selected.ourPriceTtc !== null) bars.push({ name: "Orliman", price: selected.ourPriceTtc });
     selected.competitors.forEach((c) => bars.push({ name: c.name, price: c.price }));
     return bars;
   }, [selected]);
@@ -392,10 +600,13 @@ export default function CompetitionPage() {
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.35em] text-cyan-300/90">Concurrence & positionnement</p>
+            <p className="text-xs uppercase tracking-[0.35em] text-cyan-300/90">
+              Concurrence & positionnement
+            </p>
             <h1 className="text-3xl font-bold text-slate-900">Dashboard concurrence</h1>
             <p className="text-sm text-slate-600">
-              Données via la vue Supabase <span className="font-mono">v_export_pricing</span> → dashboard (fallback si Edge Function).
+              Source: <span className="font-mono">v_export_pricing</span> + (optionnel){" "}
+              <span className="font-mono">{PRICE_EST_TABLE}</span> (prix estimés HT/TTC).
             </p>
           </div>
 
@@ -405,14 +616,14 @@ export default function CompetitionPage() {
                 <SelectValue placeholder="Territoire" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="FR">Metropole (FR)</SelectItem>
+                <SelectItem value="FR">Métropole (FR)</SelectItem>
                 <SelectItem value="GP">Guadeloupe (GP)</SelectItem>
                 <SelectItem value="MQ">Martinique (MQ)</SelectItem>
                 <SelectItem value="GF">Guyane (GF)</SelectItem>
-                <SelectItem value="RE">Reunion (RE)</SelectItem>
+                <SelectItem value="RE">Réunion (RE)</SelectItem>
                 <SelectItem value="YT">Mayotte (YT)</SelectItem>
                 <SelectItem value="SPM">Saint-Pierre-et-Miquelon (SPM)</SelectItem>
-                <SelectItem value="BL">Saint-Barthelemy (BL)</SelectItem>
+                <SelectItem value="BL">Saint-Barthélemy (BL)</SelectItem>
                 <SelectItem value="MF">Saint-Martin (MF)</SelectItem>
               </SelectContent>
             </Select>
@@ -447,24 +658,26 @@ export default function CompetitionPage() {
           </Card>
         ) : null}
 
-          <Card className="border-transparent shadow bg-gradient-to-r from-orange-50 via-white to-amber-50">
-            <CardHeader>
-              <CardTitle className="text-sm font-semibold text-amber-700">Frais supplémentaires par DROM (€/commande)</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
-              {DROM_CODES.map((code) => (
-                <div key={code} className="space-y-1">
-                  <div className="text-xs text-muted-foreground font-medium">{code}</div>
-                  <Input
-                    type="number"
-                    value={extraFees[code] ?? 0}
-                    onChange={(e) => handleExtraFeeChange(code, e.target.value)}
-                    className="h-9"
-                  />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+        <Card className="border-transparent shadow bg-gradient-to-r from-orange-50 via-white to-amber-50">
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold text-amber-700">
+              Frais supplémentaires par DROM (€/commande)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {DROM_CODES.map((code) => (
+              <div key={code} className="space-y-1">
+                <div className="text-xs text-muted-foreground font-medium">{code}</div>
+                <Input
+                  type="number"
+                  value={extraFees[code] ?? 0}
+                  onChange={(e) => handleExtraFeeChange(code, e.target.value)}
+                  className="h-9"
+                />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
           <Card className="border-transparent shadow bg-gradient-to-br from-sky-50 via-white to-sky-100">
@@ -539,6 +752,25 @@ export default function CompetitionPage() {
                       <div className="font-mono text-xs text-muted-foreground">{selected.sku}</div>
                       <div className="text-lg font-semibold">{selected.label || "Produit"}</div>
                       <div className="text-sm text-muted-foreground">Territoire: {selected.territory}</div>
+
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Prix Orliman:{" "}
+                        <span className="font-semibold">
+                          {selected.ourPriceSource === "estimate"
+                            ? "estimé"
+                            : selected.ourPriceSource === "plv"
+                            ? "PLV"
+                            : "n/a"}
+                        </span>{" "}
+                        · Base HT reco:{" "}
+                        <span className="font-semibold">
+                          {selected.baseHtSource === "estimate_ht"
+                            ? "HT estimé"
+                            : selected.baseHtSource === "derived_from_ttc"
+                            ? "dérivé TTC"
+                            : "n/a"}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -552,7 +784,7 @@ export default function CompetitionPage() {
                             ? "text-emerald-600 border-emerald-300"
                             : selected.status === "aligned"
                             ? "text-blue-600 border-blue-300"
-                            : "text-slate-500 border-slate-300"
+                            : "text-slate-500 border-slate-300",
                         )}
                       >
                         {selected.status}
@@ -575,8 +807,19 @@ export default function CompetitionPage() {
                       </CardHeader>
                       <CardContent className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <div className="font-medium">Orliman</div>
-                          <div className="font-semibold">{money(selected.ourPrice)}</div>
+                          <div className="font-medium">Orliman (TTC)</div>
+                          <div className="font-semibold">{money(selected.ourPriceTtc)}</div>
+                        </div>
+
+                        <div className="text-xs text-muted-foreground">
+                          TVA: {selected.vatRate ?? "n/a"}% · OM: {selected.omRate ?? "n/a"}% · OMR:{" "}
+                          {selected.omrRate ?? "n/a"}%{" "}
+                          {selected.omYear ? `· (année ${selected.omYear})` : ""}
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-slate-700">Reco TTC (taxes + OM + fees)</div>
+                          <div className="text-sm font-semibold">{money(selected.recommendedTtc)}</div>
                         </div>
 
                         {selected.competitors.length ? (
@@ -602,7 +845,10 @@ export default function CompetitionPage() {
                       <CardContent className="h-[220px]">
                         {priceBarsForSelected.length ? (
                           <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={priceBarsForSelected} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                            <BarChart
+                              data={priceBarsForSelected}
+                              margin={{ top: 8, right: 8, left: 0, bottom: 8 }}
+                            >
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis dataKey="name" />
                               <YAxis />
@@ -611,7 +857,9 @@ export default function CompetitionPage() {
                             </BarChart>
                           </ResponsiveContainer>
                         ) : (
-                          <div className="text-sm text-muted-foreground">Pas assez de données pour afficher un graphe.</div>
+                          <div className="text-sm text-muted-foreground">
+                            Pas assez de données pour afficher un graphe.
+                          </div>
                         )}
                       </CardContent>
                     </Card>
@@ -621,34 +869,38 @@ export default function CompetitionPage() {
             </CardContent>
           </Card>
 
-        <Card className="border-slate-200 shadow">
-          <CardHeader>
-            <CardTitle>Distribution rang Orliman</CardTitle>
-          </CardHeader>
-          <CardContent className="h-[320px]">
-            {isLoading ? (
-              <Skeleton className="h-full w-full" />
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={summary.rankCounts} layout="vertical" margin={{ top: 12, right: 24, left: 24, bottom: 12 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis type="category" dataKey="rank" width={32} />
-                  <Tooltip />
-                  <Bar dataKey="count" radius={[0, 8, 8, 0]}>
-                    {summary.rankCounts.map((_, idx) => (
-                      <Cell key={idx} fill={BAR_PALETTE[idx % BAR_PALETTE.length]} />
-                    ))}
-                  </Bar>
-                  <LabelList dataKey="count" position="right" offset={8} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-            <div className="pt-2 text-xs text-muted-foreground">
-              Basé sur produits avec prix Orliman + &gt;=1 prix concurrent.
-            </div>
-          </CardContent>
-        </Card>
+          <Card className="border-slate-200 shadow">
+            <CardHeader>
+              <CardTitle>Distribution rang Orliman</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[320px]">
+              {isLoading ? (
+                <Skeleton className="h-full w-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={summary.rankCounts}
+                    layout="vertical"
+                    margin={{ top: 12, right: 24, left: 24, bottom: 12 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis type="category" dataKey="rank" width={32} />
+                    <Tooltip />
+                    <Bar dataKey="count" radius={[0, 8, 8, 0]}>
+                      {summary.rankCounts.map((_, idx) => (
+                        <Cell key={idx} fill={BAR_PALETTE[idx % BAR_PALETTE.length]} />
+                      ))}
+                    </Bar>
+                    <LabelList dataKey="count" position="right" offset={8} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+              <div className="pt-2 text-xs text-muted-foreground">
+                Basé sur produits avec prix Orliman + &gt;=1 prix concurrent.
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <Card className="border-slate-200 shadow">
@@ -667,7 +919,8 @@ export default function CompetitionPage() {
                   Gap moyen: {d.avgGap !== null ? `${d.avgGap.toFixed(1)}%` : "n/a"}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Meilleur: {d.bestLabel || "n/a"} {d.bestGap !== null ? `(${d.bestGap.toFixed(1)}%)` : ""}
+                  Meilleur: {d.bestLabel || "n/a"}{" "}
+                  {d.bestGap !== null ? `(${(d.bestGap as number).toFixed(1)}%)` : ""}
                 </div>
               </div>
             ))}
@@ -689,17 +942,17 @@ export default function CompetitionPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Produit</TableHead>
-                  <TableHead className="text-right">Prix Orliman</TableHead>
-                  <TableHead className="text-right">Reco TTC (taxes/OM/fees)</TableHead>
-                  <TableHead className="text-right">LPPR FR</TableHead>
-                  <TableHead className="text-right">LPPR DROM</TableHead>
-                  <TableHead>Best concurrent</TableHead>
-                  <TableHead className="text-right">Gap %</TableHead>
-                  <TableHead className="text-right">Rang</TableHead>
-                  <TableHead className="text-right"># conc.</TableHead>
-                  <TableHead>Statut</TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Produit</TableHead>
+                    <TableHead className="text-right">Prix Orliman (TTC)</TableHead>
+                    <TableHead className="text-right">Reco TTC (taxes/OM/fees)</TableHead>
+                    <TableHead className="text-right">LPPR FR</TableHead>
+                    <TableHead className="text-right">LPPR DROM</TableHead>
+                    <TableHead>Best concurrent</TableHead>
+                    <TableHead className="text-right">Gap %</TableHead>
+                    <TableHead className="text-right">Rang</TableHead>
+                    <TableHead className="text-right"># conc.</TableHead>
+                    <TableHead>Statut</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -711,16 +964,30 @@ export default function CompetitionPage() {
                       style={{ cursor: "pointer" }}
                     >
                       <TableCell className="font-mono text-xs">{row.sku}</TableCell>
-                      <TableCell className="font-medium">{row.label || "—"}</TableCell>
-                      <TableCell className="text-right">{money(row.ourPrice)}</TableCell>
+                      <TableCell className="font-medium">
+                        {row.label || "—"}
+                        <div className="text-[10px] text-muted-foreground">
+                          Source prix: {row.ourPriceSource} · Base HT: {row.baseHtSource}
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="text-right">{money(row.ourPriceTtc)}</TableCell>
+
                       <TableCell className="text-right">
                         {row.recommendedTtc !== null ? money(row.recommendedTtc) : "—"}
                         <div className="text-[10px] text-muted-foreground">
-                          TVA: {row.vatRate ?? "n/a"}% · OM: {row.omRate ?? "n/a"}% · Fees: {row.extraFee ?? 0}€
+                          TVA: {row.vatRate ?? "n/a"}% · OM: {row.omRate ?? "n/a"}% · OMR:{" "}
+                          {row.omrRate ?? "n/a"}% · Fees: {row.extraFee ?? 0}€
                         </div>
                       </TableCell>
-                      <TableCell className="text-right">{row.lpprMetropole !== null ? money(row.lpprMetropole) : "—"}</TableCell>
-                      <TableCell className="text-right">{row.lpprDrom !== null ? money(row.lpprDrom) : "—"}</TableCell>
+
+                      <TableCell className="text-right">
+                        {row.lpprMetropole !== null ? money(row.lpprMetropole) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {row.lpprDrom !== null ? money(row.lpprDrom) : "—"}
+                      </TableCell>
+
                       <TableCell>
                         {row.bestCompetitor ? (
                           <div>
@@ -731,6 +998,7 @@ export default function CompetitionPage() {
                           "—"
                         )}
                       </TableCell>
+
                       <TableCell
                         className={cn(
                           "text-right",
@@ -738,13 +1006,15 @@ export default function CompetitionPage() {
                             ? "text-amber-600"
                             : row.gapPct !== null && row.gapPct < -5
                             ? "text-emerald-700"
-                            : "text-slate-700"
+                            : "text-slate-700",
                         )}
                       >
                         {row.gapPct !== null ? `${row.gapPct.toFixed(1)}%` : "—"}
                       </TableCell>
+
                       <TableCell className="text-right">{row.rank ?? "—"}</TableCell>
                       <TableCell className="text-right">{row.competitorCount}</TableCell>
+
                       <TableCell>
                         <Badge
                           variant="outline"
@@ -756,7 +1026,7 @@ export default function CompetitionPage() {
                               ? "text-emerald-600 border-emerald-300"
                               : row.status === "aligned"
                               ? "text-blue-600 border-blue-300"
-                              : "text-slate-500 border-slate-300"
+                              : "text-slate-500 border-slate-300",
                           )}
                         >
                           {row.status}
@@ -767,7 +1037,7 @@ export default function CompetitionPage() {
 
                   {filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={11} className="text-center text-sm text-muted-foreground">
                         Aucun produit trouvé.
                       </TableCell>
                     </TableRow>
@@ -785,4 +1055,3 @@ export default function CompetitionPage() {
     </MainLayout>
   );
 }
-
