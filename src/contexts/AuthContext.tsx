@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
 type AuthCtx = {
   user: User | null;
@@ -21,31 +21,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // charge la session au démarrage + écoute les changements
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session ?? null);
-      setUser(data.session?.user ?? null);
-      setIsLoading(false);
-    });
+    let alive = true;
+
+    (async () => {
+      try {
+        if (!SUPABASE_ENV_OK) {
+          if (!alive) return;
+          setSession(null);
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
+        const { data } = await supabase.auth.getSession();
+        if (!alive) return;
+        setSession(data.session ?? null);
+        setUser(data.session?.user ?? null);
+        setIsLoading(false);
+      } catch {
+        if (!alive) return;
+        setSession(null);
+        setUser(null);
+        setIsLoading(false);
+      }
+    })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (!alive) return;
       setSession(newSession);
       setUser(newSession?.user ?? null);
       setIsLoading(false);
     });
 
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      alive = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const value = useMemo<AuthCtx>(
     () => ({
       user,
       session,
-      isAuthenticated: !!session,
+      isAuthenticated: !!session?.user,
       isLoading,
 
       async signIn(email, password) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password }); // :contentReference[oaicite:1]{index=1}
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         return { error: error ? error.message : null };
       },
 
@@ -54,8 +76,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
 
       async sendPasswordLink(email) {
+        // ⚠️ IMPORTANT: ce redirectTo doit être autorisé dans Supabase (Auth > URL Configuration)
         const redirectTo = `${window.location.origin}/set-password`;
-        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo }); // :contentReference[oaicite:2]{index=2}
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
         return { error: error ? error.message : null };
       },
 
