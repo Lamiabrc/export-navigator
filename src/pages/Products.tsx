@@ -11,12 +11,25 @@ function safeText(v: any) {
   return String(v);
 }
 
+const eur = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+const pct = new Intl.NumberFormat("fr-FR", { style: "percent", maximumFractionDigits: 2 });
+
+function fmtEur(v: any) {
+  const n = typeof v === "number" ? v : v === "" || v == null ? null : Number(v);
+  return Number.isFinite(n as number) ? eur.format(n as number) : "";
+}
+function fmtPct(v: any) {
+  const n = typeof v === "number" ? v : v === "" || v == null ? null : Number(v);
+  return Number.isFinite(n as number) ? pct.format((n as number) / 100) : "";
+}
+
 export default function Products() {
   const { products, stats, isLoading, error, refresh } = useProducts({ pageSize: 5000 });
   const [q, setQ] = React.useState("");
+  const deferredQ = React.useDeferredValue(q);
 
   const filtered = React.useMemo(() => {
-    const query = q.trim().toLowerCase();
+    const query = deferredQ.trim().toLowerCase();
     if (!query) return products;
 
     return products.filter((p: any) => {
@@ -38,7 +51,7 @@ export default function Products() {
 
       return hay.includes(query);
     });
-  }, [products, q]);
+  }, [products, deferredQ]);
 
   return (
     <MainLayout contentClassName="md:p-8">
@@ -73,25 +86,27 @@ export default function Products() {
             <Badge variant="secondary">Nouveautés: {stats.nouveautes}</Badge>
             <Badge variant="secondary">LPPR: {stats.lppr}</Badge>
             <Badge variant="secondary">TVA OK: {stats.withTva}</Badge>
+            <Badge variant="outline">Filtrés: {filtered.length}</Badge>
           </div>
         </div>
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-        <div className="overflow-auto rounded-xl border">
+        <div className="overflow-auto rounded-xl border max-h-[70vh]">
           <table className="min-w-[1100px] w-full text-sm">
-            <thead className="bg-muted/50">
+            <thead className="bg-muted/50 sticky top-0 z-10">
               <tr className="text-left">
                 <th className="p-3">Code article</th>
                 <th className="p-3">Libellé</th>
-                <th className="p-3">TVA %</th>
+                <th className="p-3">TVA</th>
                 <th className="p-3">Tarif cat. 2025</th>
-                <th className="p-3">LPPR (€)</th>
+                <th className="p-3">LPPR</th>
                 <th className="p-3">HS code</th>
                 <th className="p-3">Classement</th>
                 <th className="p-3">Fabricant</th>
               </tr>
             </thead>
+
             <tbody>
               {isLoading ? (
                 <tr>
@@ -106,20 +121,38 @@ export default function Products() {
                   </td>
                 </tr>
               ) : (
-                filtered.slice(0, 500).map((p: any) => (
-                  <tr key={p.id} className="border-t">
-                    <td className="p-3 font-medium">{safeText(p.code_article)}</td>
-                    <td className="p-3">{safeText(p.libelle_article)}</td>
-                    <td className="p-3">{p.tva_percent ?? ""}</td>
-                    <td className="p-3">{p.tarif_catalogue_2025 ?? ""}</td>
-                    <td className="p-3">{p.tarif_lppr_eur ?? ""}</td>
-                    <td className="p-3">{safeText(p.hs_code)}</td>
-                    <td className="p-3">
-                      {safeText(p.classement_groupe || p.classement_produit_libelle || p.classement_detail)}
-                    </td>
-                    <td className="p-3">{safeText(p.nom_du_fabricant)}</td>
-                  </tr>
-                ))
+                filtered.slice(0, 500).map((p: any) => {
+                  const missingTva = p.tva_percent == null;
+                  const missingHs = !safeText(p.hs_code);
+                  const missingTarif = p.tarif_catalogue_2025 == null;
+
+                  return (
+                    <tr key={p.id} className="border-t hover:bg-muted/30 transition-colors">
+                      <td className="p-3 font-medium">{safeText(p.code_article)}</td>
+                      <td className="p-3">{safeText(p.libelle_article)}</td>
+
+                      <td className={`p-3 ${missingTva ? "text-red-600 font-medium" : ""}`}>
+                        {missingTva ? "Manquant" : fmtPct(p.tva_percent)}
+                      </td>
+
+                      <td className={`p-3 ${missingTarif ? "text-red-600 font-medium" : ""}`}>
+                        {missingTarif ? "Manquant" : fmtEur(p.tarif_catalogue_2025)}
+                      </td>
+
+                      <td className="p-3">{p.tarif_lppr_eur != null ? fmtEur(p.tarif_lppr_eur) : ""}</td>
+
+                      <td className={`p-3 ${missingHs ? "text-red-600 font-medium" : ""}`}>
+                        {missingHs ? "Manquant" : safeText(p.hs_code)}
+                      </td>
+
+                      <td className="p-3">
+                        {safeText(p.classement_groupe || p.classement_produit_libelle || p.classement_detail)}
+                      </td>
+
+                      <td className="p-3">{safeText(p.nom_du_fabricant)}</td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
