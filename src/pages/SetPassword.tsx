@@ -32,10 +32,10 @@ export default function SetPassword() {
 
   const urlInfo = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const type = params.get("type"); // souvent "recovery"
-    const errorDesc = params.get("error_description") || params.get("error");
-    return { code, type, errorDesc };
+    return {
+      code: params.get("code"),
+      errorDesc: params.get("error_description") || params.get("error"),
+    };
   }, []);
 
   useEffect(() => {
@@ -48,21 +48,19 @@ export default function SetPassword() {
       try {
         if (!SUPABASE_ENV_OK) throw new Error("Supabase non configuré.");
 
-        // Si Supabase a déjà mis un message d'erreur dans l'URL (rare mais possible)
         if (urlInfo.errorDesc) {
           throw new Error(decodeURIComponent(urlInfo.errorDesc));
         }
 
-        // ✅ Cas principal (PKCE): /set-password?code=...
+        // ✅ Cas principal: /set-password?code=...
         if (urlInfo.code) {
           const { error: exErr } = await supabase.auth.exchangeCodeForSession(urlInfo.code);
           if (exErr) throw exErr;
 
-          // Nettoie l'URL pour éviter un re-exchange au refresh
+          // Nettoie l’URL après échange (évite re-exchange au refresh)
           window.history.replaceState({}, document.title, window.location.pathname);
         }
 
-        // Vérifie qu'on a bien une session derrière
         const { data, error: sessErr } = await supabase.auth.getSession();
         if (sessErr) throw sessErr;
 
@@ -72,7 +70,7 @@ export default function SetPassword() {
         setLinkLoading(false);
 
         if (!ok) {
-          setError("Lien invalide ou expiré. Redemande un lien depuis 'Mot de passe oublié'.");
+          setError("Lien invalide ou expiré. Redemande un lien.");
         }
       } catch (e) {
         if (!alive) return;
@@ -95,7 +93,6 @@ export default function SetPassword() {
     if (p1.length < 8) return setError("Mot de passe trop court (min 8).");
     if (p1 !== p2) return setError("Les mots de passe ne correspondent pas.");
 
-    // ✅ garde-fou: il faut une session active (via exchange)
     if (!linkOk || !isAuthenticated) {
       return setError("Session manquante. Ouvre à nouveau le lien reçu par email ou redemande un lien.");
     }
@@ -107,7 +104,6 @@ export default function SetPassword() {
     navigate("/hub", { replace: true });
   };
 
-  // Loading global + loading lien
   if (isLoading || linkLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50">
@@ -133,12 +129,9 @@ export default function SetPassword() {
         {error ? <p className="text-sm text-red-300">{error}</p> : null}
 
         {done ? (
-          <p>Mot de passe défini ✅ Redirection…</p>
+          <p>Mot de passe défini ✅</p>
         ) : !linkOk ? (
           <div className="space-y-3">
-            <p className="text-sm text-slate-300">
-              Le lien n’est pas valide (ou a expiré). Redemande un lien depuis la page “Mot de passe oublié”.
-            </p>
             <Button className="w-full" variant="outline" onClick={() => navigate("/forgot-password", { replace: true })}>
               Redemander un lien
             </Button>
