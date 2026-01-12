@@ -23,7 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let alive = true;
 
-    (async () => {
+    const init = async () => {
       try {
         if (!SUPABASE_ENV_OK) {
           if (!alive) return;
@@ -33,10 +33,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        const { data } = await supabase.auth.getSession();
+        const { data, error } = await supabase.auth.getSession();
         if (!alive) return;
-        setSession(data.session ?? null);
-        setUser(data.session?.user ?? null);
+
+        if (error) {
+          setSession(null);
+          setUser(null);
+        } else {
+          setSession(data.session ?? null);
+          setUser(data.session?.user ?? null);
+        }
         setIsLoading(false);
       } catch {
         if (!alive) return;
@@ -44,7 +50,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         setIsLoading(false);
       }
-    })();
+    };
+
+    void init();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       if (!alive) return;
@@ -67,22 +75,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
 
       async signIn(email, password) {
+        if (!SUPABASE_ENV_OK) return { error: "Supabase non configuré." };
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         return { error: error ? error.message : null };
       },
 
       async signOut() {
+        if (!SUPABASE_ENV_OK) return;
         await supabase.auth.signOut();
       },
 
       async sendPasswordLink(email) {
-        // ⚠️ IMPORTANT: ce redirectTo doit être autorisé dans Supabase (Auth > URL Configuration)
+        if (!SUPABASE_ENV_OK) return { error: "Supabase non configuré." };
         const redirectTo = `${window.location.origin}/set-password`;
         const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
         return { error: error ? error.message : null };
       },
 
       async setPassword(newPassword) {
+        if (!SUPABASE_ENV_OK) return { error: "Supabase non configuré." };
         const { error } = await supabase.auth.updateUser({ password: newPassword });
         return { error: error ? error.message : null };
       },
