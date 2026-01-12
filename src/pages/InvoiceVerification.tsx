@@ -284,7 +284,6 @@ export default function InvoiceVerification() {
 
       setParsed(invoice);
 
-      // auto destination si DOM détectable
       const autoDest = detectDestinationFromText((invoice as any).rawText || "");
       if (autoDest) setDestination(autoDest);
 
@@ -363,7 +362,6 @@ export default function InvoiceVerification() {
       const base = safeNum(li.amountHT);
       if (base <= 0) continue;
 
-      // exclure transport/transit et lignes OM facturées éventuelles
       if (isShippingLike(desc)) continue;
       if (isOmLike(desc)) continue;
 
@@ -373,7 +371,7 @@ export default function InvoiceVerification() {
       const hs4 = hs.slice(0, 4);
       const rateRow = ratesByHs4.get(hs4);
       const rateRaw = safeNum(rateRow?.om_rate ?? 0);
-      const rateFrac = normalizeRateToFraction(rateRaw); // ✅ corrige 12.50 vs 1250%
+      const rateFrac = normalizeRateToFraction(rateRaw);
       const om = base * rateFrac;
 
       computed.push({
@@ -401,7 +399,6 @@ export default function InvoiceVerification() {
     const z = getZoneFromDestination(destination);
     const terr = getTerritoryCodeFromDestination(destination);
 
-    // TVA / exonération (si ces champs existent dans ton extract)
     const billingCountry: string | null = inv.billingCountry ?? null;
     const tva = safeNum(inv.totalTVA);
     const hasMention = !!inv.vatExemptionMention;
@@ -417,7 +414,6 @@ export default function InvoiceVerification() {
       }
     }
 
-    // Transit (frais facturés par le transitaire)
     const transit: number | null = inv.transitFees ?? null;
     const transitSource: DetectionSource = (inv.transitDetectionSource as DetectionSource) || (transit ? "raw_text" : "none");
 
@@ -425,7 +421,6 @@ export default function InvoiceVerification() {
       alerts.push("Frais de transit / transport non détectés sur la facture (ou non présents).");
     }
 
-    // OM théorique (DROM uniquement)
     let omTheoreticalTotal: number | null = null;
     if (z === "DROM" && terr) {
       const computed = await buildOmLines(parsed, destination);
@@ -436,11 +431,9 @@ export default function InvoiceVerification() {
       omTheoreticalTotal = 0;
     }
 
-    // ✅ RÈGLE MÉTIER : OM facturé = frais de transit
     const omBilled = transit;
     const omBilledDetectionSource = transitSource;
 
-    // ✅ Verdict : défavorable si OM facturé (transit) < OM théorique
     let verdictOm: Verdict = "na";
     if (omTheoreticalTotal !== null && omBilled !== null) {
       verdictOm = omBilled < omTheoreticalTotal ? "defavorable" : "favorable";
@@ -465,7 +458,6 @@ export default function InvoiceVerification() {
 
     setResult(vr);
 
-    // tracking (local)
     if (inv.invoiceNumber) {
       const totalHT = safeNum(inv.totalHT);
       const transitFees = transit ?? null;
@@ -706,7 +698,7 @@ export default function InvoiceVerification() {
                       <span className="font-medium">{formatCurrency(safeNum((parsed as any).totalTVA))}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Transit (=> OM facturé)</span>
+                      <span className="text-muted-foreground">Transit (= OM facturé)</span>
                       <span className="font-medium">{formatCurrency(safeNum((parsed as any).transitFees))}</span>
                     </div>
                     <div className="flex justify-between font-medium text-base">
