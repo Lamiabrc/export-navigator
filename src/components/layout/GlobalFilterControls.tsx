@@ -10,6 +10,8 @@ import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+const ALL = "__all__";
+
 function useDebounced<T>(value: T, delayMs = 250) {
   const [v, setV] = React.useState(value);
   React.useEffect(() => {
@@ -127,9 +129,7 @@ function RemotePicker({
   );
 }
 
-/**
- * ✅ Export attendu par MainLayout.tsx
- */
+/** ✅ Export attendu par MainLayout.tsx */
 export function TimeRangePicker(props: { className?: string } = {}) {
   const { timeRange, resolvedRange, setTimeRange, refreshNow } = useGlobalFilters();
 
@@ -224,9 +224,7 @@ export function TimeRangePicker(props: { className?: string } = {}) {
   );
 }
 
-/**
- * ✅ Export attendu par MainLayout.tsx
- */
+/** ✅ Export attendu par MainLayout.tsx */
 export function RefreshNowButton(props: { className?: string } = {}) {
   const { refreshNow } = useGlobalFilters();
   return (
@@ -237,9 +235,7 @@ export function RefreshNowButton(props: { className?: string } = {}) {
   );
 }
 
-/**
- * ✅ Export attendu par MainLayout.tsx
- */
+/** ✅ Export attendu par MainLayout.tsx */
 export function AutoRefreshControl(props: { className?: string } = {}) {
   const { autoRefresh, setAutoRefresh, lastRefreshAt } = useGlobalFilters();
   const fmtLast = lastRefreshAt ? new Date(lastRefreshAt).toLocaleString("fr-FR") : null;
@@ -270,18 +266,12 @@ export function AutoRefreshControl(props: { className?: string } = {}) {
   );
 }
 
-/**
- * ✅ Export attendu par MainLayout.tsx
- * Tu ne veux pas de "save views" => composant neutre, mais on le garde pour compat build.
- */
+/** ✅ Compat build : pas de save views */
 export function SavedViewsMenu(_props: { className?: string } = {}) {
   return null;
 }
 
-/**
- * ✅ Export attendu par MainLayout.tsx
- * VariablesBar = barre "recherche" : Territoire + Client + Produit
- */
+/** ✅ Export attendu : VariablesBar = filtres (territoire + client + produit) */
 export function VariablesBar(props: { className?: string } = {}) {
   const {
     variables,
@@ -305,9 +295,9 @@ export function VariablesBar(props: { className?: string } = {}) {
       <div className="min-w-[220px]">
         <Label className="text-xs text-muted-foreground">Territoire</Label>
         <Select
-          value={variables.territory_code ?? ""}
+          value={variables.territory_code ?? ALL}
           onValueChange={(v) => {
-            setVariable("territory_code", v || null);
+            setVariable("territory_code", v === ALL ? null : v);
             refreshNow();
           }}
           disabled={lookupsLoading}
@@ -316,7 +306,7 @@ export function VariablesBar(props: { className?: string } = {}) {
             <SelectValue placeholder="Tous territoires" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Tous</SelectItem>
+            <SelectItem value={ALL}>Tous</SelectItem>
             {lookups.territories.map((t) => (
               <SelectItem key={t.code} value={t.code}>
                 {t.label || t.code}
@@ -375,9 +365,7 @@ export function VariablesBar(props: { className?: string } = {}) {
   );
 }
 
-/**
- * Optionnel : version "barre complète" si une page veut tout afficher.
- */
+/** Optionnel : barre complète */
 export function GlobalFilterControls() {
   const { resetFilters } = useGlobalFilters();
   return (
