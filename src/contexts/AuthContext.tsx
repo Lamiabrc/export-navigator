@@ -43,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setSession(data.session ?? null);
           setUser(data.session?.user ?? null);
         }
+
         setIsLoading(false);
       } catch {
         if (!alive) return;
@@ -54,10 +55,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     void init();
 
+    // ✅ Ne pas s’abonner si env KO (client placeholder)
+    if (!SUPABASE_ENV_OK) {
+      return () => {
+        alive = false;
+      };
+    }
+
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       if (!alive) return;
       setSession(newSession);
       setUser(newSession?.user ?? null);
+      // ⚠️ ici on ne remet pas isLoading à true, on garde un état stable
       setIsLoading(false);
     });
 
