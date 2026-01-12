@@ -28,7 +28,9 @@ type Point = {
 };
 
 const BASE_W = 1010;
-const BASE_H = 520;
+// ✅ IMPORTANT: doit matcher la carte (world-map.svg) + TERRITORY_PCT
+// Dans tes autres fichiers tu es sur 666. Si ton SVG a un autre viewBox, mets cette valeur.
+const BASE_H = 666;
 
 const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
 
@@ -141,7 +143,6 @@ export function ExportMap({
   };
 
   const startPan = (e: React.PointerEvent) => {
-    // si click sur un point, le point stoppe la propagation => on arrive pas ici
     panRef.current.active = true;
     panRef.current.pointerId = e.pointerId;
     panRef.current.startX = e.clientX;
@@ -169,7 +170,6 @@ export function ExportMap({
     <div className="relative h-[520px] w-full overflow-hidden rounded-2xl bg-slate-950/80 border border-slate-800">
       <style>{css}</style>
 
-      {/* Aide + contrôles */}
       <div className="absolute top-3 left-3 z-20 text-xs text-slate-300/85">
         <div>Survole = infos • Clic = filtre • Double-clic = reset filtre</div>
         <div className="text-slate-400">{dateRangeLabel}</div>
@@ -203,7 +203,7 @@ export function ExportMap({
         }}
       >
         <g transform={transform}>
-          {/* Fond: jamais bloquer les clics */}
+          {/* ✅ Fond: forcer le fill du repère (pas de letterbox) */}
           <image
             href={worldMap}
             x={0}
@@ -211,11 +211,10 @@ export function ExportMap({
             width={BASE_W}
             height={BASE_H}
             opacity={0.45}
+            preserveAspectRatio="none"
             style={{ filter: "invert(1) saturate(1.2) contrast(1.05)", pointerEvents: "none" }}
-            preserveAspectRatio="xMidYMid meet"
           />
 
-          {/* Arcs (seulement si on a de la data) */}
           {hasData && hub
             ? visiblePoints.map((p) => {
                 const ca = p.data?.ca_ht || 0;
@@ -238,7 +237,6 @@ export function ExportMap({
               })
             : null}
 
-          {/* Hub */}
           {hub ? (
             <g
               className="cursor-pointer"
@@ -257,7 +255,6 @@ export function ExportMap({
             </g>
           ) : null}
 
-          {/* Points */}
           {visiblePoints.map((p) => {
             const ca = p.data?.ca_ht || 0;
             const lines = p.data?.lines || 0;
@@ -274,21 +271,26 @@ export function ExportMap({
 
             return (
               <g key={p.code} className="select-none">
-                {/* Hit area */}
                 <circle cx={p.x} cy={p.y} r={Math.max(14, r + 10)} fill="transparent" />
 
-                {/* Glow */}
                 <circle cx={p.x} cy={p.y} r={r + 6} fill="#0f172a" opacity={0.35} pointerEvents="none" />
 
-                {/* Pulse (SVG, fiable) */}
                 {ca > 0 ? (
-                  <circle cx={p.x} cy={p.y} r={r + 2} fill="none" stroke={fill} strokeOpacity={0.45} strokeWidth={2} pointerEvents="none">
+                  <circle
+                    cx={p.x}
+                    cy={p.y}
+                    r={r + 2}
+                    fill="none"
+                    stroke={fill}
+                    strokeOpacity={0.45}
+                    strokeWidth={2}
+                    pointerEvents="none"
+                  >
                     <animate attributeName="r" values={`${r + 2};${r + 18}`} dur="1.8s" repeatCount="indefinite" />
                     <animate attributeName="stroke-opacity" values="0.45;0" dur="1.8s" repeatCount="indefinite" />
                   </circle>
                 ) : null}
 
-                {/* Dot */}
                 <circle
                   cx={p.x}
                   cy={p.y}
@@ -296,10 +298,7 @@ export function ExportMap({
                   fill={fill}
                   opacity={isSelected ? 0.95 : opacity}
                   className="cursor-pointer"
-                  onPointerDown={(e) => {
-                    // IMPORTANT: ne pas déclencher le pan quand on clique un point
-                    e.stopPropagation();
-                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
                   onPointerEnter={(e) => setHover({ code: p.code, x: e.clientX, y: e.clientY })}
                   onPointerMove={(e) => setHover({ code: p.code, x: e.clientX, y: e.clientY })}
                   onPointerLeave={() => setHover(null)}
@@ -313,17 +312,23 @@ export function ExportMap({
                   }}
                 />
 
-                {/* Label sur top 5 OU sélection */}
                 {(isTop || isSelected) && (
                   <g transform={`translate(${p.x + offsetLabel.dx},${p.y + offsetLabel.dy})`} pointerEvents="none">
-                    <rect x={-4} y={-12} width={Math.min(220, label.length * 7 + 12)} height={20} rx={6} fill="#0f172a" opacity={0.75} />
+                    <rect
+                      x={-4}
+                      y={-12}
+                      width={Math.min(220, label.length * 7 + 12)}
+                      height={20}
+                      rx={6}
+                      fill="#0f172a"
+                      opacity={0.75}
+                    />
                     <text className="text-[11px] font-semibold fill-slate-100" x={4} y={4}>
                       {label}
                     </text>
                   </g>
                 )}
 
-                {/* mini debug */}
                 {debug ? (
                   <text x={p.x + 6} y={p.y + 18} fontSize={10} fill="#fbbf24">
                     {p.code} ({lines})
@@ -335,7 +340,6 @@ export function ExportMap({
         </g>
       </svg>
 
-      {/* Tooltip : TOUJOURS afficher dès qu'on hover (même si pas de data) */}
       {hover && hoveredPct ? (
         <div
           className="pointer-events-none fixed z-30 rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-2 shadow-xl text-xs text-slate-100"
@@ -385,7 +389,9 @@ export function ExportMap({
 }
 
 function money(n: number) {
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(Number(n || 0));
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(
+    Number(n || 0)
+  );
 }
 
 function buildArc(sx: number, sy: number, ex: number, ey: number) {
