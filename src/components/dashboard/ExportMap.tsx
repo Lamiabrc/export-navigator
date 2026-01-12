@@ -1,6 +1,5 @@
 import * as React from "react";
 import worldMapRaw from "@/assets/world-map.svg?raw";
-import { TERRITORY_PCT } from "@/domain/geo/territoryPct";
 import { Button } from "@/components/ui/button";
 import { Minus, Plus, RotateCcw } from "lucide-react";
 
@@ -19,22 +18,15 @@ type Props = {
   mode?: "overview" | "drom";
 };
 
-type Point = {
-  code: string;
-  name: string;
-  x: number;
-  y: number;
-  data?: TerritoryData;
-};
+const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"] as const;
 
-const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
-
-const LABEL_OFFSETS: Record<string, { dx: number; dy: number }> = {
-  GP: { dx: -10, dy: -12 },
-  MQ: { dx: -10, dy: 12 },
-  GF: { dx: 10, dy: 0 },
-  RE: { dx: 10, dy: 0 },
-  YT: { dx: 10, dy: -10 },
+const TERRITORY_META: Record<string, { label: string; dx: number; dy: number }> = {
+  HUB_FR: { label: "Hub", dx: 14, dy: 4 },
+  GP: { label: "Guadeloupe", dx: -10, dy: -12 },
+  MQ: { label: "Martinique", dx: -10, dy: 12 },
+  GF: { label: "Guyane", dx: 10, dy: 0 },
+  RE: { label: "Réunion", dx: 10, dy: 0 },
+  YT: { label: "Mayotte", dx: 10, dy: -10 },
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -45,17 +37,49 @@ const css = `
 `;
 
 function parseSvg(raw: string) {
-  // viewBox
-  const vbMatch = raw.match(/viewBox="([^"]+)"/i);
-  const vb = vbMatch?.[1]?.trim().split(/\s+/).map(Number) ?? [0, 0, 1010, 666];
-  const [vbX, vbY, vbW, vbH] = vb.length === 4 ? vb : [0, 0, 1010, 666];
-
-  // inner content (everything inside <svg ...>...</svg>)
+  const width = Number((raw.match(/width="([\d.]+)"/i)?.[1] ?? "1010").trim());
+  const height = Number((raw.match(/height="([\d.]+)"/i)?.[1] ?? "666").trim());
   const inner = raw
     .replace(/^[\s\S]*?<svg[^>]*>/i, "")
     .replace(/<\/svg>\s*$/i, "");
+  return { width, height, inner };
+}
 
-  return { vbX, vbY, vbW, vbH, inner };
+function money(n: number) {
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(Number(n || 0));
+}
+
+function buildArc(sx: number, sy: number, ex: number, ey: number) {
+  const mx = (sx + ex) / 2;
+  const my = (sy + ey) / 2;
+  const dx = ex - sx;
+  const dy = ey - sy;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const bend = clamp(len * 0.12, 12, 100);
+  const cx = mx + nx * bend;
+  const cy = my + ny * bend;
+  return `M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`;
+}
+
+function markerSize(ca: number) {
+  if (ca <= 0) return 5;
+  return clamp(Math.sqrt(ca) * 0.02, 6, 14);
+}
+
+function scaleStroke(ca: number, max: number) {
+  if (max <= 0) return 1.2;
+  const ratio = ca / max;
+  return clamp(1 + ratio * 6, 1.2, 8);
+}
+
+function pickColor(code: string) {
+  return (DROM_CODES as readonly string[]).includes(code) ? "#22d3ee" : "#60a5fa";
 }
 
 export function ExportMap({
@@ -66,9 +90,9 @@ export function ExportMap({
   mode = "overview",
 }: Props) {
   const svgRef = React.useRef<SVGSVGElement | null>(null);
-  const [hover, setHover] = React.useState<{ code: string; x: number; y: number } | null>(null);
-
   const map = React.useMemo(() => parseSvg(worldMapRaw), []);
+
+  const [hover, setHover] = React.useState<{ code: string; x: number; y: number } | null>(null);
 
   // Pan/Zoom
   const [scale, setScale] = React.useState(1);
@@ -82,44 +106,41 @@ export function ExportMap({
     oy: number;
   }>({ active: false, pointerId: null, startX: 0, startY: 0, ox: 0, oy: 0 });
 
-  const debug = React.useMemo(
-    () => typeof window !== "undefined" && window.location.search.includes("debug=1"),
-    []
-  );
+  const [anchors, setAnchors] = React.useState<Record<string, { x: number; y: number }>>({});
 
-  // ✅ conversion % -> coordonnées EXACTES du viewBox du SVG
-  const toXY = React.useCallback(
-    (code: string) => {
-      const pct = (TERRITORY_PCT as any)[code];
-      if (!pct) return null;
-      return {
-        x: map.vbX + (pct.x / 100) * map.vbW,
-        y: map.vbY + (pct.y / 100) * map.vbH,
-      };
-    },
-    [map.vbH, map.vbW, map.vbX, map.vbY]
-  );
+  // ✅ lit les ancres directement dans le SVG (anchor-GP, anchor-RE, etc.)
+  React.useLayoutEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
 
-  const hub = toXY("HUB_FR");
+    const codes = ["HUB_FR", ...DROM_CODES] as string[];
+    const next: Record<string, { x: number; y: number }> = {};
 
-  const points: Point[] = React.useMemo(() => {
-    return Object.entries(TERRITORY_PCT as any)
-      .filter(([code]) => code !== "HUB_FR")
-      .map(([code, meta]: any) => {
-        const pos = toXY(code);
-        return {
-          code,
-          name: meta.label || code,
-          x: pos?.x ?? 0,
-          y: pos?.y ?? 0,
-          data: dataByTerritory[code],
-        };
-      });
-  }, [dataByTerritory, toXY]);
+    for (const code of codes) {
+      const el = svg.querySelector(`#anchor-${code}`) as SVGCircleElement | null;
+      if (!el) continue;
+      const x = el.cx?.baseVal?.value ?? Number(el.getAttribute("cx") || "0");
+      const y = el.cy?.baseVal?.value ?? Number(el.getAttribute("cy") || "0");
+      if (x && y) next[code] = { x, y };
+    }
 
-  const visiblePoints = React.useMemo(() => {
-    return points.filter((p) => (mode === "drom" ? DROM_CODES.includes(p.code) : true));
-  }, [points, mode]);
+    setAnchors(next);
+  }, [map.inner]);
+
+  const points = React.useMemo(() => {
+    const list = (DROM_CODES as readonly string[])
+      .filter((c) => (mode === "drom" ? true : true))
+      .map((code) => ({
+        code,
+        label: TERRITORY_META[code]?.label || code,
+        x: anchors[code]?.x ?? 0,
+        y: anchors[code]?.y ?? 0,
+        data: dataByTerritory[code],
+      }));
+    return mode === "drom" ? list : list;
+  }, [anchors, dataByTerritory, mode]);
+
+  const hub = anchors["HUB_FR"];
 
   const totalLines = React.useMemo(
     () => Object.values(dataByTerritory).reduce((s, d) => s + (d?.lines || 0), 0),
@@ -133,20 +154,15 @@ export function ExportMap({
   );
 
   const topTerritories = React.useMemo(() => {
-    const sorted = visiblePoints
+    const sorted = points
       .map((p) => ({ code: p.code, ca: p.data?.ca_ht || 0 }))
       .sort((a, b) => b.ca - a.ca)
       .map((x) => x.code);
     return new Set(sorted.slice(0, 5));
-  }, [visiblePoints]);
+  }, [points]);
 
-  // ⚠️ on garde ton ordre (translate puis scale) :
-  // p' = (p + offset) * scale  => p = p'/scale - offset
   const transform = `translate(${offset.x},${offset.y}) scale(${scale})`;
-  const viewBox = `${map.vbX} ${map.vbY} ${map.vbW} ${map.vbH}`;
-
-  const hoveredMeta = hover ? (TERRITORY_PCT as any)[hover.code] : undefined;
-  const hoveredData = hover ? dataByTerritory[hover.code] : undefined;
+  const viewBox = `0 0 ${map.width} ${map.height}`;
 
   const zoomIn = () => setScale((s) => clamp(s * 1.12, 0.85, 3.5));
   const zoomOut = () => setScale((s) => clamp(s / 1.12, 0.85, 3.5));
@@ -185,44 +201,12 @@ export function ExportMap({
     }
   };
 
-  // ✅ Debug: Shift+clic sur la carte => log % exact à mettre dans TERRITORY_PCT
-  const debugClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!debug || !e.shiftKey) return;
-    const svg = svgRef.current;
-    if (!svg) return;
-
-    const ctm = svg.getScreenCTM();
-    if (!ctm) return;
-
-    const pt = svg.createSVGPoint();
-    pt.x = e.clientX;
-    pt.y = e.clientY;
-
-    const pSvg = pt.matrixTransform(ctm.inverse());
-
-    // enlever pan/zoom (ordre translate->scale)
-    const baseX = pSvg.x / scale - offset.x;
-    const baseY = pSvg.y / scale - offset.y;
-
-    const pctX = ((baseX - map.vbX) / map.vbW) * 100;
-    const pctY = ((baseY - map.vbY) / map.vbH) * 100;
-
-    const out = { x: Number(pctX.toFixed(1)), y: Number(pctY.toFixed(1)) };
-    // eslint-disable-next-line no-console
-    console.log("[ExportMap] SHIFT+click => TERRITORY_PCT =", out);
-
-    void navigator.clipboard?.writeText(`${out.x}, ${out.y}`).catch(() => {});
-  };
-
   return (
     <div className="relative h-[520px] w-full overflow-hidden rounded-2xl bg-slate-950/80 border border-slate-800">
       <style>{css}</style>
 
       <div className="absolute top-3 left-3 z-20 text-xs text-slate-300/85">
-        <div>
-          Survole = infos • Clic = filtre • Double-clic = reset filtre
-          {debug ? <span className="ml-2 text-amber-300">• debug=1 : SHIFT+clic = récupère %</span> : null}
-        </div>
+        <div>Survole = infos • Clic = filtre • Double-clic = reset filtre</div>
         <div className="text-slate-400">{dateRangeLabel}</div>
       </div>
 
@@ -252,19 +236,22 @@ export function ExportMap({
           panRef.current.active = false;
           panRef.current.pointerId = null;
         }}
-        onClick={debugClick}
       >
         <g transform={transform}>
-          {/* ✅ Fond INLINE : même repère que tes overlays */}
+          {/* ✅ Fond INLINE: overlays et ancres = même repère */}
           <g
-            style={{ filter: "invert(1) saturate(1.2) contrast(1.05)", opacity: 0.45, pointerEvents: "none" as any }}
+            style={{
+              filter: "invert(1) saturate(1.2) contrast(1.05)",
+              opacity: 0.45,
+              pointerEvents: "none",
+            }}
             // eslint-disable-next-line react/no-danger
             dangerouslySetInnerHTML={{ __html: map.inner }}
           />
 
           {/* Arcs */}
           {hasData && hub
-            ? visiblePoints.map((p) => {
+            ? points.map((p) => {
                 const ca = p.data?.ca_ht || 0;
                 if (ca <= 0) return null;
                 const width = scaleStroke(ca, maxCa);
@@ -305,24 +292,21 @@ export function ExportMap({
           ) : null}
 
           {/* Points */}
-          {visiblePoints.map((p) => {
-            const ca = p.data?.ca_ht || 0;
-            const lines = p.data?.lines || 0;
+          {points.map((p) => {
+            if (!p.x || !p.y) return null;
 
+            const ca = p.data?.ca_ht || 0;
+            const r = markerSize(ca);
             const isSelected = selectedTerritory === p.code;
             const isTop = topTerritories.has(p.code);
-
-            const r = markerSize(ca);
-            const label = p.name;
-            const offsetLabel = LABEL_OFFSETS[p.code] || { dx: 10, dy: -8 };
-
             const fill = isSelected ? "#38bdf8" : pickColor(p.code);
             const opacity = ca > 0 ? 0.8 : 0.25;
+
+            const off = TERRITORY_META[p.code] ?? { label: p.code, dx: 10, dy: -8 };
 
             return (
               <g key={p.code} className="select-none">
                 <circle cx={p.x} cy={p.y} r={Math.max(14, r + 10)} fill="transparent" />
-
                 <circle cx={p.x} cy={p.y} r={r + 6} fill="#0f172a" opacity={0.35} pointerEvents="none" />
 
                 {ca > 0 ? (
@@ -363,27 +347,13 @@ export function ExportMap({
                 />
 
                 {(isTop || isSelected) && (
-                  <g transform={`translate(${p.x + offsetLabel.dx},${p.y + offsetLabel.dy})`} pointerEvents="none">
-                    <rect
-                      x={-4}
-                      y={-12}
-                      width={Math.min(220, label.length * 7 + 12)}
-                      height={20}
-                      rx={6}
-                      fill="#0f172a"
-                      opacity={0.75}
-                    />
+                  <g transform={`translate(${p.x + off.dx},${p.y + off.dy})`} pointerEvents="none">
+                    <rect x={-4} y={-12} width={Math.min(220, p.label.length * 7 + 12)} height={20} rx={6} fill="#0f172a" opacity={0.75} />
                     <text className="text-[11px] font-semibold fill-slate-100" x={4} y={4}>
-                      {label}
+                      {p.label}
                     </text>
                   </g>
                 )}
-
-                {debug ? (
-                  <text x={p.x + 6} y={p.y + 18} fontSize={10} fill="#fbbf24">
-                    {p.code} ({lines})
-                  </text>
-                ) : null}
               </g>
             );
           })}
@@ -391,39 +361,33 @@ export function ExportMap({
       </svg>
 
       {/* Tooltip */}
-      {hover && hoveredMeta ? (
+      {hover ? (
         <div
           className="pointer-events-none fixed z-30 rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-2 shadow-xl text-xs text-slate-100"
           style={{ left: hover.x + 12, top: hover.y + 12, minWidth: 190 }}
         >
           <div className="flex items-center justify-between">
-            <span className="font-semibold">{hoveredMeta.label || hover.code}</span>
+            <span className="font-semibold">{TERRITORY_META[hover.code]?.label || hover.code}</span>
             <span className="text-[10px] text-slate-400">{hover.code}</span>
           </div>
 
           <div className="mt-1 space-y-1">
             <div className="flex justify-between">
               <span className="text-slate-400">CA HT</span>
-              <span>{money(hoveredData?.ca_ht || 0)}</span>
+              <span>{money(dataByTerritory[hover.code]?.ca_ht || 0)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">CA TTC</span>
-              <span>{money(hoveredData?.ca_ttc || 0)}</span>
+              <span>{money(dataByTerritory[hover.code]?.ca_ttc || 0)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">TVA</span>
-              <span>{money(hoveredData?.vat || 0)}</span>
+              <span>{money(dataByTerritory[hover.code]?.vat || 0)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Ventes</span>
-              <span>{(hoveredData?.lines || 0).toLocaleString("fr-FR")}</span>
+              <span>{(dataByTerritory[hover.code]?.lines || 0).toLocaleString("fr-FR")}</span>
             </div>
-
-            {!hoveredData ? (
-              <div className="mt-2 text-[11px] text-amber-200/90">
-                Pas de données pour ce territoire (code non présent ou ventes = 0).
-              </div>
-            ) : null}
           </div>
         </div>
       ) : null}
@@ -437,40 +401,4 @@ export function ExportMap({
       ) : null}
     </div>
   );
-}
-
-function money(n: number) {
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(
-    Number(n || 0)
-  );
-}
-
-function buildArc(sx: number, sy: number, ex: number, ey: number) {
-  const mx = (sx + ex) / 2;
-  const my = (sy + ey) / 2;
-  const dx = ex - sx;
-  const dy = ey - sy;
-  const len = Math.hypot(dx, dy) || 1;
-  const nx = -dy / len;
-  const ny = dx / len;
-  const bend = clamp(len * 0.12, 12, 100);
-  const cx = mx + nx * bend;
-  const cy = my + ny * bend;
-  return `M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`;
-}
-
-function markerSize(ca: number) {
-  if (ca <= 0) return 5;
-  return clamp(Math.sqrt(ca) * 0.02, 6, 14);
-}
-
-function scaleStroke(ca: number, max: number) {
-  if (max <= 0) return 1.2;
-  const ratio = ca / max;
-  return clamp(1 + ratio * 6, 1.2, 8);
-}
-
-function pickColor(code: string) {
-  if (DROM_CODES.includes(code)) return "#22d3ee";
-  return "#60a5fa";
 }
