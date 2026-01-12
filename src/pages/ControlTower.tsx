@@ -70,11 +70,13 @@ const formatMoney = (n: number | null | undefined) =>
     Number(n || 0)
   );
 
+// 👉 IMPORTANT : on projette dans le même viewBox que la carte (0..MAP_WIDTH / 0..MAP_HEIGHT)
+// Tu peux ajuster ces marges si ton SVG a un padding interne.
+const MAP_INSET = { left: 0, right: 0, top: 0, bottom: 0 };
+
 const project = (lat: number, lon: number) => {
-  const paddingX = 20;
-  const paddingY = 10;
-  const x = ((lon + 180) / 360) * (MAP_WIDTH - 2 * paddingX) + paddingX;
-  const y = ((90 - lat) / 180) * (MAP_HEIGHT - 2 * paddingY) + paddingY;
+  const x = ((lon + 180) / 360) * (MAP_WIDTH - MAP_INSET.left - MAP_INSET.right) + MAP_INSET.left;
+  const y = ((90 - lat) / 180) * (MAP_HEIGHT - MAP_INSET.top - MAP_INSET.bottom) + MAP_INSET.top;
   return { x, y };
 };
 
@@ -136,7 +138,6 @@ export default function ControlTower() {
         let costData = costRes.data || [];
         if (costRes.error) {
           if (isMissingTableError(costRes.error)) {
-            // fallback on "costs" table if cost_lines missing
             const fallback = await supabase
               .from("costs")
               .select("id,date,destination,amount,cost_type")
@@ -383,7 +384,7 @@ export default function ControlTower() {
       dromCaPct: Math.min(100, Math.max(0, (dromCa / total) * 100)),
       dromMargePct: totals.totalSalesHt > 0 ? Math.min(100, Math.max(0, (dromMarge / totals.totalSalesHt) * 100 + 50)) : 50,
       dromVolPct: Math.min(100, Math.max(0, (dromVol / totalVol) * 100)),
-      onTime: 72, // placeholder until real data
+      onTime: 72,
       deltaCa: 1.2,
       deltaMarge: 0.5,
       deltaVol: -0.3,
@@ -401,13 +402,12 @@ export default function ControlTower() {
 
   const actions = ["Ouvrir Explore", "Optimiser incoterm", "Importer CSV coûts"];
 
-  // ✅ Wheel zoom: native listener (passive: false) + pas d'event React dans setState
+  // ✅ Wheel zoom (passive:false)
   React.useEffect(() => {
     const el = zoomLayerRef.current;
     if (!el) return;
 
     const onWheel = (e: WheelEvent) => {
-      // empêcher le scroll du navigateur sur la carte
       e.preventDefault();
 
       const delta = -e.deltaY * 0.0015;
@@ -491,11 +491,10 @@ export default function ControlTower() {
                 <NeonKpiCard label="Ventes (30j)" value={sales.length.toString()} delta={sales.length ? 1.1 : -0.2} accent="var(--chart-4)" />
               </div>
 
+              {/* ✅ FIX : conteneur interactions (pas transformé) + layer map (transformé) */}
               <div
                 ref={zoomLayerRef}
                 className="absolute inset-0 bg-gradient-to-br from-slate-900/60 via-slate-900/40 to-cyan-900/20 rounded-xl border border-cyan-500/20 shadow-[0_0_40px_rgba(34,211,238,0.15)]"
-                style={zoomCss}
-                // ⚠️ wheel géré via addEventListener(passive:false) dans useEffect
                 onMouseDown={(e) => {
                   draggingRef.current = { startX: e.clientX, startY: e.clientY, startTx: viewport.tx, startTy: viewport.ty };
                 }}
@@ -513,113 +512,126 @@ export default function ControlTower() {
                   draggingRef.current = null;
                 }}
               >
-                <img
-                  src={worldMap}
-                  alt="World map"
-                  className="absolute inset-0 h-full w-full object-contain opacity-40 pointer-events-none"
-                  style={{ filter: "invert(1) saturate(1.2) contrast(1.05)" }}
-                />
+                {/* Layer transformé (carte + points + arcs) */}
+                <div className="absolute inset-0" style={zoomCss}>
+                  {/* ✅ UNE SEULE SVG : la carte + overlay partagent le même viewBox => plus de décalage */}
+                  <svg
+                    viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
+                    preserveAspectRatio="xMidYMid meet"
+                    className="absolute inset-0 w-full h-full"
+                  >
+                    <defs>
+                      <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur stdDeviation="6" result="coloredBlur" />
+                        <feMerge>
+                          <feMergeNode in="coloredBlur" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
+                    </defs>
 
-                <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="absolute inset-0 w-full h-full">
-                  <defs>
-                    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                      <feGaussianBlur stdDeviation="6" result="coloredBlur" />
-                      <feMerge>
-                        <feMergeNode in="coloredBlur" />
-                        <feMergeNode in="SourceGraphic" />
-                      </feMerge>
-                    </filter>
-                  </defs>
+                    <image
+                      href={worldMap}
+                      x="0"
+                      y="0"
+                      width={MAP_WIDTH}
+                      height={MAP_HEIGHT}
+                      preserveAspectRatio="xMidYMid meet"
+                      opacity="0.4"
+                      style={{ pointerEvents: "none", filter: "invert(1) saturate(1.2) contrast(1.05)" }}
+                    />
 
-                  {nodes
-                    .filter((n) => n.code !== "FR")
-                    .map((node) => {
-                      const path = buildArc(metropole, node);
-                      const isActive = selected === node.code;
-                      const isHover = hovered === node.code;
-                      const strokeWidth = isActive || isHover ? 2.6 : 1.2;
-                      const territoryData = salesByTerritory[node.code];
-                      const hasFlow = (territoryData?.ca || 0) > 0;
-                      const showLabel = topLabels.has(node.code);
+                    {nodes
+                      .filter((n) => n.code !== "FR")
+                      .map((node) => {
+                        const path = buildArc(metropole, node);
+                        const isActive = selected === node.code;
+                        const isHover = hovered === node.code;
+                        const strokeWidth = isActive || isHover ? 2.6 : 1.2;
+                        const territoryData = salesByTerritory[node.code];
+                        const hasFlow = (territoryData?.ca || 0) > 0;
+                        const showLabel = topLabels.has(node.code);
 
-                      return (
-                        <g key={node.code}>
-                          {hasFlow ? (
-                            <path
-                              d={path}
-                              fill="none"
-                              stroke={node.color}
-                              strokeWidth={strokeWidth}
-                              strokeOpacity={isActive || isHover ? 0.9 : 0.25}
-                              className="transition-all duration-300"
-                              vectorEffect="non-scaling-stroke"
-                              filter="url(#glow)"
+                        return (
+                          <g key={node.code}>
+                            {hasFlow ? (
+                              <path
+                                d={path}
+                                fill="none"
+                                stroke={node.color}
+                                strokeWidth={strokeWidth}
+                                strokeOpacity={isActive || isHover ? 0.9 : 0.25}
+                                className="transition-all duration-300"
+                                vectorEffect="non-scaling-stroke"
+                                filter="url(#glow)"
+                              />
+                            ) : null}
+
+                            <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={hasFlow ? 0.35 : 0.15} />
+                            <circle
+                              cx={node.x}
+                              cy={node.y}
+                              r={isActive || isHover ? 7 : 5.5}
+                              fill={node.color}
+                              opacity={hasFlow ? 0.9 : 0.35}
+                              className="cursor-pointer"
+                              onMouseEnter={(evt) => {
+                                setHovered(node.code);
+                                setTooltipPos({ x: evt.clientX, y: evt.clientY });
+                              }}
+                              onMouseMove={(evt) => setTooltipPos({ x: evt.clientX, y: evt.clientY })}
+                              onMouseLeave={() => {
+                                setHovered(null);
+                                setTooltipPos(null);
+                              }}
+                              onClick={() => setVariable("territory_code", node.code)}
+                              onDoubleClick={() => {
+                                setVariable("territory_code", node.code);
+                                navigate("/explore");
+                              }}
                             />
-                          ) : null}
 
-                          <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={hasFlow ? 0.35 : 0.15} />
-                          <circle
-                            cx={node.x}
-                            cy={node.y}
-                            r={isActive || isHover ? 7 : 5.5}
-                            fill={node.color}
-                            opacity={hasFlow ? 0.9 : 0.35}
-                            className="cursor-pointer"
-                            onMouseEnter={(evt) => {
-                              setHovered(node.code);
-                              setTooltipPos({ x: evt.clientX, y: evt.clientY });
-                            }}
-                            onMouseMove={(evt) => setTooltipPos({ x: evt.clientX, y: evt.clientY })}
-                            onMouseLeave={() => {
-                              setHovered(null);
-                              setTooltipPos(null);
-                            }}
-                            onClick={() => setVariable("territory_code", node.code)}
-                            onDoubleClick={() => {
-                              setVariable("territory_code", node.code);
-                              navigate("/explore");
-                            }}
-                          />
+                            {showLabel ? (
+                              <text x={node.x + 12} y={node.y - 8} className="text-xs font-semibold fill-cyan-100 drop-shadow">
+                                {node.name}
+                              </text>
+                            ) : null}
+                          </g>
+                        );
+                      })}
 
-                          {showLabel ? (
-                            <text x={node.x + 12} y={node.y - 8} className="text-xs font-semibold fill-cyan-100 drop-shadow">
-                              {node.name}
-                            </text>
-                          ) : null}
-                        </g>
-                      );
-                    })}
+                    <motion.circle
+                      cx={metropole.x}
+                      cy={metropole.y}
+                      r={hovered === "FR" || selected === "FR" ? 15 : 12}
+                      fill="#0ea5e9"
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ duration: 0.4 }}
+                      className="cursor-pointer"
+                      onMouseEnter={(evt) => {
+                        setHovered("FR");
+                        setTooltipPos({ x: evt.clientX, y: evt.clientY });
+                      }}
+                      onMouseMove={(evt) => setTooltipPos({ x: evt.clientX, y: evt.clientY })}
+                      onMouseLeave={() => {
+                        setHovered(null);
+                        setTooltipPos(null);
+                      }}
+                      onClick={() => setVariable("territory_code", "FR")}
+                      onDoubleClick={() => {
+                        setVariable("territory_code", null);
+                        navigate("/explore");
+                      }}
+                    />
 
-                  <motion.circle
-                    cx={metropole.x}
-                    cy={metropole.y}
-                    r={hovered === "FR" || selected === "FR" ? 15 : 12}
-                    fill="#0ea5e9"
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 0.4 }}
-                    className="cursor-pointer"
-                    onMouseEnter={(evt) => {
-                      setHovered("FR");
-                      setTooltipPos({ x: evt.clientX, y: evt.clientY });
-                    }}
-                    onMouseMove={(evt) => setTooltipPos({ x: evt.clientX, y: evt.clientY })}
-                    onMouseLeave={() => {
-                      setHovered(null);
-                      setTooltipPos(null);
-                    }}
-                    onClick={() => setVariable("territory_code", "FR")}
-                    onDoubleClick={() => {
-                      setVariable("territory_code", null);
-                      navigate("/explore");
-                    }}
-                  />
+                    <text x={metropole.x + 18} y={metropole.y + 4} className="text-sm font-bold fill-cyan-100 drop-shadow">
+                      Metropole
+                    </text>
+                  </svg>
+                </div>
 
-                  <text x={metropole.x + 18} y={metropole.y + 4} className="text-sm font-bold fill-cyan-100 drop-shadow">
-                    Metropole
-                  </text>
-                </svg>
-
+                {/* Légende (fixe, NON affectée par le zoom/pan) */}
                 <div className="absolute bottom-3 left-3 z-30 rounded-lg border border-cyan-500/30 bg-slate-900/70 px-3 py-2 text-xs text-cyan-50 shadow-lg">
                   <div className="font-semibold text-cyan-100 mb-1">Légende DOM-TOM</div>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1">
@@ -643,9 +655,10 @@ export default function ControlTower() {
                 </div>
               ) : null}
 
+              {/* Tooltip en position FIXED (pas dépendant du conteneur) */}
               {hovered && tooltipPos ? (
                 <div
-                  className="pointer-events-none absolute z-30 rounded-lg border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-slate-100 shadow-xl"
+                  className="pointer-events-none fixed z-[9999] rounded-lg border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-slate-100 shadow-xl"
                   style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 30 }}
                 >
                   <div className="font-semibold">{hovered === "FR" ? "Hub" : hovered}</div>
