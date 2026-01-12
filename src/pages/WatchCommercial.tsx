@@ -41,45 +41,37 @@ import {
   LabelList,
 } from "recharts";
 
-/**
- * ✅ Table des prix produits estimés
- */
-const PRICE_EST_TABLE = "product_prices";
+const PRICE_TABLE = "product_prices";
+
+const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"] as const;
+type DromCode = (typeof DROM_CODES)[number];
+
+const BAR_PALETTE = ["#0ea5e9", "#a855f7", "#f97316", "#22c55e", "#e11d48"];
 
 type CompetitorPrice = { name: string; price: number };
 
 type BaseRow = {
+  productId: string;
   sku: string;
   label: string | null;
   territory: string;
 
-  // base Orliman (TTC) provenant de la vue
-  plvMetropoleTtc: number | null;
-  plvOmTtc: number | null;
-
-  // HS
   hsCode: string | null;
   hs4: string | null;
 
-  // prix concurrents
+  // prix TTC Orliman
+  ourPriceTtc: number | null;
+
+  // concurrents TTC
   competitors: CompetitorPrice[];
   bestCompetitor: CompetitorPrice | null;
 
-  // prix Orliman utilisé (TTC)
-  ourPriceTtc: number | null;
-  ourPriceSource: "estimate" | "plv" | "none";
-
-  // base HT pour reco TTC
-  baseHtForReco: number | null;
-  baseHtSource: "estimate_ht" | "derived_from_ttc" | "none";
-
-  // métriques concurrence
   gapPct: number | null;
   status: "premium" | "aligned" | "underpriced" | "no_data";
   rank: number | null;
   competitorCount: number;
 
-  // taxes / OM / OMR (en %)
+  // fiscalité (%)
   vatRate: number | null;
   omRate: number | null;
   omrRate: number | null;
@@ -88,15 +80,15 @@ type BaseRow = {
   // LPPR
   lpprMetropole: number | null;
   lpprDrom: number | null;
+
+  // base HT pour faire une reco TTC “taxes+OM+OMR” (approximée)
+  baseHtForReco: number | null;
 };
 
 type PositionRow = BaseRow & {
   extraFee: number;
   recommendedTtc: number | null;
 };
-
-const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
-const BAR_PALETTE = ["#0ea5e9", "#a855f7", "#f97316", "#22c55e", "#e11d48"];
 
 function toNum(v: unknown): number | null {
   const n = Number(v);
@@ -150,101 +142,17 @@ function chunkArray<T>(arr: T[], size: number) {
   return out;
 }
 
-// --- robust pickers pour product_prices (colonnes peuvent varier)
-function pickSku(row: any): string | null {
-  return (
-    (typeof row?.sku === "string" && row.sku) ||
-    (typeof row?.code_article === "string" && row.code_article) ||
-    (typeof row?.product_sku === "string" && row.product_sku) ||
-    null
-  );
-}
-function pickTerritory(row: any): string | null {
-  const t =
-    (typeof row?.territory_code === "string" && row.territory_code) ||
-    (typeof row?.territory === "string" && row.territory) ||
-    (typeof row?.destination === "string" && row.destination) ||
-    null;
-  return t ? String(t).toUpperCase() : null;
-}
-function pickHt(row: any): number | null {
-  return (
-    toNum(row?.price_ht) ??
-    toNum(row?.ht) ??
-    toNum(row?.estimated_ht) ??
-    toNum(row?.plv_ht) ??
-    null
-  );
-}
-function pickTtc(row: any): number | null {
-  return (
-    toNum(row?.price_ttc) ??
-    toNum(row?.ttc) ??
-    toNum(row?.estimated_ttc) ??
-    toNum(row?.plv_ttc) ??
-    null
-  );
-}
-
-async function fetchProductPricesBySkuList(params: {
-  territory: string;
-  skus: string[];
-}) {
-  const { territory, skus } = params;
-  const skuChunks = chunkArray(skus, 500);
-  const out: any[] = [];
-
-  // 1) Essais “propres” (filtrés par territoire) : territory_code / territory
-  const attempts = [
-    { terrCol: "territory_code", skuCol: "sku" },
-    { terrCol: "territory_code", skuCol: "code_article" },
-    { terrCol: "territory", skuCol: "sku" },
-    { terrCol: "territory", skuCol: "code_article" },
-  ] as const;
-
-  for (const a of attempts) {
-    try {
-      out.length = 0;
-      for (const ch of skuChunks) {
-        const qb: any = supabase
-          .from(PRICE_EST_TABLE)
-          .select("*")
-          .eq(a.terrCol, territory);
-        const res = await qb.in(a.skuCol, ch);
-
-        if (res.error) throw res.error;
-        (res.data || []).forEach((x: any) => out.push(x));
-      }
-      // si on a trouvé des lignes, on stop
-      if (out.length) return out;
-      // sinon on continue (peut être table vide pour ce territoire)
-      // mais au moins la requête a fonctionné
-      return out;
-    } catch {
-      // on tente la prochaine variante
-    }
-  }
-
-  // 2) Fallback : sans filtre territoire (au cas où colonne absente), on limite large
-  try {
-    const res = await supabase.from(PRICE_EST_TABLE).select("*").limit(5000);
-    if (!res.error) return res.data || [];
-  } catch {
-    // ignore
-  }
-
-  return [];
-}
-
 export default function WatchCommercial() {
   const { variables } = useGlobalFilters();
 
-  const [baseRows, setBaseRows] = React.useState<BaseRow[]>([]);
+  const [baseRowsMain, setBaseRowsMain] = React.useState<BaseRow[]>([]);
+  const [baseRowsDrom, setBaseRowsDrom] = React.useState<BaseRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const [search, setSearch] = React.useState("");
   const [territory, setTerritory] = React.useState(variables.territory_code || "FR");
+
   const [selectedSku, setSelectedSku] = React.useState<string>("");
 
   const [extraFees, setExtraFees] = React.useState<Record<string, number>>({
@@ -264,7 +172,6 @@ export default function WatchCommercial() {
     if (variables.territory_code) setTerritory(variables.territory_code);
   }, [variables.territory_code]);
 
-  // ✅ LOAD DB : dépend seulement de territory
   React.useEffect(() => {
     let active = true;
 
@@ -278,60 +185,67 @@ export default function WatchCommercial() {
       setError(null);
 
       try {
-        // 1) Vue pricing principale
-        const { data: viewData, error: viewError } = await supabase
-          .from("v_export_pricing")
-          .select("*")
-          .eq("territory_code", territory)
-          .limit(3000);
+        // 1) product_prices : territoire sélectionné + DROM (pour résumé)
+        const [mainRes, dromRes] = await Promise.all([
+          supabase.from(PRICE_TABLE).select("*").eq("territory_code", territory).limit(5000),
+          supabase.from(PRICE_TABLE).select("*").in("territory_code", [...DROM_CODES]).limit(25000),
+        ]);
 
-        if (!active) return;
-        if (viewError) throw viewError;
+        if (mainRes.error) throw mainRes.error;
+        if (dromRes.error) throw dromRes.error;
 
-        const rows0 = (viewData || []).filter((r: any) => r?.sku);
-        const skus = Array.from(new Set(rows0.map((r: any) => String(r.sku)).filter(Boolean)));
-        const skuChunks = chunkArray(skus, 500);
+        const mainPrices = (mainRes.data || []) as any[];
+        const dromPrices = (dromRes.data || []) as any[];
 
-        // 2) LPPR + coeff
-        const productsData: any[] = [];
-        for (const ch of skuChunks) {
-          const res = await supabase
-            .from("products")
-            .select("code_article, tarif_lppr_eur")
-            .in("code_article", ch);
+        // union des product_id (main + drom) pour récupérer SKU/label/HS/LPPR
+        const allProductIds = Array.from(
+          new Set(
+            [...mainPrices, ...dromPrices]
+              .map((r) => r.product_id)
+              .filter(Boolean)
+              .map((x) => String(x)),
+          ),
+        );
 
-          if (res.error) console.warn("LPPR fetch error", res.error);
-          (res.data || []).forEach((x: any) => productsData.push(x));
+        // 2) products : mapping id -> infos produit
+        const productMap = new Map<
+          string,
+          { sku: string; label: string | null; hs_code: string | null; hs4: string | null; lppr: number | null }
+        >();
+
+        if (allProductIds.length) {
+          const chunks = chunkArray(allProductIds, 500);
+          for (const ch of chunks) {
+            const pr = await supabase
+              .from("products")
+              .select("id, code_article, libelle_article, hs_code, hs4, tarif_lppr_eur")
+              .in("id", ch);
+
+            if (pr.error) throw pr.error;
+
+            (pr.data || []).forEach((p: any) => {
+              const id = String(p.id);
+              productMap.set(id, {
+                sku: String(p.code_article || id),
+                label: (p.libelle_article ?? null) as string | null,
+                hs_code: p.hs_code ? String(p.hs_code) : null,
+                hs4: p.hs4 ? String(p.hs4) : null,
+                lppr: toNum(p.tarif_lppr_eur),
+              });
+            });
+          }
         }
 
-        const coefRes = await supabase
-          .from("lpp_majoration_coefficients")
-          .select("territory_code, coef");
-
-        if (coefRes.error) console.warn("LPPR coef fetch error", coefRes.error);
-
-        const lpprMap = new Map<string, number>();
-        (productsData || []).forEach((p: any) => {
-          if (p.code_article && Number.isFinite(Number(p.tarif_lppr_eur))) {
-            lpprMap.set(String(p.code_article), Number(p.tarif_lppr_eur));
-          }
-        });
-
-        const coefMap = new Map<string, number>();
-        (coefRes.data || []).forEach((c: any) => {
-          if (c.territory_code && Number.isFinite(Number(c.coef))) {
-            coefMap.set(String(c.territory_code).toUpperCase(), Number(c.coef));
-          }
-        });
-
-        // 3) TVA + OM/OMR (✅ colonnes attendues: hs4, om_rate, omr_rate)
-        const [vatRes, omRes] = await Promise.all([
+        // 3) TVA + OM/OMR + coeff LPPR
+        const [vatRes, omRes, coefRes] = await Promise.all([
           supabase.from("vat_rates").select("territory_code, rate"),
           supabase.from("om_rates").select("territory_code, hs4, om_rate, omr_rate, year"),
+          supabase.from("lpp_majoration_coefficients").select("territory_code, coef"),
         ]);
 
         if (vatRes.error) console.warn("VAT fetch error", vatRes.error);
         if (omRes.error) console.warn("OM fetch error", omRes.error);
+        if (coefRes.error) console.warn("LPPR coef fetch error", coefRes.error);
 
         const vatMap = new Map<string, number>();
         (vatRes.data || []).forEach((v: any) => {
@@ -340,12 +254,12 @@ export default function WatchCommercial() {
           if (code && rate !== null) vatMap.set(code, rate);
         });
 
-        // garder la ligne la plus récente par (territory, hs4)
+        // OM : garder la ligne la plus récente par (territory, hs4)
         const omMap = new Map<string, { om: number | null; omr: number | null; year: number | null }>();
         (omRes.data || []).forEach((o: any) => {
           const code = String(o.territory_code || "").toUpperCase();
-          const hs4 = String(o.hs4 || "");
-          const key = `${code}:${hs4}`;
+          const h = String(o.hs4 || "");
+          const key = `${code}:${h}`;
           const year = toNum(o.year) ?? null;
 
           const cur = omMap.get(key);
@@ -357,25 +271,30 @@ export default function WatchCommercial() {
           }
         });
 
-        // 4) Prix estimés (product_prices)
-        const priceEstRows = await fetchProductPricesBySkuList({ territory, skus });
-        const priceEstMap = new Map<string, { ht: number | null; ttc: number | null }>();
+        const coefMap = new Map<string, number>();
+        (coefRes.data || []).forEach((c: any) => {
+          const t = String(c.territory_code || "").toUpperCase();
+          const coef = toNum(c.coef);
+          if (t && coef !== null) coefMap.set(t, coef);
+        });
 
-        for (const r of priceEstRows) {
-          const sku = pickSku(r);
-          const terr = pickTerritory(r) || territory.toUpperCase();
-          if (!sku) continue;
-          priceEstMap.set(`${terr}:${sku}`, { ht: pickHt(r), ttc: pickTtc(r) });
-        }
+        const mapPriceRow = (r: any): BaseRow | null => {
+          const productId = r.product_id ? String(r.product_id) : null;
+          if (!productId) return null;
 
-        // 5) Mapping final
-        const mapped: BaseRow[] = rows0.map((r: any) => {
-          const sku = String(r.sku);
-          const label = (r.label ?? null) as string | null;
           const terr = String(r.territory_code || territory).toUpperCase();
+          const p = productMap.get(productId);
 
-          const plvMetropoleTtc = toNum(r.plv_metropole_ttc);
+          const sku = p?.sku || productId;
+          const label = p?.label ?? null;
+
+          const hsCode = p?.hs_code ?? null;
+          const hs4 = p?.hs4 ?? hs4FromHs(hsCode);
+
+          // prix TTC Orliman : FR => metropole, sinon OM si dispo sinon metropole
+          const plvMetTtc = toNum(r.plv_metropole_ttc);
           const plvOmTtc = toNum(r.plv_om_ttc);
+          const ourPriceTtc = terr === "FR" ? plvMetTtc : (plvOmTtc ?? plvMetTtc);
 
           const competitorsAll = [
             { name: "Thuasne", price: toNum(r.thuasne_price_ttc) },
@@ -392,46 +311,22 @@ export default function WatchCommercial() {
               ? competitors.reduce((m, c) => (c.price < m.price ? c : m), competitors[0])
               : null;
 
-          const hsCode = (r.hs_code ? String(r.hs_code) : null) as string | null;
-          const hs4 = hs4FromHs(hsCode);
-
-          const plvFallbackTtc =
-            terr === "FR"
-              ? plvMetropoleTtc
-              : (plvOmTtc ?? plvMetropoleTtc);
-
-          const est = priceEstMap.get(`${terr}:${sku}`) || null;
-
-          const ourPriceTtc = (est?.ttc ?? plvFallbackTtc) ?? null;
-          const ourPriceSource: BaseRow["ourPriceSource"] =
-            est?.ttc !== null && est?.ttc !== undefined
-              ? "estimate"
-              : plvFallbackTtc !== null
-              ? "plv"
-              : "none";
-
-          const vatRate = vatMap.get(terr) ?? null;
-
-          let baseHtForReco: number | null = est?.ht ?? null;
-          let baseHtSource: BaseRow["baseHtSource"] = baseHtForReco !== null ? "estimate_ht" : "none";
-
-          if (baseHtForReco === null && ourPriceTtc !== null && vatRate !== null) {
-            baseHtForReco = ourPriceTtc / (1 + vatRate / 100);
-            baseHtSource = "derived_from_ttc";
-          }
-
           const { gapPct, status } = computeStatusAndGap(ourPriceTtc, bestCompetitor);
           const rank =
             ourPriceTtc !== null && competitors.length > 0 ? computeRank(ourPriceTtc, competitors) : null;
 
-          const lpprBase = lpprMap.get(sku) ?? null;
-          const coef = coefMap.get(terr) ?? 1;
-          const lpprDrom = lpprBase !== null ? lpprBase * coef : null;
+          const vatRate = vatMap.get(terr) ?? null;
 
+          // base HT approx pour reco TTC (on "retire" la TVA de notre TTC)
+          let baseHtForReco: number | null = null;
+          if (ourPriceTtc !== null && vatRate !== null) {
+            baseHtForReco = ourPriceTtc / (1 + vatRate / 100);
+          }
+
+          // OM/OMR via hs4
           let omRate: number | null = null;
           let omrRate: number | null = null;
           let omYear: number | null = null;
-
           if (hs4) {
             const omRow = omMap.get(`${terr}:${hs4}`);
             omRate = omRow?.om ?? null;
@@ -439,25 +334,24 @@ export default function WatchCommercial() {
             omYear = omRow?.year ?? null;
           }
 
+          // LPPR
+          const lpprBase = p?.lppr ?? null;
+          const coef = coefMap.get(terr) ?? 1;
+          const lpprDrom = lpprBase !== null ? lpprBase * coef : null;
+
           return {
+            productId,
             sku,
             label,
             territory: terr,
 
-            plvMetropoleTtc,
-            plvOmTtc,
-
             hsCode,
             hs4,
 
+            ourPriceTtc,
+
             competitors,
             bestCompetitor,
-
-            ourPriceTtc,
-            ourPriceSource,
-
-            baseHtForReco,
-            baseHtSource,
 
             gapPct,
             status,
@@ -471,18 +365,26 @@ export default function WatchCommercial() {
 
             lpprMetropole: lpprBase,
             lpprDrom,
+
+            baseHtForReco,
           };
-        });
+        };
+
+        const mainMapped = mainPrices.map(mapPriceRow).filter(Boolean) as BaseRow[];
+        const dromMapped = dromPrices.map(mapPriceRow).filter(Boolean) as BaseRow[];
 
         if (!active) return;
 
-        setBaseRows(mapped);
-        if (selectedSku && !mapped.some((m) => m.sku === selectedSku)) setSelectedSku("");
+        setBaseRowsMain(mainMapped);
+        setBaseRowsDrom(dromMapped);
+
+        if (selectedSku && !mainMapped.some((m) => m.sku === selectedSku)) setSelectedSku("");
       } catch (err: any) {
-        console.error("Chargement concurrence échoué", err);
+        console.error("Chargement WatchCommercial échoué", err);
         if (!active) return;
-        setError(err?.message || "Erreur chargement concurrence (v_export_pricing)");
-        setBaseRows([]);
+        setError(err?.message || "Erreur chargement concurrence (product_prices)");
+        setBaseRowsMain([]);
+        setBaseRowsDrom([]);
       } finally {
         if (active) setIsLoading(false);
       }
@@ -495,34 +397,49 @@ export default function WatchCommercial() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [territory]);
 
-  // ✅ Reco TTC recalculée localement (sans reload DB)
-  const rows: PositionRow[] = React.useMemo(() => {
-    return baseRows.map((r) => {
-      const extraFee = extraFees[r.territory] ?? 0;
+  // Reco TTC recalculée localement (sans reload DB)
+  const rowsMain: PositionRow[] = React.useMemo(() => {
+    return baseRowsMain.map((r) => {
+      const extraFee = (extraFees as any)[r.territory] ?? 0;
       const vat = r.vatRate ?? 0;
       const om = r.omRate ?? 0;
       const omr = r.omrRate ?? 0;
 
-      const baseHt = r.baseHtForReco;
       const recommendedTtc =
-        baseHt !== null
-          ? baseHt * (1 + (vat + om + omr) / 100) + extraFee
+        r.baseHtForReco !== null
+          ? r.baseHtForReco * (1 + (vat + om + omr) / 100) + extraFee
           : null;
 
       return { ...r, extraFee, recommendedTtc };
     });
-  }, [baseRows, extraFees]);
+  }, [baseRowsMain, extraFees]);
+
+  const rowsDrom: PositionRow[] = React.useMemo(() => {
+    return baseRowsDrom.map((r) => {
+      const extraFee = (extraFees as any)[r.territory] ?? 0;
+      const vat = r.vatRate ?? 0;
+      const om = r.omRate ?? 0;
+      const omr = r.omrRate ?? 0;
+
+      const recommendedTtc =
+        r.baseHtForReco !== null
+          ? r.baseHtForReco * (1 + (vat + om + omr) / 100) + extraFee
+          : null;
+
+      return { ...r, extraFee, recommendedTtc };
+    });
+  }, [baseRowsDrom, extraFees]);
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) => (r.sku + " " + (r.label || "")).toLowerCase().includes(q));
-  }, [rows, search]);
+    if (!q) return rowsMain;
+    return rowsMain.filter((r) => (r.sku + " " + (r.label || "")).toLowerCase().includes(q));
+  }, [rowsMain, search]);
 
   const selected = React.useMemo(() => {
     if (!selectedSku) return null;
-    return rows.find((r) => r.sku === selectedSku) || null;
-  }, [rows, selectedSku]);
+    return rowsMain.find((r) => r.sku === selectedSku) || null;
+  }, [rowsMain, selectedSku]);
 
   const summary = React.useMemo(() => {
     const base = filtered;
@@ -546,14 +463,20 @@ export default function WatchCommercial() {
   }, [filtered]);
 
   const dromSummary = React.useMemo(() => {
-    return DROM_CODES.map((code) => {
-      const terrRows = rows.filter((r) => (r.territory || "").toUpperCase() === code);
+    return (DROM_CODES as readonly DromCode[]).map((code) => {
+      const terrRows = rowsDrom.filter((r) => (r.territory || "").toUpperCase() === code);
       const count = terrRows.length;
-      const finiteGaps = terrRows.filter((r) => Number.isFinite(r.gapPct as number)).map((r) => r.gapPct as number);
+
+      const finiteGaps = terrRows
+        .filter((r) => Number.isFinite(r.gapPct as number))
+        .map((r) => r.gapPct as number);
+
       const avgGap = finiteGaps.length ? finiteGaps.reduce((s, g) => s + g, 0) / finiteGaps.length : null;
+
       const best = terrRows
         .filter((r) => Number.isFinite(r.gapPct as number))
         .sort((a, b) => (a.gapPct as number) - (b.gapPct as number))[0];
+
       return {
         territory: code,
         count,
@@ -562,7 +485,7 @@ export default function WatchCommercial() {
         bestGap: best?.gapPct ?? null,
       };
     });
-  }, [rows]);
+  }, [rowsDrom]);
 
   const priceBarsForSelected = React.useMemo(() => {
     if (!selected) return [];
@@ -578,10 +501,9 @@ export default function WatchCommercial() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.35em] text-cyan-300/90">Concurrence & positionnement</p>
-            <h1 className="text-3xl font-bold text-slate-900">Dashboard concurrence</h1>
+            <h1 className="text-3xl font-bold text-slate-900">Watch Commercial</h1>
             <p className="text-sm text-slate-600">
-              Source: <span className="font-mono">v_export_pricing</span> +{" "}
-              <span className="font-mono">{PRICE_EST_TABLE}</span> (prix estimés si dispo).
+              Source: <span className="font-mono">{PRICE_TABLE}</span> + <span className="font-mono">products</span> (SKU/HS/LPPR).
             </p>
           </div>
 
@@ -728,8 +650,8 @@ export default function WatchCommercial() {
                       <div className="text-lg font-semibold">{selected.label || "Produit"}</div>
                       <div className="text-sm text-muted-foreground">Territoire: {selected.territory}</div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        Source prix: <span className="font-semibold">{selected.ourPriceSource}</span> · Base HT reco:{" "}
-                        <span className="font-semibold">{selected.baseHtSource}</span>
+                        HS4: {selected.hs4 ?? "n/a"} · TVA: {selected.vatRate ?? "n/a"}% · OM: {selected.omRate ?? "n/a"}% · OMR:{" "}
+                        {selected.omrRate ?? "n/a"}% {selected.omYear ? `· (année ${selected.omYear})` : ""}
                       </div>
                     </div>
 
@@ -769,11 +691,6 @@ export default function WatchCommercial() {
                         <div className="flex items-center justify-between">
                           <div className="font-medium">Orliman (TTC)</div>
                           <div className="font-semibold">{money(selected.ourPriceTtc)}</div>
-                        </div>
-
-                        <div className="text-xs text-muted-foreground">
-                          TVA: {selected.vatRate ?? "n/a"}% · OM: {selected.omRate ?? "n/a"}% · OMR:{" "}
-                          {selected.omrRate ?? "n/a"}% {selected.omYear ? `· (année ${selected.omYear})` : ""}
                         </div>
 
                         <div className="flex items-center justify-between">
@@ -856,7 +773,7 @@ export default function WatchCommercial() {
         <Card className="border-slate-200 shadow">
           <CardHeader>
             <CardTitle className="text-lg">Résumé DROM</CardTitle>
-            <CardDescription>Position prix Orliman vs concurrents sur les DOM-TOM.</CardDescription>
+            <CardDescription>Position prix Orliman vs concurrents sur les DOM-TOM (GP/MQ/GF/RE/YT).</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-3">
             {dromSummary.map((d) => (
@@ -869,8 +786,7 @@ export default function WatchCommercial() {
                   Gap moyen: {d.avgGap !== null ? `${d.avgGap.toFixed(1)}%` : "n/a"}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Meilleur: {d.bestLabel || "n/a"}{" "}
-                  {d.bestGap !== null ? `(${(d.bestGap as number).toFixed(1)}%)` : ""}
+                  Meilleur: {d.bestLabel || "n/a"} {d.bestGap !== null ? `(${Number(d.bestGap).toFixed(1)}%)` : ""}
                 </div>
               </div>
             ))}
@@ -894,7 +810,7 @@ export default function WatchCommercial() {
                   <TableRow>
                     <TableHead>SKU</TableHead>
                     <TableHead>Produit</TableHead>
-                    <TableHead className="text-right">Prix Orliman (TTC)</TableHead>
+                    <TableHead className="text-right">Prix Orliman</TableHead>
                     <TableHead className="text-right">Reco TTC (taxes/OM/OMR/fees)</TableHead>
                     <TableHead className="text-right">LPPR FR</TableHead>
                     <TableHead className="text-right">LPPR DROM</TableHead>
@@ -905,6 +821,7 @@ export default function WatchCommercial() {
                     <TableHead>Statut</TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
                   {filtered.slice(0, 400).map((row) => (
                     <TableRow
@@ -914,11 +831,10 @@ export default function WatchCommercial() {
                       style={{ cursor: "pointer" }}
                     >
                       <TableCell className="font-mono text-xs">{row.sku}</TableCell>
+
                       <TableCell className="font-medium">
                         {row.label || "—"}
-                        <div className="text-[10px] text-muted-foreground">
-                          Source prix: {row.ourPriceSource} · Base HT: {row.baseHtSource}
-                        </div>
+                        <div className="text-[10px] text-muted-foreground">HS4: {row.hs4 ?? "n/a"}</div>
                       </TableCell>
 
                       <TableCell className="text-right">{money(row.ourPriceTtc)}</TableCell>
@@ -926,17 +842,13 @@ export default function WatchCommercial() {
                       <TableCell className="text-right">
                         {row.recommendedTtc !== null ? money(row.recommendedTtc) : "—"}
                         <div className="text-[10px] text-muted-foreground">
-                          TVA: {row.vatRate ?? "n/a"}% · OM: {row.omRate ?? "n/a"}% · OMR:{" "}
-                          {row.omrRate ?? "n/a"}% · Fees: {row.extraFee ?? 0}€
+                          TVA: {row.vatRate ?? "n/a"}% · OM: {row.omRate ?? "n/a"}% · OMR: {row.omrRate ?? "n/a"}% · Fees:{" "}
+                          {row.extraFee ?? 0}€
                         </div>
                       </TableCell>
 
-                      <TableCell className="text-right">
-                        {row.lpprMetropole !== null ? money(row.lpprMetropole) : "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {row.lpprDrom !== null ? money(row.lpprDrom) : "—"}
-                      </TableCell>
+                      <TableCell className="text-right">{row.lpprMetropole !== null ? money(row.lpprMetropole) : "—"}</TableCell>
+                      <TableCell className="text-right">{row.lpprDrom !== null ? money(row.lpprDrom) : "—"}</TableCell>
 
                       <TableCell>
                         {row.bestCompetitor ? (
