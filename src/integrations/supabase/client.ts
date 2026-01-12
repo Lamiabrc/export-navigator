@@ -13,13 +13,10 @@ export const SUPABASE_ENV_OK = Boolean(supabaseUrl && supabaseAnonKey);
 
 if (!SUPABASE_ENV_OK) {
   // eslint-disable-next-line no-console
-  console.error(
-    "[Supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY at build time.",
-    {
-      hasUrl: Boolean(supabaseUrl),
-      keyLength: (supabaseAnonKey || "").length,
-    }
-  );
+  console.error("[Supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY at build time.", {
+    hasUrl: Boolean(supabaseUrl),
+    keyLength: (supabaseAnonKey || "").length,
+  });
 }
 
 // Placeholders pour éviter l’exception “supabaseKey is required”
@@ -31,5 +28,9 @@ export const supabase = createClient(SAFE_URL, SAFE_KEY, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    // ✅ important pour les liens email avec ?code=...
+    flowType: "pkce",
+    // (optionnel mais propre)
+    storageKey: "export-navigator-auth",
   },
 });
