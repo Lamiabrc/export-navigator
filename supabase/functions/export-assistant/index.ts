@@ -1,36 +1,14 @@
+// supabase/functions/export-assistant/index.ts
+// Edge Function: export-assistant
+// Objectif : répondre avec (1) base documentaire vectorisée (RAG) + (2) "live data" depuis tes tables (products, clients, sales, cost_lines/costs, etc.)
+// Sécurité : exige un JWT (Authorization: Bearer <access_token>) + option allowlist emails via env ALLOWED_EMAILS
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-type AssistantRequest = {
-  question: string;
-
-  destination?: string | null;     // ex: "GP" ou "Guadeloupe"
-  territory_code?: string | null;  // filtre global éventuel
-  incoterm?: string | null;
-  transport_mode?: string | null;
-
-  date_from?: string | null; // YYYY-MM-DD
-  date_to?: string | null;   // YYYY-MM-DD
-
-  include_tables?: boolean;
-  match_count?: number;
-  strict_docs_only?: boolean;
-
-  // optionnel, si tu ajoutes plus tard des sélecteurs
-  client_id?: string | null;
-  product_ids?: string[] | null;
-
-  doc_filter?: {
-    doc_type?: string | null;
-    tags?: string[] | null;
-    export_zone?: string | null;
-    incoterm?: string | null;
-  };
 };
 
 function json(status: number, data: unknown) {
@@ -40,47 +18,162 @@ function json(status: number, data: unknown) {
   });
 }
 
-function normalizeHS(v: any) {
-  return String(v ?? "").trim().replace(/[^\d]/g, "");
+type DromCode = "GP" | "MQ" | "GF" | "RE" | "YT" | "UNKNOWN";
+type ComCode = "BL" | "MF" | "SPM" | "UNKNOWN";
+
+type DestinationKey =
+  | "UE"
+  | "HORS_UE"
+  | "MONACO"
+  | "PTOM_NOUVELLE_CALEDONIE"
+  | `DROM_${DromCode}`
+  | `COM_${ComCode}`;
+
+type AssistantRequest = {
+  question: string;
+  destination?: DestinationKey | string | null;
+  incoterm?: string | null;
+  transport_mode?: string | null;
+
+  // optionnel (si tu veux pointer des objets précis)
+  client_id?: string | null;
+  product_ids?: string[] | null;
+
+  // optionnel : pour orienter la recherche dans les tables
+  territory_code?: string | null; // ex: "GP"
+  date_from?: string | null; // "YYYY-MM-DD"
+  date_to?: string | null; // "YYYY-MM-DD"
+
+  // doc RAG
+  doc_filter?: {
+    doc_type?: string | null;
+    tags?: string[] | null;
+    export_zone?: string | null;
+    incoterm?: string | null;
+  };
+  match_count?: number;
+  strict_docs_only?: boolean;
+
+  // data
+  include_live_data?: boolean; // default true
+  max_rows_per_table?: number; // default 25
+};
+
+type RagCitation = {
+  document_id: string;
+  title: string;
+  published_at: string | null;
+  chunk_index: number;
+  similarity: number;
+};
+
+type DataSource =
+  | { table: "products"; id: string }
+  | { table: "clients"; id: string }
+  | { table: "sales"; id: string }
+  | { table: "cost_lines" | "costs"; id: string };
+
+function nowISODate() {
+  return new Date().toISOString().slice(0, 10);
+}
+function addDaysISO(iso: string, deltaDays: number) {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return d.toISOString().slice(0, 10);
 }
 
-function extractHsCodes(text: string) {
-  const found = new Set<string>();
-  const re = /\b\d{4,10}\b/g;
-  for (const m of text.match(re) ?? []) found.add(m);
-  return Array.from(found).slice(0, 8);
+function normalizeIncoterm(raw?: string | null) {
+  const x = (raw ?? "").trim().toUpperCase();
+  return x || null;
 }
 
-const TERR_MAP: Array<{ code: string; keys: string[] }> = [
-  { code: "GP", keys: ["GP", "GUADELOUPE"] },
-  { code: "MQ", keys: ["MQ", "MARTINIQUE"] },
-  { code: "GF", keys: ["GF", "GUYANE"] },
-  { code: "RE", keys: ["RE", "REUNION", "RÉUNION"] },
-  { code: "YT", keys: ["YT", "MAYOTTE"] },
-  { code: "BL", keys: ["BL", "SAINT-BARTHELEMY", "SAINT BARTH", "SAINT-BARTH", "ST BARTH"] },
-  { code: "MF", keys: ["MF", "SAINT-MARTIN", "ST MARTIN"] },
-  { code: "SPM", keys: ["SPM", "SAINT-PIERRE", "SAINT-PIERRE-ET-MIQUELON", "MIQUELON"] },
-  { code: "FR", keys: ["FR", "FRANCE", "METROPOLE", "MÉTROPOLE"] },
-];
-
-function normalizeTerritory(raw?: string | null): string | null {
+function normalizeDestination(raw?: string | null): DestinationKey {
   const x = (raw ?? "").toUpperCase().trim();
-  if (!x) return null;
-  for (const t of TERR_MAP) {
-    if (t.keys.some((k) => x === k || x.includes(k))) return t.code;
-  }
-  // si l’utilisateur tape déjà un code
-  if (/^[A-Z]{2,3}$/.test(x)) return x;
+  if (!x) return "HORS_UE";
+
+  // codes directs
+  if (x === "UE" || x.includes("EU") || x.includes("EUROPE")) return "UE";
+  if (x.includes("MONACO")) return "MONACO";
+  if (x.includes("NOUVELLE") || x.includes("CALEDONIE") || x === "NC") return "PTOM_NOUVELLE_CALEDONIE";
+
+  // DOM/COM codes
+  const mapExact: Record<string, DestinationKey> = {
+    GP: "DROM_GP",
+    MQ: "DROM_MQ",
+    GF: "DROM_GF",
+    RE: "DROM_RE",
+    YT: "DROM_YT",
+    BL: "COM_BL",
+    MF: "COM_MF",
+    SPM: "COM_SPM",
+  };
+  if (mapExact[x]) return mapExact[x];
+
+  // noms
+  if (x.includes("GUADELOUPE")) return "DROM_GP";
+  if (x.includes("MARTINIQUE")) return "DROM_MQ";
+  if (x.includes("GUYANE")) return "DROM_GF";
+  if (x.includes("REUNION") || x.includes("RÉUNION")) return "DROM_RE";
+  if (x.includes("MAYOTTE")) return "DROM_YT";
+  if (x.includes("SAINT-BARTH") || x.includes("ST BARTH") || x.includes("BARTHELEMY") || x.includes("BARTHÉLEMY")) return "COM_BL";
+  if (x.includes("SAINT-MARTIN")) return "COM_MF";
+  if (x.includes("MIQUELON")) return "COM_SPM";
+
+  // generic
+  if (x.startsWith("DROM_")) return x as DestinationKey;
+  if (x.startsWith("COM_")) return x as DestinationKey;
+  if (x.includes("DROM") || x.includes("OUTRE")) return "DROM_UNKNOWN";
+
+  return "HORS_UE";
+}
+
+function destinationToTerritoryCode(dest: DestinationKey): string | null {
+  if (dest.startsWith("DROM_")) return dest.slice("DROM_".length);
+  if (dest.startsWith("COM_")) return dest.slice("COM_".length);
+  if (dest === "MONACO") return "FR";
+  if (dest === "UE") return "UE";
   return null;
 }
 
-function computeExportZone(territoryCode: string | null, destinationRaw?: string | null) {
-  const x = (destinationRaw ?? "").toUpperCase();
-  if (x.includes("UE") || x.includes("EU")) return "UE";
-  if (x.includes("MONACO")) return "MONACO";
-  if (x.includes("NOUVELLE") || x.includes("CALEDONIE") || x.includes("NC")) return "PTOM_NOUVELLE_CALEDONIE";
-  if (territoryCode && ["GP", "MQ", "GF", "RE", "YT", "BL", "MF", "SPM"].includes(territoryCode)) return "DROM_COM";
-  return "HORS_UE";
+function pickFirst(arr: string[]) {
+  return arr.find(Boolean) ?? "";
+}
+
+function safeStr(v: unknown) {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") return v;
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
+
+function compactNumber(n: number) {
+  return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n);
+}
+
+function moneyEUR(n: number) {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 2 }).format(n);
+}
+
+// Extraction "best effort" de tokens utiles
+function extractTokens(question: string) {
+  const q = question.trim();
+
+  // HS codes / EAN / codes numériques
+  const nums = Array.from(q.matchAll(/\b\d{4,14}\b/g)).map((m) => m[0]);
+
+  // mots (pour ilike)
+  const words = q
+    .toLowerCase()
+    .replace(/[^a-zàâçéèêëîïôûùüÿñæœ0-9\s-]/gi, " ")
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 4 && !["avec", "pour", "dans", "comme", "quoi", "comment", "quel", "quels", "quelle", "quelles", "prix", "taux", "omr", "octroi"].includes(w))
+    .slice(0, 6);
+
+  return { nums: nums.slice(0, 8), words };
 }
 
 async function embedQueryOpenAI(apiKey: string, model: string, text: string) {
@@ -94,13 +187,13 @@ async function embedQueryOpenAI(apiKey: string, model: string, text: string) {
   return data.data[0].embedding as number[];
 }
 
-async function chatOpenAI(apiKey: string, model: string, system: string, user: string) {
+async function chatOpenAI(apiKey: string, model: string, messages: Array<{ role: "system" | "user" | "assistant"; content: string }>) {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
-      messages: [{ role: "system", content: system }, { role: "user", content: user }],
+      messages,
       temperature: 0.2,
     }),
   });
@@ -109,15 +202,74 @@ async function chatOpenAI(apiKey: string, model: string, system: string, user: s
   return data.choices?.[0]?.message?.content ?? "";
 }
 
-function money(n: number) {
-  const v = Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100;
-  return v.toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+// Fallback KB (quand OpenAI ou docs indisponibles)
+function kbForDestination(destination: DestinationKey) {
+  const commonDocs = [
+    "Facture commerciale (mentions complètes) + packing list",
+    "Document transport (AWB/BL/CMR) + preuve d’expédition/livraison",
+    "HS code + origine + valeur (au moins en interne)",
+    "Certificats/attestations conformité selon produit/destination (si DM : IFU/étiquetage/traçabilité)",
+  ];
+
+  const base = {
+    documents_checklist: commonDocs,
+    transport_customs_basics: [
+      "Clarifier Incoterm + lieu : qui paie transport/assurance/taxes/dédouanement ?",
+      "Verrouiller HS + origine + valeur : causes n°1 de blocages/coûts à l’import.",
+      "Toujours exiger preuves de transport + livraison.",
+    ],
+    taxes_and_costs_basics: [
+      "Ne pas annoncer un taux fixe sans validation : taxes varient (destination, HS, incoterm, statut client).",
+      "Définir l’importateur de référence (IOR) et qui supporte taxes/droits (DAP vs DDP).",
+      "Séparer ventes / charges / taxes (TVA, OM/OMR, droits) dans ton pilotage.",
+    ],
+    risks_and_pitfalls: [
+      "Incoterm flou → litiges et surcoûts",
+      "HS/origine/valeur incohérents → retards + taxes imprévues",
+      "Docs incomplets → blocage",
+    ],
+    next_steps: [
+      "Confirmer destination + incoterm + lieu",
+      "Valider HS + origine + valeur + IOR",
+      "Préparer pack documentaire + preuves",
+      "Verrouiller qui dédouane / qui paie taxes",
+    ],
+  };
+
+  if (destination.startsWith("DROM_") || destination.startsWith("COM_")) {
+    return {
+      ...base,
+      taxes_and_costs_basics: [
+        "Métropole → Outre-mer : sécuriser preuves + traitement fiscal selon cas.",
+        "Anticiper Octroi de mer (OM/OMR) si DROM : qui paie ? selon incoterm / contrat.",
+        ...base.taxes_and_costs_basics,
+      ],
+    };
+  }
+  if (destination === "UE") {
+    return {
+      ...base,
+      taxes_and_costs_basics: [
+        "UE : pas de dédouanement ; focus TVA intracom (statut client + preuve transport).",
+        ...base.taxes_and_costs_basics,
+      ],
+    };
+  }
+  return {
+    ...base,
+    taxes_and_costs_basics: [
+      "Hors UE : export souvent HT si preuve d’export ; taxes/droits payés à l’import selon pays.",
+      "DDP hors UE : attention IOR/immatriculation (risque de blocage si non cadré).",
+      ...base.taxes_and_costs_basics,
+    ],
+  };
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { error: "Method not allowed" });
 
+  // ---- ENV ----
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -125,10 +277,32 @@ Deno.serve(async (req) => {
   const EMB_MODEL = Deno.env.get("OPENAI_EMBEDDING_MODEL") ?? "text-embedding-3-small";
   const CHAT_MODEL = Deno.env.get("OPENAI_CHAT_MODEL") ?? "gpt-4.1-mini";
 
+  const ALLOWED_EMAILS_RAW = (Deno.env.get("ALLOWED_EMAILS") ?? "").trim(); // ex: "lamia@..., patrick@..."
+  const ALLOWED_EMAILS = ALLOWED_EMAILS_RAW
+    ? new Set(ALLOWED_EMAILS_RAW.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean))
+    : null;
+
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return json(500, { error: "Missing supabase env" });
 
-  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  // ---- AUTH: require Bearer token ----
+  const authHeader = req.headers.get("authorization") || "";
+  const jwt = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!jwt) return json(401, { error: "Missing Authorization Bearer token" });
 
+  // Service-role client (DB + auth.getUser(jwt))
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+
+  const { data: userData, error: userErr } = await admin.auth.getUser(jwt);
+  if (userErr || !userData?.user) return json(401, { error: "Invalid session" });
+
+  const userEmail = (userData.user.email || "").toLowerCase();
+  if (ALLOWED_EMAILS && !ALLOWED_EMAILS.has(userEmail)) {
+    return json(403, { error: "Forbidden" });
+  }
+
+  // ---- BODY ----
   let body: AssistantRequest;
   try {
     body = await req.json();
@@ -139,220 +313,265 @@ Deno.serve(async (req) => {
   const question = (body?.question ?? "").trim();
   if (!question) return json(400, { error: "question is required" });
 
-  // (optionnel) vérifier user (JWT)
-  // Si tu veux verrouiller l’accès, décommente et ajoute une whitelist email
-  // const authHeader = req.headers.get("Authorization") || "";
-  // const jwt = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  // if (!jwt) return json(401, { error: "Missing Authorization" });
-  // const { data: uData, error: uErr } = await supabase.auth.getUser(jwt);
-  // if (uErr || !uData?.user) return json(401, { error: "Invalid user session" });
+  const destination = normalizeDestination(body.destination ?? null);
+  const incoterm = normalizeIncoterm(body.incoterm);
+  const transportMode = (body.transport_mode ?? null)?.trim() ?? null;
 
-  const incoterm = (body.incoterm ?? null)?.toUpperCase() ?? null;
+  const includeLiveData = body.include_live_data !== false;
+  const maxRows = Math.min(Math.max(body.max_rows_per_table ?? 25, 5), 80);
 
-  const territoryFromDestination = normalizeTerritory(body.destination ?? null);
-  const territory = normalizeTerritory(body.territory_code ?? null) ?? territoryFromDestination;
-  const exportZone = computeExportZone(territory, body.destination ?? null);
+  // dates
+  const today = nowISODate();
+  const dateTo = (body.date_to ?? today).slice(0, 10);
+  const dateFrom = (body.date_from ?? addDaysISO(dateTo, -30)).slice(0, 10);
 
-  const includeTables = body.include_tables !== false; // default true
-  const dateFrom = body.date_from ?? null;
-  const dateTo = body.date_to ?? null;
+  const tokens = extractTokens(question);
 
-  // -----------------------------
-  // 1) TABLES: products / clients / sales / costs
-  // -----------------------------
-  const tableSections: Record<string, string[]> = {};
-  const hsCodes = extractHsCodes(question);
+  // ---- DATA: fetch live rows (best effort) ----
+  let client: any = null;
+  let products: any[] = [];
+  let sales: any[] = [];
+  let costs: any[] = [];
+  const dataSources: DataSource[] = [];
+  let liveDataError: string | null = null;
 
-  let productsBrief: any[] = [];
-  let clientsBrief: any[] = [];
-  let salesBrief: any = null;
-  let costsBrief: any = null;
+  const territoryHint =
+    (body.territory_code ?? null) ||
+    destinationToTerritoryCode(destination) ||
+    null;
 
-  async function safeProductsLookup() {
-    // Heuristique simple: si HS codes présents => match par HS ; sinon search texte sur libellé
-    const q = question.slice(0, 120);
-
-    // essayer de limiter le payload
-    const baseSelect = "id,code_article,libelle_article,hs_code,hs4";
-
-    if (hsCodes.length) {
-      const hs10 = hsCodes.map(normalizeHS).filter(Boolean);
-      const hs4 = hs10.map((h) => h.slice(0, 4)).filter((h) => h.length === 4);
-
-      // On tente d'abord hs_code IN, puis hs4 IN
-      let { data, error } = await supabase.from("products").select(baseSelect).in("hs_code", hs10).limit(12);
-      if (error) {
-        // fallback hs4
-        const r2 = await supabase.from("products").select(baseSelect).in("hs4", hs4).limit(12);
-        data = r2.data ?? [];
-      }
-      return data ?? [];
-    }
-
-    // fallback texte
-    const { data } = await supabase
-      .from("products")
-      .select(baseSelect)
-      .ilike("libelle_article", `%${q}%`)
-      .limit(12);
-
-    return data ?? [];
-  }
-
-  async function safeClientsLookup() {
-    const q = question.slice(0, 80);
-    const sel = "id,code_ets,libelle_client,email,ville,pays,export_zone,drom_code";
-
-    // Heuristique: si la question contient "PHARMACIE" / "CLIENT" / un nom long => tente ilike
-    const shouldSearch =
-      /pharmacie|client|sarl|sas|sa\b|eurl|gmbh|spa/i.test(question) || q.length >= 10;
-
-    if (!shouldSearch) return [];
-
-    const { data } = await supabase
-      .from("clients")
-      .select(sel)
-      .ilike("libelle_client", `%${q}%`)
-      .limit(8);
-
-    return data ?? [];
-  }
-
-  async function safeSalesSummary() {
-    if (!dateFrom || !dateTo) return null;
-
-    const { data, error } = await supabase
-      .from("sales")
-      .select("territory_code,amount_ht,amount_ttc,sale_date")
-      .gte("sale_date", dateFrom)
-      .lte("sale_date", dateTo)
-      .limit(5000);
-
-    if (error) return { error: error.message };
-
-    const rows = data ?? [];
-    const agg: Record<string, { count: number; ht: number; ttc: number }> = {};
-    for (const r of rows as any[]) {
-      const code = String(r.territory_code ?? "FR");
-      if (territory && code !== territory) continue;
-      agg[code] ||= { count: 0, ht: 0, ttc: 0 };
-      agg[code].count += 1;
-      agg[code].ht += Number(r.amount_ht || 0);
-      agg[code].ttc += Number(r.amount_ttc || 0);
-    }
-
-    const list = Object.entries(agg)
-      .map(([code, v]) => ({ code, ...v }))
-      .sort((a, b) => b.ht - a.ht)
-      .slice(0, 8);
-
-    return { total_rows: rows.length, by_territory: list };
-  }
-
-  async function safeCostsSummary() {
-    if (!dateFrom || !dateTo) return null;
-
-    // cost_lines -> fallback costs
-    const run = async (table: "cost_lines" | "costs") => {
-      const { data, error } = await supabase
-        .from(table)
-        .select("destination,amount,cost_type,date")
-        .gte("date", dateFrom)
-        .lte("date", dateTo)
-        .limit(5000);
-      return { data: data ?? [], error: error?.message ?? null };
-    };
-
-    let res = await run("cost_lines");
-    if (res.error) res = await run("costs");
-
-    const rows = res.data as any[];
-    const agg: Record<string, { count: number; amount: number }> = {};
-    for (const r of rows) {
-      const code = String(r.destination ?? "FR");
-      if (territory && code !== territory) continue;
-      agg[code] ||= { count: 0, amount: 0 };
-      agg[code].count += 1;
-      agg[code].amount += Number(r.amount || 0);
-    }
-
-    const list = Object.entries(agg)
-      .map(([code, v]) => ({ code, ...v }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 8);
-
-    return { source_error: res.error, by_territory: list };
-  }
-
-  if (includeTables) {
+  if (includeLiveData) {
     try {
-      // si client_id/product_ids envoyés, on priorise
+      // ---- CLIENT ----
       if (body.client_id) {
-        const { data } = await supabase.from("clients").select("*").eq("id", body.client_id).maybeSingle();
-        if (data) clientsBrief = [data];
-      } else {
-        clientsBrief = await safeClientsLookup();
+        const { data, error } = await admin.from("clients").select("*").eq("id", body.client_id).maybeSingle();
+        if (error) throw error;
+        client = data ?? null;
+        if (client?.id) dataSources.push({ table: "clients", id: client.id });
+      } else if (tokens.words.length) {
+        // recherche simple sur libelle_client / code_ets / ville
+        const w = tokens.words[0];
+        const { data, error } = await admin
+          .from("clients")
+          .select("*")
+          .or(`libelle_client.ilike.%${w}%,code_ets.ilike.%${w}%,ville.ilike.%${w}%`)
+          .limit(5);
+        if (!error && data?.length) {
+          client = data[0];
+          if (client?.id) dataSources.push({ table: "clients", id: client.id });
+        }
       }
 
+      // ---- PRODUCTS ----
       if (body.product_ids?.length) {
-        const { data } = await supabase.from("products").select("id,code_article,libelle_article,hs_code,hs4").in("id", body.product_ids);
-        productsBrief = data ?? [];
+        const { data, error } = await admin.from("products").select("*").in("id", body.product_ids).limit(maxRows);
+        if (error) throw error;
+        products = data ?? [];
       } else {
-        productsBrief = await safeProductsLookup();
+        // priorité : HS / EAN / codes numériques
+        const nums = tokens.nums;
+
+        // recherche HS probable (4,6,8,10) ou EAN(13)
+        let hsCandidates = nums.filter((n) => [4, 6, 8, 10].includes(n.length));
+        if (!hsCandidates.length) hsCandidates = nums.filter((n) => n.length >= 4 && n.length <= 10);
+
+        // recherche code_article / ean / hs_code / hs4
+        if (hsCandidates.length) {
+          const n = hsCandidates[0];
+          const { data, error } = await admin
+            .from("products")
+            .select("*")
+            .or(
+              [
+                `hs_code.eq.${n}`,
+                `hs4.eq.${n.slice(0, 4)}`,
+                `code_article.eq.${n}`,
+                `sku.eq.${n}`,
+                `code_acl13_ou_ean13.eq.${n}`,
+              ].join(",")
+            )
+            .limit(maxRows);
+          if (!error && data?.length) products = data;
+        }
+
+        // sinon recherche texte (libellé)
+        if (!products.length && tokens.words.length) {
+          const w = tokens.words[0];
+          const { data, error } = await admin
+            .from("products")
+            .select("*")
+            .or(`libelle_article.ilike.%${w}%,label.ilike.%${w}%,name.ilike.%${w}%`)
+            .limit(maxRows);
+          if (!error && data?.length) products = data;
+        }
       }
 
-      salesBrief = await safeSalesSummary();
-      costsBrief = await safeCostsSummary();
-
-      if (productsBrief.length) {
-        tableSections["Produits (table products)"] = productsBrief.map((p: any) => {
-          const code = p.code_article ?? p.id;
-          const label = p.libelle_article ?? "";
-          const hs = p.hs_code ?? p.hs4 ?? "";
-          return `${code} — ${label}${hs ? ` (HS: ${hs})` : ""}`;
-        });
+      for (const p of products) {
+        if (p?.id) dataSources.push({ table: "products", id: p.id });
       }
 
-      if (clientsBrief.length) {
-        tableSections["Clients (table clients)"] = clientsBrief.slice(0, 8).map((c: any) => {
-          const name = c.libelle_client ?? c.id;
-          const drom = c.drom_code ? ` • drom=${c.drom_code}` : "";
-          const zone = c.export_zone ? ` • zone=${c.export_zone}` : "";
-          return `${name}${zone}${drom}`;
-        });
+      // ---- SALES ----
+      try {
+        let salesQ = admin
+          .from("sales")
+          .select("id,sale_date,territory_code,amount_ht,amount_ttc,client_id")
+          .gte("sale_date", dateFrom)
+          .lte("sale_date", dateTo)
+          .order("sale_date", { ascending: false })
+          .limit(2000);
+
+        if (territoryHint && territoryHint !== "UE") salesQ = salesQ.eq("territory_code", territoryHint);
+        if (client?.id) salesQ = salesQ.eq("client_id", client.id);
+
+        const { data, error } = await salesQ;
+        if (!error) sales = data ?? [];
+      } catch {
+        // ignore (table peut ne pas avoir client_id, etc.)
+        const { data, error } = await admin
+          .from("sales")
+          .select("id,sale_date,territory_code,amount_ht,amount_ttc")
+          .gte("sale_date", dateFrom)
+          .lte("sale_date", dateTo)
+          .order("sale_date", { ascending: false })
+          .limit(2000);
+        if (!error) sales = data ?? [];
       }
 
-      if (salesBrief?.by_territory?.length) {
-        tableSections["Ventes (table sales)"] = salesBrief.by_territory.map((t: any) => {
-          return `${t.code}: ${t.count} vente(s) • CA HT ${money(t.ht)} • CA TTC ${money(t.ttc)}`;
-        });
+      for (const s of sales.slice(0, 200)) {
+        if (s?.id) dataSources.push({ table: "sales", id: s.id });
       }
 
-      if (costsBrief?.by_territory?.length) {
-        tableSections["Coûts (cost_lines/costs)"] = costsBrief.by_territory.map((t: any) => {
-          return `${t.code}: ${t.count} ligne(s) • Total ${money(t.amount)}`;
-        });
+      // ---- COSTS (cost_lines fallback -> costs) ----
+      const loadCosts = async (table: "cost_lines" | "costs") => {
+        const { data, error } = await admin
+          .from(table)
+          .select("id,date,destination,amount,cost_type")
+          .gte("date", dateFrom)
+          .lte("date", dateTo)
+          .order("date", { ascending: false })
+          .limit(5000);
+        if (error) throw error;
+        return data ?? [];
+      };
+
+      try {
+        costs = await loadCosts("cost_lines");
+      } catch {
+        costs = await loadCosts("costs");
+      }
+
+      for (const c of costs.slice(0, 200)) {
+        if (c?.id) dataSources.push({ table: (c?.table as any) ?? "cost_lines", id: c.id });
       }
     } catch (e) {
-      tableSections["Tables (warning)"] = [`Erreur lecture tables: ${String(e)}`];
+      liveDataError = String(e?.message || e);
     }
   }
 
-  // -----------------------------
-  // 2) DOCS RAG (comme avant)
-  // -----------------------------
+  // ---- Build "data context" (compact, pour le LLM) ----
+  const salesTotalHt = sales.reduce((s, r) => s + (Number(r.amount_ht) || 0), 0);
+  const salesTotalTtc = sales.reduce((s, r) => s + (Number(r.amount_ttc) || 0), 0);
+
+  const costsTotal = costs.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const marginEst = salesTotalHt - costsTotal;
+  const marginPct = salesTotalHt > 0 ? (marginEst / salesTotalHt) * 100 : null;
+
+  const byTerritory: Record<string, { ca_ht: number; ca_ttc: number; costs: number; count_sales: number; count_costs: number }> = {};
+  for (const s of sales) {
+    const code = (s.territory_code || "FR") as string;
+    byTerritory[code] ||= { ca_ht: 0, ca_ttc: 0, costs: 0, count_sales: 0, count_costs: 0 };
+    byTerritory[code].ca_ht += Number(s.amount_ht) || 0;
+    byTerritory[code].ca_ttc += Number(s.amount_ttc) || 0;
+    byTerritory[code].count_sales += 1;
+  }
+  for (const c of costs) {
+    const code = (c.destination || "FR") as string;
+    byTerritory[code] ||= { ca_ht: 0, ca_ttc: 0, costs: 0, count_sales: 0, count_costs: 0 };
+    byTerritory[code].costs += Number(c.amount) || 0;
+    byTerritory[code].count_costs += 1;
+  }
+
+  const topTerritories = Object.entries(byTerritory)
+    .sort((a, b) => b[1].ca_ht - a[1].ca_ht)
+    .slice(0, 6)
+    .map(([code, v]) => ({
+      code,
+      ca_ht: v.ca_ht,
+      ca_ttc: v.ca_ttc,
+      costs: v.costs,
+      margin: v.ca_ht - v.costs,
+      margin_pct: v.ca_ht > 0 ? ((v.ca_ht - v.costs) / v.ca_ht) * 100 : null,
+      count_sales: v.count_sales,
+      count_costs: v.count_costs,
+    }));
+
+  const productSummary = products.slice(0, 12).map((p) => {
+    const name = p.libelle_article ?? p.label ?? p.name ?? p.code_article ?? p.sku ?? p.id;
+    const hs = p.hs_code ?? p.hs4 ?? null;
+    return {
+      id: p.id,
+      name,
+      hs,
+      sku: p.sku ?? p.code_article ?? null,
+      ean13: p.code_acl13_ou_ean13 ?? null,
+    };
+  });
+
+  const clientSummary = client
+    ? {
+        id: client.id,
+        name: client.libelle_client ?? client.raison_sociale ?? client.id,
+        code: client.code_ets ?? null,
+        ville: client.ville ?? null,
+        pays: client.pays ?? null,
+        drom_code: client.drom_code ?? null,
+      }
+    : null;
+
+  const liveDataContext =
+    includeLiveData
+      ? [
+          `LIVE DATA (période ${dateFrom} → ${dateTo})`,
+          `- Totaux ventes: CA HT=${moneyEUR(salesTotalHt)} | CA TTC=${moneyEUR(salesTotalTtc)} | nb ventes=${compactNumber(sales.length)}`,
+          `- Totaux coûts: ${moneyEUR(costsTotal)} | nb lignes coûts=${compactNumber(costs.length)}`,
+          `- Marge estimée: ${moneyEUR(marginEst)}${marginPct === null ? "" : ` (${marginPct.toFixed(1)}%)`}`,
+          clientSummary ? `- Client: ${clientSummary.name} (id=${clientSummary.id})` : `- Client: (non spécifié)`,
+          productSummary.length
+            ? `- Produits (extraits):\n${productSummary.map((p) => `  • ${p.name} | hs=${p.hs ?? "n/a"} | sku=${p.sku ?? "n/a"} | id=${p.id}`).join("\n")}`
+            : `- Produits: (aucun match)`,
+          topTerritories.length
+            ? `- Top territoires (CA HT):\n${topTerritories
+                .map(
+                  (t) =>
+                    `  • ${t.code} | CA HT=${moneyEUR(t.ca_ht)} | coûts=${moneyEUR(t.costs)} | marge=${moneyEUR(t.margin)}${
+                      t.margin_pct === null ? "" : ` (${t.margin_pct.toFixed(1)}%)`
+                    } | ventes=${t.count_sales}`,
+                )
+                .join("\n")}`
+            : `- Territoires: (aucune donnée)`,
+          liveDataError ? `- liveDataError: ${liveDataError}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : "";
+
+  // ---- DOCS RAG ----
   const matchCount = body.match_count ?? 8;
   const filter = body.doc_filter ?? {};
-
-  let citations: any[] = [];
-  let docContext = "";
+  let citations: RagCitation[] = [];
+  let docAnswer: string | null = null;
   let ragError: string | null = null;
 
+  // IMPORTANT: RAG = docs; Live data = tables.
+  // Tu peux décider : (a) demander au modèle d'abord d'utiliser les docs, sinon data, sinon fallback.
+  const wantsDocsOnly = !!body.strict_docs_only;
+
   if (OPENAI_API_KEY) {
+    // RAG docs-first
     try {
       const queryEmbedding = await embedQueryOpenAI(OPENAI_API_KEY, EMB_MODEL, question);
 
-      const { data: matches, error: mErr } = await supabase.rpc("match_document_chunks", {
+      const { data: matches, error: mErr } = await admin.rpc("match_document_chunks", {
         query_embedding: queryEmbedding,
         match_count: matchCount,
         filter_doc_type: filter.doc_type ?? null,
@@ -364,93 +583,144 @@ Deno.serve(async (req) => {
       if (mErr) throw new Error(mErr.message);
 
       const rows = (matches ?? []) as any[];
-      docContext = rows
+
+      const docContext = rows
+        .slice(0, matchCount)
         .map(
           (r, i) =>
             `#${i + 1} ${r.title} (${r.doc_type ?? "doc"}, ${r.published_at ?? "n/a"}) [chunk ${r.chunk_index}]\n${r.content}`,
         )
         .join("\n\n---\n\n");
 
-      citations = rows.map((r) => ({
+      citations = rows.slice(0, matchCount).map((r) => ({
         document_id: r.document_id,
         title: r.title,
-        published_at: r.published_at,
+        published_at: r.published_at ?? null,
         chunk_index: r.chunk_index,
         similarity: r.similarity,
       }));
+
+      // Prompt
+      const system = [
+        "Tu es l’assistant Export Navigator.",
+        "Tu as potentiellement 2 sources: (A) EXTRaits DOCUMENTAIRES (RAG) et (B) LIVE DATA (tables internes).",
+        "Règles:",
+        "- Si tu utilises des infos issues des extraits DOCUMENTAIRES: cite (titre + chunk).",
+        "- Si tu utilises des infos issues des LIVE DATA: cite l'id et la table quand tu donnes un chiffre ou un fait.",
+        "- Si l’info n’est pas disponible: dis-le clairement et demande la donnée manquante.",
+        "- Réponse en français, structurée, actionnable (checklist + risques + next steps).",
+        "- Ne révèle pas de clés/API ni de détails techniques inutiles.",
+      ].join("\n");
+
+      const userMsg = [
+        `QUESTION:\n${question}`,
+        "",
+        `CONTEXTE OPÉRATIONNEL:\n- destination=${destination}\n- incoterm=${incoterm ?? "n/a"}\n- transport=${transportMode ?? "n/a"}\n- territory_hint=${territoryHint ?? "n/a"}\n- période=${dateFrom} → ${dateTo}`,
+        "",
+        includeLiveData && liveDataContext ? `LIVE DATA:\n${liveDataContext}` : "LIVE DATA: (désactivé)",
+        "",
+        citations.length ? `EXTRAITS DOCUMENTS:\n${docContext}` : "EXTRAITS DOCUMENTS: (aucun match)",
+        "",
+        "Contraintes:",
+        "- Si strict_docs_only=true: n'utilise QUE les extraits documents.",
+        "- Sinon: privilégie d'abord les extraits documents, puis complète avec LIVE DATA si pertinent.",
+      ].join("\n");
+
+      docAnswer = await chatOpenAI(OPENAI_API_KEY, CHAT_MODEL, [
+        { role: "system", content: system },
+        { role: "user", content: userMsg },
+      ]);
     } catch (e) {
-      ragError = String(e);
+      ragError = String(e?.message || e);
     }
   }
 
-  if (body.strict_docs_only && (!docContext || !citations.length)) {
+  // ---- Decide response mode ----
+  // Cas 1: réponse via LLM (docs + éventuellement data)
+  if (docAnswer && docAnswer.trim()) {
     return json(200, {
       ok: true,
-      mode: "docs_only",
-      answer:
-        "Je ne trouve pas la réponse dans la base documentaire disponible (ou elle n’est pas accessible). " +
-        "Ajoute les documents pertinents dans la Reference Library (PDF) puis relance.",
-      citations: [],
-      sections: includeTables ? tableSections : {},
-      debug: { territory, exportZone, incoterm, ragError: ragError ?? "No docs / no matches" },
+      mode: citations.length ? (includeLiveData ? "docs_rag+live_data" : "docs_rag") : (includeLiveData ? "live_data_only_llm" : "llm_no_docs"),
+      destination,
+      incoterm,
+      transport_mode: transportMode,
+      answer: docAnswer.trim(),
+      citations,
+      data_sources: includeLiveData ? dataSources.slice(0, 400) : [],
+      live_data: includeLiveData
+        ? {
+            period: { from: dateFrom, to: dateTo },
+            totals: {
+              sales_ht: salesTotalHt,
+              sales_ttc: salesTotalTtc,
+              costs: costsTotal,
+              margin: marginEst,
+              margin_pct: marginPct,
+            },
+            top_territories: topTerritories,
+            client: clientSummary,
+            products: productSummary,
+          }
+        : null,
+      debug: { ragError: ragError ?? null, liveDataError: liveDataError ?? null, user: { email: userEmail } },
     });
   }
 
-  // -----------------------------
-  // 3) LLM final (docs + tables)
-  // -----------------------------
-  const system =
-    "Tu es l’assistant Export Navigator. Tu réponds de façon opérationnelle et concrète.\n" +
-    "Tu peux utiliser:\n" +
-    "- les EXTRaits de documents (si fournis)\n" +
-    "- le résumé TABLES internes (si fourni)\n" +
-    "Si une info n’est pas présente, dis-le clairement.\n" +
-    "Rends une réponse courte + une checklist + 3 actions suggérées.\n";
-
-  const user =
-    `Question:\n${question}\n\n` +
-    `Contexte:\n` +
-    `- export_zone=${exportZone}\n` +
-    `- territory=${territory ?? "n/a"}\n` +
-    `- destination_raw=${body.destination ?? "n/a"}\n` +
-    `- incoterm=${incoterm ?? "n/a"}\n` +
-    `- transport=${body.transport_mode ?? "n/a"}\n` +
-    (dateFrom && dateTo ? `- période=${dateFrom} → ${dateTo}\n` : "") +
-    (hsCodes.length ? `- HS détectés=${hsCodes.join(", ")}\n` : "") +
-    `\nTABLES (résumé):\n${Object.entries(tableSections)
-      .map(([k, lines]) => `## ${k}\n- ${lines.join("\n- ")}`)
-      .join("\n\n") || "n/a"}\n\n` +
-    `DOCS (extraits):\n${docContext || "n/a"}\n\n` +
-    "Format attendu:\n" +
-    "1) Réponse (5-10 lignes)\n" +
-    "2) Checklist\n" +
-    "3) Actions suggérées (3)\n" +
-    "4) Si tu cites des docs, indique titre + chunk.\n";
-
-  let finalAnswer = "";
-  try {
-    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY manquant");
-    finalAnswer = await chatOpenAI(OPENAI_API_KEY, CHAT_MODEL, system, user);
-  } catch (e) {
-    // fallback si pas d’OpenAI
-    finalAnswer =
-      "Je ne peux pas appeler le modèle IA pour le moment. " +
-      "Je te renvoie les éléments internes disponibles (tables) et tu peux préciser la question.";
+  // Cas 2: strict docs only demandé
+  if (wantsDocsOnly) {
+    return json(200, {
+      ok: true,
+      mode: "docs_only",
+      destination,
+      incoterm,
+      transport_mode: transportMode,
+      answer:
+        "Je ne trouve pas la réponse dans la base documentaire disponible (ou elle n’est pas accessible). " +
+        "Ajoute/importe les documents pertinents dans la Reference Library (PDF) puis relance.",
+      citations: [],
+      data_sources: [],
+      debug: { ragError: ragError ?? "No docs / no matches", liveDataError: liveDataError ?? null, user: { email: userEmail } },
+    });
   }
 
-  const actionsSuggested = [
-    "Confirmer HS + valeur + origine (source interne) avant annonce client",
-    "Vérifier incoterm + importateur (IOR) + qui paie OM/TVA/droits",
-    "Contrôler pièces: facture/packing + preuve transport + règles OM/OMR",
+  // Cas 3: fallback KB + résumé data (si dispo)
+  const kb = kbForDestination(destination);
+
+  const fallbackAnswerParts = [
+    `Je n’ai pas pu m’appuyer sur la base documentaire (ou je n’ai pas trouvé d’extraits pertinents).`,
+    includeLiveData
+      ? `J’ai toutefois accès à tes données (tables). Sur ${dateFrom} → ${dateTo}: CA HT=${moneyEUR(salesTotalHt)}, coûts=${moneyEUR(costsTotal)}, marge≈${moneyEUR(marginEst)}${
+          marginPct === null ? "" : ` (${marginPct.toFixed(1)}%)`
+        }.`
+      : `LIVE DATA désactivé.`,
+    `Voici une synthèse opérationnelle (fallback) pour ${destination}${incoterm ? ` / ${incoterm}` : ""}.`,
   ];
 
   return json(200, {
     ok: true,
-    mode: citations.length ? (includeTables ? "tables+docs_rag" : "docs_rag") : includeTables ? "tables_only" : "no_docs",
-    answer: finalAnswer,
-    sections: tableSections,
-    actionsSuggested,
-    citations,
-    debug: { territory, exportZone, incoterm, ragError: ragError ?? null },
+    mode: includeLiveData ? "fallback_kb+live_data" : "fallback_kb",
+    destination,
+    incoterm,
+    transport_mode: transportMode,
+    answer: fallbackAnswerParts.join(" "),
+    kb,
+    citations: [],
+    data_sources: includeLiveData ? dataSources.slice(0, 400) : [],
+    live_data: includeLiveData
+      ? {
+          period: { from: dateFrom, to: dateTo },
+          totals: {
+            sales_ht: salesTotalHt,
+            sales_ttc: salesTotalTtc,
+            costs: costsTotal,
+            margin: marginEst,
+            margin_pct: marginPct,
+          },
+          top_territories: topTerritories,
+          client: clientSummary,
+          products: productSummary,
+        }
+      : null,
+    debug: { ragError: ragError ?? "No docs / no matches", liveDataError: liveDataError ?? null, user: { email: userEmail } },
   });
 });
