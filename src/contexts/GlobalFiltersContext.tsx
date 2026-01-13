@@ -170,7 +170,18 @@ const resolveTimeRange = (range: TimeRangeValue): ResolvedTimeRange => {
 
 function sanitizeForOr(term: string) {
   // évite de casser supabase .or("...") avec des caractères structurants
-  return term.trim().replace(/[,%()]/g, " ").replace(/\s+/g, " ").trim();
+  return (term ?? "")
+    .trim()
+    .replace(/[,%()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeTerritoryCode(v: unknown) {
+  if (typeof v !== "string") return v as any;
+  const s = v.trim();
+  if (!s) return null;
+  return s.toUpperCase();
 }
 
 export function GlobalFiltersProvider({ children }: { children: React.ReactNode }) {
@@ -220,7 +231,15 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
 
   const setVariable = React.useCallback(
     <K extends keyof GlobalVariables>(key: K, value: GlobalVariables[K]) => {
-      setVariables((prev) => ({ ...prev, [key]: value || null }));
+      let v: any = value;
+
+      // Normalisation critique : éviter de stocker "Saint-Martin" au lieu de "MF"
+      if (key === "territory_code") v = normalizeTerritoryCode(v);
+
+      // garder null si vide
+      if (v === "" || v === undefined) v = null;
+
+      setVariables((prev) => ({ ...prev, [key]: v || null }));
     },
     []
   );
@@ -266,23 +285,27 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
     };
   }, []);
 
+  /**
+   * ✅ IMPORTANT : ta table clients n'a (visiblement) PAS une colonne "name".
+   * On utilise "libelle_client" (cohérent avec tes imports CSV).
+   */
   const searchClients = React.useCallback(async (term: string) => {
     if (!SUPABASE_ENV_OK) return;
-    const t = sanitizeForOr(term);
+    const t = sanitizeForOr(term ?? "");
 
     setSearchingClients(true);
     try {
-      const q = supabase.from("clients").select("id,name");
+      const q = supabase.from("clients").select("id,libelle_client");
 
       const { data, error } =
         t.length >= 2
-          ? await q.ilike("name", `%${t}%`).order("name", { ascending: true }).limit(30)
-          : await q.order("name", { ascending: true }).limit(30);
+          ? await q.ilike("libelle_client", `%${t}%`).order("libelle_client", { ascending: true }).limit(30)
+          : await q.order("libelle_client", { ascending: true }).limit(30);
 
       if (error) throw error;
 
       const rows = ((data as any[]) ?? [])
-        .map((c) => ({ id: String(c.id), label: String(c.name ?? "") }))
+        .map((c) => ({ id: String(c.id), label: String(c.libelle_client ?? "") }))
         .filter((x) => x.label);
 
       for (const r of rows) clientCacheRef.current[r.id] = r.label;
@@ -297,7 +320,7 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
 
   const searchProducts = React.useCallback(async (term: string) => {
     if (!SUPABASE_ENV_OK) return;
-    const t = sanitizeForOr(term);
+    const t = sanitizeForOr(term ?? "");
 
     setSearchingProducts(true);
     try {
@@ -344,18 +367,25 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
 
       try {
         if (clientId && !clientCacheRef.current[clientId]) {
-          const { data } = await supabase.from("clients").select("id,name").eq("id", clientId).maybeSingle();
-          if (!cancelled && data?.id) clientCacheRef.current[String(data.id)] = String((data as any).name ?? "");
+          const { data, error } = await supabase
+            .from("clients")
+            .select("id,libelle_client")
+            .eq("id", clientId)
+            .maybeSingle();
+
+          if (!error && !cancelled && data?.id) {
+            clientCacheRef.current[String(data.id)] = String((data as any).libelle_client ?? "");
+          }
         }
 
         if (productId && !productCacheRef.current[productId]) {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from("products")
             .select("id,libelle_article,code_article")
             .eq("id", productId)
             .maybeSingle();
 
-          if (!cancelled && data?.id) {
+          if (!error && !cancelled && data?.id) {
             const code = (data as any).code_article ? String((data as any).code_article) : "";
             const lib = (data as any).libelle_article ? String((data as any).libelle_article) : "";
             productCacheRef.current[String(data.id)] = code ? `${code} — ${lib}` : lib;
@@ -373,8 +403,10 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
   }, [variables.client_id, variables.product_id]);
 
   const labels = React.useMemo(() => {
-    const territory = variables.territory_code
-      ? (lookups.territories.find((t) => t.code === variables.territory_code)?.label ?? variables.territory_code)
+    const wantedTerr = variables.territory_code ? String(variables.territory_code).toUpperCase() : null;
+
+    const territory = wantedTerr
+      ? (lookups.territories.find((t) => String(t.code).toUpperCase() === wantedTerr)?.label ?? wantedTerr)
       : null;
 
     const client = variables.client_id ? clientCacheRef.current[variables.client_id] ?? null : null;
