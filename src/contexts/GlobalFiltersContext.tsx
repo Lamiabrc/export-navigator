@@ -37,8 +37,8 @@ type AutoRefreshState = {
 
 type Lookups = {
   territories: { code: string; label?: string | null }[];
-  clients: { id: string; label: string }[]; // résultats de recherche
-  products: { id: string; label: string }[]; // résultats de recherche
+  clients: { id: string; label: string }[];
+  products: { id: string; label: string }[];
 };
 
 type GlobalFiltersState = {
@@ -168,20 +168,13 @@ const resolveTimeRange = (range: TimeRangeValue): ResolvedTimeRange => {
   return resolver();
 };
 
-function sanitizeForOr(term: string) {
-  // évite de casser supabase .or("...") avec des caractères structurants
-  return (term ?? "")
+function sanitizeTerm(term: string) {
+  // évite de casser .or() et les ilike avec des caractères “structurants”
+  return term
     .trim()
-    .replace(/[,%()]/g, " ")
+    .replace(/[,%()'"]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function normalizeTerritoryCode(v: unknown) {
-  if (typeof v !== "string") return v as any;
-  const s = v.trim();
-  if (!s) return null;
-  return s.toUpperCase();
 }
 
 export function GlobalFiltersProvider({ children }: { children: React.ReactNode }) {
@@ -212,6 +205,10 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
   const clientCacheRef = React.useRef<Record<string, string>>({});
   const productCacheRef = React.useRef<Record<string, string>>({});
 
+  // anti “race conditions” (réponses réseau qui arrivent dans le désordre)
+  const clientReqIdRef = React.useRef(0);
+  const productReqIdRef = React.useRef(0);
+
   React.useEffect(() => {
     setStoredFilters({ timeRange, variables, autoRefresh });
   }, [timeRange, variables, autoRefresh, setStoredFilters]);
@@ -231,15 +228,7 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
 
   const setVariable = React.useCallback(
     <K extends keyof GlobalVariables>(key: K, value: GlobalVariables[K]) => {
-      let v: any = value;
-
-      // Normalisation critique : éviter de stocker "Saint-Martin" au lieu de "MF"
-      if (key === "territory_code") v = normalizeTerritoryCode(v);
-
-      // garder null si vide
-      if (v === "" || v === undefined) v = null;
-
-      setVariables((prev) => ({ ...prev, [key]: v || null }));
+      setVariables((prev) => ({ ...prev, [key]: value || null }));
     },
     []
   );
@@ -285,42 +274,53 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
     };
   }, []);
 
-  /**
-   * ✅ IMPORTANT : ta table clients n'a (visiblement) PAS une colonne "name".
-   * On utilise "libelle_client" (cohérent avec tes imports CSV).
-   */
   const searchClients = React.useCallback(async (term: string) => {
     if (!SUPABASE_ENV_OK) return;
-    const t = sanitizeForOr(term ?? "");
+
+    const reqId = ++clientReqIdRef.current;
+    const t = sanitizeTerm(term);
 
     setSearchingClients(true);
     try {
-      const q = supabase.from("clients").select("id,libelle_client");
+      // ✅ IMPORTANT : chez toi ce n’est pas "name" mais "libelle_client" (+ code_ets)
+      const q = supabase.from("clients").select("id,libelle_client,code_ets");
 
       const { data, error } =
         t.length >= 2
-          ? await q.ilike("libelle_client", `%${t}%`).order("libelle_client", { ascending: true }).limit(30)
+          ? await q
+              .or(`libelle_client.ilike.%${t}%,code_ets.ilike.%${t}%`)
+              .order("libelle_client", { ascending: true })
+              .limit(30)
           : await q.order("libelle_client", { ascending: true }).limit(30);
 
       if (error) throw error;
+      if (reqId !== clientReqIdRef.current) return; // réponse obsolète
 
       const rows = ((data as any[]) ?? [])
-        .map((c) => ({ id: String(c.id), label: String(c.libelle_client ?? "") }))
+        .map((c) => {
+          const id = String(c.id);
+          const lib = c.libelle_client ? String(c.libelle_client) : "";
+          const code = c.code_ets ? String(c.code_ets) : "";
+          const label = code ? `${code} — ${lib}` : lib;
+          return { id, label };
+        })
         .filter((x) => x.label);
 
       for (const r of rows) clientCacheRef.current[r.id] = r.label;
       setLookups((prev) => ({ ...prev, clients: rows }));
     } catch (err) {
       console.error("[global-filters] searchClients error", err);
-      setLookups((prev) => ({ ...prev, clients: [] }));
+      if (reqId === clientReqIdRef.current) setLookups((prev) => ({ ...prev, clients: [] }));
     } finally {
-      setSearchingClients(false);
+      if (reqId === clientReqIdRef.current) setSearchingClients(false);
     }
   }, []);
 
   const searchProducts = React.useCallback(async (term: string) => {
     if (!SUPABASE_ENV_OK) return;
-    const t = sanitizeForOr(term ?? "");
+
+    const reqId = ++productReqIdRef.current;
+    const t = sanitizeTerm(term);
 
     setSearchingProducts(true);
     try {
@@ -335,6 +335,7 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
           : await q.order("libelle_article", { ascending: true }).limit(30);
 
       if (error) throw error;
+      if (reqId !== productReqIdRef.current) return;
 
       const rows = ((data as any[]) ?? [])
         .map((p) => {
@@ -350,13 +351,13 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
       setLookups((prev) => ({ ...prev, products: rows }));
     } catch (err) {
       console.error("[global-filters] searchProducts error", err);
-      setLookups((prev) => ({ ...prev, products: [] }));
+      if (reqId === productReqIdRef.current) setLookups((prev) => ({ ...prev, products: [] }));
     } finally {
-      setSearchingProducts(false);
+      if (reqId === productReqIdRef.current) setSearchingProducts(false);
     }
   }, []);
 
-  // hydrate les labels si on a juste un id (rechargement / navigation)
+  // hydrate labels si on a juste un id (rechargement / navigation)
   React.useEffect(() => {
     let cancelled = false;
     if (!SUPABASE_ENV_OK) return;
@@ -367,28 +368,30 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
 
       try {
         if (clientId && !clientCacheRef.current[clientId]) {
-          const { data, error } = await supabase
+          const { data } = await supabase
             .from("clients")
-            .select("id,libelle_client")
+            .select("id,libelle_client,code_ets")
             .eq("id", clientId)
             .maybeSingle();
 
-          if (!error && !cancelled && data?.id) {
-            clientCacheRef.current[String(data.id)] = String((data as any).libelle_client ?? "");
+          if (!cancelled && data?.id) {
+            const lib = (data as any).libelle_client ? String((data as any).libelle_client) : "";
+            const code = (data as any).code_ets ? String((data as any).code_ets) : "";
+            clientCacheRef.current[String((data as any).id)] = code ? `${code} — ${lib}` : lib;
           }
         }
 
         if (productId && !productCacheRef.current[productId]) {
-          const { data, error } = await supabase
+          const { data } = await supabase
             .from("products")
             .select("id,libelle_article,code_article")
             .eq("id", productId)
             .maybeSingle();
 
-          if (!error && !cancelled && data?.id) {
+          if (!cancelled && data?.id) {
             const code = (data as any).code_article ? String((data as any).code_article) : "";
             const lib = (data as any).libelle_article ? String((data as any).libelle_article) : "";
-            productCacheRef.current[String(data.id)] = code ? `${code} — ${lib}` : lib;
+            productCacheRef.current[String((data as any).id)] = code ? `${code} — ${lib}` : lib;
           }
         }
       } catch (e) {
@@ -403,10 +406,8 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
   }, [variables.client_id, variables.product_id]);
 
   const labels = React.useMemo(() => {
-    const wantedTerr = variables.territory_code ? String(variables.territory_code).toUpperCase() : null;
-
-    const territory = wantedTerr
-      ? (lookups.territories.find((t) => String(t.code).toUpperCase() === wantedTerr)?.label ?? wantedTerr)
+    const territory = variables.territory_code
+      ? lookups.territories.find((t) => t.code === variables.territory_code)?.label ?? variables.territory_code
       : null;
 
     const client = variables.client_id ? clientCacheRef.current[variables.client_id] ?? null : null;
