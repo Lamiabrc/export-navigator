@@ -17,8 +17,15 @@ export type CostLine = {
   client_id: string | null;
   product_id: string | null;
 
-  // ✅ nouveau champ pour charges "par commande"
+  // charges "par commande"
   order_id: string | null;
+};
+
+export type UseCostsParams = {
+  from?: string;
+  to?: string;
+  territory?: string; // ex: FR / GP / ... / UE
+  clientId?: string;
 };
 
 type UseCostsResult = {
@@ -26,6 +33,7 @@ type UseCostsResult = {
   isLoading: boolean;
   error: string | null;
   warning: string | null;
+  source: "cost_lines" | "costs" | null;
   refresh: () => Promise<void>;
 };
 
@@ -36,7 +44,20 @@ function asMessage(err: any): string {
   return JSON.stringify(err);
 }
 
-async function fetchAllCostLines(): Promise<CostLine[]> {
+function looksLikeMissingTable(errMsg: string) {
+  const msg = (errMsg || "").toLowerCase();
+  return (
+    msg.includes("does not exist") ||
+    msg.includes("relation") ||
+    msg.includes("not found") ||
+    msg.includes("42p01") // relation does not exist
+  );
+}
+
+async function fetchAll(
+  table: "cost_lines" | "costs",
+  params: UseCostsParams
+): Promise<CostLine[]> {
   const pageSize = 5000;
   let from = 0;
   const all: CostLine[] = [];
@@ -44,15 +65,36 @@ async function fetchAllCostLines(): Promise<CostLine[]> {
   while (true) {
     const to = from + pageSize - 1;
 
-    const { data, error } = await supabase
-      .from("cost_lines")
+    let q = supabase
+      .from(table)
       .select(
         "id,date,cost_type,amount,currency,market_zone,destination,incoterm,client_id,product_id,order_id"
       )
       .order("date", { ascending: false })
       .range(from, to);
 
+    // filtres période
+    if (params.from) q = q.gte("date", params.from);
+    if (params.to) q = q.lte("date", params.to);
+
+    // filtre territoire
+    if (params.territory) {
+      const terr = params.territory.toUpperCase();
+      if (terr === "UE") {
+        q = q.eq("market_zone", "UE");
+      } else {
+        q = q.eq("destination", terr);
+      }
+    }
+
+    // filtre client
+    if (params.clientId) {
+      q = q.eq("client_id", params.clientId);
+    }
+
+    const { data, error } = await q;
     if (error) throw error;
+
     if (!data || data.length === 0) break;
 
     all.push(
@@ -78,17 +120,22 @@ async function fetchAllCostLines(): Promise<CostLine[]> {
   return all;
 }
 
-export function useCosts(): UseCostsResult {
+export function useCosts(params: UseCostsParams = {}): UseCostsResult {
   const [rows, setRows] = React.useState<CostLine[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [warning, setWarning] = React.useState<string | null>(null);
+  const [source, setSource] = React.useState<UseCostsResult["source"]>(null);
+
+  const paramsRef = React.useRef<UseCostsParams>(params);
+  paramsRef.current = params;
 
   const refresh = React.useCallback(async () => {
     if (!SUPABASE_ENV_OK) {
       setRows([]);
       setError(null);
       setWarning("Configuration Supabase manquante (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).");
+      setSource(null);
       return;
     }
 
@@ -97,43 +144,40 @@ export function useCosts(): UseCostsResult {
     setWarning(null);
 
     try {
-      const data = await fetchAllCostLines();
+      // 1) on tente cost_lines (table “canon”)
+      const data = await fetchAll("cost_lines", paramsRef.current);
       setRows(data);
-    } catch (e: any) {
-      // Cas fréquent: table manquante / RLS / permissions / etc.
-      const msg = asMessage(e);
+      setSource("cost_lines");
+    } catch (e1: any) {
+      const msg1 = asMessage(e1);
 
-      // PostgREST peut remonter des codes, on met une warning si "relation ... does not exist"
-      const hintMissing =
-        msg.toLowerCase().includes("does not exist") ||
-        msg.toLowerCase().includes("relation") ||
-        msg.toLowerCase().includes("not found");
-
-      if (hintMissing) {
-        setWarning("Table cost_lines manquante ou non accessible (droits/RLS).");
-        setError(null);
+      // si cost_lines absente => fallback costs
+      if (looksLikeMissingTable(msg1)) {
+        try {
+          const data2 = await fetchAll("costs", paramsRef.current);
+          setRows(data2);
+          setSource("costs");
+          setWarning("Lecture via table costs (fallback) : cost_lines manquante ou non accessible (droits/RLS).");
+          setError(null);
+        } catch (e2: any) {
+          setRows([]);
+          setSource(null);
+          setError(asMessage(e2));
+        }
       } else {
-        setError(msg);
+        setRows([]);
+        setSource(null);
+        setError(msg1);
       }
-
-      setRows([]);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  // auto-refresh quand les filtres changent
   React.useEffect(() => {
-    let cancelled = false;
+    void refresh();
+  }, [refresh, params.from, params.to, params.territory, params.clientId]);
 
-    (async () => {
-      if (cancelled) return;
-      await refresh();
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [refresh]);
-
-  return { rows, isLoading, error, warning, refresh };
+  return { rows, isLoading, error, warning, source, refresh };
 }
