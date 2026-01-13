@@ -31,15 +31,7 @@ type ProductRow = {
 };
 
 type LppCoefRow = { territory_code: string; coef: number | null };
-
-type VatRow = { territory_code: string; rate: number | null };
-
-type OmRow = {
-  territory_code: string;
-  hs4: string;
-  om_rate: number | null;
-  omr_rate: number | null;
-};
+type OmRow = { territory_code: string; hs4: string; om_rate: number | null; omr_rate: number | null };
 
 type CompetitorPrice = { name: string; price: number };
 
@@ -65,7 +57,7 @@ type PositionRow = {
   competitors: CompetitorPrice[];
   bestCompetitor: CompetitorPrice | null;
 
-  gapPct: number | null; // our vs best competitor
+  gapPct: number | null;
   rank: number | null;
   competitorCount: number;
 
@@ -74,11 +66,23 @@ type PositionRow = {
   hs4: string | null;
   omTotalRate: number | null; // OM + OMR
   thuasneOmTotalRateBilled: number | null; // OM total * 1.025
-
   thuasneDromUpliftObservedPct: number | null; // (th_drom/th_fr - 1)*100
 };
 
 const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"];
+
+// IMPORTANT : inclure MF/BL/SPM car ton GlobalFilter te met Saint-Martin etc.
+const TERRITORIES: { code: string; label: string }[] = [
+  { code: "FR", label: "Métropole (FR)" },
+  { code: "GP", label: "Guadeloupe (GP)" },
+  { code: "MQ", label: "Martinique (MQ)" },
+  { code: "GF", label: "Guyane (GF)" },
+  { code: "RE", label: "Réunion (RE)" },
+  { code: "YT", label: "Mayotte (YT)" },
+  { code: "MF", label: "Saint-Martin (MF)" },
+  { code: "BL", label: "Saint-Barthélemy (BL)" },
+  { code: "SPM", label: "Saint-Pierre-et-Miquelon (SPM)" },
+];
 
 const money = (n: number | null | undefined) => {
   if (n === null || n === undefined || !Number.isFinite(Number(n))) return "—";
@@ -94,7 +98,7 @@ function num(v: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function pct(n: number | null | undefined) {
+function pctLabel(n: number | null | undefined) {
   if (n === null || n === undefined || !Number.isFinite(Number(n))) return "—";
   const sign = n > 0 ? "+" : "";
   return `${sign}${n.toFixed(1)}%`;
@@ -122,10 +126,16 @@ function hs4Of(hsCode: string | null) {
   return x.slice(0, 4);
 }
 
+const neonCard =
+  "bg-white border border-slate-200 shadow-[0_0_0_1px_rgba(56,189,248,0.10),0_10px_30px_rgba(2,6,23,0.06)]";
+
+const neonHeader =
+  "bg-gradient-to-r from-slate-50 via-white to-sky-50 border border-slate-200 shadow-[0_0_0_1px_rgba(56,189,248,0.12),0_12px_40px_rgba(2,6,23,0.08)]";
+
 export default function WatchCommercial() {
   const { variables } = useGlobalFilters();
 
-  const [territory, setTerritory] = React.useState<string>(variables.territory_code || "FR");
+  const [territory, setTerritory] = React.useState<string>((variables.territory_code || "FR").toUpperCase());
   const [search, setSearch] = React.useState("");
   const [selectedSku, setSelectedSku] = React.useState<string>("");
 
@@ -135,7 +145,6 @@ export default function WatchCommercial() {
 
   const [showSources, setShowSources] = React.useState(true);
 
-  // Frais supplémentaires par DOM (€/commande) : utilisé dans la lecture / simulation si tu veux l’exploiter ensuite
   const [extraFees, setExtraFees] = React.useState<Record<string, number>>({
     GP: 0,
     MQ: 0,
@@ -150,7 +159,7 @@ export default function WatchCommercial() {
   };
 
   React.useEffect(() => {
-    if (variables.territory_code) setTerritory(variables.territory_code);
+    if (variables.territory_code) setTerritory(String(variables.territory_code).toUpperCase());
   }, [variables.territory_code]);
 
   React.useEffect(() => {
@@ -166,21 +175,22 @@ export default function WatchCommercial() {
       setError(null);
 
       try {
-        // On charge toujours le territoire demandé + FR pour calculer "Thuasne attendu DROM (FR * 1.02)"
-        const wantedTerritories = Array.from(new Set(["FR", territory.toUpperCase()]));
+        const terr = territory.toUpperCase();
+        const wantedTerritories = Array.from(new Set(["FR", terr]));
 
         const { data: pp, error: ppErr } = await supabase
           .from("product_prices")
-          .select("product_id, territory_code, plv_metropole_ttc, plv_om_ttc, thuasne_price_ttc, donjoy_price_ttc, gibaud_price_ttc")
+          .select(
+            "product_id, territory_code, plv_metropole_ttc, plv_om_ttc, thuasne_price_ttc, donjoy_price_ttc, gibaud_price_ttc",
+          )
           .in("territory_code", wantedTerritories)
-          .limit(10000);
+          .limit(20000);
 
         if (!active) return;
         if (ppErr) throw ppErr;
 
         const ppRows = (pp || []) as unknown as ProductPriceRow[];
 
-        // map product -> {FR, TERR}
         const byProduct = new Map<string, { FR?: ProductPriceRow; TERR?: ProductPriceRow }>();
         for (const r of ppRows) {
           const pid = r.product_id;
@@ -188,7 +198,7 @@ export default function WatchCommercial() {
           const rec = byProduct.get(pid) || {};
           const t = (r.territory_code || "").toUpperCase();
           if (t === "FR") rec.FR = r;
-          if (t === territory.toUpperCase()) rec.TERR = r;
+          if (t === terr) rec.TERR = r;
           byProduct.set(pid, rec);
         }
 
@@ -210,45 +220,32 @@ export default function WatchCommercial() {
         const productMap = new Map<string, ProductRow>();
         (products || []).forEach((p: any) => productMap.set(p.id, p as ProductRow));
 
-        const [coefRes, vatRes] = await Promise.all([
-          supabase.from("lpp_majoration_coefficients").select("territory_code, coef"),
-          supabase.from("vat_rates").select("territory_code, rate"),
-        ]);
-
-        const coefData = (coefRes.data || []) as unknown as LppCoefRow[];
-        const vatData = (vatRes.data || []) as unknown as VatRow[];
+        const { data: coefData } = await supabase
+          .from("lpp_majoration_coefficients")
+          .select("territory_code, coef")
+          .limit(2000);
 
         const coefMap = new Map<string, number>();
-        coefData.forEach((c) => {
+        ((coefData || []) as unknown as LppCoefRow[]).forEach((c) => {
           const code = (c.territory_code || "").toUpperCase();
           const v = num(c.coef);
           if (code && v !== null) coefMap.set(code, v);
         });
 
-        const vatMap = new Map<string, number>();
-        vatData.forEach((v) => {
-          const code = (v.territory_code || "").toUpperCase();
-          const r = num(v.rate);
-          if (code && r !== null) vatMap.set(code, r);
-        });
-
-        // OM/OMR : on récupère uniquement le territoire sélectionné (FR inutile)
         const hs4List = productIds
           .map((id) => hs4Of(productMap.get(id)?.hs_code ?? null))
           .filter(Boolean) as string[];
         const hs4Uniq = Array.from(new Set(hs4List));
 
         let omRows: OmRow[] = [];
-        if (hs4Uniq.length && territory.toUpperCase() !== "FR") {
-          const { data: omData, error: omErr } = await supabase
+        if (hs4Uniq.length && terr !== "FR") {
+          const { data: omData } = await supabase
             .from("om_rates")
             .select("territory_code, hs4, om_rate, omr_rate")
-            .eq("territory_code", territory.toUpperCase())
+            .eq("territory_code", terr)
             .in("hs4", hs4Uniq)
-            .limit(10000);
+            .limit(20000);
 
-          if (!active) return;
-          if (omErr) console.warn("OM fetch warning", omErr.message);
           omRows = (omData || []) as unknown as OmRow[];
         }
 
@@ -268,7 +265,6 @@ export default function WatchCommercial() {
 
             const sku = (p?.code_article || "").trim() || pid.slice(0, 8);
             const label = p?.libelle_article ?? null;
-            const terr = territory.toUpperCase();
 
             const isDrom = territoryIsDrom(terr);
 
@@ -316,13 +312,10 @@ export default function WatchCommercial() {
             const omTotalRate =
               terr === "FR" ? null : (om !== null || omr !== null) ? (om ?? 0) + (omr ?? 0) : null;
 
-            const thuasneOmTotalRateBilled =
-              omTotalRate !== null ? omTotalRate * 1.025 : null;
+            const thuasneOmTotalRateBilled = omTotalRate !== null ? omTotalRate * 1.025 : null;
 
             const thuasneDromUpliftObservedPct =
-              isDrom && thuasneFr !== null && thuasneTerritory !== null
-                ? ((thuasneTerritory / thuasneFr) - 1) * 100
-                : null;
+              isDrom && thuasneFr !== null && thuasneTerritory !== null ? ((thuasneTerritory / thuasneFr) - 1) * 100 : null;
 
             return {
               productId: pid,
@@ -355,20 +348,17 @@ export default function WatchCommercial() {
               hs4,
               omTotalRate,
               thuasneOmTotalRateBilled,
-
               thuasneDromUpliftObservedPct,
             };
           })
           .sort((a, b) => (a.sku || "").localeCompare(b.sku || ""));
 
         setRows(mapped);
-
-        // si le SKU sélectionné n’existe plus dans le territoire, on reset
         if (selectedSku && !mapped.some((m) => m.sku === selectedSku)) setSelectedSku("");
       } catch (e: any) {
         console.error(e);
         if (!active) return;
-        setError(e?.message || "Erreur chargement (product_prices / products / taxes)");
+        setError(e?.message || "Erreur chargement (product_prices / products / coefficients / om_rates)");
         setRows([]);
         setSelectedSku("");
       } finally {
@@ -380,8 +370,7 @@ export default function WatchCommercial() {
     return () => {
       active = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [territory]);
+  }, [territory]); // volontaire : pas d’effet sur client/produit global
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -394,13 +383,9 @@ export default function WatchCommercial() {
     return rows.find((r) => r.sku === selectedSku) || null;
   }, [rows, selectedSku]);
 
-  // Synthèse “intelligence économique” (actionnable)
   const summary = React.useMemo(() => {
     const base = filtered;
     const total = base.length;
-
-    const withCompetitor = base.filter((r) => r.competitorCount > 0).length;
-    const coveragePct = total ? (withCompetitor / total) * 100 : 0;
 
     const premium = base.filter((r) => r.status === "premium").length;
     const aligned = base.filter((r) => r.status === "aligned").length;
@@ -410,7 +395,7 @@ export default function WatchCommercial() {
     const gaps = base.filter((r) => Number.isFinite(r.gapPct as number)).map((r) => r.gapPct as number);
     const avgGap = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
 
-    const isDrom = territoryIsDrom(territory.toUpperCase());
+    const isDrom = territoryIsDrom(territory);
     const upliftVals = isDrom
       ? base
           .filter((r) => Number.isFinite(r.thuasneDromUpliftObservedPct as number))
@@ -422,324 +407,280 @@ export default function WatchCommercial() {
       ? base.filter((r) => r.thuasneDromUpliftObservedPct !== null && Math.abs((r.thuasneDromUpliftObservedPct as number) - 2) > 0.5).length
       : 0;
 
-    return {
-      total,
-      withCompetitor,
-      coveragePct,
-      premium,
-      aligned,
-      underpriced,
-      noData,
-      avgGap,
-      upliftMedian,
-      anomaliesThuasne,
-    };
+    const withCompetitor = base.filter((r) => r.competitorCount > 0).length;
+    const coveragePct = total ? (withCompetitor / total) * 100 : 0;
+
+    return { total, premium, aligned, underpriced, noData, avgGap, upliftMedian, anomaliesThuasne, coveragePct };
   }, [filtered, territory]);
 
   const toLowerPrice = React.useMemo(() => {
     return filtered
       .filter((r) => r.status === "premium" && r.bestCompetitor && r.ourPrice !== null)
       .sort((a, b) => (b.gapPct ?? 0) - (a.gapPct ?? 0))
-      .slice(0, 14);
+      .slice(0, 12);
   }, [filtered]);
 
   const toRaisePrice = React.useMemo(() => {
     return filtered
       .filter((r) => r.status === "underpriced" && r.bestCompetitor && r.ourPrice !== null)
       .sort((a, b) => (a.gapPct ?? 0) - (b.gapPct ?? 0))
-      .slice(0, 14);
+      .slice(0, 12);
   }, [filtered]);
 
   const anomaliesThuasne = React.useMemo(() => {
-    const isDrom = territoryIsDrom(territory.toUpperCase());
-    if (!isDrom) return [];
+    if (!territoryIsDrom(territory)) return [];
     return filtered
       .filter((r) => r.thuasneDromUpliftObservedPct !== null && Math.abs((r.thuasneDromUpliftObservedPct as number) - 2) > 0.5)
-      .sort((a, b) => Math.abs((b.thuasneDromUpliftObservedPct as number) - 2) - Math.abs((a.thuasneDromUpliftObservedPct as number) - 2))
-      .slice(0, 14);
+      .sort(
+        (a, b) =>
+          Math.abs((b.thuasneDromUpliftObservedPct as number) - 2) - Math.abs((a.thuasneDromUpliftObservedPct as number) - 2),
+      )
+      .slice(0, 12);
   }, [filtered, territory]);
 
   const missingData = React.useMemo(() => {
-    return filtered
-      .filter((r) => r.ourPrice === null || r.competitorCount === 0)
-      .slice(0, 14);
+    return filtered.filter((r) => r.ourPrice === null || r.competitorCount === 0).slice(0, 12);
   }, [filtered]);
 
-  const headerTerritoryLabel = React.useMemo(() => {
-    const t = territory.toUpperCase();
-    if (t === "FR") return "Métropole (FR)";
-    if (t === "GP") return "Guadeloupe (GP)";
-    if (t === "MQ") return "Martinique (MQ)";
-    if (t === "GF") return "Guyane (GF)";
-    if (t === "RE") return "Réunion (RE)";
-    if (t === "YT") return "Mayotte (YT)";
-    return t;
-  }, [territory]);
-
   return (
-    <MainLayout contentClassName="md:p-6 bg-[radial-gradient(1200px_600px_at_20%_0%,rgba(34,211,238,0.10),transparent_55%),radial-gradient(900px_520px_at_90%_10%,rgba(168,85,247,0.10),transparent_55%),linear-gradient(to_bottom,#020617,#0b1020)]">
-      <div className="space-y-4 text-slate-100">
-        {/* Header */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.35em] text-cyan-200/90">Veille concurrentielle · stratégie prix</p>
-            <h1 className="text-3xl font-bold text-white">Concurrence & stratégie prix</h1>
-            <p className="text-sm text-slate-300">
-              Territoire : <span className="font-semibold text-slate-100">{headerTerritoryLabel}</span> · Objectif :{" "}
-              <span className="text-slate-200">signaux actionnables</span> (premium / sous-pricé / anomalies / manque données).
-            </p>
-          </div>
+    // IMPORTANT : on ne met PLUS de background dark sur MainLayout -> évite de casser le header global + dropdowns
+    <MainLayout contentClassName="md:p-6">
+      <div className="space-y-4">
+        {/* Bandeau lisible + “neon” discret */}
+        <div className={cn("rounded-2xl p-5", neonHeader)}>
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.35em] text-sky-700">Veille concurrentielle · stratégie prix</p>
+              <h1 className="text-3xl font-bold text-slate-900">Concurrence & stratégie prix</h1>
+              <p className="text-sm text-slate-600 mt-1">
+                Objectif : signaux actionnables (premium / sous-pricé / anomalies / manque données) ·{" "}
+                <span className="font-semibold text-slate-800">Couverture : {summary.coveragePct.toFixed(0)}%</span>
+              </p>
+            </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Select value={territory} onValueChange={setTerritory}>
-              <SelectTrigger className="w-[220px] bg-slate-950/60 border-cyan-400/20 text-slate-100">
-                <SelectValue placeholder="Territoire" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="FR">Métropole (FR)</SelectItem>
-                <SelectItem value="GP">Guadeloupe (GP)</SelectItem>
-                <SelectItem value="MQ">Martinique (MQ)</SelectItem>
-                <SelectItem value="GF">Guyane (GF)</SelectItem>
-                <SelectItem value="RE">Réunion (RE)</SelectItem>
-                <SelectItem value="YT">Mayotte (YT)</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Select value={territory} onValueChange={(v) => setTerritory(String(v).toUpperCase())}>
+                <SelectTrigger className="w-[240px] bg-white border-slate-300 text-slate-900">
+                  <SelectValue placeholder="Territoire" />
+                </SelectTrigger>
+                <SelectContent className="z-[500]">
+                  {TERRITORIES.map((t) => (
+                    <SelectItem key={t.code} value={t.code}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher (SKU ou libellé)"
-              className="w-[280px] bg-slate-950/60 border-cyan-400/20 text-slate-100 placeholder:text-slate-500"
-            />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher (SKU ou libellé)"
+                className="w-[280px] bg-white border-slate-300 text-slate-900 placeholder:text-slate-400"
+              />
 
-            <Select value={selectedSku} onValueChange={setSelectedSku}>
-              <SelectTrigger className="w-[280px] bg-slate-950/60 border-cyan-400/20 text-slate-100">
-                <SelectValue placeholder="Sélectionner un produit (SKU)" />
-              </SelectTrigger>
-              <SelectContent>
-                {filtered.slice(0, 700).map((r) => (
-                  <SelectItem key={r.sku} value={r.sku}>
-                    {r.sku} — {(r.label || "Produit").slice(0, 46)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <Select value={selectedSku} onValueChange={setSelectedSku}>
+                <SelectTrigger className="w-[280px] bg-white border-slate-300 text-slate-900">
+                  <SelectValue placeholder="Sélectionner un produit (SKU)" />
+                </SelectTrigger>
+                <SelectContent className="z-[500]">
+                  {filtered.slice(0, 700).map((r) => (
+                    <SelectItem key={r.sku} value={r.sku}>
+                      {r.sku} — {(r.label || "Produit").slice(0, 48)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            <Button
-              variant="secondary"
-              className="bg-slate-950/60 border border-cyan-400/20 text-slate-100 hover:bg-slate-900"
-              onClick={() => setShowSources((s) => !s)}
-            >
-              <Database className="h-4 w-4 mr-2" />
-              {showSources ? "Masquer sources" : "Afficher sources"}
-            </Button>
+              <Button
+                variant="secondary"
+                className="bg-white border border-slate-300 text-slate-900 hover:bg-slate-50"
+                onClick={() => setShowSources((s) => !s)}
+              >
+                <Database className="h-4 w-4 mr-2" />
+                {showSources ? "Masquer sources" : "Afficher sources"}
+              </Button>
+            </div>
           </div>
         </div>
 
         {error ? (
-          <Card className="border border-rose-400/30 bg-rose-950/20">
+          <Card className="border border-rose-200 bg-rose-50">
             <CardContent className="pt-6">
-              <div className="text-sm text-rose-200">{error}</div>
+              <div className="text-sm text-rose-700">{error}</div>
             </CardContent>
           </Card>
         ) : null}
 
-        {/* Control tower: Hypothèses + lecture rapide + sources */}
+        {/* 3 cartes “claires” (plus de gris illisibles) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <Card className="border border-cyan-400/20 bg-slate-950/50 shadow-[0_0_40px_rgba(34,211,238,0.08)]">
+          <Card className={neonCard}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-cyan-200 flex items-center gap-2">
-                <Sparkles className="h-4 w-4" />
-                Hypothèses concurrentielles (à afficher clairement)
+              <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-sky-700" />
+                Hypothèses concurrentielles (visibles)
               </CardTitle>
-              <CardDescription className="text-slate-400">
-                Règles appliquées / visibles pour la lecture business.
+              <CardDescription className="text-slate-600">
+                Règles affichées pour une lecture business non ambiguë.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="rounded-lg border border-cyan-400/15 bg-slate-950/40 p-3">
+            <CardContent className="space-y-3 text-sm text-slate-800">
+              <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
                 <div className="flex items-center justify-between">
-                  <div className="font-semibold text-slate-100">Thuasne — DROM</div>
-                  <Badge variant="outline" className="border-cyan-300/30 text-cyan-200">
+                  <div className="font-semibold">Thuasne — DROM</div>
+                  <Badge variant="outline" className="border-sky-300 text-sky-800">
                     +2%
                   </Badge>
                 </div>
-                <div className="text-xs text-slate-300 mt-1">
-                  Prix DROM attendu = <span className="text-slate-100">prix catalogue FR</span> × 1.02
+                <div className="text-xs text-slate-700 mt-1">
+                  Prix DROM attendu = <span className="font-semibold">prix catalogue FR</span> × 1.02
                 </div>
-
-                {/* Sous-info OM majoré */}
-                <div className="mt-2 text-xs text-slate-300">
-                  <span className="text-slate-200 font-medium">Sous-info facturation Thuasne :</span>{" "}
-                  OM facturé = OM statutaire × <span className="text-slate-100">1.025</span> (soit +2,5%).
+                <div className="mt-2 text-xs text-slate-700">
+                  <span className="font-semibold">Sous-info facturation Thuasne :</span> OM facturé = OM statutaire ×{" "}
+                  <span className="font-semibold">1.025</span> (soit +2,5%).
                 </div>
               </div>
 
-              <div className="rounded-lg border border-violet-400/15 bg-slate-950/40 p-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div className="flex items-center justify-between">
-                  <div className="font-semibold text-slate-100">Enovis (Donjoy)</div>
-                  <Badge variant="outline" className="border-slate-600 text-slate-300">
+                  <div className="font-semibold">Enovis (Donjoy)</div>
+                  <Badge variant="outline" className="border-slate-300 text-slate-700">
                     info non dispo
                   </Badge>
                 </div>
-                <div className="text-xs text-slate-400 mt-1">
-                  Pas d’hypothèse de majoration fiable → on affiche uniquement les prix présents en base.
-                </div>
+                <div className="text-xs text-slate-600 mt-1">On affiche uniquement les prix présents en base.</div>
               </div>
 
-              <div className="rounded-lg border border-violet-400/15 bg-slate-950/40 p-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div className="flex items-center justify-between">
-                  <div className="font-semibold text-slate-100">Gibaud</div>
-                  <Badge variant="outline" className="border-slate-600 text-slate-300">
+                  <div className="font-semibold">Gibaud</div>
+                  <Badge variant="outline" className="border-slate-300 text-slate-700">
                     info non dispo
                   </Badge>
                 </div>
-                <div className="text-xs text-slate-400 mt-1">
-                  Pas d’hypothèse de majoration fiable → on affiche uniquement les prix présents en base.
-                </div>
+                <div className="text-xs text-slate-600 mt-1">On affiche uniquement les prix présents en base.</div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border border-emerald-400/20 bg-slate-950/50 shadow-[0_0_40px_rgba(34,197,94,0.08)]">
+          <Card className={neonCard}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-emerald-200 flex items-center gap-2">
-                <Target className="h-4 w-4" />
+              <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
+                <Target className="h-4 w-4 text-emerald-700" />
                 Lecture rapide (pertinence business)
               </CardTitle>
-              <CardDescription className="text-slate-400">
-                Couverture, signal premium/sous-pricé, anomalies Thuasne.
-              </CardDescription>
+              <CardDescription className="text-slate-600">Premium / sous-pricé / anomalies / gap moyen.</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-emerald-400/15 bg-slate-950/40 p-3">
-                <div className="text-xs text-slate-400">Produits (filtrés)</div>
-                <div className="text-2xl font-bold text-white">{summary.total}</div>
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="text-xs text-slate-600">Produits (filtrés)</div>
+                <div className="text-2xl font-bold text-slate-900">{summary.total}</div>
               </div>
 
-              <div className="rounded-xl border border-emerald-400/15 bg-slate-950/40 p-3">
-                <div className="text-xs text-slate-400">Couverture concurrence</div>
-                <div className="text-2xl font-bold text-emerald-200">{summary.coveragePct.toFixed(0)}%</div>
-                <div className="text-[11px] text-slate-400">{summary.withCompetitor} / {summary.total} avec ≥1 concurrent</div>
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="text-xs text-slate-600">Couverture concurrence</div>
+                <div className="text-2xl font-bold text-slate-900">{summary.coveragePct.toFixed(0)}%</div>
               </div>
 
-              <div className="rounded-xl border border-amber-400/15 bg-slate-950/40 p-3">
-                <div className="text-xs text-slate-400">À baisser (premium)</div>
-                <div className="text-2xl font-bold text-amber-200">{summary.premium}</div>
-                <div className="text-[11px] text-slate-400">&gt; +5% vs best concurrent</div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <div className="text-xs text-amber-800">À baisser (premium)</div>
+                <div className="text-2xl font-bold text-amber-900">{summary.premium}</div>
+                <div className="text-[11px] text-amber-800">&gt; +5% vs best</div>
               </div>
 
-              <div className="rounded-xl border border-cyan-400/15 bg-slate-950/40 p-3">
-                <div className="text-xs text-slate-400">À monter (sous-pricé)</div>
-                <div className="text-2xl font-bold text-cyan-200">{summary.underpriced}</div>
-                <div className="text-[11px] text-slate-400">&lt; -5% vs best concurrent</div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <div className="text-xs text-emerald-800">À monter (sous-pricé)</div>
+                <div className="text-2xl font-bold text-emerald-900">{summary.underpriced}</div>
+                <div className="text-[11px] text-emerald-800">&lt; -5% vs best</div>
               </div>
 
-              {territoryIsDrom(territory.toUpperCase()) ? (
-                <>
-                  <div className="rounded-xl border border-violet-400/15 bg-slate-950/40 p-3 col-span-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-xs text-slate-400">Thuasne : uplift observé (médiane)</div>
-                        <div className="text-2xl font-bold text-violet-200">
-                          {summary.upliftMedian === null ? "—" : `${summary.upliftMedian.toFixed(2)}%`}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs text-slate-400">Anomalies vs règle 2%</div>
-                        <div className="text-2xl font-bold text-rose-200">{summary.anomaliesThuasne}</div>
-                      </div>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-1">
-                      “Anomalie” = écart &gt; 0,5 point vs 2% (si prix FR et DROM Thuasne présents).
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="rounded-xl border border-slate-700/60 bg-slate-950/40 p-3 col-span-2">
-                  <div className="text-xs text-slate-400">Thuasne uplift DROM</div>
-                  <div className="text-sm text-slate-300">Non applicable en territoire FR.</div>
+              <div className="rounded-xl border border-slate-200 bg-white p-3 col-span-2">
+                <div className="text-xs text-slate-600">Gap moyen vs best (sur données)</div>
+                <div className="text-2xl font-bold text-slate-900">
+                  {summary.avgGap === null ? "—" : `${summary.avgGap.toFixed(1)}%`}
                 </div>
-              )}
+                {territoryIsDrom(territory) ? (
+                  <div className="text-xs text-slate-600 mt-1">
+                    Uplift Thuasne médiane :{" "}
+                    <span className="font-semibold">{summary.upliftMedian === null ? "—" : `${summary.upliftMedian.toFixed(2)}%`}</span>{" "}
+                    · anomalies : <span className="font-semibold">{summary.anomaliesThuasne}</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 mt-1">Uplift Thuasne : n/a sur territoire non DROM.</div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="border border-slate-700/60 bg-slate-950/50 shadow-[0_0_40px_rgba(168,85,247,0.06)]">
+          <Card className={neonCard}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-200 flex items-center gap-2">
-                <Database className="h-4 w-4" />
-                Sources & définitions (éviter “données incomprises”)
+              <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
+                <Database className="h-4 w-4 text-violet-700" />
+                Sources & définitions (audit)
               </CardTitle>
-              <CardDescription className="text-slate-400">
-                Affiche d’où viennent les chiffres et à quoi ils servent.
-              </CardDescription>
+              <CardDescription className="text-slate-600">Évite les “données incomprises”.</CardDescription>
             </CardHeader>
             <CardContent className="text-sm space-y-3">
               {showSources ? (
                 <>
-                  <div className="rounded-lg border border-slate-700/60 bg-slate-950/40 p-3">
-                    <div className="font-semibold text-slate-100">Provenance</div>
-                    <ul className="mt-2 space-y-1 text-xs text-slate-300">
-                      <li>• Prix (Orliman + concurrents) : table <span className="font-mono text-slate-100">product_prices</span></li>
-                      <li>• Référence LPPR : table <span className="font-mono text-slate-100">products.tarif_lppr_eur</span></li>
-                      <li>• LPPR DROM : table <span className="font-mono text-slate-100">lpp_majoration_coefficients</span> (coef par territoire)</li>
-                      <li>• OM/OMR : table <span className="font-mono text-slate-100">om_rates</span> (clé : hs4)</li>
-                      <li>• TVA : table <span className="font-mono text-slate-100">vat_rates</span></li>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="font-semibold text-slate-900">Provenance</div>
+                    <ul className="mt-2 space-y-1 text-xs text-slate-700">
+                      <li>• Prix (Orliman + concurrents) : <span className="font-mono">product_prices</span></li>
+                      <li>• LPPR : <span className="font-mono">products.tarif_lppr_eur</span></li>
+                      <li>• LPPR DROM : <span className="font-mono">lpp_majoration_coefficients</span></li>
+                      <li>• OM/OMR : <span className="font-mono">om_rates</span> (clé hs4)</li>
                     </ul>
                   </div>
 
-                  <div className="rounded-lg border border-slate-700/60 bg-slate-950/40 p-3">
-                    <div className="font-semibold text-slate-100">Définitions KPI</div>
-                    <ul className="mt-2 space-y-1 text-xs text-slate-300">
-                      <li>• <span className="text-slate-100">Best concurrent</span> = le plus bas prix disponible (Thuasne / Enovis / Gibaud)</li>
-                      <li>• <span className="text-slate-100">Gap %</span> = (Orliman − Best) / Best</li>
-                      <li>• <span className="text-slate-100">Premium</span> = gap &gt; +5% (action : baisser/justifier)</li>
-                      <li>• <span className="text-slate-100">Sous-pricé</span> = gap &lt; −5% (action : monter/optimiser)</li>
-                      <li>• <span className="text-slate-100">OM total</span> = OM + OMR (si disponibles). Thuasne OM facturé = OM total × 1.025</li>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="font-semibold text-slate-900">Définitions</div>
+                    <ul className="mt-2 space-y-1 text-xs text-slate-700">
+                      <li>• Best concurrent = prix le plus bas disponible (Thuasne / Enovis / Gibaud)</li>
+                      <li>• Gap % = (Orliman − Best) / Best</li>
+                      <li>• Premium = gap &gt; +5% (action baisser/justifier)</li>
+                      <li>• Sous-pricé = gap &lt; −5% (action monter/optimiser)</li>
+                      <li>• OM total = OM + OMR ; Thuasne OM facturé = OM total × 1.025</li>
                     </ul>
                   </div>
                 </>
               ) : (
-                <div className="text-xs text-slate-400">
-                  Sources masquées — clique “Afficher sources” si tu veux auditer la provenance.
-                </div>
+                <div className="text-xs text-slate-600">Sources masquées.</div>
               )}
             </CardContent>
           </Card>
         </div>
 
         {/* Frais DOM */}
-        <Card className="border border-amber-400/15 bg-slate-950/40">
+        <Card className={neonCard}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-amber-200">Frais supplémentaires par DOM (€/commande)</CardTitle>
-            <CardDescription className="text-slate-400">
-              Paramètre interne : utile pour simuler une recommandation TTC “décisionnelle” ensuite.
-            </CardDescription>
+            <CardTitle className="text-sm text-slate-900">Frais supplémentaires par DROM (€/commande)</CardTitle>
+            <CardDescription className="text-slate-600">Paramètre interne de simulation.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-3">
             {DROM_CODES.map((code) => (
               <div key={code} className="space-y-1">
-                <div className="text-xs text-slate-300 font-medium">{code}</div>
+                <div className="text-xs text-slate-600 font-medium">{code}</div>
                 <Input
                   type="number"
                   value={extraFees[code] ?? 0}
                   onChange={(e) => handleExtraFeeChange(code, e.target.value)}
-                  className="h-9 bg-slate-950/60 border-amber-400/15 text-slate-100"
+                  className="h-9 bg-white border-slate-300 text-slate-900"
                 />
               </div>
             ))}
           </CardContent>
         </Card>
 
-        {/* Action boards (très parlant / interactif) */}
+        {/* Boards actionnables */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-          <Card className="border border-amber-400/20 bg-slate-950/50">
+          <Card className={neonCard}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-amber-200 flex items-center gap-2">
-                <TrendingDown className="h-4 w-4" />
+              <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
+                <TrendingDown className="h-4 w-4 text-amber-700" />
                 À baisser (premium)
               </CardTitle>
-              <CardDescription className="text-slate-400">Orliman est au-dessus du best concurrent.</CardDescription>
+              <CardDescription className="text-slate-600">Orliman au-dessus du best concurrent.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {isLoading ? (
@@ -750,34 +691,30 @@ export default function WatchCommercial() {
                     key={r.sku}
                     onClick={() => setSelectedSku(r.sku)}
                     className={cn(
-                      "w-full text-left rounded-lg border px-3 py-2 transition",
-                      "bg-slate-950/40 border-amber-400/15 hover:border-amber-300/35 hover:bg-slate-950/60",
-                      selectedSku === r.sku && "border-amber-300/60"
+                      "w-full text-left rounded-xl border p-3 transition",
+                      "bg-white hover:bg-amber-50 border-slate-200 hover:border-amber-200",
+                      selectedSku === r.sku && "border-amber-300"
                     )}
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-xs text-slate-400 font-mono">{r.sku}</div>
-                        <div className="text-sm text-slate-100 font-semibold line-clamp-1">{r.label || "Produit"}</div>
-                        {/* LPPR avant prix */}
+                        <div className="text-xs text-slate-500 font-mono">{r.sku}</div>
+                        <div className="text-sm text-slate-900 font-semibold line-clamp-1">{r.label || "Produit"}</div>
                         <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
-                          <Badge variant="outline" className="border-slate-700 text-slate-200">
+                          <Badge variant="outline" className="border-slate-200 text-slate-700">
                             LPPR FR: {money(r.lpprMetropole)}
                           </Badge>
-                          <Badge variant="outline" className="border-slate-700 text-slate-200">
+                          <Badge variant="outline" className="border-slate-200 text-slate-700">
                             LPPR DROM: {money(r.lpprDrom)}
                           </Badge>
                         </div>
                       </div>
-
                       <div className="text-right">
-                        <Badge variant="outline" className="border-amber-300/35 text-amber-200">
-                          {pct(r.gapPct)}
+                        <Badge variant="outline" className="border-amber-200 text-amber-800">
+                          {pctLabel(r.gapPct)}
                         </Badge>
-                        <div className="text-[11px] text-slate-400 mt-1">
-                          Orli: {money(r.ourPrice)}
-                        </div>
-                        <div className="text-[11px] text-slate-400">
+                        <div className="text-[11px] text-slate-600 mt-1">Orli: {money(r.ourPrice)}</div>
+                        <div className="text-[11px] text-slate-600">
                           Best: {r.bestCompetitor ? `${money(r.bestCompetitor.price)} (${r.bestCompetitor.name})` : "—"}
                         </div>
                       </div>
@@ -785,18 +722,18 @@ export default function WatchCommercial() {
                   </button>
                 ))
               ) : (
-                <div className="text-xs text-slate-400">Aucune opportunité “à baisser” sur ce filtre.</div>
+                <div className="text-xs text-slate-600">Aucune opportunité.</div>
               )}
             </CardContent>
           </Card>
 
-          <Card className="border border-cyan-400/20 bg-slate-950/50">
+          <Card className={neonCard}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-cyan-200 flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" />
+              <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-emerald-700" />
                 À monter (sous-pricé)
               </CardTitle>
-              <CardDescription className="text-slate-400">Orliman est sous le marché (best concurrent).</CardDescription>
+              <CardDescription className="text-slate-600">Orliman sous le marché.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {isLoading ? (
@@ -807,34 +744,30 @@ export default function WatchCommercial() {
                     key={r.sku}
                     onClick={() => setSelectedSku(r.sku)}
                     className={cn(
-                      "w-full text-left rounded-lg border px-3 py-2 transition",
-                      "bg-slate-950/40 border-cyan-400/15 hover:border-cyan-300/35 hover:bg-slate-950/60",
-                      selectedSku === r.sku && "border-cyan-300/60"
+                      "w-full text-left rounded-xl border p-3 transition",
+                      "bg-white hover:bg-emerald-50 border-slate-200 hover:border-emerald-200",
+                      selectedSku === r.sku && "border-emerald-300"
                     )}
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-xs text-slate-400 font-mono">{r.sku}</div>
-                        <div className="text-sm text-slate-100 font-semibold line-clamp-1">{r.label || "Produit"}</div>
-                        {/* LPPR avant prix */}
+                        <div className="text-xs text-slate-500 font-mono">{r.sku}</div>
+                        <div className="text-sm text-slate-900 font-semibold line-clamp-1">{r.label || "Produit"}</div>
                         <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
-                          <Badge variant="outline" className="border-slate-700 text-slate-200">
+                          <Badge variant="outline" className="border-slate-200 text-slate-700">
                             LPPR FR: {money(r.lpprMetropole)}
                           </Badge>
-                          <Badge variant="outline" className="border-slate-700 text-slate-200">
+                          <Badge variant="outline" className="border-slate-200 text-slate-700">
                             LPPR DROM: {money(r.lpprDrom)}
                           </Badge>
                         </div>
                       </div>
-
                       <div className="text-right">
-                        <Badge variant="outline" className="border-cyan-300/35 text-cyan-200">
-                          {pct(r.gapPct)}
+                        <Badge variant="outline" className="border-emerald-200 text-emerald-800">
+                          {pctLabel(r.gapPct)}
                         </Badge>
-                        <div className="text-[11px] text-slate-400 mt-1">
-                          Orli: {money(r.ourPrice)}
-                        </div>
-                        <div className="text-[11px] text-slate-400">
+                        <div className="text-[11px] text-slate-600 mt-1">Orli: {money(r.ourPrice)}</div>
+                        <div className="text-[11px] text-slate-600">
                           Best: {r.bestCompetitor ? `${money(r.bestCompetitor.price)} (${r.bestCompetitor.name})` : "—"}
                         </div>
                       </div>
@@ -842,20 +775,18 @@ export default function WatchCommercial() {
                   </button>
                 ))
               ) : (
-                <div className="text-xs text-slate-400">Aucune opportunité “à monter” sur ce filtre.</div>
+                <div className="text-xs text-slate-600">Aucune opportunité.</div>
               )}
             </CardContent>
           </Card>
 
-          <Card className="border border-violet-400/20 bg-slate-950/50">
+          <Card className={neonCard}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-violet-200 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4" />
+              <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-violet-700" />
                 Anomalies Thuasne
               </CardTitle>
-              <CardDescription className="text-slate-400">
-                Écart observé vs règle DROM +2% (si données présentes).
-              </CardDescription>
+              <CardDescription className="text-slate-600">Écart vs règle DROM +2% (si données).</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {isLoading ? (
@@ -866,53 +797,49 @@ export default function WatchCommercial() {
                     key={r.sku}
                     onClick={() => setSelectedSku(r.sku)}
                     className={cn(
-                      "w-full text-left rounded-lg border px-3 py-2 transition",
-                      "bg-slate-950/40 border-violet-400/15 hover:border-violet-300/35 hover:bg-slate-950/60",
-                      selectedSku === r.sku && "border-violet-300/60"
+                      "w-full text-left rounded-xl border p-3 transition",
+                      "bg-white hover:bg-violet-50 border-slate-200 hover:border-violet-200",
+                      selectedSku === r.sku && "border-violet-300"
                     )}
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-xs text-slate-400 font-mono">{r.sku}</div>
-                        <div className="text-sm text-slate-100 font-semibold line-clamp-1">{r.label || "Produit"}</div>
-                        {/* LPPR avant prix */}
+                        <div className="text-xs text-slate-500 font-mono">{r.sku}</div>
+                        <div className="text-sm text-slate-900 font-semibold line-clamp-1">{r.label || "Produit"}</div>
                         <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
-                          <Badge variant="outline" className="border-slate-700 text-slate-200">
+                          <Badge variant="outline" className="border-slate-200 text-slate-700">
                             LPPR FR: {money(r.lpprMetropole)}
                           </Badge>
-                          <Badge variant="outline" className="border-slate-700 text-slate-200">
+                          <Badge variant="outline" className="border-slate-200 text-slate-700">
                             LPPR DROM: {money(r.lpprDrom)}
                           </Badge>
                         </div>
                       </div>
-
                       <div className="text-right">
-                        <Badge variant="outline" className="border-violet-300/35 text-violet-200">
+                        <Badge variant="outline" className="border-violet-200 text-violet-800">
                           uplift {r.thuasneDromUpliftObservedPct === null ? "—" : `${r.thuasneDromUpliftObservedPct.toFixed(2)}%`}
                         </Badge>
-                        <div className="text-[11px] text-slate-400 mt-1">
+                        <div className="text-[11px] text-slate-600 mt-1">
                           FR: {money(r.thuasneFr)} · DROM: {money(r.thuasneTerritory)}
                         </div>
-                        <div className="text-[11px] text-slate-400">
-                          attendu: {money(r.thuasneExpectedDrom)}
-                        </div>
+                        <div className="text-[11px] text-slate-600">attendu: {money(r.thuasneExpectedDrom)}</div>
                       </div>
                     </div>
                   </button>
                 ))
               ) : (
-                <div className="text-xs text-slate-400">Aucune anomalie Thuasne détectable (ou hors DROM).</div>
+                <div className="text-xs text-slate-600">Aucune anomalie détectable (ou hors DROM).</div>
               )}
             </CardContent>
           </Card>
 
-          <Card className="border border-slate-700/60 bg-slate-950/50">
+          <Card className={neonCard}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-200 flex items-center gap-2">
-                <Database className="h-4 w-4" />
+              <CardTitle className="text-sm text-slate-900 flex items-center gap-2">
+                <Database className="h-4 w-4 text-slate-700" />
                 Données manquantes
               </CardTitle>
-              <CardDescription className="text-slate-400">À compléter côté veille / pricing interne.</CardDescription>
+              <CardDescription className="text-slate-600">À compléter côté veille/pricing.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {isLoading ? (
@@ -923,27 +850,25 @@ export default function WatchCommercial() {
                     key={r.sku}
                     onClick={() => setSelectedSku(r.sku)}
                     className={cn(
-                      "w-full text-left rounded-lg border px-3 py-2 transition",
-                      "bg-slate-950/40 border-slate-700/60 hover:border-slate-500 hover:bg-slate-950/60",
+                      "w-full text-left rounded-xl border p-3 transition",
+                      "bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300",
                       selectedSku === r.sku && "border-slate-400"
                     )}
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-xs text-slate-400 font-mono">{r.sku}</div>
-                        <div className="text-sm text-slate-100 font-semibold line-clamp-1">{r.label || "Produit"}</div>
-                        {/* LPPR avant prix */}
+                        <div className="text-xs text-slate-500 font-mono">{r.sku}</div>
+                        <div className="text-sm text-slate-900 font-semibold line-clamp-1">{r.label || "Produit"}</div>
                         <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
-                          <Badge variant="outline" className="border-slate-700 text-slate-200">
+                          <Badge variant="outline" className="border-slate-200 text-slate-700">
                             LPPR FR: {money(r.lpprMetropole)}
                           </Badge>
-                          <Badge variant="outline" className="border-slate-700 text-slate-200">
+                          <Badge variant="outline" className="border-slate-200 text-slate-700">
                             LPPR DROM: {money(r.lpprDrom)}
                           </Badge>
                         </div>
                       </div>
-
-                      <div className="text-right text-[11px] text-slate-400">
+                      <div className="text-right text-[11px] text-slate-600">
                         <div>Orli: {money(r.ourPrice)}</div>
                         <div>Concurrents: {r.competitorCount}</div>
                       </div>
@@ -951,17 +876,17 @@ export default function WatchCommercial() {
                   </button>
                 ))
               ) : (
-                <div className="text-xs text-slate-400">OK — pas de manque critique sur ce filtre.</div>
+                <div className="text-xs text-slate-600">OK — pas de manque critique.</div>
               )}
             </CardContent>
           </Card>
         </div>
 
         {/* Produit sélectionné */}
-        <Card className="border border-cyan-400/20 bg-slate-950/50">
+        <Card className={neonCard}>
           <CardHeader>
-            <CardTitle className="text-lg text-white">Produit sélectionné</CardTitle>
-            <CardDescription className="text-slate-400">
+            <CardTitle className="text-lg text-slate-900">Produit sélectionné</CardTitle>
+            <CardDescription className="text-slate-600">
               LPPR en référence (Métropole/DROM) avant lecture des prix et des écarts.
             </CardDescription>
           </CardHeader>
@@ -969,21 +894,20 @@ export default function WatchCommercial() {
             {isLoading ? (
               <Skeleton className="h-28 w-full" />
             ) : !selected ? (
-              <div className="text-sm text-slate-400">Sélectionne un SKU (liste ou recherche) pour afficher l’analyse.</div>
+              <div className="text-sm text-slate-600">Sélectionne un SKU pour afficher l’analyse.</div>
             ) : (
               <div className="space-y-4">
                 <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                   <div>
-                    <div className="text-xs text-slate-400 font-mono">{selected.sku}</div>
-                    <div className="text-lg font-semibold text-white">{selected.label || "Produit"}</div>
-                    <div className="text-sm text-slate-300">Territoire : {selected.territory}</div>
+                    <div className="text-xs text-slate-500 font-mono">{selected.sku}</div>
+                    <div className="text-lg font-semibold text-slate-900">{selected.label || "Produit"}</div>
+                    <div className="text-sm text-slate-600">Territoire : {selected.territory}</div>
 
-                    {/* LPPR bien visible en premier */}
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <Badge variant="outline" className="border-slate-600 text-slate-100">
+                      <Badge variant="outline" className="border-slate-200 text-slate-800">
                         LPPR Métropole : {money(selected.lpprMetropole)}
                       </Badge>
-                      <Badge variant="outline" className="border-slate-600 text-slate-100">
+                      <Badge variant="outline" className="border-slate-200 text-slate-800">
                         LPPR DROM : {money(selected.lpprDrom)}
                       </Badge>
                     </div>
@@ -995,108 +919,107 @@ export default function WatchCommercial() {
                       className={cn(
                         "capitalize",
                         selected.status === "premium"
-                          ? "text-amber-200 border-amber-300/35"
+                          ? "text-amber-800 border-amber-200 bg-amber-50"
                           : selected.status === "underpriced"
-                          ? "text-cyan-200 border-cyan-300/35"
+                          ? "text-emerald-800 border-emerald-200 bg-emerald-50"
                           : selected.status === "aligned"
-                          ? "text-emerald-200 border-emerald-300/35"
-                          : "text-slate-300 border-slate-600"
+                          ? "text-sky-800 border-sky-200 bg-sky-50"
+                          : "text-slate-700 border-slate-200 bg-slate-50"
                       )}
                     >
                       {selected.status}
                     </Badge>
 
-                    <Badge variant="outline" className="text-slate-100 border-slate-600">
+                    <Badge variant="outline" className="text-slate-800 border-slate-200 bg-white">
                       Rang Orliman : {selected.rank ?? "—"}
                     </Badge>
 
-                    <Badge variant="outline" className="text-slate-100 border-slate-600">
+                    <Badge variant="outline" className="text-slate-800 border-slate-200 bg-white">
                       Gap vs best : {selected.gapPct === null ? "—" : `${selected.gapPct.toFixed(1)}%`}
                     </Badge>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <Card className="border border-slate-700/60 bg-slate-950/40">
+                  <Card className="border border-slate-200 bg-white">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm text-slate-100">Prix (TTC) — lecture simple</CardTitle>
+                      <CardTitle className="text-sm text-slate-900">Prix TTC — lecture simple</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-2 text-sm">
+                    <CardContent className="space-y-2 text-sm text-slate-800">
                       <div className="flex items-center justify-between">
-                        <div className="font-medium text-slate-200">Orliman</div>
-                        <div className="font-semibold text-white">{money(selected.ourPrice)}</div>
+                        <div className="font-medium">Orliman</div>
+                        <div className="font-semibold">{money(selected.ourPrice)}</div>
                       </div>
 
-                      <div className="h-px bg-slate-800 my-2" />
+                      <div className="h-px bg-slate-200 my-2" />
 
                       <div className="flex items-center justify-between">
-                        <div className="text-slate-300">Thuasne</div>
-                        <div className="text-slate-100 font-medium">{money(selected.thuasneEffective)}</div>
+                        <div>Thuasne</div>
+                        <div className="font-medium">{money(selected.thuasneEffective)}</div>
                       </div>
                       {territoryIsDrom(selected.territory) ? (
-                        <div className="text-[11px] text-slate-400">
-                          DROM attendu (FR×1.02) : {money(selected.thuasneExpectedDrom)} ·
-                          uplift observé :{" "}
+                        <div className="text-[11px] text-slate-600">
+                          DROM attendu (FR×1.02) : {money(selected.thuasneExpectedDrom)} · uplift observé :{" "}
                           {selected.thuasneDromUpliftObservedPct === null ? "—" : `${selected.thuasneDromUpliftObservedPct.toFixed(2)}%`}
                         </div>
                       ) : null}
 
                       <div className="flex items-center justify-between">
-                        <div className="text-slate-300">Enovis (Donjoy)</div>
-                        <div className="text-slate-100 font-medium">{money(selected.donjoy)}</div>
+                        <div>Enovis (Donjoy)</div>
+                        <div className="font-medium">{money(selected.donjoy)}</div>
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <div className="text-slate-300">Gibaud</div>
-                        <div className="text-slate-100 font-medium">{money(selected.gibaud)}</div>
+                        <div>Gibaud</div>
+                        <div className="font-medium">{money(selected.gibaud)}</div>
                       </div>
 
-                      <div className="h-px bg-slate-800 my-2" />
+                      <div className="h-px bg-slate-200 my-2" />
 
                       <div className="flex items-center justify-between">
-                        <div className="text-slate-300">Best concurrent</div>
-                        <div className="text-slate-100 font-medium">
+                        <div className="text-slate-700">Best concurrent</div>
+                        <div className="font-medium">
                           {selected.bestCompetitor ? `${money(selected.bestCompetitor.price)} (${selected.bestCompetitor.name})` : "—"}
                         </div>
                       </div>
                     </CardContent>
                   </Card>
 
-                  <Card className="border border-slate-700/60 bg-slate-950/40">
+                  <Card className="border border-slate-200 bg-white">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm text-slate-100">Taxes / OM (lecture auditable)</CardTitle>
+                      <CardTitle className="text-sm text-slate-900">OM (audit)</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-2 text-sm">
+                    <CardContent className="space-y-2 text-sm text-slate-800">
                       <div className="flex items-center justify-between">
-                        <div className="text-slate-300">HS4</div>
-                        <div className="text-slate-100 font-medium">{selected.hs4 ?? "—"}</div>
+                        <div className="text-slate-700">HS4</div>
+                        <div className="font-medium">{selected.hs4 ?? "—"}</div>
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <div className="text-slate-300">OM total (OM+OMR)</div>
-                        <div className="text-slate-100 font-medium">
+                        <div className="text-slate-700">OM total (OM+OMR)</div>
+                        <div className="font-medium">
                           {selected.omTotalRate === null ? "—" : `${selected.omTotalRate.toFixed(2)}%`}
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <div className="text-slate-300">OM facturé Thuasne (+2,5%)</div>
-                        <div className="text-slate-100 font-medium">
+                        <div className="text-slate-700">OM facturé Thuasne (+2,5%)</div>
+                        <div className="font-medium">
                           {selected.thuasneOmTotalRateBilled === null ? "—" : `${selected.thuasneOmTotalRateBilled.toFixed(2)}%`}
                         </div>
                       </div>
 
-                      <div className="rounded-lg border border-slate-700/60 bg-slate-950/50 p-3 mt-2">
-                        <div className="text-xs text-slate-400">
-                          Note : ici on affiche les taux (audit). La conversion en montant dépendra de la base HT / valeur taxable.
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 mt-2">
+                        <div className="text-xs text-slate-600">
+                          Ici on affiche des <span className="font-semibold">taux</span> (audit). La conversion en montant dépendra de la base taxable.
                         </div>
                       </div>
 
-                      <div className="rounded-lg border border-slate-700/60 bg-slate-950/50 p-3">
-                        <div className="text-xs text-slate-400">
-                          Frais DOM (paramètre interne) :{" "}
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="text-xs text-slate-600">
+                          Frais DOM paramétrés :{" "}
                           {territoryIsDrom(selected.territory) ? (
-                            <span className="text-slate-200 font-medium">{extraFees[selected.territory] ?? 0}€ / commande</span>
+                            <span className="font-semibold text-slate-800">{extraFees[selected.territory] ?? 0}€ / commande</span>
                           ) : (
                             <span className="text-slate-500">n/a</span>
                           )}
@@ -1110,12 +1033,12 @@ export default function WatchCommercial() {
           </CardContent>
         </Card>
 
-        {/* Table (LPPR avant prix) */}
-        <Card className="border border-slate-700/60 bg-slate-950/50">
+        {/* Table : LPPR AVANT prix */}
+        <Card className={neonCard}>
           <CardHeader>
-            <CardTitle className="text-lg text-white">Positionnement (liste)</CardTitle>
-            <CardDescription className="text-slate-400">
-              Priorité lecture : <span className="text-slate-200">LPPR</span> → <span className="text-slate-200">prix Orliman</span> → best concurrent → gap/rang.
+            <CardTitle className="text-lg text-slate-900">Positionnement (liste)</CardTitle>
+            <CardDescription className="text-slate-600">
+              Lecture : <span className="font-semibold">LPPR</span> → Orliman → best concurrent → gap/rang.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1126,20 +1049,20 @@ export default function WatchCommercial() {
                 ))}
               </div>
             ) : (
-              <div className="overflow-auto rounded-lg border border-slate-800">
+              <div className="overflow-auto rounded-xl border border-slate-200">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-slate-950/60">
-                      <TableHead className="text-slate-200">SKU</TableHead>
-                      <TableHead className="text-slate-200">Produit</TableHead>
-                      <TableHead className="text-right text-slate-200">LPPR FR</TableHead>
-                      <TableHead className="text-right text-slate-200">LPPR DROM</TableHead>
-                      <TableHead className="text-right text-slate-200">Orliman TTC</TableHead>
-                      <TableHead className="text-slate-200">Best concurrent</TableHead>
-                      <TableHead className="text-right text-slate-200">Gap %</TableHead>
-                      <TableHead className="text-right text-slate-200">Rang</TableHead>
-                      <TableHead className="text-right text-slate-200"># conc.</TableHead>
-                      <TableHead className="text-slate-200">Statut</TableHead>
+                    <TableRow className="bg-slate-50">
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Produit</TableHead>
+                      <TableHead className="text-right">LPPR FR</TableHead>
+                      <TableHead className="text-right">LPPR DROM</TableHead>
+                      <TableHead className="text-right">Orliman TTC</TableHead>
+                      <TableHead>Best concurrent</TableHead>
+                      <TableHead className="text-right">Gap %</TableHead>
+                      <TableHead className="text-right">Rang</TableHead>
+                      <TableHead className="text-right"># conc.</TableHead>
+                      <TableHead>Statut</TableHead>
                     </TableRow>
                   </TableHeader>
 
@@ -1147,28 +1070,25 @@ export default function WatchCommercial() {
                     {filtered.slice(0, 500).map((row) => (
                       <TableRow
                         key={row.sku}
-                        className={cn(
-                          "cursor-pointer",
-                          selectedSku === row.sku ? "bg-slate-900/40" : "hover:bg-slate-900/20"
-                        )}
+                        className={cn("cursor-pointer", selectedSku === row.sku ? "bg-sky-50" : "hover:bg-slate-50")}
                         onClick={() => setSelectedSku(row.sku)}
                       >
-                        <TableCell className="font-mono text-xs text-slate-200">{row.sku}</TableCell>
-                        <TableCell className="font-medium text-slate-100">{row.label || "—"}</TableCell>
+                        <TableCell className="font-mono text-xs text-slate-700">{row.sku}</TableCell>
+                        <TableCell className="font-medium text-slate-900">{row.label || "—"}</TableCell>
 
-                        <TableCell className="text-right text-slate-100">{money(row.lpprMetropole)}</TableCell>
-                        <TableCell className="text-right text-slate-100">{money(row.lpprDrom)}</TableCell>
+                        <TableCell className="text-right text-slate-900">{money(row.lpprMetropole)}</TableCell>
+                        <TableCell className="text-right text-slate-900">{money(row.lpprDrom)}</TableCell>
 
-                        <TableCell className="text-right text-white font-semibold">{money(row.ourPrice)}</TableCell>
+                        <TableCell className="text-right font-semibold text-slate-900">{money(row.ourPrice)}</TableCell>
 
-                        <TableCell className="text-slate-100">
+                        <TableCell className="text-slate-900">
                           {row.bestCompetitor ? (
                             <div>
                               <span className="font-semibold">{money(row.bestCompetitor.price)}</span>{" "}
-                              <span className="text-xs text-slate-400">({row.bestCompetitor.name})</span>
+                              <span className="text-xs text-slate-500">({row.bestCompetitor.name})</span>
                             </div>
                           ) : (
-                            <span className="text-slate-500">—</span>
+                            <span className="text-slate-400">—</span>
                           )}
                         </TableCell>
 
@@ -1176,17 +1096,17 @@ export default function WatchCommercial() {
                           className={cn(
                             "text-right",
                             row.gapPct !== null && row.gapPct > 5
-                              ? "text-amber-200"
+                              ? "text-amber-700"
                               : row.gapPct !== null && row.gapPct < -5
-                              ? "text-cyan-200"
-                              : "text-slate-200"
+                              ? "text-emerald-700"
+                              : "text-slate-700"
                           )}
                         >
                           {row.gapPct !== null ? `${row.gapPct.toFixed(1)}%` : "—"}
                         </TableCell>
 
-                        <TableCell className="text-right text-slate-200">{row.rank ?? "—"}</TableCell>
-                        <TableCell className="text-right text-slate-200">{row.competitorCount}</TableCell>
+                        <TableCell className="text-right text-slate-700">{row.rank ?? "—"}</TableCell>
+                        <TableCell className="text-right text-slate-700">{row.competitorCount}</TableCell>
 
                         <TableCell>
                           <Badge
@@ -1194,12 +1114,12 @@ export default function WatchCommercial() {
                             className={cn(
                               "capitalize",
                               row.status === "premium"
-                                ? "text-amber-200 border-amber-300/35"
+                                ? "text-amber-800 border-amber-200 bg-amber-50"
                                 : row.status === "underpriced"
-                                ? "text-cyan-200 border-cyan-300/35"
+                                ? "text-emerald-800 border-emerald-200 bg-emerald-50"
                                 : row.status === "aligned"
-                                ? "text-emerald-200 border-emerald-300/35"
-                                : "text-slate-300 border-slate-600"
+                                ? "text-sky-800 border-sky-200 bg-sky-50"
+                                : "text-slate-700 border-slate-200 bg-slate-50"
                             )}
                           >
                             {row.status}
@@ -1210,7 +1130,7 @@ export default function WatchCommercial() {
 
                     {filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center text-sm text-slate-400">
+                        <TableCell colSpan={10} className="text-center text-sm text-slate-500">
                           Aucun produit trouvé.
                         </TableCell>
                       </TableRow>
@@ -1220,26 +1140,8 @@ export default function WatchCommercial() {
               </div>
             )}
 
-            <div className="pt-2 text-xs text-slate-400">
-              Astuce : clique une ligne (ou une carte “à baisser/monter”) pour verrouiller l’analyse du produit.
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Mini note “audit contrast / pertinence” */}
-        <Card className="border border-slate-700/60 bg-slate-950/40">
-          <CardContent className="pt-6 text-xs text-slate-400">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-200 mt-0.5" />
-              <div>
-                <div className="text-slate-200 font-semibold">Pourquoi cette page est “pertinente” en veille & stratégie ?</div>
-                <div className="mt-1">
-                  Elle force une lecture décisionnelle : <span className="text-slate-200">LPPR (référence)</span> →{" "}
-                  <span className="text-slate-200">Orliman</span> → <span className="text-slate-200">best concurrent</span> →{" "}
-                  <span className="text-slate-200">écart</span> → <span className="text-slate-200">action</span>.
-                  Et elle rend visible ce qui est manquant (donc où investir la collecte d’info).
-                </div>
-              </div>
+            <div className="pt-2 text-xs text-slate-500">
+              Astuce : clique une carte “À baisser/monter” ou une ligne pour verrouiller l’analyse.
             </div>
           </CardContent>
         </Card>
