@@ -7,7 +7,7 @@ import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { isMissingTableError } from "@/domain/calc";
 import worldMap from "@/assets/world-map.svg";
-import { TERRITORY_PCT } from "@/domain/geo/territoryPct";
+import { TERRITORY_COORDS } from "@/domain/geo/territoryCoords";
 import {
   NeonSurface,
   NeonKpiCard,
@@ -51,88 +51,99 @@ type CompetitionRow = {
   status: "premium" | "aligned" | "underpriced" | "no_data";
 };
 
-const MAP_WIDTH = 1010; // matches svg width
-const MAP_HEIGHT = 666; // matches svg height
-
-const DESTINATIONS: Destination[] = [
-  { code: "FR", name: "Metropole", lat: 44.0, lon: 2.0, color: "#38bdf8" },
-
-  { code: "GP", name: "Guadeloupe", lat: 16.265, lon: -61.551, color: "#fb7185" },
-  { code: "MQ", name: "Martinique", lat: 14.6415, lon: -61.0242, color: "#f59e0b" },
-  { code: "GF", name: "Guyane", lat: 4.0, lon: -53.0, color: "#22c55e" },
-  { code: "RE", name: "Reunion", lat: -21.1151, lon: 55.5364, color: "#a855f7" },
-  { code: "YT", name: "Mayotte", lat: -12.8275, lon: 45.1662, color: "#38bdf8" },
-
-  // territoires “bonus” (fallback projection si pas d’ancre)
-  { code: "SPM", name: "Saint-Pierre-et-Miquelon", lat: 46.8852, lon: -56.3159, color: "#0ea5e9" },
-  { code: "BL", name: "Saint-Barthelemy", lat: 17.9, lon: -62.85, color: "#ec4899" },
-  { code: "MF", name: "Saint-Martin", lat: 18.0708, lon: -63.0501, color: "#10b981" },
-];
-
-const OVERSEAS_CODES = ["GP", "MQ", "GF", "RE", "YT", "SPM", "BL", "MF"];
-
-const formatMoney = (n: number | null | undefined) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(
-    Number(n || 0),
-  );
-
-// 👉 IMPORTANT : on projette dans le même viewBox que la carte (0..MAP_WIDTH / 0..MAP_HEIGHT)
-const MAP_INSET = { left: 0, right: 0, top: 0, bottom: 0 };
+type SvgMeta = {
+  width: number;
+  height: number;
+  geo: { left: number; top: number; right: number; bottom: number };
+};
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+const rad = (deg: number) => (deg * Math.PI) / 180;
 
-/**
- * ✅ SOURCE DE VÉRITÉ PRIORITAIRE : TERRITORY_PCT
- * - FR (Métropole) => utilise HUB_FR (ancre calibrée sur la carte)
- * - GP/MQ/GF/RE/YT => ancre calibrée
- * - le reste => fallback projection (approximatif)
- */
-function fromPct(code: string) {
-  const pctKey = code === "FR" ? "HUB_FR" : code;
-  const pct = (TERRITORY_PCT as any)[pctKey];
-  if (!pct) return null;
+// fallback si jamais fetch/parse du svg échoue
+const FALLBACK_META: SvgMeta = {
+  width: 1009.6727,
+  height: 665.963,
+  geo: { left: -169.110266, top: 83.600842, right: 190.486279, bottom: -58.508473 },
+};
+
+async function loadSvgMeta(url: string): Promise<SvgMeta> {
+  const txt = await fetch(url).then((r) => r.text());
+
+  const w = Number((txt.match(/width="([\d.]+)/)?.[1] ?? FALLBACK_META.width).toString());
+  const h = Number((txt.match(/height="([\d.]+)/)?.[1] ?? FALLBACK_META.height).toString());
+
+  const geoStr = txt.match(/mapsvg:geoViewBox="([^"]+)"/)?.[1];
+  if (!geoStr) return { ...FALLBACK_META, width: w || FALLBACK_META.width, height: h || FALLBACK_META.height };
+
+  const parts = geoStr.split(/\s+/).map(Number);
+  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) {
+    return { ...FALLBACK_META, width: w || FALLBACK_META.width, height: h || FALLBACK_META.height };
+  }
+
+  const [left, top, right, bottom] = parts;
   return {
-    x: (pct.x / 100) * MAP_WIDTH,
-    y: (pct.y / 100) * MAP_HEIGHT,
+    width: w || FALLBACK_META.width,
+    height: h || FALLBACK_META.height,
+    geo: { left, top, right, bottom },
   };
 }
 
-// fallback (approx) pour SPM/BL/MF si pas d’ancre
-function projectFallback(lat: number, lon: number) {
-  const x = ((lon + 180) / 360) * (MAP_WIDTH - MAP_INSET.left - MAP_INSET.right) + MAP_INSET.left;
-  const y = ((90 - lat) / 180) * (MAP_HEIGHT - MAP_INSET.top - MAP_INSET.bottom) + MAP_INSET.top;
+// ✅ Projection Mercator (match world-map.svg MapSVG)
+function projectMercator(lat: number, lon: number, meta: SvgMeta) {
+  const { width, height, geo } = meta;
+
+  const x = ((lon - geo.left) / (geo.right - geo.left)) * width;
+
+  const latClamped = clamp(lat, -85, 85); // mercator safe
+  const merc = (la: number) => Math.log(Math.tan(Math.PI / 4 + rad(la) / 2));
+
+  const mercTop = merc(geo.top);
+  const mercBottom = merc(geo.bottom);
+  const y = ((mercTop - merc(latClamped)) / (mercTop - mercBottom)) * height;
+
   return { x, y };
 }
 
-const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
+const COLORS: Record<string, string> = {
+  FR: "#38bdf8",
+  GP: "#fb7185",
+  MQ: "#f59e0b",
+  GF: "#22c55e",
+  RE: "#a855f7",
+  YT: "#38bdf8",
+  SPM: "#0ea5e9",
+  BL: "#ec4899",
+  MF: "#10b981",
+};
 
-/**
- * ✅ Arc “propre” : courbure perpendiculaire (et pas juste un midY)
- * - vers l’Ouest (Antilles) => arc remonte (plus “naturel” visuellement)
- * - vers l’Est (Réunion/Mayotte) => arc descend
- */
-const buildArc = (a: { x: number; y: number }, b: { x: number; y: number }) => {
-  const mx = (a.x + b.x) / 2;
-  const my = (a.y + b.y) / 2;
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
+const formatMoney = (n: number | null | undefined) =>
+  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(
+    Number(n || 0)
+  );
+
+function buildArc(sx: number, sy: number, ex: number, ey: number) {
+  const mx = (sx + ex) / 2;
+  const my = (sy + ey) / 2;
+  const dx = ex - sx;
+  const dy = ey - sy;
   const len = Math.hypot(dx, dy) || 1;
   const nx = -dy / len;
   const ny = dx / len;
-
-  const bend = clamp(len * 0.22, 28, 160);
+  const bend = clamp(len * 0.14, 18, 130);
   const cx = mx + nx * bend;
   const cy = my + ny * bend;
-
-  return `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`;
-};
+  return `M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`;
+}
 
 export default function ControlTower() {
   const navigate = useNavigate();
   const { resolvedRange, variables, setVariable, refreshToken, lastRefreshAt } = useGlobalFilters();
 
-  const [sales, setSales] = React.useState<SalesRow[]>([]);
-  const [costs, setCosts] = React.useState<CostRow[]>([]);
+  const [svgMeta, setSvgMeta] = React.useState<SvgMeta>(FALLBACK_META);
+
+  const [salesAll, setSalesAll] = React.useState<SalesRow[]>([]);
+  const [costsAll, setCostsAll] = React.useState<CostRow[]>([]);
   const [competition, setCompetition] = React.useState<CompetitionRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -145,6 +156,60 @@ export default function ControlTower() {
   const draggingRef = React.useRef<{ startX: number; startY: number; startTx: number; startTy: number } | null>(null);
   const zoomLayerRef = React.useRef<HTMLDivElement | null>(null);
 
+  // ✅ lire width/height + geoViewBox depuis le SVG (robuste si tu changes l’asset)
+  React.useEffect(() => {
+    let alive = true;
+    loadSvgMeta(worldMap)
+      .then((m) => {
+        if (alive) setSvgMeta(m);
+      })
+      .catch(() => {
+        // ignore -> fallback meta
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // ⚠️ codes DOM-TOM
+  const dromCodes = React.useMemo(() => ["GP", "MQ", "GF", "RE", "YT", "BL", "MF", "SPM"], []);
+
+  const normalizeTerritory = React.useCallback(
+    (code: string | null | undefined) => {
+      const c = (code || "").toUpperCase();
+      return dromCodes.includes(c) ? c : "FR";
+    },
+    [dromCodes]
+  );
+
+  // ✅ Destinations : on réutilise territoryCoords.ts (plus “inutile”)
+  const DESTINATIONS: Destination[] = React.useMemo(() => {
+    const hub = TERRITORY_COORDS.HUB; // Orliman FR
+    return [
+      { code: "FR", name: "Metropole", lat: hub?.lat ?? 48.86, lon: hub?.lng ?? 2.35, color: COLORS.FR },
+      { code: "GP", name: "Guadeloupe", lat: TERRITORY_COORDS.GP?.lat ?? 16.265, lon: TERRITORY_COORDS.GP?.lng ?? -61.551, color: COLORS.GP },
+      { code: "MQ", name: "Martinique", lat: TERRITORY_COORDS.MQ?.lat ?? 14.6415, lon: TERRITORY_COORDS.MQ?.lng ?? -61.0242, color: COLORS.MQ },
+      { code: "GF", name: "Guyane", lat: TERRITORY_COORDS.GF?.lat ?? 4.0, lon: TERRITORY_COORDS.GF?.lng ?? -53.0, color: COLORS.GF },
+      { code: "RE", name: "Reunion", lat: TERRITORY_COORDS.RE?.lat ?? -21.1151, lon: TERRITORY_COORDS.RE?.lng ?? 55.5364, color: COLORS.RE },
+      { code: "YT", name: "Mayotte", lat: TERRITORY_COORDS.YT?.lat ?? -12.8275, lon: TERRITORY_COORDS.YT?.lng ?? 45.1662, color: COLORS.YT },
+      // SPM pas dans TERRITORY_COORDS -> fallback ici
+      { code: "SPM", name: "Saint-Pierre-et-Miquelon", lat: 46.8852, lon: -56.3159, color: COLORS.SPM },
+      { code: "BL", name: "Saint-Barthelemy", lat: TERRITORY_COORDS.BL?.lat ?? 17.9, lon: TERRITORY_COORDS.BL?.lng ?? -62.85, color: COLORS.BL },
+      { code: "MF", name: "Saint-Martin", lat: TERRITORY_COORDS.MF?.lat ?? 18.0708, lon: TERRITORY_COORDS.MF?.lng ?? -63.0501, color: COLORS.MF },
+    ];
+  }, []);
+
+  // ✅ positions projetées (Mercator)
+  const nodes = React.useMemo(() => {
+    return DESTINATIONS.map((d) => {
+      const p = projectMercator(d.lat, d.lon, svgMeta);
+      return { ...d, x: p.x, y: p.y };
+    });
+  }, [DESTINATIONS, svgMeta]);
+
+  const metropole = React.useMemo(() => nodes.find((n) => n.code === "FR")!, [nodes]);
+
+  // ✅ load data (NE PAS refiltrer ici → sinon “blocage” quand filtre = vide)
   React.useEffect(() => {
     let active = true;
     const load = async () => {
@@ -192,23 +257,17 @@ export default function ControlTower() {
           }
         }
 
-        const filteredSales = (salesRes.data || []).filter((row) =>
-          variables.territory_code ? row.territory_code === variables.territory_code : true,
-        );
-        const filteredCosts = (costData || []).filter((row: any) =>
-          variables.territory_code ? row.destination === variables.territory_code : true,
-        );
-
-        setSales(filteredSales as SalesRow[]);
-        setCosts(filteredCosts as CostRow[]);
+        setSalesAll((salesRes.data || []) as SalesRow[]);
+        setCostsAll((costData || []) as CostRow[]);
       } catch (err: any) {
         console.error(err);
         setError(err?.message || "Erreur chargement donnees");
-        setSales([
+        // démo safe
+        setSalesAll([
           { id: "demo1", sale_date: resolvedRange.from, territory_code: "GP", amount_ht: 1200, amount_ttc: 1400 },
           { id: "demo2", sale_date: resolvedRange.from, territory_code: "MQ", amount_ht: 800, amount_ttc: 920 },
         ]);
-        setCosts([{ id: "demoC", date: resolvedRange.from, destination: "GP", amount: 300, cost_type: "transport" }]);
+        setCostsAll([{ id: "demoC", date: resolvedRange.from, destination: "GP", amount: 300, cost_type: "transport" }]);
       } finally {
         if (active) setIsLoading(false);
       }
@@ -217,8 +276,9 @@ export default function ControlTower() {
     return () => {
       active = false;
     };
-  }, [resolvedRange.from, resolvedRange.to, variables.territory_code, refreshToken]);
+  }, [resolvedRange.from, resolvedRange.to, refreshToken]);
 
+  // competition (inchangé)
   React.useEffect(() => {
     let active = true;
     const loadCompetition = async () => {
@@ -280,15 +340,29 @@ export default function ControlTower() {
     };
   }, []);
 
+  const selectedTerritory = variables.territory_code ? variables.territory_code.toUpperCase() : null;
+
+  // ✅ vues filtrées (au bon endroit)
+  const salesView = React.useMemo(() => {
+    if (!selectedTerritory) return salesAll;
+    return salesAll.filter((r) => normalizeTerritory(r.territory_code) === selectedTerritory);
+  }, [normalizeTerritory, salesAll, selectedTerritory]);
+
+  const costsView = React.useMemo(() => {
+    if (!selectedTerritory) return costsAll;
+    return costsAll.filter((r) => normalizeTerritory(r.destination) === selectedTerritory);
+  }, [costsAll, normalizeTerritory, selectedTerritory]);
+
+  // ✅ KPI / totaux sur la vue filtrée
   const totals = React.useMemo(() => {
-    const totalSalesHt = sales.reduce((s, r) => s + (r.amount_ht || 0), 0);
-    const totalSalesTtc = sales.reduce((s, r) => s + (r.amount_ttc || 0), 0);
-    const totalCosts = costs.reduce((s, r) => s + (r.amount || 0), 0);
+    const totalSalesHt = salesView.reduce((s, r) => s + (r.amount_ht || 0), 0);
+    const totalSalesTtc = salesView.reduce((s, r) => s + (r.amount_ttc || 0), 0);
+    const totalCosts = costsView.reduce((s, r) => s + (r.amount || 0), 0);
     const margin = totalSalesHt - totalCosts;
 
     const byTerritory = DESTINATIONS.map((d) => {
-      const tSales = sales.filter((r) => (r.territory_code || "FR") === d.code);
-      const tCosts = costs.filter((c) => (c.destination || "FR") === d.code);
+      const tSales = salesView.filter((r) => normalizeTerritory(r.territory_code) === d.code);
+      const tCosts = costsView.filter((c) => normalizeTerritory(c.destination) === d.code);
       const ht = tSales.reduce((s, r) => s + (r.amount_ht || 0), 0);
       const ttc = tSales.reduce((s, r) => s + (r.amount_ttc || 0), 0);
       const c = tCosts.reduce((s, r) => s + (r.amount || 0), 0);
@@ -298,19 +372,23 @@ export default function ControlTower() {
     });
 
     return { totalSalesHt, totalSalesTtc, totalCosts, margin, byTerritory };
-  }, [sales, costs]);
+  }, [DESTINATIONS, costsView, normalizeTerritory, salesView]);
 
   const marginRate = React.useMemo(() => {
     if (totals.totalSalesHt <= 0) return null;
     return (totals.margin / totals.totalSalesHt) * 100;
   }, [totals.margin, totals.totalSalesHt]);
 
-  const hasData = sales.length > 0;
-  const hasZeroState = React.useMemo(() => {
-    const allZero =
-      totals.totalSalesHt === 0 && totals.totalSalesTtc === 0 && totals.totalCosts === 0 && totals.margin === 0;
-    return allZero && !hasData;
-  }, [totals.totalSalesHt, totals.totalSalesTtc, totals.totalCosts, totals.margin, hasData]);
+  // ✅ “zero state” seulement si vraiment aucune donnée sur la période (pas juste le filtre)
+  const hasAnyData = React.useMemo(() => salesAll.length > 0 || costsAll.length > 0, [costsAll.length, salesAll.length]);
+  const hasZeroState = !hasAnyData;
+
+  const noDataForSelection = React.useMemo(() => {
+    if (!selectedTerritory) return false;
+    const hasSales = salesView.length > 0;
+    const hasCosts = costsView.length > 0;
+    return !hasSales && !hasCosts;
+  }, [costsView.length, salesView.length, selectedTerritory]);
 
   const lastRefreshText = React.useMemo(() => {
     if (!lastRefreshAt) return "Live";
@@ -320,70 +398,22 @@ export default function ControlTower() {
     return `il y a ${minutes} min`;
   }, [lastRefreshAt]);
 
-  const selected = variables.territory_code || hovered || "FR";
-
-  /**
-   * ✅ NODES : on place FR + DROM via TERRITORY_PCT (calibré),
-   * et on fallback en projection pour le reste.
-   */
-  const nodes = React.useMemo(
-    () =>
-      DESTINATIONS.map((d) => {
-        const anchored = fromPct(d.code);
-        const base = anchored || projectFallback(d.lat, d.lon);
-        return { ...d, x: base.x, y: base.y };
-      }),
-    [],
-  );
-
-  const metropole = nodes.find((n) => n.code === "FR")!;
-
-  const computeZoomForSubset = React.useCallback(
-    (codes: string[]) => {
-      const subset = nodes.filter((n) => codes.includes(n.code));
-      if (!subset.length) return { scale: 1, tx: 0, ty: 0 };
-      const minX = Math.min(...subset.map((n) => n.x));
-      const maxX = Math.max(...subset.map((n) => n.x));
-      const minY = Math.min(...subset.map((n) => n.y));
-      const maxY = Math.max(...subset.map((n) => n.y));
-      const bboxW = maxX - minX || 1;
-      const bboxH = maxY - minY || 1;
-      const scale = Math.min(4, Math.min(MAP_WIDTH / (bboxW * 2.4), MAP_HEIGHT / (bboxH * 2.4)));
-      const centerX = (minX + maxX) / 2;
-      const centerY = (minY + maxY) / 2;
-      const tx = MAP_WIDTH / 2 - centerX * scale;
-      const ty = MAP_HEIGHT / 2 - centerY * scale;
-      return { scale, tx, ty };
-    },
-    [nodes],
-  );
-
-  const zoomCss = React.useMemo(
-    () => ({
-      transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`,
-      transformOrigin: "0 0",
-    }),
-    [viewport.scale, viewport.tx, viewport.ty],
-  );
-
+  // Map flows : on suit la vue filtrée (cohérent KPI)
   const salesByTerritory = React.useMemo(() => {
     const agg: Record<string, { route: string; volume: number; ca: number; marge: number }> = {};
-    sales.forEach((s) => {
-      const raw = s.territory_code || "FR";
-      const code = OVERSEAS_CODES.includes(raw) ? raw : "FR";
+    salesView.forEach((s) => {
+      const code = normalizeTerritory(s.territory_code);
       if (!agg[code]) agg[code] = { route: `FR→${code}`, volume: 0, ca: 0, marge: 0 };
-
       const ca = s.amount_ht || 0;
-      const relatedCosts = costs
-        .filter((c) => (c.destination || "FR") === code)
+      const relatedCosts = costsView
+        .filter((c) => normalizeTerritory(c.destination) === code)
         .reduce((t, c) => t + (c.amount || 0), 0);
-
       agg[code].volume += 1;
       agg[code].ca += ca;
       agg[code].marge += ca - relatedCosts;
     });
     return agg;
-  }, [sales, costs]);
+  }, [costsView, normalizeTerritory, salesView]);
 
   const topRoutes = React.useMemo(() => {
     return Object.values(salesByTerritory)
@@ -403,12 +433,12 @@ export default function ControlTower() {
 
   const timeseries = React.useMemo(() => {
     const bucket: Record<string, { label: string; sales: number; costs: number }> = {};
-    sales.forEach((s) => {
+    salesView.forEach((s) => {
       const key = (s.sale_date || "").slice(0, 10);
       bucket[key] ||= { label: key, sales: 0, costs: 0 };
       bucket[key].sales += s.amount_ht || 0;
     });
-    costs.forEach((c) => {
+    costsView.forEach((c) => {
       const key = (c.date || "").slice(0, 10);
       bucket[key] ||= { label: key, sales: 0, costs: 0 };
       bucket[key].costs += c.amount || 0;
@@ -419,37 +449,38 @@ export default function ControlTower() {
         const margin = row.sales - row.costs;
         return { ...row, marginPct: row.sales > 0 ? (margin / row.sales) * 100 : 0 };
       });
-  }, [sales, costs]);
+  }, [salesView, costsView]);
 
   const donuts = React.useMemo(() => {
     const total = totals.totalSalesHt || 1;
-    const domCa = OVERSEAS_CODES.reduce((s, code) => s + (salesByTerritory[code]?.ca || 0), 0);
-    const domMarge = OVERSEAS_CODES.reduce((s, code) => s + (salesByTerritory[code]?.marge || 0), 0);
-    const domVol = OVERSEAS_CODES.reduce((s, code) => s + (salesByTerritory[code]?.volume || 0), 0);
+    const dromOnly = ["GP", "MQ", "GF", "RE", "YT"];
+    const dromCa = dromOnly.reduce((s, code) => s + (salesByTerritory[code]?.ca || 0), 0);
+    const dromMarge = dromOnly.reduce((s, code) => s + (salesByTerritory[code]?.marge || 0), 0);
+    const dromVol = dromOnly.reduce((s, code) => s + (salesByTerritory[code]?.volume || 0), 0);
     const totalVol = Object.values(salesByTerritory).reduce((s, r) => s + r.volume, 0) || 1;
     return {
-      dromCaPct: Math.min(100, Math.max(0, (domCa / total) * 100)),
-      dromMargePct: totals.totalSalesHt > 0 ? Math.min(100, Math.max(0, (domMarge / totals.totalSalesHt) * 100 + 50)) : 50,
-      dromVolPct: Math.min(100, Math.max(0, (domVol / totalVol) * 100)),
+      dromCaPct: Math.min(100, Math.max(0, (dromCa / total) * 100)),
+      dromMargePct: totals.totalSalesHt > 0 ? Math.min(100, Math.max(0, (dromMarge / totals.totalSalesHt) * 100 + 50)) : 50,
+      dromVolPct: Math.min(100, Math.max(0, (dromVol / totalVol) * 100)),
       onTime: 72,
       deltaCa: 1.2,
       deltaMarge: 0.5,
       deltaVol: -0.3,
       deltaOnTime: 1.1,
     };
-  }, [salesByTerritory, totals.totalSalesHt]);
+  }, [salesByTerritory, totals.totalSalesHt, totals.totalSalesHt]);
 
   const alerts = React.useMemo(() => {
     const list: { label: string; severity: "warning" }[] = [];
     if ((marginRate ?? 0) < 5) list.push({ label: "Marge < 5% sur la période", severity: "warning" });
-    if (!sales.length) list.push({ label: "Aucune vente sur la période filtrée", severity: "warning" });
-    if (!costs.length) list.push({ label: "Pas de coûts logistiques injectés", severity: "warning" });
+    if (!salesView.length) list.push({ label: "Aucune vente sur la période filtrée", severity: "warning" });
+    if (!costsView.length) list.push({ label: "Pas de coûts logistiques injectés", severity: "warning" });
     return list.slice(0, 3);
-  }, [marginRate, sales.length, costs.length]);
+  }, [marginRate, salesView.length, costsView.length]);
 
   const actions = ["Ouvrir Explore", "Optimiser incoterm", "Importer CSV coûts"];
 
-  // ✅ Wheel zoom (passive:false)
+  // ✅ Wheel zoom (px) — OK
   React.useEffect(() => {
     const el = zoomLayerRef.current;
     if (!el) return;
@@ -477,6 +508,54 @@ export default function ControlTower() {
       el.removeEventListener("wheel", onWheel);
     };
   }, []);
+
+  // ✅ Zoom Antilles (le bug était ici : tu calculais tx/ty en unités SVG, mais tu appliques en px)
+  const computeZoomForSubset = React.useCallback(
+    (codes: string[]) => {
+      const el = zoomLayerRef.current;
+      if (!el) return { scale: 1, tx: 0, ty: 0 };
+
+      const rect = el.getBoundingClientRect();
+      const subset = nodes.filter((n) => codes.includes(n.code));
+      if (!subset.length) return { scale: 1, tx: 0, ty: 0 };
+
+      // conversion SVG->px dans le conteneur
+      const pts = subset.map((n) => ({
+        x: (n.x / svgMeta.width) * rect.width,
+        y: (n.y / svgMeta.height) * rect.height,
+      }));
+
+      const minX = Math.min(...pts.map((p) => p.x));
+      const maxX = Math.max(...pts.map((p) => p.x));
+      const minY = Math.min(...pts.map((p) => p.y));
+      const maxY = Math.max(...pts.map((p) => p.y));
+
+      const bboxW = Math.max(1, maxX - minX);
+      const bboxH = Math.max(1, maxY - minY);
+
+      const pad = 0.28; // zoom confort
+      const scale = Math.min(5, Math.min(rect.width / (bboxW * (1 + pad)), rect.height / (bboxH * (1 + pad))));
+
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      const tx = rect.width / 2 - centerX * scale;
+      const ty = rect.height / 2 - centerY * scale;
+
+      return { scale, tx, ty };
+    },
+    [nodes, svgMeta.height, svgMeta.width]
+  );
+
+  const zoomCss = React.useMemo(
+    () => ({
+      transform: `translate(${viewport.tx}px, ${viewport.ty}px) scale(${viewport.scale})`,
+      transformOrigin: "0 0",
+    }),
+    [viewport.scale, viewport.tx, viewport.ty]
+  );
+
+  const selected = selectedTerritory || hovered || "FR";
 
   return (
     <MainLayout wrapperClassName="control-tower-neon" variant="bare">
@@ -518,7 +597,6 @@ export default function ControlTower() {
           </div>
         </div>
 
-        {/* Ligne 1 : carte + donuts */}
         <div className="grid grid-cols-12 gap-3">
           <div className="col-span-12 lg:col-span-8">
             <NeonSurface className="h-[460px] relative overflow-hidden">
@@ -527,18 +605,13 @@ export default function ControlTower() {
                 <NeonKpiCard label="CA TTC (30j)" value={formatMoney(totals.totalSalesTtc)} delta={2.4} accent="var(--chart-2)" />
                 <NeonKpiCard
                   label="Marge % (30j)"
-                  value={
-                    marginRate === null
-                      ? "n/a"
-                      : `${marginRate.toLocaleString("fr-FR", { maximumFractionDigits: 1, minimumFractionDigits: 0 })}%`
-                  }
+                  value={marginRate === null ? "n/a" : `${marginRate.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%`}
                   delta={marginRate ? marginRate / 10 : 0}
                   accent="var(--chart-3)"
                 />
-                <NeonKpiCard label="Ventes (30j)" value={sales.length.toString()} delta={sales.length ? 1.1 : -0.2} accent="var(--chart-4)" />
+                <NeonKpiCard label="Ventes (30j)" value={salesView.length.toString()} delta={salesView.length ? 1.1 : -0.2} accent="var(--chart-4)" />
               </div>
 
-              {/* ✅ FIX : conteneur interactions (pas transformé) + layer map (transformé) */}
               <div
                 ref={zoomLayerRef}
                 className="absolute inset-0 bg-gradient-to-br from-slate-900/60 via-slate-900/40 to-cyan-900/20 rounded-xl border border-cyan-500/20 shadow-[0_0_40px_rgba(34,211,238,0.15)]"
@@ -559,10 +632,9 @@ export default function ControlTower() {
                   draggingRef.current = null;
                 }}
               >
-                {/* Layer transformé (carte + points + arcs) */}
                 <div className="absolute inset-0" style={zoomCss}>
                   <svg
-                    viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
+                    viewBox={`0 0 ${svgMeta.width} ${svgMeta.height}`}
                     preserveAspectRatio="xMidYMid meet"
                     className="absolute inset-0 w-full h-full"
                   >
@@ -576,22 +648,20 @@ export default function ControlTower() {
                       </filter>
                     </defs>
 
-                    <style>
-                      {`
-                        .arc-neon {
-                          stroke-dasharray: 7 11;
-                          animation: dash 1.2s linear infinite;
-                        }
-                        @keyframes dash { to { stroke-dashoffset: -36; } }
-                      `}
-                    </style>
+                    <style>{`
+                      .arc-neon {
+                        stroke-dasharray: 8 10;
+                        animation: arcDash 1.35s linear infinite;
+                      }
+                      @keyframes arcDash { to { stroke-dashoffset: -38; } }
+                    `}</style>
 
                     <image
                       href={worldMap}
                       x="0"
                       y="0"
-                      width={MAP_WIDTH}
-                      height={MAP_HEIGHT}
+                      width={svgMeta.width}
+                      height={svgMeta.height}
                       preserveAspectRatio="xMidYMid meet"
                       opacity="0.4"
                       style={{ pointerEvents: "none", filter: "invert(1) saturate(1.2) contrast(1.05)" }}
@@ -600,10 +670,10 @@ export default function ControlTower() {
                     {nodes
                       .filter((n) => n.code !== "FR")
                       .map((node) => {
-                        const path = buildArc(metropole, node);
+                        const d = buildArc(metropole.x, metropole.y, node.x, node.y);
                         const isActive = selected === node.code;
                         const isHover = hovered === node.code;
-                        const strokeWidth = isActive || isHover ? 2.8 : 1.35;
+                        const strokeWidth = isActive || isHover ? 2.6 : 1.2;
 
                         const territoryData = salesByTerritory[node.code];
                         const hasFlow = (territoryData?.ca || 0) > 0;
@@ -613,25 +683,25 @@ export default function ControlTower() {
                           <g key={node.code}>
                             {hasFlow ? (
                               <path
-                                d={path}
+                                d={d}
                                 fill="none"
                                 stroke={node.color}
                                 strokeWidth={strokeWidth}
-                                strokeOpacity={isActive || isHover ? 0.92 : 0.28}
-                                className="arc-neon"
+                                strokeOpacity={isActive || isHover ? 0.95 : 0.25}
+                                className="arc-neon transition-all duration-300"
                                 vectorEffect="non-scaling-stroke"
                                 filter="url(#glow)"
                                 pointerEvents="none"
                               />
                             ) : null}
 
-                            <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={hasFlow ? 0.35 : 0.12} />
+                            <circle cx={node.x} cy={node.y} r={isActive || isHover ? 12 : 9} fill={node.color} opacity={hasFlow ? 0.35 : 0.15} pointerEvents="none" />
                             <circle
                               cx={node.x}
                               cy={node.y}
                               r={isActive || isHover ? 7 : 5.5}
                               fill={node.color}
-                              opacity={hasFlow ? 0.9 : 0.28}
+                              opacity={hasFlow ? 0.9 : 0.35}
                               className="cursor-pointer"
                               onMouseEnter={(evt) => {
                                 setHovered(node.code);
@@ -650,7 +720,7 @@ export default function ControlTower() {
                             />
 
                             {showLabel ? (
-                              <text x={node.x + 12} y={node.y - 10} className="text-xs font-semibold fill-cyan-100 drop-shadow">
+                              <text x={node.x + 12} y={node.y - 8} className="text-xs font-semibold fill-cyan-100 drop-shadow">
                                 {node.name}
                               </text>
                             ) : null}
@@ -689,7 +759,14 @@ export default function ControlTower() {
                   </svg>
                 </div>
 
-                {/* Légende (fixe, NON affectée par le zoom/pan) */}
+                {/* ✅ message non bloquant si filtre = vide */}
+                {noDataForSelection ? (
+                  <div className="pointer-events-none absolute top-16 left-1/2 -translate-x-1/2 z-30 rounded-lg border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-xs text-amber-100 shadow-lg">
+                    Pas de données pour <span className="font-semibold">{selectedTerritory}</span> sur la période — clique une autre destination ou “Reset territoire”.
+                  </div>
+                ) : null}
+
+                {/* Légende fixe */}
                 <div className="absolute bottom-3 left-3 z-30 rounded-lg border border-cyan-500/30 bg-slate-900/70 px-3 py-2 text-xs text-cyan-50 shadow-lg">
                   <div className="font-semibold text-cyan-100 mb-1">Légende DOM-TOM</div>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1">
@@ -705,15 +782,15 @@ export default function ControlTower() {
                 </div>
               </div>
 
+              {/* ✅ overlay “aucune donnée période” = pointer-events-none pour ne jamais bloquer la carte */}
               {hasZeroState ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40">
                   <div className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
                     Aucune donnée sur la période. Ajuste les filtres ou importe des ventes.
                   </div>
                 </div>
               ) : null}
 
-              {/* Tooltip en position FIXED (pas dépendant du conteneur) */}
               {hovered && tooltipPos ? (
                 <div
                   className="pointer-events-none fixed z-[9999] rounded-lg border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-slate-100 shadow-xl"
@@ -740,7 +817,6 @@ export default function ControlTower() {
           </div>
         </div>
 
-        {/* Ligne 2 : barres + mini DOM + courbe */}
         <div className="grid grid-cols-12 gap-3">
           <div className="col-span-12 md:col-span-4">
             <NeonBarCard title="Top routes par volume" data={topRoutes} dataKey="volume" labelKey="route" />
@@ -784,7 +860,6 @@ export default function ControlTower() {
           </div>
         </div>
 
-        {/* Ligne 3 : alertes + actions */}
         <div className="grid grid-cols-12 gap-3">
           <div className="col-span-12 md:col-span-6">
             <NeonSurface>
