@@ -5,21 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Download, Truck, Plane, Plus } from "lucide-react";
+import { RefreshCw, Download, Plus, Truck, Receipt } from "lucide-react";
 
-import { useCosts } from "@/hooks/useCosts";
 import { supabase } from "@/integrations/supabase/client";
-import { useDhlSalesQuotes } from "@/hooks/useDhlSalesQuotes";
 import { ExportFiltersBar } from "@/components/export/ExportFiltersBar";
 import { fetchKpis } from "@/domain/export/queries";
 import { ExportFilters } from "@/domain/export/types";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { toast } from "sonner";
-
-type PricingSummary = { territory: string; skuCount: number; avgPlv: number };
+import { useCosts } from "@/hooks/useCosts";
 
 const DROM = ["GP", "MQ", "GF", "RE", "YT"];
-
 const TERRITORIES: { code: string; label: string }[] = [
   { code: "FR", label: "Métropole" },
   { code: "GP", label: "Guadeloupe" },
@@ -35,7 +31,7 @@ function safeNumber(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function formatMoney(n: number, digits = 2) {
+function formatMoney(n: number, digits = 0) {
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
     currency: "EUR",
@@ -49,6 +45,26 @@ function zoneForDestination(dest: string) {
   if (up === "FR") return "FR";
   return "UE";
 }
+
+function normalizeCostType(t: unknown) {
+  return String(t || "").trim().toUpperCase();
+}
+
+const TRANSPORT_TYPES = new Set([
+  "TRANSPORT",
+  "FRET",
+  "SHIPPING",
+  "TRANSPORT_DHL",
+  "TRANSPORT_FEDEX",
+  "TRANSPORT_UPS",
+]);
+
+const TRANSIT_TYPES = new Set([
+  "TRANSIT",
+  "FRAIS_TRANSIT",
+  "FRAIS DE TRANSIT",
+  "TRANSITAIRE",
+]);
 
 function toCsv(rows: Record<string, any>[]) {
   if (!rows.length) return "";
@@ -66,10 +82,7 @@ function toCsv(rows: Record<string, any>[]) {
     return needsQuotes ? `"${normalized}"` : normalized;
   };
 
-  const lines = [
-    headers.join(","), // header
-    ...rows.map((r) => headers.map((h) => esc(r[h])).join(",")),
-  ];
+  const lines = [headers.join(","), ...rows.map((r) => headers.map((h) => esc(r[h])).join(","))];
   return lines.join("\n");
 }
 
@@ -85,17 +98,34 @@ function downloadText(content: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function SummaryTile({ label, value }: { label: string; value: number }) {
+function KpiTile({
+  icon,
+  label,
+  value,
+  hint,
+  accent = "border-slate-200",
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: string;
+  hint?: string;
+  accent?: string;
+}) {
   return (
-    <div className="rounded-lg border p-3 bg-card/50">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-xl font-semibold">{formatMoney(value, 0)}</div>
+    <div className={`rounded-xl border ${accent} bg-card/60 p-3`}>
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        {icon ? <div className="text-muted-foreground">{icon}</div> : null}
+      </div>
+      <div className="mt-1 text-2xl font-semibold tracking-tight">{value}</div>
+      {hint ? <div className="mt-1 text-[11px] text-muted-foreground">{hint}</div> : null}
     </div>
   );
 }
 
 export default function Costs() {
   const { resolvedRange, variables } = useGlobalFilters();
+
   const [filters, setFilters] = React.useState<ExportFilters>({
     from: resolvedRange.from,
     to: resolvedRange.to,
@@ -113,8 +143,9 @@ export default function Costs() {
     }));
   }, [resolvedRange.from, resolvedRange.to, variables.territory_code, variables.client_id]);
 
+  // KPI export: taxes estimées + transit total (si exposé par fetchKpis)
   const kpisQuery = useQuery({
-    queryKey: ["export-costs-kpis", filters],
+    queryKey: ["costs-kpis-nonrepercutes", filters],
     queryFn: () => fetchKpis(filters),
   });
 
@@ -122,11 +153,17 @@ export default function Costs() {
     if (kpisQuery.error) toast.error((kpisQuery.error as Error).message);
   }, [kpisQuery.error]);
 
-  // -------------------- Charges (table costs via hook) --------------------
-  const { rows, isLoading, error, warning, refresh } = useCosts();
+  // Charges réelles: cost_lines filtrées (période/territoire/client)
+  const { rows, isLoading, error, warning, refresh } = useCosts({
+    from: filters.from,
+    to: filters.to,
+    territory: filters.territory,
+    clientId: filters.clientId,
+  });
 
+  // Recherche sur charges
   const [q, setQ] = React.useState("");
-  const filtered = React.useMemo(() => {
+  const filteredRows = React.useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return rows;
 
@@ -149,14 +186,48 @@ export default function Costs() {
     });
   }, [rows, q]);
 
-  const totalCharges = React.useMemo(
-    () => filtered.reduce((s: number, r: any) => s + safeNumber(r.amount), 0),
-    [filtered]
-  );
+  // Agrégats charges
+  const chargesTotals = React.useMemo(() => {
+    const total = filteredRows.reduce((s, r) => s + safeNumber(r.amount), 0);
 
+    const transport = filteredRows.reduce((s, r) => {
+      const t = normalizeCostType(r.cost_type);
+      return s + (TRANSPORT_TYPES.has(t) ? safeNumber(r.amount) : 0);
+    }, 0);
+
+    const transitFees = filteredRows.reduce((s, r) => {
+      const t = normalizeCostType(r.cost_type);
+      return s + (TRANSIT_TYPES.has(t) ? safeNumber(r.amount) : 0);
+    }, 0);
+
+    const byType: Record<string, number> = {};
+    filteredRows.forEach((r) => {
+      const t = normalizeCostType(r.cost_type) || "AUTRE";
+      byType[t] = (byType[t] || 0) + safeNumber(r.amount);
+    });
+
+    return { total, transport, transitFees, byType };
+  }, [filteredRows]);
+
+  // Taxes estimées (depuis fetchKpis)
+  const estimatedCosts = kpisQuery.data?.estimatedExportCosts;
+  const estOM = safeNumber(estimatedCosts?.om);
+  const estOMR = safeNumber(estimatedCosts?.octroi); // selon ton modèle actuel (souvent OMR / octroi régional)
+  const taxesOMTotal = estOM + estOMR;
+
+  // Transit facturé (depuis KPI export)
+  const totalTransitFacture = safeNumber(kpisQuery.data?.totalTransit);
+
+  // ✅ KPI demandé
+  // Coût non répercuté = (Transport + Taxes OM/OMR) - Transit facturé
+  const kpiNonRepercute = React.useMemo(() => {
+    return chargesTotals.transport + taxesOMTotal - totalTransitFacture;
+  }, [chargesTotals.transport, taxesOMTotal, totalTransitFacture]);
+
+  // Export CSV charges
   function exportChargesCsv() {
     const csv = toCsv(
-      filtered.map((r: any) => ({
+      filteredRows.map((r: any) => ({
         date: r.date ?? "",
         cost_type: r.cost_type ?? "",
         amount: r.amount ?? 0,
@@ -169,90 +240,43 @@ export default function Costs() {
         product_id: r.product_id ?? "",
       }))
     );
-
-    downloadText(csv, `costs_${new Date().toISOString().slice(0, 10)}.csv`);
+    downloadText(csv, `charges_${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
-  // -------------------- DHL quotes --------------------
-  const [destinations, setDestinations] = React.useState<{ id: string; name: string | null }[]>([]);
-  const [dhlDestinationId, setDhlDestinationId] = React.useState<string>("all");
-
-  const {
-    data: dhlQuotes,
-    loading: dhlLoading,
-    error: dhlError,
-    refetch: refetchDhl,
-  } = useDhlSalesQuotes({
-    destinationId: dhlDestinationId === "all" ? undefined : dhlDestinationId,
-  });
-
-  React.useEffect(() => {
-    let mounted = true;
-
-    supabase
-      .from("export_destinations")
-      .select("id,name")
-      .order("name", { ascending: true })
-      .limit(1000)
-      .then(({ data, error: destError }) => {
-        if (!mounted) return;
-        if (!destError && data) setDestinations(data as any);
-      })
-      .catch(console.error);
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const dhlTotal = React.useMemo(
-    () => (dhlQuotes || []).reduce((s: number, x: any) => s + safeNumber(x?.dhl_transport_eur), 0),
-    [dhlQuotes]
-  );
-
-  function exportDhlCsv() {
-    if (!dhlQuotes?.length) return;
-    const csv = toCsv(
-      dhlQuotes.map((x: any) => ({
-        sale_id: x.sale_id ?? "",
-        sale_date: x.sale_date ?? "",
-        destination_name: x.destination_name ?? "",
-        dhl_zone: x.dhl_zone ?? "",
-        quantity: x.quantity ?? "",
-        total_actual_weight_kg: x.total_actual_weight_kg ?? "",
-        dhl_transport_eur: x.dhl_transport_eur ?? "",
-      }))
-    );
-    downloadText(csv, `dhl_quotes_${new Date().toISOString().slice(0, 10)}.csv`);
-  }
-
-  // -------------------- Form: add order charges --------------------
+  // Ajout charge (table canonique = cost_lines)
   const [orderId, setOrderId] = React.useState("");
   const [transportAmount, setTransportAmount] = React.useState<string>("");
   const [dossierAmount, setDossierAmount] = React.useState<string>("");
+  const [transitAmount, setTransitAmount] = React.useState<string>("");
   const [currency, setCurrency] = React.useState("EUR");
-  const [destination, setDestination] = React.useState("FR");
+  const [destination, setDestination] = React.useState(filters.territory || "FR");
   const [incoterm, setIncoterm] = React.useState("DAP");
-  const [isSavingOrderCharges, setIsSavingOrderCharges] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
 
-  async function addOrderCharges() {
+  React.useEffect(() => {
+    setDestination(filters.territory || "FR");
+  }, [filters.territory]);
+
+  async function addCharges() {
     const oid = orderId.trim();
     if (!oid) {
-      alert("Merci de renseigner un ID de commande.");
+      toast.error("Merci de renseigner un ID de commande.");
       return;
     }
 
     const t = safeNumber(transportAmount);
     const d = safeNumber(dossierAmount);
-    if (t <= 0 && d <= 0) {
-      alert("Renseigne au moins un montant (transport ou dossier).");
+    const tr = safeNumber(transitAmount);
+
+    if (t <= 0 && d <= 0 && tr <= 0) {
+      toast.error("Renseigne au moins un montant (transport, dossier, transit).");
       return;
     }
 
+    const today = new Date().toISOString().slice(0, 10);
     const market_zone = zoneForDestination(destination);
 
     const payload: any[] = [];
-    const today = new Date().toISOString().slice(0, 10);
 
     if (t > 0) {
       payload.push({
@@ -266,6 +290,7 @@ export default function Costs() {
         order_id: oid,
       });
     }
+
     if (d > 0) {
       payload.push({
         date: today,
@@ -279,163 +304,166 @@ export default function Costs() {
       });
     }
 
-    setIsSavingOrderCharges(true);
+    // Optionnel: si tu saisis aussi le “frais transit” payé au transitaire
+    if (tr > 0) {
+      payload.push({
+        date: today,
+        cost_type: "FRAIS_TRANSIT",
+        amount: tr,
+        currency: currency || "EUR",
+        market_zone,
+        destination: destination || null,
+        incoterm: incoterm || null,
+        order_id: oid,
+      });
+    }
+
+    setIsSaving(true);
     try {
-      const { error } = await supabase.from("costs").insert(payload);
+      const { error } = await supabase.from("cost_lines").insert(payload);
       if (error) throw error;
 
       setOrderId("");
       setTransportAmount("");
       setDossierAmount("");
+      setTransitAmount("");
 
-      await refresh?.();
-      alert("Charges ajoutées ✅");
+      await refresh();
+      await kpisQuery.refetch();
+      toast.success("Charges ajoutées ✅");
     } catch (e: any) {
-      alert(e?.message || "Erreur lors de l'ajout des charges.");
+      toast.error(e?.message || "Erreur lors de l'ajout des charges.");
     } finally {
-      setIsSavingOrderCharges(false);
+      setIsSaving(false);
     }
   }
 
-  // -------------------- Pricing export + mini dashboard (v_export_pricing) --------------------
-  const [pricingTerritory, setPricingTerritory] = React.useState<string>("FR");
-  const [isExportPricing, setIsExportPricing] = React.useState(false);
-  const [pricingWarning, setPricingWarning] = React.useState<string>("");
-  const [pricingDashboard, setPricingDashboard] = React.useState<PricingSummary[]>([]);
+  // Synthèse par destination (pratique pour “où je perds”)
+  const byDestination = React.useMemo(() => {
+    const agg = new Map<string, { total: number; transport: number; transit: number; lines: number }>();
+    filteredRows.forEach((r: any) => {
+      const code = String(r.destination || "—").toUpperCase();
+      const cur = agg.get(code) || { total: 0, transport: 0, transit: 0, lines: 0 };
+      const amt = safeNumber(r.amount);
+      const t = normalizeCostType(r.cost_type);
+      cur.total += amt;
+      cur.lines += 1;
+      if (TRANSPORT_TYPES.has(t)) cur.transport += amt;
+      if (TRANSIT_TYPES.has(t)) cur.transit += amt;
+      agg.set(code, cur);
+    });
 
-  async function exportPricingCsv() {
-    setIsExportPricing(true);
-    setPricingWarning("");
-    try {
-      // On exporte tout le catalogue, éventuellement filtrable (si la vue a un champ territory_code)
-      const { data, error } = await supabase
-        .from("v_export_pricing")
-        .select("*")
-        .limit(20000);
+    return Array.from(agg.entries())
+      .map(([destination, v]) => ({ destination, ...v }))
+      .sort((a, b) => b.total - a.total);
+  }, [filteredRows]);
 
-      if (error) throw error;
+  const territoryLabel =
+    TERRITORIES.find((t) => t.code === (filters.territory || "FR"))?.label ||
+    (filters.territory ? filters.territory : "Toutes");
 
-      const filtered = (data || []).filter((r: any) => {
-        if (!pricingTerritory) return true;
-        const terr = String(r?.territory_code ?? r?.territory ?? "").toUpperCase();
-        return pricingTerritory === "UE" ? terr === "UE" : terr === pricingTerritory;
-      });
-
-      const csv = toCsv(
-        filtered.map((r: any) => ({
-          territory_code: r.territory_code ?? "",
-          sku: r.sku ?? r.code_article ?? "",
-          name: r.name ?? r.libelle_article ?? "",
-          plv_metropole_ttc: r.plv_metropole_ttc ?? "",
-          plv_om_ttc: r.plv_om_ttc ?? "",
-          vat_rate: r.vat_rate ?? "",
-          om: r.om ?? "",
-          omr: r.omr ?? "",
-          lppr: r.lppr ?? r.tarif_lppr_eur ?? "",
-          competitor_price: r.competitor_price ?? "",
-        }))
-      );
-
-      downloadText(csv, `export_pricing_${pricingTerritory}_${new Date().toISOString().slice(0, 10)}.csv`);
-    } catch (e: any) {
-      setPricingWarning(e?.message || "Erreur export v_export_pricing");
-    } finally {
-      setIsExportPricing(false);
-    }
-  }
-
-  React.useEffect(() => {
-    // Dashboard simple (avg PLV) depuis v_export_pricing
-    const load = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("v_export_pricing")
-          .select("territory_code,plv_metropole_ttc,plv_om_ttc,sku")
-          .limit(5000);
-
-        if (error) throw error;
-
-        const agg = new Map<string, { sum: number; count: number }>();
-        (data || []).forEach((r: any) => {
-          const terr = String(r.territory_code || "FR").toUpperCase();
-          const val = safeNumber(r.plv_om_ttc ?? r.plv_metropole_ttc ?? 0);
-          const cur = agg.get(terr) || { sum: 0, count: 0 };
-          cur.sum += val;
-          cur.count += 1;
-          agg.set(terr, cur);
-        });
-
-        const res: PricingSummary[] = Array.from(agg.entries()).map(([territory, v]) => ({
-          territory,
-          skuCount: v.count,
-          avgPlv: v.count ? v.sum / v.count : 0,
-        }));
-
-        setPricingDashboard(res.sort((a, b) => a.territory.localeCompare(b.territory)));
-      } catch (err: any) {
-        setPricingWarning(err?.message || "Erreur lecture v_export_pricing");
-      }
-    };
-
-    void load();
-  }, []);
-
-  const estimatedCosts = kpisQuery.data?.estimatedExportCosts;
-  const transitGap = (kpisQuery.data?.totalTransit ?? 0) - (estimatedCosts?.total ?? 0);
-
-  // -------------------- UI --------------------
   return (
     <MainLayout contentClassName="md:p-8">
       <div className="space-y-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm text-muted-foreground">Coûts export</p>
+            <p className="text-sm text-muted-foreground">Charges & coûts non répercutés</p>
             <h1 className="text-2xl font-bold">Costs</h1>
-            <p className="text-sm text-muted-foreground">Charges, estimation DHL, et export du catalogue pricing.</p>
+            <p className="text-sm text-muted-foreground">
+              Suivi des charges réelles + taxes OM/OMR estimées, et KPI “Transport + OM − Transit”.
+            </p>
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={refresh} disabled={isLoading} className="gap-2">
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            <Button
+              variant="outline"
+              onClick={() => {
+                kpisQuery.refetch();
+                refresh();
+              }}
+              disabled={isLoading || kpisQuery.isLoading}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${(isLoading || kpisQuery.isLoading) ? "animate-spin" : ""}`} />
               Actualiser
             </Button>
-            <Button variant="outline" onClick={exportChargesCsv} disabled={isLoading || filtered.length === 0} className="gap-2">
+            <Button
+              variant="outline"
+              onClick={exportChargesCsv}
+              disabled={isLoading || filteredRows.length === 0}
+              className="gap-2"
+            >
               <Download className="h-4 w-4" />
               Export charges (CSV)
             </Button>
           </div>
         </div>
 
-        <ExportFiltersBar value={filters} onChange={setFilters} onRefresh={() => { kpisQuery.refetch(); refresh(); }} loading={kpisQuery.isLoading} />
+        <ExportFiltersBar
+          value={filters}
+          onChange={setFilters}
+          onRefresh={() => {
+            kpisQuery.refetch();
+            refresh();
+          }}
+          loading={kpisQuery.isLoading || isLoading}
+        />
 
+        {/* KPI */}
         <Card>
           <CardHeader>
-            <CardTitle>Coûts export estimés (factures)</CardTitle>
-            <CardDescription>Basé sur OM / octroi / TVA des tables Supabase, filtre période + territoire + client.</CardDescription>
+            <CardTitle>KPI “coûts non répercutés”</CardTitle>
+            <CardDescription>
+              Période : <b>{filters.from}</b> → <b>{filters.to}</b> • Territoire : <b>{territoryLabel}</b>
+            </CardDescription>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <SummaryTile label="OM" value={estimatedCosts?.om ?? 0} />
-            <SummaryTile label="Octroi" value={estimatedCosts?.octroi ?? 0} />
-            <SummaryTile label="TVA" value={estimatedCosts?.vat ?? 0} />
-            <SummaryTile label="Autres règles" value={estimatedCosts?.extraRules ?? 0} />
-            <SummaryTile label="Total coûts export" value={estimatedCosts?.total ?? 0} />
-            <div className="md:col-span-5 rounded-lg border p-3 bg-muted/30 flex items-center justify-between">
-              <div>
-                <div className="text-xs text-muted-foreground">Écart transit vs coûts export estimés</div>
-                <div className="text-sm text-muted-foreground">Transit inclut dans invoice_ht, pas dans transport_cost_eur.</div>
+          <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <KpiTile
+              icon={<Truck className="h-4 w-4" />}
+              label="Transport (charges réelles)"
+              value={formatMoney(chargesTotals.transport, 0)}
+              hint="Somme cost_lines où cost_type=TRANSPORT/FRET/SHIPPING…"
+              accent="border-cyan-200"
+            />
+
+            <KpiTile
+              icon={<Receipt className="h-4 w-4" />}
+              label="Taxes OM/OMR estimées"
+              value={formatMoney(taxesOMTotal, 0)}
+              hint={`OM: ${formatMoney(estOM, 0)} • OMR/Octroi: ${formatMoney(estOMR, 0)}`}
+              accent="border-amber-200"
+            />
+
+            <KpiTile
+              label="Frais de transit facturés"
+              value={formatMoney(totalTransitFacture, 0)}
+              hint="Vient des KPI export (totalTransit)"
+              accent="border-emerald-200"
+            />
+
+            <KpiTile
+              label="✅ Coût non répercuté"
+              value={formatMoney(kpiNonRepercute, 0)}
+              hint="(Transport + OM/OMR) − Transit facturé"
+              accent="border-rose-200"
+            />
+
+            <div className="md:col-span-4 rounded-xl border bg-muted/30 p-3 text-sm">
+              <div className="text-muted-foreground">
+                Lecture : si le KPI est <b>positif</b>, tu absorbes du coût. S’il est <b>négatif</b>, le transit couvre
+                plus que (transport+OM).
               </div>
-              <div className="text-xl font-semibold">{formatMoney(transitGap, 0)}</div>
             </div>
           </CardContent>
         </Card>
 
+        {/* Warnings / errors */}
         {kpisQuery.data?.warning ? (
           <Card className="border-amber-200 bg-amber-50">
             <CardContent className="pt-4 text-sm text-amber-800">{kpisQuery.data.warning}</CardContent>
           </Card>
         ) : null}
 
-        {/* ERRORS */}
         {error || warning ? (
           <Card className={(warning || "").toLowerCase().includes("manquante") ? "border-amber-300 bg-amber-50" : "border-red-200"}>
             <CardContent className="pt-6 text-sm text-foreground">{error || warning}</CardContent>
@@ -445,19 +473,42 @@ export default function Costs() {
         {/* Charges list */}
         <Card>
           <CardHeader>
-            <CardTitle>Charges</CardTitle>
-            <CardDescription>Recherche, total, et export CSV.</CardDescription>
+            <CardTitle>Charges (cost_lines)</CardTitle>
+            <CardDescription>Recherche, total, synthèse par destination, et export CSV.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-col md:flex-row md:items-end gap-3">
               <div className="flex-1">
                 <p className="text-xs text-muted-foreground mb-1">Recherche</p>
-                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ex: TRANSPORT, RE, DAP, CMD-2026…" />
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Ex: TRANSPORT, FRAIS_TRANSIT, RE, DAP, CMD-2026…"
+                />
               </div>
               <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="secondary">Lignes: {filtered.length}</Badge>
-                <Badge variant="secondary">Total: {formatMoney(totalCharges, 2)}</Badge>
+                <Badge variant="secondary">Lignes: {filteredRows.length}</Badge>
+                <Badge variant="secondary">Total charges: {formatMoney(chargesTotals.total, 0)}</Badge>
+                <Badge variant="secondary">Transit (charges): {formatMoney(chargesTotals.transitFees, 0)}</Badge>
               </div>
+            </div>
+
+            {/* Mini synthèse destination */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {byDestination.slice(0, 6).map((row) => (
+                <div key={row.destination} className="rounded-xl border p-3 bg-card/50">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold">{row.destination}</div>
+                    <Badge variant="outline">{row.lines} lignes</Badge>
+                  </div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    Total: <b className="text-foreground">{formatMoney(row.total, 0)}</b>
+                  </div>
+                  <div className="text-[12px] text-muted-foreground">
+                    Transport: {formatMoney(row.transport, 0)} • Transit: {formatMoney(row.transit, 0)}
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div className="overflow-auto border rounded-md">
@@ -480,14 +531,14 @@ export default function Costs() {
                         Chargement…
                       </td>
                     </tr>
-                  ) : filtered.length === 0 ? (
+                  ) : filteredRows.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-4 px-3 text-center text-muted-foreground">
                         Aucune charge.
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((r: any) => (
+                    filteredRows.map((r: any) => (
                       <tr key={r.id ?? `${r.date}-${r.cost_type}-${r.order_id}-${r.amount}`} className="border-b last:border-0">
                         <td className="py-2 px-3">{r.date ?? "—"}</td>
                         <td className="py-2 px-3">{r.cost_type ?? "—"}</td>
@@ -505,14 +556,16 @@ export default function Costs() {
           </CardContent>
         </Card>
 
-        {/* Add order charges */}
+        {/* Add charges */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Truck className="h-5 w-5" />
-              Transport & traitement de dossier (par commande)
+              Ajouter des charges (par commande)
             </CardTitle>
-            <CardDescription>Ajoute 1 ou 2 lignes dans la table <code className="text-xs">costs</code>.</CardDescription>
+            <CardDescription>
+              Ajoute 1 à 3 lignes dans <code className="text-xs">cost_lines</code> : transport / dossier / frais transit.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -558,7 +611,7 @@ export default function Costs() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Transport (€)</p>
                 <Input
@@ -581,171 +634,24 @@ export default function Costs() {
                 />
               </div>
 
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Frais transit (€)</p>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={transitAmount}
+                  onChange={(e) => setTransitAmount(e.target.value)}
+                  placeholder="Ex: 8.00"
+                />
+              </div>
+
               <div className="flex items-end">
-                <Button onClick={addOrderCharges} disabled={isSavingOrderCharges} className="gap-2 w-full">
+                <Button onClick={addCharges} disabled={isSaving} className="gap-2 w-full">
                   <Plus className="h-4 w-4" />
-                  {isSavingOrderCharges ? "Ajout..." : "Ajouter"}
+                  {isSaving ? "Ajout..." : "Ajouter"}
                 </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* DHL ESTIMATION */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Plane className="h-5 w-5" />
-              Estimation DHL (Economy Select • Export)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col md:flex-row md:items-end gap-3">
-              <div className="flex-1">
-                <p className="text-xs text-muted-foreground mb-1">Destination</p>
-                <select
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  value={dhlDestinationId}
-                  onChange={(e) => setDhlDestinationId(e.target.value)}
-                >
-                  <option value="all">Toutes</option>
-                  {destinations.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name ?? d.id}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={refetchDhl} disabled={dhlLoading} className="gap-2">
-                  <RefreshCw className={`h-4 w-4 ${dhlLoading ? "animate-spin" : ""}`} />
-                  Actualiser DHL
-                </Button>
-                <Button variant="outline" onClick={exportDhlCsv} disabled={dhlLoading || (dhlQuotes?.length ?? 0) === 0} className="gap-2">
-                  <Download className="h-4 w-4" />
-                  Export DHL (CSV)
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2 text-xs">
-              <Badge variant="secondary">Lignes: {dhlQuotes?.length ?? 0}</Badge>
-              <Badge variant="secondary">Total estimé: {formatMoney(dhlTotal, 2)}</Badge>
-            </div>
-
-            {dhlError ? (
-              <Card className="border-red-200 bg-red-50">
-                <CardContent className="pt-4 text-sm text-foreground">{dhlError}</CardContent>
-              </Card>
-            ) : null}
-
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-background">
-                  <tr className="border-b text-muted-foreground">
-                    <th className="py-2 text-left font-medium">Vente</th>
-                    <th className="py-2 text-left font-medium">Date</th>
-                    <th className="py-2 text-left font-medium">Destination</th>
-                    <th className="py-2 text-left font-medium">Zone DHL</th>
-                    <th className="py-2 text-right font-medium">Qté</th>
-                    <th className="py-2 text-right font-medium">Poids (kg)</th>
-                    <th className="py-2 text-right font-medium">Transport (€)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dhlLoading ? (
-                    <tr>
-                      <td colSpan={7} className="py-4 text-center text-muted-foreground">
-                        Chargement…
-                      </td>
-                    </tr>
-                  ) : (dhlQuotes?.length ?? 0) === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-4 text-center text-muted-foreground">
-                        Pas de devis DHL : vérifier destination_id, mapping zone, poids produit.
-                      </td>
-                    </tr>
-                  ) : (
-                    dhlQuotes.map((x: any) => (
-                      <tr key={x.sale_id ?? `${x.sale_date}-${x.destination_name}-${x.dhl_zone}`} className="border-b last:border-0">
-                        <td className="py-2">{x.sale_id ?? "—"}</td>
-                        <td className="py-2">{x.sale_date ?? "—"}</td>
-                        <td className="py-2">{x.destination_name ?? "—"}</td>
-                        <td className="py-2">{x.dhl_zone ?? "—"}</td>
-                        <td className="py-2 text-right tabular-nums">{x.quantity ?? "—"}</td>
-                        <td className="py-2 text-right tabular-nums">{x.total_actual_weight_kg ?? "—"}</td>
-                        <td className="py-2 text-right tabular-nums">
-                          {safeNumber(x.dhl_transport_eur).toLocaleString("fr-FR", { maximumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* PRIX (v_export_pricing) */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Prix catalogue (export par territoire)</CardTitle>
-            <CardDescription>
-              Exporte depuis <code className="text-xs">v_export_pricing</code> (TVA, OM/OMR, TR/LPPR majoré, concurrence…).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-col md:flex-row md:items-end gap-3">
-              <div className="flex-1">
-                <p className="text-xs text-muted-foreground mb-1">Territoire</p>
-                <select
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  value={pricingTerritory}
-                  onChange={(e) => setPricingTerritory(e.target.value)}
-                >
-                  {TERRITORIES.map((t) => (
-                    <option key={t.code} value={t.code}>
-                      {t.code} — {t.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-2">
-                <Button onClick={exportPricingCsv} disabled={isExportPricing} className="gap-2">
-                  <Download className="h-4 w-4" />
-                  {isExportPricing ? "Export..." : "Exporter le catalogue (CSV)"}
-                </Button>
-              </div>
-            </div>
-
-            {pricingWarning ? <p className="text-sm text-amber-600">{pricingWarning}</p> : null}
-          </CardContent>
-        </Card>
-
-        {/* Pricing dashboard */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Dashboard pricing (avg PLV)</CardTitle>
-            <CardDescription>Résumé rapide depuis v_export_pricing.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {pricingDashboard.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aucune donnée.</p>
-            ) : (
-              <div className="grid gap-3 md:grid-cols-3">
-                {pricingDashboard.map((row) => (
-                  <div key={row.territory} className="rounded-lg border p-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-semibold">{row.territory}</span>
-                      <Badge variant="outline">{row.skuCount} SKU</Badge>
-                    </div>
-                    <div className="text-xs text-muted-foreground">PLV moyenne: {formatMoney(row.avgPlv, 2)}</div>
-                  </div>
-                ))}
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>
