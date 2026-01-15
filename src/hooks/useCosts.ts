@@ -3,18 +3,18 @@ import * as React from "react";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
 export type CostLine = {
-  id: string; // text dans ta table
+  id: string;
   date: string | null;
-  destination: string | null; // text (GP/MQ/...)
+  destination: string | null; // ex: GP / MQ / RE ...
+  cost_type: string | null;   // ex: OM / OCTROI / DOUANE / DOSSIER / AUTRE
   amount: number | null;
-  cost_type: string | null;
 };
 
 export type CostsFilters = {
-  from?: string; // YYYY-MM-DD
-  to?: string; // YYYY-MM-DD
-  destination?: string; // ex: GP
-  costType?: string; // ex: TRANSPORT
+  from?: string;
+  to?: string;
+  destination?: string; // GP/MQ/...
+  costType?: string;    // optionnel
 };
 
 type UseCostsResult = {
@@ -32,7 +32,7 @@ function asMessage(err: any): string {
   return JSON.stringify(err);
 }
 
-async function fetchAllCostLines(filters: CostsFilters): Promise<CostLine[]> {
+async function fetchAllCostLines(filters?: CostsFilters): Promise<CostLine[]> {
   const pageSize = 5000;
   let from = 0;
   const all: CostLine[] = [];
@@ -42,14 +42,14 @@ async function fetchAllCostLines(filters: CostsFilters): Promise<CostLine[]> {
 
     let q = supabase
       .from("cost_lines")
-      .select("id,date,destination,amount,cost_type")
+      .select("id,date,destination,cost_type,amount")
       .order("date", { ascending: false })
       .range(from, to);
 
-    if (filters.from) q = q.gte("date", filters.from);
-    if (filters.to) q = q.lte("date", filters.to);
-    if (filters.destination) q = q.eq("destination", filters.destination);
-    if (filters.costType) q = q.eq("cost_type", filters.costType);
+    if (filters?.from) q = q.gte("date", filters.from);
+    if (filters?.to) q = q.lte("date", filters.to);
+    if (filters?.destination) q = q.eq("destination", filters.destination);
+    if (filters?.costType) q = q.eq("cost_type", filters.costType);
 
     const { data, error } = await q;
     if (error) throw error;
@@ -60,8 +60,8 @@ async function fetchAllCostLines(filters: CostsFilters): Promise<CostLine[]> {
         id: String(r.id),
         date: r.date ?? null,
         destination: r.destination ?? null,
-        amount: r.amount ?? null,
         cost_type: r.cost_type ?? null,
+        amount: r.amount ?? null,
       }))
     );
 
@@ -72,7 +72,7 @@ async function fetchAllCostLines(filters: CostsFilters): Promise<CostLine[]> {
   return all;
 }
 
-export function useCosts(filters: CostsFilters): UseCostsResult {
+export function useCosts(filters?: CostsFilters): UseCostsResult {
   const [rows, setRows] = React.useState<CostLine[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -94,15 +94,23 @@ export function useCosts(filters: CostsFilters): UseCostsResult {
       const data = await fetchAllCostLines(filters);
       setRows(data);
     } catch (e: any) {
+      const msg = asMessage(e);
       setRows([]);
-      setError(asMessage(e));
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
-  }, [filters]);
+  }, [filters?.from, filters?.to, filters?.destination, filters?.costType]);
 
   React.useEffect(() => {
-    void refresh();
+    let cancelled = false;
+    (async () => {
+      if (cancelled) return;
+      await refresh();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [refresh]);
 
   return { rows, isLoading, error, warning, refresh };
