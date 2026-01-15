@@ -1,55 +1,37 @@
+// src/pages/Costs.tsx
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Download, Plus, Truck, Receipt } from "lucide-react";
+import { RefreshCw, Plus, Download } from "lucide-react";
+import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { ExportFiltersBar } from "@/components/export/ExportFiltersBar";
+import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { fetchKpis } from "@/domain/export/queries";
 import { ExportFilters } from "@/domain/export/types";
-import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
-import { toast } from "sonner";
-import { useCosts } from "@/hooks/useCosts";
+import { useQuery } from "@tanstack/react-query";
+
+import { useCosts, type CostLine } from "@/hooks/useCosts";
 
 const DROM = ["GP", "MQ", "GF", "RE", "YT"];
-
-const TERRITORIES: { code: string; label: string }[] = [
-  { code: "FR", label: "Métropole" },
-  { code: "GP", label: "Guadeloupe" },
-  { code: "MQ", label: "Martinique" },
-  { code: "GF", label: "Guyane" },
-  { code: "RE", label: "Réunion" },
-  { code: "YT", label: "Mayotte" },
-  { code: "UE", label: "Union Européenne" },
-];
-
-type ExportDestination = { id: string; name: string | null; code: string | null };
+const DESTS = ["all", "FR", ...DROM, "UE"] as const;
+const COST_TYPES = ["all", "TRANSPORT", "TRANSIT", "OM", "OCTROI", "DOSSIER", "AUTRE"] as const;
 
 function safeNumber(v: unknown): number {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : 0;
 }
 
-function formatMoney(n: number, digits = 0) {
+function formatMoney(n: number, digits = 2) {
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
     currency: "EUR",
     maximumFractionDigits: digits,
   }).format(Number.isFinite(n) ? n : 0);
-}
-
-function stripAccents(s: string) {
-  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
-
-function normKey(s: string) {
-  return stripAccents(String(s || ""))
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
 }
 
 function toCsv(rows: Record<string, any>[]) {
@@ -84,56 +66,20 @@ function downloadText(content: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function KpiTile({ label, value, hint, icon }: { label: string; value: string; hint?: string; icon?: React.ReactNode }) {
+function SummaryTile({ label, value, hint }: { label: string; value: number; hint?: string }) {
   return (
-    <div className="rounded-xl border bg-card/60 p-3">
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-muted-foreground">{label}</div>
-        {icon ? <div className="text-muted-foreground">{icon}</div> : null}
-      </div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight">{value}</div>
-      {hint ? <div className="mt-1 text-[11px] text-muted-foreground">{hint}</div> : null}
+    <div className="rounded-lg border p-3 bg-card/50">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-xl font-semibold">{formatMoney(value, 0)}</div>
+      {hint ? <div className="text-[11px] text-muted-foreground mt-1">{hint}</div> : null}
     </div>
   );
-}
-
-// ✅ mapping métier => on retrouve l'UUID via export_destinations.code OU name
-function getDestinationIdForTerritory(terr: string, dests: ExportDestination[]) {
-  const up = (terr || "").toUpperCase();
-  if (!up || up === "UE") return null;
-
-  const label = TERRITORIES.find((t) => t.code === up)?.label || up;
-
-  const candidates = new Set<string>([
-    normKey(label),
-    normKey(up),
-    // cas FR : on tente plusieurs libellés probables
-    ...(up === "FR" ? ["france", "metropole", "francemetropolitaine", "francemetro", "metropolitaine"].map(normKey) : []),
-  ]);
-
-  // 1) match sur export_destinations.code (plus fiable)
-  for (const d of dests) {
-    const dk = normKey(d.code || "");
-    if (dk && [...candidates].some((c) => dk === c)) return d.id;
-  }
-
-  // 2) fallback sur name
-  for (const d of dests) {
-    const nk = normKey(d.name || "");
-    if (nk && [...candidates].some((c) => nk === c || nk.includes(c) || c.includes(nk))) return d.id;
-  }
-
-  return null;
-}
-
-const TRANSPORT_TYPES = new Set(["TRANSPORT", "FRET", "SHIPPING"]);
-function normalizeCostType(t: unknown) {
-  return String(t || "").trim().toUpperCase();
 }
 
 export default function Costs() {
   const { resolvedRange, variables } = useGlobalFilters();
 
+  // Filtres "export" (pour KPIs douanes estimées)
   const [filters, setFilters] = React.useState<ExportFilters>({
     from: resolvedRange.from,
     to: resolvedRange.to,
@@ -151,157 +97,137 @@ export default function Costs() {
     }));
   }, [resolvedRange.from, resolvedRange.to, variables.territory_code, variables.client_id]);
 
-  // 🔎 Destinations (UUID)
-  const [exportDestinations, setExportDestinations] = React.useState<ExportDestination[]>([]);
-  React.useEffect(() => {
-    let mounted = true;
-    supabase
-      .from("export_destinations")
-      .select("id,name,code")
-      .order("name", { ascending: true })
-      .limit(5000)
-      .then(({ data, error }) => {
-        if (!mounted) return;
-        if (error) {
-          console.error(error);
-          return;
-        }
-        setExportDestinations((data || []) as any);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const destinationId = React.useMemo(
-    () => getDestinationIdForTerritory(filters.territory || "", exportDestinations),
-    [filters.territory, exportDestinations]
-  );
-
-  const territoryLabel = TERRITORIES.find((t) => t.code === (filters.territory || "FR"))?.label || (filters.territory || "Toutes");
-
-  // KPI export (taxes estimées + totalTransit facturé)
+  // KPIs douanes (estimations)
   const kpisQuery = useQuery({
-    queryKey: ["costs-kpis-nonrepercutes", filters.from, filters.to, filters.territory, filters.clientId],
+    queryKey: ["export-costs-kpis", filters],
     queryFn: () => fetchKpis(filters),
-    retry: false,
   });
 
   React.useEffect(() => {
     if (kpisQuery.error) toast.error((kpisQuery.error as Error).message);
   }, [kpisQuery.error]);
 
-  // ✅ Charges réelles filtrées en DB avec destination UUID (fin du 400)
-  const { rows, isLoading, error, warning, refresh } = useCosts({
+  // Filtres "charges" (cost_lines)
+  const [destination, setDestination] = React.useState<(typeof DESTS)[number]>(
+    (filters.territory as any) || "all"
+  );
+  const [costType, setCostType] = React.useState<(typeof COST_TYPES)[number]>("all");
+  const [q, setQ] = React.useState("");
+
+  React.useEffect(() => {
+    // si on change de territoire global => aligne le filtre destination (mais sans écraser "all" si déjà choisi)
+    setDestination((prev) => {
+      const t = (filters.territory as any) || "all";
+      return prev === "all" ? "all" : t;
+    });
+  }, [filters.territory]);
+
+  const costsHook = useCosts({
     from: filters.from,
     to: filters.to,
-    clientId: filters.clientId,
-    destinationId: destinationId || undefined,
+    destination: destination === "all" ? undefined : destination,
+    costType: costType === "all" ? undefined : costType,
   });
 
-  const [q, setQ] = React.useState("");
+  const { rows, isLoading, error, warning, schemaMode, refresh } = costsHook;
 
   const filteredRows = React.useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return rows;
 
-    return rows.filter((r: any) => {
+    return rows.filter((r: CostLine) => {
       const hay = [
         r.date,
         r.cost_type,
         r.amount,
-        r.currency,
-        r.market_zone,
         r.destination,
+        r.currency,
         r.incoterm,
         r.order_id,
-        r.client_id,
-        r.product_id,
+        r.invoice_number,
+        r.notes,
       ]
+        .filter(Boolean)
         .join(" ")
         .toLowerCase();
+
       return hay.includes(query);
     });
   }, [rows, q]);
 
+  // KPI "charges non répercutées" (en schéma minimal, on ne sait pas "rebilled" -> on considère tout non répercuté)
   const totals = React.useMemo(() => {
-    const total = filteredRows.reduce((s, r) => s + safeNumber(r.amount), 0);
-    const transport = filteredRows.reduce((s, r) => {
-      const t = normalizeCostType(r.cost_type);
-      return s + (TRANSPORT_TYPES.has(t) ? safeNumber(r.amount) : 0);
-    }, 0);
-    return { total, transport };
+    const sumBy = (pred: (r: CostLine) => boolean) =>
+      filteredRows.reduce((s, r) => s + (pred(r) ? safeNumber(r.amount) : 0), 0);
+
+    const transport = sumBy((r) => String(r.cost_type || "").toUpperCase() === "TRANSPORT");
+    const transit = sumBy((r) => String(r.cost_type || "").toUpperCase() === "TRANSIT");
+    const dossier = sumBy((r) => String(r.cost_type || "").toUpperCase() === "DOSSIER");
+
+    const om = sumBy((r) => String(r.cost_type || "").toUpperCase() === "OM");
+    const octroi = sumBy((r) => String(r.cost_type || "").toUpperCase() === "OCTROI");
+
+    const totalCharges = filteredRows.reduce((s, r) => s + safeNumber(r.amount), 0);
+
+    return { transport, transit, dossier, om, octroi, totalCharges };
   }, [filteredRows]);
 
   const estimatedCosts = kpisQuery.data?.estimatedExportCosts;
-  const taxesOMTotal = safeNumber(estimatedCosts?.om) + safeNumber(estimatedCosts?.octroi);
-  const totalTransitFacture = safeNumber(kpisQuery.data?.totalTransit);
-
-  // ✅ KPI demandé
-  const kpiNonRepercute = totals.transport + taxesOMTotal - totalTransitFacture;
+  const estDouanes = (estimatedCosts?.om ?? 0) + (estimatedCosts?.octroi ?? 0);
+  const nonRepercute = totals.transport + estDouanes - totals.transit; // ton KPI demandé
 
   function exportChargesCsv() {
     const csv = toCsv(
-      filteredRows.map((r: any) => ({
+      filteredRows.map((r: CostLine) => ({
         date: r.date ?? "",
         cost_type: r.cost_type ?? "",
-        amount: r.amount ?? 0,
-        currency: r.currency ?? "",
         destination: r.destination ?? "",
+        amount: r.amount ?? "",
+        currency: r.currency ?? "",
         incoterm: r.incoterm ?? "",
         order_id: r.order_id ?? "",
-        client_id: r.client_id ?? "",
-        product_id: r.product_id ?? "",
+        invoice_number: r.invoice_number ?? "",
+        notes: r.notes ?? "",
       }))
     );
-    downloadText(csv, `charges_${new Date().toISOString().slice(0, 10)}.csv`);
+    downloadText(csv, `cost_lines_${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
-  // Ajout charges
-  const [orderId, setOrderId] = React.useState("");
-  const [transportAmount, setTransportAmount] = React.useState<string>("");
-  const [currency, setCurrency] = React.useState("EUR");
-  const [destination, setDestination] = React.useState(filters.territory || "FR");
-  const [incoterm, setIncoterm] = React.useState("DAP");
-  const [isSaving, setIsSaving] = React.useState(false);
+  // Ajout rapide (compatible schéma minimal)
+  const [newDate, setNewDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
+  const [newDest, setNewDest] = React.useState<string>((filters.territory as any) || "FR");
+  const [newType, setNewType] = React.useState<string>("TRANSPORT");
+  const [newAmount, setNewAmount] = React.useState<string>("");
 
-  React.useEffect(() => {
-    setDestination(filters.territory || "FR");
-  }, [filters.territory]);
+  const [saving, setSaving] = React.useState(false);
 
-  async function addChargeTransport() {
-    const oid = orderId.trim();
-    if (!oid) return toast.error("Merci de renseigner un ID de commande.");
-    const t = safeNumber(transportAmount);
-    if (t <= 0) return toast.error("Montant transport invalide.");
+  async function addCostLine() {
+    const amount = safeNumber(newAmount);
+    if (!newDate) return toast.error("Date obligatoire.");
+    if (!newDest) return toast.error("Destination obligatoire.");
+    if (!newType) return toast.error("Type obligatoire.");
+    if (amount <= 0) return toast.error("Montant invalide.");
 
-    // ✅ destination stockée en UUID (si trouvée) => plus jamais de GP en base si la colonne est uuid
-    const destId = getDestinationIdForTerritory(destination, exportDestinations);
-
-    setIsSaving(true);
+    setSaving(true);
     try {
-      const { error: insErr } = await supabase.from("cost_lines").insert([
-        {
-          date: new Date().toISOString().slice(0, 10),
-          cost_type: "TRANSPORT",
-          amount: t,
-          currency,
-          destination: destId || null,
-          incoterm,
-          order_id: oid,
-        },
-      ]);
-      if (insErr) throw insErr;
+      // On insère seulement les colonnes "sûres"
+      const payload = {
+        date: newDate,
+        destination: newDest,
+        cost_type: newType,
+        amount,
+      };
 
-      setOrderId("");
-      setTransportAmount("");
+      const { error } = await supabase.from("cost_lines").insert([payload] as any);
+      if (error) throw error;
+
+      setNewAmount("");
+      toast.success("Charge ajoutée ✅");
       await refresh();
-      await kpisQuery.refetch();
-      toast.success("Transport ajouté ✅");
     } catch (e: any) {
-      toast.error(e?.message || "Erreur lors de l'ajout.");
+      toast.error(e?.message || "Erreur insertion cost_lines");
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   }
 
@@ -312,26 +238,24 @@ export default function Costs() {
           <div>
             <p className="text-sm text-muted-foreground">Charges & coûts non répercutés</p>
             <h1 className="text-2xl font-bold">Costs</h1>
-            <p className="text-sm text-muted-foreground">KPI = Transport charges + OM/Octroi − Frais de transit facturés.</p>
+            <p className="text-sm text-muted-foreground">
+              KPI = Transport + (OM+Octroi estimés) − Frais de transit.
+            </p>
           </div>
 
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                kpisQuery.refetch();
-                refresh();
-              }}
-              disabled={isLoading || kpisQuery.isLoading}
-              className="gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${(isLoading || kpisQuery.isLoading) ? "animate-spin" : ""}`} />
+            <Button variant="outline" onClick={refresh} disabled={isLoading} className="gap-2">
+              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
               Actualiser
             </Button>
-
-            <Button variant="outline" onClick={exportChargesCsv} disabled={isLoading || filteredRows.length === 0} className="gap-2">
+            <Button
+              variant="outline"
+              onClick={exportChargesCsv}
+              disabled={isLoading || filteredRows.length === 0}
+              className="gap-2"
+            >
               <Download className="h-4 w-4" />
-              Export charges (CSV)
+              Export CSV
             </Button>
           </div>
         </div>
@@ -346,45 +270,93 @@ export default function Costs() {
           loading={kpisQuery.isLoading || isLoading}
         />
 
+        {/* KPI */}
         <Card>
           <CardHeader>
             <CardTitle>KPI “coûts non répercutés”</CardTitle>
             <CardDescription>
-              Période : <b>{filters.from}</b> → <b>{filters.to}</b> • Territoire : <b>{territoryLabel}</b>
-              {filters.territory && filters.territory !== "UE" ? (
-                <span className="text-muted-foreground"> • destinationId: <code className="text-xs">{destinationId || "introuvable"}</code></span>
-              ) : null}
+              Période + territoire + client via la barre de filtres. Transport/Transit via <code className="text-xs">cost_lines</code>,
+              OM/Octroi via tes tables douanes.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <KpiTile icon={<Truck className="h-4 w-4" />} label="Transport (charges)" value={formatMoney(totals.transport, 0)} />
-            <KpiTile icon={<Receipt className="h-4 w-4" />} label="OM/Octroi estimés" value={formatMoney(taxesOMTotal, 0)} />
-            <KpiTile label="Transit facturé" value={formatMoney(totalTransitFacture, 0)} hint="Depuis KPI export (totalTransit)" />
-            <KpiTile label="✅ Non répercuté" value={formatMoney(kpiNonRepercute, 0)} />
+          <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <SummaryTile label="Transport (charges)" value={totals.transport} />
+            <SummaryTile label="Transit (charges)" value={totals.transit} />
+            <SummaryTile label="OM+Octroi (estimés)" value={estDouanes} hint="via fetchKpis()" />
+            <SummaryTile label="Total charges (table)" value={totals.totalCharges} />
+            <SummaryTile label="Non répercuté" value={nonRepercute} hint="Transport + Douanes − Transit" />
           </CardContent>
         </Card>
 
-        {error || warning ? (
-          <Card className={(warning || "").toLowerCase().includes("manquante") ? "border-amber-300 bg-amber-50" : "border-red-200"}>
-            <CardContent className="pt-6 text-sm text-foreground">{error || warning}</CardContent>
+        {/* Warnings / errors */}
+        {error ? (
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="pt-4 text-sm">{error}</CardContent>
           </Card>
         ) : null}
 
+        {warning ? (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="pt-4 text-sm">{warning}</CardContent>
+          </Card>
+        ) : null}
+
+        {schemaMode === "minimal" ? (
+          <Card className="border-slate-200 bg-slate-50">
+            <CardContent className="pt-4 text-sm text-slate-700">
+              Ta table <code className="text-xs">cost_lines</code> est en schéma minimal.  
+              Si tu veux suivre <b>par facture/commande</b> + marquer “répercuté / non répercuté”, on pourra ajouter des colonnes.
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {/* Filtres locaux charges */}
         <Card>
           <CardHeader>
             <CardTitle>Charges (cost_lines)</CardTitle>
-            <CardDescription>Filtrées DB par destination UUID + période + client. Recherche + export CSV.</CardDescription>
+            <CardDescription>Filtre destination / type + recherche texte.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex flex-col md:flex-row md:items-end gap-3">
-              <div className="flex-1">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Destination</p>
+                <select
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value as any)}
+                >
+                  {DESTS.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Type</p>
+                <select
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  value={costType}
+                  onChange={(e) => setCostType(e.target.value as any)}
+                >
+                  {COST_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="md:col-span-2">
                 <p className="text-xs text-muted-foreground mb-1">Recherche</p>
-                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ex: TRANSPORT, DAP, CMD-…" />
+                <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ex: FV..., CMD..., TRANSPORT, GP..." />
               </div>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="secondary">Lignes: {filteredRows.length}</Badge>
-                <Badge variant="secondary">Total: {formatMoney(totals.total, 0)}</Badge>
-              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 text-xs">
+              <Badge variant="secondary">Lignes: {filteredRows.length}</Badge>
+              <Badge variant="secondary">Total: {formatMoney(totals.totalCharges, 2)}</Badge>
             </div>
 
             <div className="overflow-auto border rounded-md">
@@ -393,25 +365,29 @@ export default function Costs() {
                   <tr className="border-b text-muted-foreground">
                     <th className="py-2 px-3 text-left font-medium">Date</th>
                     <th className="py-2 px-3 text-left font-medium">Type</th>
-                    <th className="py-2 px-3 text-left font-medium">Destination(UUID)</th>
-                    <th className="py-2 px-3 text-left font-medium">Incoterm</th>
-                    <th className="py-2 px-3 text-left font-medium">Commande</th>
+                    <th className="py-2 px-3 text-left font-medium">Destination</th>
                     <th className="py-2 px-3 text-right font-medium">Montant</th>
                   </tr>
                 </thead>
                 <tbody>
                   {isLoading ? (
-                    <tr><td colSpan={6} className="py-4 px-3 text-center text-muted-foreground">Chargement…</td></tr>
+                    <tr>
+                      <td colSpan={4} className="py-4 px-3 text-center text-muted-foreground">
+                        Chargement…
+                      </td>
+                    </tr>
                   ) : filteredRows.length === 0 ? (
-                    <tr><td colSpan={6} className="py-4 px-3 text-center text-muted-foreground">Aucune charge.</td></tr>
+                    <tr>
+                      <td colSpan={4} className="py-4 px-3 text-center text-muted-foreground">
+                        Aucune charge.
+                      </td>
+                    </tr>
                   ) : (
-                    filteredRows.map((r: any) => (
-                      <tr key={r.id} className="border-b last:border-0">
+                    filteredRows.map((r, idx) => (
+                      <tr key={r.id ?? `${r.date}-${r.cost_type}-${r.destination}-${idx}`} className="border-b last:border-0">
                         <td className="py-2 px-3">{r.date ?? "—"}</td>
                         <td className="py-2 px-3">{r.cost_type ?? "—"}</td>
                         <td className="py-2 px-3">{r.destination ?? "—"}</td>
-                        <td className="py-2 px-3">{r.incoterm ?? "—"}</td>
-                        <td className="py-2 px-3">{r.order_id ?? "—"}</td>
                         <td className="py-2 px-3 text-right tabular-nums">{formatMoney(safeNumber(r.amount), 2)}</td>
                       </tr>
                     ))
@@ -422,66 +398,68 @@ export default function Costs() {
           </CardContent>
         </Card>
 
+        {/* Ajout charge */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Truck className="h-5 w-5" />
-              Ajouter un transport (par commande)
+              <Plus className="h-5 w-5" />
+              Ajouter une charge
             </CardTitle>
-            <CardDescription>Insert dans <code className="text-xs">cost_lines</code> avec destination UUID.</CardDescription>
+            <CardDescription>Insertion dans <code className="text-xs">cost_lines</code> (compatible schéma minimal).</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div>
-                <p className="text-xs text-muted-foreground mb-1">ID commande</p>
-                <Input value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="Ex: CMD-2026-0001" />
+                <p className="text-xs text-muted-foreground mb-1">Date</p>
+                <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
               </div>
 
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Destination</p>
                 <select
                   className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
+                  value={newDest}
+                  onChange={(e) => setNewDest(e.target.value)}
                 >
                   {["FR", ...DROM, "UE"].map((d) => (
-                    <option key={d} value={d}>{d}</option>
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Incoterm</p>
+                <p className="text-xs text-muted-foreground mb-1">Type</p>
                 <select
                   className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  value={incoterm}
-                  onChange={(e) => setIncoterm(e.target.value)}
+                  value={newType}
+                  onChange={(e) => setNewType(e.target.value)}
                 >
-                  {["EXW", "FCA", "DAP", "DDP"].map((i) => (
-                    <option key={i} value={i}>{i}</option>
+                  {["TRANSPORT", "TRANSIT", "DOSSIER", "OM", "OCTROI", "AUTRE"].map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Devise</p>
-                <Input value={currency} onChange={(e) => setCurrency(e.target.value)} placeholder="EUR" />
+                <p className="text-xs text-muted-foreground mb-1">Montant (€)</p>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={newAmount}
+                  onChange={(e) => setNewAmount(e.target.value)}
+                  placeholder="Ex: 12.50"
+                />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Transport (€)</p>
-                <Input type="number" inputMode="decimal" value={transportAmount} onChange={(e) => setTransportAmount(e.target.value)} />
-              </div>
-
-              <div className="flex items-end">
-                <Button onClick={addChargeTransport} disabled={isSaving} className="gap-2 w-full">
-                  <Plus className="h-4 w-4" />
-                  {isSaving ? "Ajout..." : "Ajouter"}
-                </Button>
-              </div>
-            </div>
+            <Button onClick={addCostLine} disabled={saving} className="gap-2 w-full md:w-auto">
+              <Plus className="h-4 w-4" />
+              {saving ? "Ajout..." : "Ajouter"}
+            </Button>
           </CardContent>
         </Card>
       </div>
