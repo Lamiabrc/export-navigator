@@ -1,3 +1,4 @@
+// src/pages/InvoiceVerification.tsx
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -7,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+
 import {
   AlertTriangle,
   CheckCircle,
@@ -45,9 +47,6 @@ import {
   Legend,
 } from "recharts";
 
-/**
- * Destinations UI
- */
 const destinations: Destination[] = [
   "Guadeloupe",
   "Martinique",
@@ -61,7 +60,7 @@ const destinations: Destination[] = [
 ];
 
 type TerritoryCode = "GP" | "MQ" | "GF" | "RE" | "YT";
-type DetectionSource = "line_items" | "raw_text" | "none";
+type DetectionSource = "line_items" | "raw_text" | "lines_scan" | "none";
 type Verdict = "favorable" | "defavorable" | "na";
 
 type OmRateRow = {
@@ -74,21 +73,14 @@ type OmRateRow = {
 type OmComputedLine = {
   key: string;
   description: string;
-  hsCode: string | null;
-  hs4: string | null;
-
+  hsCode: string;
+  hs4: string;
   baseHT: number;
 
-  omRateRaw: number; // ex 5,5
-  omrRateRaw: number; // ex 2,5
-  totalRateFraction: number; // 0.08
-
+  // On affiche un taux unique : OM + OMR (si présent)
+  omRateRaw: number; // en %
+  omRateFraction: number; // en fraction
   omAmount: number;
-  omrAmount: number;
-  totalAmount: number;
-
-  hasHs: boolean;
-  rateFound: boolean;
 };
 
 type VerificationResult = {
@@ -97,14 +89,17 @@ type VerificationResult = {
   zone: string;
   territory: TerritoryCode | null;
 
-  // Chez toi : transitFees = OM facturé (ta facturation OM)
+  // Dans ton usage : OM facturé = "Transit" (ta facturation OM)
   omBilled: number | null;
   omBilledDetectionSource: DetectionSource;
 
-  // Théorique = OM + OMR sur valeur marchandise
-  omTheoreticalTotal: number | null;
+  goodsValue: number | null; // valeur marchandise attendue (Total lignes HT si présent, sinon TotalHT - transit)
+  goodsValueSource: "total_lignes_ht" | "totalht_minus_transit" | "none";
 
-  // Défavorable si OM facturé < OM théorique
+  detectedGoodsBase: number; // somme des lignes produit détectées (hors transport/transit)
+  baseCoverageOk: boolean;
+
+  omTheoreticalTotal: number | null;
   verdictOm: Verdict;
 
   alerts: string[];
@@ -121,11 +116,16 @@ function safeNum(n: any): number {
   return Number.isFinite(v) ? v : 0;
 }
 
-function parseEuroAmount(s: string): number {
-  // "1 061,90" => 1061.90
-  const cleaned = (s || "").replace(/\s/g, "").replace(",", ".");
-  const v = Number(cleaned);
-  return Number.isFinite(v) ? v : 0;
+function parseEuroAmount(v: any): number {
+  if (v === null || v === undefined) return 0;
+  const s = String(v)
+    .replace(/\u00A0/g, " ")
+    .replace(/€/g, "")
+    .trim()
+    .replace(/\s/g, "")
+    .replace(",", ".");
+  const num = Number(s);
+  return Number.isFinite(num) ? num : 0;
 }
 
 function formatCurrency(amount: number) {
@@ -136,7 +136,6 @@ function formatCurrency(amount: number) {
 
 function normalizeRateToFraction(rate: number) {
   if (!Number.isFinite(rate)) return 0;
-  // 12.5 => 0.125 ; 0.125 => 0.125
   return rate > 1 ? rate / 100 : rate;
 }
 
@@ -157,7 +156,6 @@ function getTerritoryCodeFromDestination(dest: Destination): TerritoryCode | nul
 function detectDestinationHint(text: string): DestinationHint | null {
   const t = (text || "").toUpperCase();
 
-  // Preuve forte : code postal DOM
   const m = t.match(/97(1|2|3|4|6)\d{2}/);
   if (m) {
     const prefix = m[0].slice(0, 3);
@@ -168,7 +166,6 @@ function detectDestinationHint(text: string): DestinationHint | null {
     if (prefix === "976") return { destination: "Mayotte", confidence: "high", evidence: "Code postal 976xx détecté" };
   }
 
-  // Preuve moyenne : mots-clés
   if (t.includes("GUADELOUPE")) return { destination: "Guadeloupe", confidence: "medium", evidence: "Mot-clé GUADELOUPE détecté" };
   if (t.includes("MARTINIQUE") || t.includes("LE LAMENTIN")) return { destination: "Martinique", confidence: "medium", evidence: "Mot-clé MARTINIQUE / LAMENTIN détecté" };
   if (t.includes("GUYANE")) return { destination: "Guyane", confidence: "medium", evidence: "Mot-clé GUYANE détecté" };
@@ -178,10 +175,16 @@ function detectDestinationHint(text: string): DestinationHint | null {
   return null;
 }
 
+// Lignes "non marchandise" à exclure de la base marchandise
 function isShippingLike(desc: string) {
   const d = (desc || "").toLowerCase();
-  // Chez toi, le transit peut être une ligne / mention ; on l’exclut de la base marchandise si détecté en ligne
-  return /(transport|transit|livraison|exp[ée]dition|shipping|fret|affranchissement|port)\b/.test(d);
+  return /(transport|livraison|exp[ée]dition|shipping|fret|affranchissement|port)\b/.test(d);
+}
+
+// Transit = ta facturation OM (pas transport), mais ça reste "non marchandise"
+function isTransitLike(desc: string) {
+  const d = (desc || "").toLowerCase();
+  return /\btransit\b/.test(d);
 }
 
 function isVatLine(desc: string) {
@@ -192,35 +195,28 @@ function isVatLine(desc: string) {
 function isOmLike(desc: string) {
   const d = (desc || "").toLowerCase();
   if (isVatLine(d)) return false;
-  return /octroi\s+de\s+mer|octroi|\bomr\b|\b(o\.?m\.?)\b|d[ée]bours?|douane|d[ée]douan/.test(d);
+  return /octroi\s+de\s+mer/.test(d) || /\boctroi\b/.test(d) || /\bomr\b/.test(d) || /\bom\b/.test(d) || /douane|d[ée]douan/.test(d);
 }
 
-/**
- * ORLIMAN : extraction Totaux directement depuis rawText
- * - Total lignes HT
- * - Transit
- * - Total HT
- */
-function extractOrlimanTotalsFromRawText(rawText: string) {
+function getLineHT(li: any) {
+  return safeNum(li?.amountHT ?? li?.totalHT ?? li?.amount ?? li?.total ?? li?.total_ht ?? li?.ht);
+}
+
+// Extrait "Total lignes HT" du texte si pas déjà fourni
+function detectTotalLignesHT(rawText: string): number | null {
   const t = rawText || "";
-
-  const mLines = t.match(/Total\s+lignes\s+HT\s+([\d\s]+,\d{2})/i);
-  const mTransit = t.match(/\bTransit\s+([\d\s]+,\d{2})/i);
-  const mTotalHT = t.match(/\bTotal\s+HT\s+([\d\s]+,\d{2})/i);
-
-  const totalLinesHT = mLines ? parseEuroAmount(mLines[1]) : null;
-  const transit = mTransit ? parseEuroAmount(mTransit[1]) : null;
-  const totalHT = mTotalHT ? parseEuroAmount(mTotalHT[1]) : null;
-
-  return { totalLinesHT, transit, totalHT };
+  const m = t.match(/Total\s+lignes\s+HT\s+([\d\s]+,\d{2})/i);
+  if (!m) return null;
+  const v = parseEuroAmount(m[1]);
+  return v > 0 ? v : null;
 }
 
 /**
- * ORLIMAN : parsing lignes produits depuis rawText
- *
- * IMPORTANT : dans ce PDF, le format est typiquement :
- *   CP06132UL 08435025907843 64069090 1UN 11,91 35,0% 7,74 7,74 0,00
- * → le point clé : "1UN" / "2UN" / "3UN" (pas "UN" séparé)
+ * Fallback Orliman (robuste) :
+ * - EAN 13 OU 14 chiffres ✅
+ * - multi-pages ✅
+ * - qty = "1UN" ou "1 UN" ✅
+ * - Total HT = avant-dernier montant (dernier = Taxe souvent 0,00)
  */
 function parseOrlimanLineItemsFromRawText(rawText: string) {
   const lines = (rawText || "")
@@ -228,47 +224,51 @@ function parseOrlimanLineItemsFromRawText(rawText: string) {
     .map((l) => l.trim())
     .filter(Boolean);
 
+  const isHeader = (l: string) => /^Article\b.*HS\s+code\b/i.test(l);
   const isTotalsLine = (l: string) =>
     /^(Base\s+taxe|Total\s+lignes\s+HT|Transit|Total\s+HT|Montant\s+TVA|TOTAL\s+TTC)\b/i.test(l);
 
-  const headerIdx = lines.findIndex((l) => /^Article\b.*HS\s+code\b/i.test(l));
-  if (headerIdx < 0) return [];
-
+  // ✅ EAN13/14 + HS8 + qty UN
   const isProductRow = (l: string) =>
-    /^[A-Z0-9]{6,}\s+\d{13}\s+\d{8}\s+\d+\s*UN\b/i.test(l);
+    /^[A-Z0-9]{6,}\s+\d{13,14}\s+\d{8}\s+\d+\s*UN\b/i.test(l);
 
-  const extractTotalHTFromRow = (row: string) => {
-    // récupère les montants xx,xx (peut y avoir des espaces milliers)
-    const m = row.match(/(\d[\d\s]*,\d{2})/g);
-    if (!m || m.length < 2) return 0;
-    // dernière valeur = taxe (souvent 0,00), avant-dernière = Total HT ligne
-    return parseEuroAmount(m[m.length - 2]);
-  };
+  const headerIdx = lines.findIndex((l) => isHeader(l));
+  if (headerIdx < 0) return [];
 
   const items: any[] = [];
 
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const line = lines[i];
+
+    // ignore headers repeated on page 2
+    if (isHeader(line)) continue;
+
+    // stop only at global totals
     if (isTotalsLine(line)) break;
+
+    // ignore currency artifacts
+    if (/^EUR(\s+EUR)+$/i.test(line)) continue;
+
     if (!isProductRow(line)) continue;
 
     const toks = line.split(/\s+/);
-    if (toks.length < 6) continue;
-
+    // Ex: CP06132UL 08435025907843 64069090 1UN 11,91 35,0% 7,74 7,74 0,00
     const codeArticle = toks[0];
     const ean = toks[1];
     const hsCode = toks[2];
+    const qtyToken = toks[3]; // "1UN" ou "1" (rare) mais on gère
 
-    const qtyToken = toks[3]; // ex "1UN" ou "1UN"
-    const qty = Number(String(qtyToken).replace(/UN/i, "")) || null;
-
-    const totalHT = extractTotalHTFromRow(line);
+    // total = avant-dernier token monétaire (dernier = taxe)
+    const totalToken = toks[toks.length - 2];
+    const totalHT = parseEuroAmount(totalToken);
     if (!Number.isFinite(totalHT) || totalHT <= 0) continue;
 
-    // description = ligne suivante si pas une nouvelle ligne produit & pas une ligne totaux
+    const qty = Number(String(qtyToken).replace("UN", "").trim()) || null;
+
+    // description = ligne suivante si ce n’est pas une autre ligne produit/totaux/header
     let description = codeArticle;
     const next = lines[i + 1] || "";
-    if (next && !isProductRow(next) && !isTotalsLine(next)) {
+    if (next && !isProductRow(next) && !isTotalsLine(next) && !isHeader(next) && !/^EUR(\s+EUR)+$/i.test(next)) {
       description = `${codeArticle} • ${next}`.trim();
       i += 1;
     }
@@ -286,9 +286,6 @@ function parseOrlimanLineItemsFromRawText(rawText: string) {
   return items;
 }
 
-/**
- * CSV fallback
- */
 async function parseCsvInvoice(file: File): Promise<ParsedInvoice> {
   const text = await file.text();
   const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
@@ -309,7 +306,7 @@ async function parseCsvInvoice(file: File): Promise<ParsedInvoice> {
   const iDesc = idx(["description", "désignation", "designation", "libelle", "libellé", "article"]);
   const iHs = idx(["hs", "taric", "nc"]);
   const iQty = idx(["qte", "qté", "quantite", "quantité", "qty"]);
-  const iHt = idx(["total ht", "montant ht", "ht", "total"]);
+  const iHt = idx(["total ht", "montant ht", "ht"]);
 
   const items: any[] = [];
 
@@ -330,16 +327,16 @@ async function parseCsvInvoice(file: File): Promise<ParsedInvoice> {
   }
 
   const goodsSum = items
-    .filter((it) => !isShippingLike(it.description || "") && !isOmLike(it.description || ""))
+    .filter((it) => !isShippingLike(it.description || "") && !isTransitLike(it.description || "") && !isOmLike(it.description || ""))
     .reduce((s, it) => s + safeNum(it.amountHT), 0);
 
-  const transit = items.filter((it) => isShippingLike(it.description || "")).reduce((s, it) => s + safeNum(it.amountHT), 0);
+  const transit = items.filter((it) => isTransitLike(it.description || "")).reduce((s, it) => s + safeNum(it.amountHT), 0);
 
   return {
     invoiceNumber: null,
     supplier: null,
     date: null,
-    totalHT: goodsSum > 0 ? goodsSum : null,
+    totalHT: goodsSum > 0 ? goodsSum + transit : null,
     totalTTC: null,
     transitFees: transit > 0 ? transit : null,
     rawText: text,
@@ -355,10 +352,7 @@ export default function InvoiceVerification() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [parsed, setParsed] = useState<ParsedInvoice | null>(null);
 
-  // Destination réellement utilisée pour le calcul OM
   const [destination, setDestination] = useState<Destination>("Martinique");
-
-  // Transparence : d’où vient la destination affichée ?
   const [destinationSource, setDestinationSource] = useState<"default" | "auto" | "manual">("default");
   const [destinationEvidence, setDestinationEvidence] = useState<string | null>(null);
   const [destinationConfidence, setDestinationConfidence] = useState<"high" | "medium" | "none">("none");
@@ -403,7 +397,6 @@ export default function InvoiceVerification() {
     setOmLines([]);
     setResult(null);
 
-    // on remet la destination “à confirmer” tant qu’on n’a pas de preuve
     setDestinationSource("default");
     setDestinationEvidence(null);
     setDestinationConfidence("none");
@@ -417,44 +410,38 @@ export default function InvoiceVerification() {
       const isPdf = currentFile.type === "application/pdf" || currentFile.name.toLowerCase().endsWith(".pdf");
       const invoice = isPdf ? await extractInvoiceFromPdf(currentFile) : await parseCsvInvoice(currentFile);
 
+      // 🔎 Garantir rawText
       const rawText = String((invoice as any).rawText || "");
+      // 🔎 Garantir Total lignes HT
+      if (!(invoice as any).goodsLinesHT) {
+        const tl = detectTotalLignesHT(rawText);
+        if (tl) (invoice as any).goodsLinesHT = tl;
+      }
 
-      // ORLIMAN : renforcer totals + lignes
-      if (rawText) {
-        const totals = extractOrlimanTotalsFromRawText(rawText);
-        const fallbackItems = parseOrlimanLineItemsFromRawText(rawText);
+      // ✅ Fallback Orliman : récupérer toutes les lignes produit (multi-pages)
+      const fallbackItems = parseOrlimanLineItemsFromRawText(rawText);
+      const currentItems: any[] = (((invoice as any).lineItems || []) as any[]) || [];
 
-        // Totaux
-        if (totals.totalLinesHT && totals.totalLinesHT > 0) (invoice as any).goodsLinesHT = totals.totalLinesHT;
-        if (totals.transit && totals.transit > 0) (invoice as any).transitFees = totals.transit;
-        if (totals.totalHT && totals.totalHT > 0) (invoice as any).totalHT = totals.totalHT;
+      const sumItems = (arr: any[]) =>
+        arr
+          .filter((it) => !isShippingLike(String(it?.description || "")) && !isTransitLike(String(it?.description || "")) && !isOmLike(String(it?.description || "")))
+          .reduce((s, it) => s + getLineHT(it), 0);
 
-        // Choix des lineItems : on garde ce qui colle le mieux à Total lignes HT
-        const currentItems: any[] = (((invoice as any).lineItems || []) as any[]) || [];
+      const expectedGoods = safeNum((invoice as any).goodsLinesHT);
+      const sumCurrent = sumItems(currentItems);
+      const sumFallback = sumItems(fallbackItems);
 
-        const sumItems = (arr: any[]) =>
-          arr.reduce((s, it) => s + safeNum(it.amountHT ?? it.totalHT ?? it.amount ?? it.total), 0);
+      const currentError = expectedGoods > 0 ? Math.abs(sumCurrent - expectedGoods) : 999999;
+      const fallbackError = expectedGoods > 0 ? Math.abs(sumFallback - expectedGoods) : 999999;
 
-        const sumCurrent = sumItems(currentItems);
-        const sumFallback = sumItems(fallbackItems);
-
-        const expectedGoods = safeNum((invoice as any).goodsLinesHT); // Total lignes HT
-        const currentError = expectedGoods > 0 ? Math.abs(sumCurrent - expectedGoods) : Number.POSITIVE_INFINITY;
-        const fallbackError = expectedGoods > 0 ? Math.abs(sumFallback - expectedGoods) : Number.POSITIVE_INFINITY;
-
-        // on bascule sur fallback si ça rapproche de Total lignes HT
-        if (
-          fallbackItems.length > 0 &&
-          sumFallback > 0.5 &&
-          (fallbackError + 0.5 < currentError || (expectedGoods > 0 && currentError > 0.5 && fallbackError < currentError))
-        ) {
-          (invoice as any).lineItems = fallbackItems;
-        }
+      // On remplace si le fallback colle mieux au Total lignes HT
+      if (fallbackItems.length && (fallbackError + 0.01 < currentError) && sumFallback > 0) {
+        (invoice as any).lineItems = fallbackItems;
+        (invoice as any).lineScanSource = "lines_scan";
       }
 
       setParsed(invoice);
 
-      // Détection destination avec preuve
       const hint = detectDestinationHint(rawText);
       if (hint) {
         setDestination(hint.destination);
@@ -467,10 +454,7 @@ export default function InvoiceVerification() {
         setDestinationConfidence("none");
       }
 
-      toast({
-        title: "Analyse terminée",
-        description: "Données détectées. Vérifie la destination de calcul OM puis lance le contrôle.",
-      });
+      toast({ title: "Analyse terminée", description: "Données détectées. Vérifie la destination puis lance le contrôle." });
     } catch (err) {
       toast({
         title: "Analyse impossible",
@@ -537,54 +521,41 @@ export default function InvoiceVerification() {
     );
 
     const ratesByHs4 = await fetchOmRates(terr, hs4s);
+
     const computed: OmComputedLine[] = [];
 
     for (const li of items) {
-      const desc = String(li.description || "").trim();
+      const desc = (li.description || "").trim();
+      const base = getLineHT(li);
 
-      // montant HT robuste (extracteurs variables)
-      const base = safeNum(li.amountHT ?? li.totalHT ?? li.amount ?? li.total);
       if (base <= 0) continue;
 
-      // On exclut tout ce qui ressemble à transport/transit si ça existe en ligne
-      if (isShippingLike(desc)) continue;
-
-      // On exclut toute ligne explicitement taxe/OM si jamais
-      if (isOmLike(desc)) continue;
+      // Exclure lignes non-marchandise de la base théorique
+      if (isShippingLike(desc) || isTransitLike(desc) || isOmLike(desc)) continue;
 
       const hs = String(li.hsCode || "").replace(/[^\d]/g, "");
-      const hasHs = hs.length >= 4;
-      const hs4 = hasHs ? hs.slice(0, 4) : null;
+      if (hs.length < 4) continue;
 
-      const rateRow = hs4 ? ratesByHs4.get(hs4) : undefined;
+      const hs4 = hs.slice(0, 4);
+      const rateRow = ratesByHs4.get(hs4);
 
-      const omRateRaw = safeNum(rateRow?.om_rate ?? 0);
-      const omrRateRaw = safeNum(rateRow?.omr_rate ?? 0);
+      // ✅ taux utilisé = OM + OMR (si présent)
+      const omRate = safeNum(rateRow?.om_rate ?? 0);
+      const omrRate = safeNum(rateRow?.omr_rate ?? 0);
+      const totalRateRaw = omRate + omrRate;
 
-      const omFrac = normalizeRateToFraction(omRateRaw);
-      const omrFrac = normalizeRateToFraction(omrRateRaw);
-      const totalFrac = omFrac + omrFrac;
-
-      const rateFound = !!rateRow && totalFrac > 0;
-
-      const omAmount = base * omFrac;
-      const omrAmount = base * omrFrac;
-      const totalAmount = base * totalFrac;
+      const rateFrac = normalizeRateToFraction(totalRateRaw);
+      const om = base * rateFrac;
 
       computed.push({
-        key: `${hs || "NOHS"}-${desc}-${base}`,
+        key: `${hs}-${desc}-${base}`,
         description: desc || "(ligne produit)",
-        hsCode: hasHs ? hs : null,
+        hsCode: hs,
         hs4,
         baseHT: base,
-        omRateRaw,
-        omrRateRaw,
-        totalRateFraction: totalFrac,
-        omAmount,
-        omrAmount,
-        totalAmount,
-        hasHs,
-        rateFound,
+        omRateRaw: totalRateRaw,
+        omRateFraction: rateFrac,
+        omAmount: om,
       });
     }
 
@@ -598,7 +569,6 @@ export default function InvoiceVerification() {
     const inv: any = parsed;
     const alerts: string[] = [];
 
-    // Transparence : destination par défaut sans preuve -> on alerte
     if (destinationSource === "default") {
       alerts.push(`Destination non prouvée dans le document : valeur par défaut à confirmer (${destination}).`);
     }
@@ -606,66 +576,60 @@ export default function InvoiceVerification() {
     const z = getZoneFromDestination(destination);
     const terr = getTerritoryCodeFromDestination(destination);
 
-    // OM facturé (chez toi) = transitFees
+    // OM facturé = Transit
     const transit: number | null = inv.transitFees ?? null;
-    const transitSource: DetectionSource =
-      (inv.transitDetectionSource as DetectionSource) || (transit ? "raw_text" : "none");
+    const transitSource: DetectionSource = (inv.lineScanSource as DetectionSource) || (inv.transitDetectionSource as DetectionSource) || (transit ? "raw_text" : "none");
+    if (transit === null || transit <= 0) alerts.push("Transit (OM facturé) non détecté sur la facture (ou non présent).");
 
-    if (transit === null || transit <= 0) {
-      alerts.push("OM facturé (Transit) non détecté sur la facture (ou valeur nulle).");
+    // Valeur marchandise attendue
+    const totalHT = safeNum(inv.totalHT);
+    const goodsLinesHT = safeNum(inv.goodsLinesHT);
+    let goodsValue: number | null = null;
+    let goodsValueSource: VerificationResult["goodsValueSource"] = "none";
+
+    if (goodsLinesHT > 0) {
+      goodsValue = goodsLinesHT;
+      goodsValueSource = "total_lignes_ht";
+    } else if (totalHT > 0 && transit !== null) {
+      goodsValue = Math.max(0, totalHT - safeNum(transit));
+      goodsValueSource = "totalht_minus_transit";
     }
 
-    // Valeur marchandise attendue :
-    // 1) Total lignes HT (si présent)
-    // 2) sinon Total HT - Transit (fallback)
-    const goodsLinesHT = safeNum(inv.goodsLinesHT);
-    const totalHT = safeNum(inv.totalHT);
-    const expectedGoods =
-      goodsLinesHT > 0
-        ? goodsLinesHT
-        : totalHT > 0 && safeNum(inv.transitFees) > 0
-          ? Math.max(0, totalHT - safeNum(inv.transitFees))
-          : 0;
+    // Base détectée (somme lignes produit détectées)
+    const items: any[] = (((inv as any).lineItems || []) as any[]) || [];
+    const detectedGoodsBase = items
+      .filter((it) => {
+        const d = String(it?.description || "");
+        return !isShippingLike(d) && !isTransitLike(d) && !isOmLike(d);
+      })
+      .reduce((s, it) => s + getLineHT(it), 0);
 
     // OM théorique (DROM uniquement)
     let omTheoreticalTotal: number | null = null;
-
     if (z === "DROM" && terr) {
       const computed = await buildOmLines(parsed, destination);
-
-      const baseDetected = computed.reduce((s, l) => s + safeNum(l.baseHT), 0);
-
-      if (expectedGoods > 0 && Math.abs(baseDetected - expectedGoods) > 0.5) {
-        alerts.push(
-          `Certaines lignes marchandise ne sont pas détectées : base détectée ${formatCurrency(baseDetected)} vs base attendue ${formatCurrency(expectedGoods)}.`,
-        );
-      }
-
-      const missingHs = computed.filter((l) => !l.hasHs).length;
-      if (missingHs > 0) alerts.push(`HS manquant sur ${missingHs} ligne(s) produit.`);
-
-      const missingRates = computed.filter((l) => l.hasHs && !l.rateFound).length;
-      if (missingRates > 0) alerts.push(`Taux OM/OMR introuvable pour ${missingRates} ligne(s) (HS4 absent de om_rates).`);
-
-      // Théorique = somme OM + OMR sur les lignes où on a un taux
-      const total = computed.filter((l) => l.rateFound).reduce((s, l) => s + safeNum(l.totalAmount), 0);
+      const total = computed.reduce((s, l) => s + safeNum(l.omAmount), 0);
       omTheoreticalTotal = total >= 0 ? total : 0;
-
-      if (!computed.length) alerts.push("Aucune ligne produit détectée pour calculer l’OM théorique.");
+      if (!computed.length) alerts.push("Aucune ligne produit avec HS code exploitable pour calculer l’OM théorique.");
     } else {
-      // Hors DROM : pas d’OM
       omTheoreticalTotal = 0;
     }
 
-    const omBilled = transit;
-    const omBilledDetectionSource = transitSource;
+    // Couverture base : on attend que base détectée == valeur marchandise
+    const baseCoverageOk = goodsValue !== null ? Math.abs(detectedGoodsBase - goodsValue) < 0.5 : true;
+    if (goodsValue !== null && !baseCoverageOk) {
+      alerts.push(
+        `Certaines lignes marchandise ne sont pas détectées : base détectée ${formatCurrency(detectedGoodsBase)} vs base attendue ${formatCurrency(goodsValue)}.`,
+      );
+    }
 
+    // Verdict : Transit (OM facturé) doit être >= OM théorique
     let verdictOm: Verdict = "na";
-    if (omTheoreticalTotal !== null && omBilled !== null) {
-      verdictOm = omBilled < omTheoreticalTotal ? "defavorable" : "favorable";
+    if (omTheoreticalTotal !== null && transit !== null) {
+      verdictOm = transit < omTheoreticalTotal ? "defavorable" : "favorable";
       if (verdictOm === "defavorable") {
         alerts.push(
-          `Défavorable : OM facturé (${formatCurrency(omBilled)}) < OM théorique (${formatCurrency(omTheoreticalTotal)}).`,
+          `Défavorable : OM facturé (Transit) (${formatCurrency(transit)}) < OM théorique (${formatCurrency(omTheoreticalTotal)}).`,
         );
       }
     }
@@ -675,8 +639,15 @@ export default function InvoiceVerification() {
       destination,
       zone: z,
       territory: terr,
-      omBilled,
-      omBilledDetectionSource,
+      omBilled: transit,
+      omBilledDetectionSource: transitSource,
+
+      goodsValue,
+      goodsValueSource,
+
+      detectedGoodsBase,
+      baseCoverageOk,
+
       omTheoreticalTotal,
       verdictOm,
       alerts,
@@ -684,16 +655,15 @@ export default function InvoiceVerification() {
 
     setResult(vr);
 
-    // Tracking (marge = valeur marchandise - OM facturé)
     if (inv.invoiceNumber) {
-      const marginAmount = expectedGoods - safeNum(transit);
-      const marginPercent = expectedGoods > 0 ? (marginAmount / expectedGoods) * 100 : 0;
+      const marginAmount = totalHT - safeNum(transit);
+      const marginPercent = totalHT > 0 ? (marginAmount / totalHT) * 100 : 0;
 
       upsert({
         invoiceNumber: inv.invoiceNumber,
         supplier: inv.supplier || "",
         date: inv.date || "",
-        totalHT: expectedGoods, // on track la valeur marchandise
+        totalHT,
         totalTTC: safeNum(inv.totalTTC),
         transitFees: transit ?? null,
         marginAmount,
@@ -705,7 +675,7 @@ export default function InvoiceVerification() {
 
     toast({
       title: "Contrôle terminé",
-      description: alerts.length ? `${alerts.length} message(s)` : "Aucune anomalie détectée",
+      description: alerts.length ? `${alerts.length} alerte(s)` : "Aucune anomalie détectée",
       variant: alerts.length ? "destructive" : "default",
     });
   }, [parsed, destination, destinationSource, buildOmLines, toast, upsert, currentFile]);
@@ -721,34 +691,12 @@ export default function InvoiceVerification() {
     return { label: "N/A", badge: "outline" as const, border: "border-border" };
   }, []);
 
-  const goodsValue = useMemo(() => {
-    const inv: any = parsed;
-    if (!inv) return 0;
-    const goodsLinesHT = safeNum(inv.goodsLinesHT);
-    if (goodsLinesHT > 0) return goodsLinesHT;
-
-    const totalHT = safeNum(inv.totalHT);
-    const transit = safeNum(inv.transitFees);
-    if (totalHT > 0 && transit > 0) return Math.max(0, totalHT - transit);
-    return 0;
-  }, [parsed]);
-
-  const computedBaseDetected = useMemo(() => {
-    // base détectée = somme des lignes marchandise prises en compte dans omLines
-    return omLines.reduce((s, l) => s + safeNum(l.baseHT), 0);
-  }, [omLines]);
-
   const omStats = useMemo(() => {
-    const covered = omLines.filter((l) => l.rateFound);
-    const baseCovered = covered.reduce((s, l) => s + safeNum(l.baseHT), 0);
-    const baseAll = computedBaseDetected;
-    const baseUncovered = Math.max(0, baseAll - baseCovered);
-
-    const omTotal = covered.reduce((s, l) => s + safeNum(l.totalAmount), 0);
-    const avgRate = baseCovered > 0 ? omTotal / baseCovered : 0;
-
-    return { baseAll, baseCovered, baseUncovered, omTotal, avgRate, count: omLines.length };
-  }, [omLines, computedBaseDetected]);
+    const baseTotal = omLines.reduce((s, l) => s + safeNum(l.baseHT), 0);
+    const omTotal = omLines.reduce((s, l) => s + safeNum(l.omAmount), 0);
+    const avgRate = baseTotal > 0 ? omTotal / baseTotal : 0;
+    return { baseTotal, omTotal, avgRate, count: omLines.length };
+  }, [omLines]);
 
   const barData = useMemo(() => {
     if (!result) return [];
@@ -760,10 +708,7 @@ export default function InvoiceVerification() {
 
   const omByHs4 = useMemo(() => {
     const map = new Map<string, number>();
-    for (const l of omLines) {
-      if (!l.rateFound || !l.hs4) continue;
-      map.set(l.hs4, (map.get(l.hs4) || 0) + safeNum(l.totalAmount));
-    }
+    for (const l of omLines) map.set(l.hs4, (map.get(l.hs4) || 0) + safeNum(l.omAmount));
     const arr = Array.from(map.entries())
       .map(([hs4, value]) => ({ hs4, value }))
       .sort((a, b) => b.value - a.value);
@@ -860,8 +805,8 @@ export default function InvoiceVerification() {
 
                 <p className="text-xs text-muted-foreground flex items-start gap-2">
                   <Info className="h-4 w-4 mt-0.5" />
-                  La valeur marchandise = Total lignes HT (si présent), sinon Total HT - transit. Les lignes “transport/transit” en
-                  table sont exclues de la base marchandise.
+                  La valeur marchandise = Total lignes HT (si présent), sinon Total HT - transit. Les lignes “transport” (si présentes)
+                  sont exclues de la base marchandise.
                 </p>
               </CardContent>
             </Card>
@@ -870,44 +815,59 @@ export default function InvoiceVerification() {
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <MapPin className="h-5 w-5" />
-                  Destination utilisée pour le calcul OM {destinationBadge}
+                  Destination utilisée pour le calcul OM
+                  {destinationBadge}
                 </CardTitle>
-                <CardDescription>Le calcul OM dépend de la destination DOM (GP/MQ/GF/RE/YT).</CardDescription>
+                <CardDescription>
+                  L’OM théorique dépend de la destination. On n’affiche “Auto” que si on trouve une preuve.
+                </CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-3">
-                <Label className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  Destination
-                </Label>
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Destination
+                  </Label>
 
-                <Select
-                  value={destination}
-                  onValueChange={(v) => {
-                    setDestination(v as Destination);
-                    setDestinationSource("manual");
-                  }}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {destinations.map((d) => (
-                      <SelectItem key={d} value={d}>
-                        {d}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <Select
+                    value={destination}
+                    onValueChange={(v) => {
+                      setDestination(v as Destination);
+                      setDestinationSource("manual");
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {destinations.map((d) => (
+                        <SelectItem key={d} value={d}>
+                          {d}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-                <div className="flex gap-2 flex-wrap">
-                  <Badge variant={zone === "UE" ? "default" : zone === "DROM" ? "secondary" : "outline"}>
-                    Zone {zone}
-                  </Badge>
-                  {territory && <Badge variant="outline">Territory {territory}</Badge>}
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge variant={zone === "UE" ? "default" : zone === "DROM" ? "secondary" : "outline"}>Zone {zone}</Badge>
+                    {territory && <Badge variant="outline">Territory {territory}</Badge>}
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-medium">Preuve :</span> {destinationEvidence || "-"}
+                  </div>
                 </div>
 
-                <div className="text-xs text-muted-foreground">
-                  <span className="font-medium">Preuve :</span> {destinationEvidence || "-"}
-                </div>
+                {zone === "DROM" && destinationSource === "default" && (
+                  <div className="p-3 rounded-lg bg-status-warning/10 text-sm flex gap-2">
+                    <AlertTriangle className="h-4 w-4 text-status-warning mt-0.5" />
+                    <div>
+                      La destination n’a pas été prouvée dans la facture : le calcul OM peut être faux.
+                      Choisis la bonne destination avant de lancer le contrôle.
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -926,20 +886,51 @@ export default function InvoiceVerification() {
                 ) : (
                   <>
                     <div className="flex justify-between">
+                      <span className="text-muted-foreground">Facture</span>
+                      <span className="font-medium">{(parsed as any).invoiceNumber || "-"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Fournisseur</span>
+                      <span className="font-medium">{(parsed as any).supplier || "-"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Date</span>
+                      <span className="font-medium">{(parsed as any).date || "-"}</span>
+                    </div>
+
+                    <Separator className="my-2" />
+
+                    <div className="flex justify-between">
                       <span className="text-muted-foreground">Total HT (facture)</span>
                       <span className="font-medium">{formatCurrency(safeNum((parsed as any).totalHT))}</span>
                     </div>
+
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Transit (= OM facturé)</span>
                       <span className="font-medium">{formatCurrency(safeNum((parsed as any).transitFees))}</span>
                     </div>
+
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Valeur marchandise (Total lignes HT)</span>
-                      <span className="font-medium">{formatCurrency(goodsValue)}</span>
+                      <span className="font-medium">{formatCurrency(safeNum((parsed as any).goodsLinesHT))}</span>
                     </div>
+
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Base détectée (somme lignes produits)</span>
-                      <span className="font-medium">{formatCurrency(computedBaseDetected)}</span>
+                      <span className="font-medium">
+                        {formatCurrency(
+                          (((parsed as any).lineItems || []) as any[])
+                            .filter((it: any) => {
+                              const d = String(it?.description || "");
+                              return !isShippingLike(d) && !isTransitLike(d) && !isOmLike(d);
+                            })
+                            .reduce((s: number, it: any) => s + getLineHT(it), 0),
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground">
+                      <span className="font-medium">Source lignes :</span> {(parsed as any).lineScanSource || (parsed as any).itemsSource || "line_items"}
                     </div>
 
                     <div className="text-xs text-muted-foreground">
@@ -1000,9 +991,7 @@ export default function InvoiceVerification() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="p-4 bg-muted rounded-lg">
                         <p className="text-xs text-muted-foreground mb-1">OM facturé (Transit)</p>
-                        <p className="text-xl font-bold">
-                          {result.omBilled === null ? "—" : formatCurrency(result.omBilled)}
-                        </p>
+                        <p className="text-xl font-bold">{result.omBilled === null ? "—" : formatCurrency(result.omBilled)}</p>
                         <p className="text-xs text-muted-foreground mt-1">Source : {result.omBilledDetectionSource}</p>
                       </div>
                       <div className="p-4 bg-muted rounded-lg">
@@ -1013,9 +1002,7 @@ export default function InvoiceVerification() {
 
                     <div
                       className={`p-4 rounded-lg flex items-center justify-between ${
-                        safeNum(result.omBilled) < safeNum(result.omTheoreticalTotal)
-                          ? "bg-status-warning/10"
-                          : "bg-status-ok/10"
+                        safeNum(result.omBilled) < safeNum(result.omTheoreticalTotal) ? "bg-status-warning/10" : "bg-status-ok/10"
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -1036,7 +1023,7 @@ export default function InvoiceVerification() {
                     <div className="grid grid-cols-3 gap-4">
                       <div className="p-3 rounded-lg bg-muted/50">
                         <p className="text-xs text-muted-foreground">Base (somme lignes produits)</p>
-                        <p className="text-base font-bold">{formatCurrency(omStats.baseAll)}</p>
+                        <p className="text-base font-bold">{formatCurrency(result.detectedGoodsBase)}</p>
                       </div>
                       <div className="p-3 rounded-lg bg-muted/50">
                         <p className="text-xs text-muted-foreground">Taux moyen (sur base couverte)</p>
@@ -1078,14 +1065,7 @@ export default function InvoiceVerification() {
                         <PieChart>
                           <Tooltip formatter={(v: any) => formatCurrency(safeNum(v))} />
                           <Legend />
-                          <Pie
-                            data={omByHs4}
-                            dataKey="value"
-                            nameKey="hs4"
-                            innerRadius={55}
-                            outerRadius={90}
-                            paddingAngle={2}
-                          >
+                          <Pie data={omByHs4} dataKey="value" nameKey="hs4" innerRadius={55} outerRadius={90} paddingAngle={2}>
                             {omByHs4.map((_, idx) => (
                               <Cell key={idx} fill={pieColors[idx % pieColors.length]} />
                             ))}
@@ -1095,9 +1075,7 @@ export default function InvoiceVerification() {
                     </div>
 
                     {omByHs4.length === 0 && (
-                      <p className="text-sm text-muted-foreground">
-                        Aucune donnée HS4/OM à afficher (HS manquants, taux manquants, ou destination non DROM).
-                      </p>
+                      <p className="text-sm text-muted-foreground">Aucune donnée HS4/OM à afficher (HS manquants ou destination non DROM).</p>
                     )}
                   </CardContent>
                 </Card>
@@ -1109,19 +1087,17 @@ export default function InvoiceVerification() {
                       Détail du calcul OM théorique
                     </CardTitle>
                     <CardDescription>
-                      Chaque ligne : Base HT × (OM + OMR) = OM théorique. Les lignes “transport/transit” sont exclues de la base marchandise.
+                      Chaque ligne : Base HT × (OM+OMR selon HS4) = OM théorique. Les lignes “transport” et “transit” sont exclues.
                     </CardDescription>
                   </CardHeader>
 
                   <CardContent className="space-y-3">
                     {!omLines.length ? (
-                      <p className="text-sm text-muted-foreground">
-                        Aucun détail OM (destination ≠ DROM, HS manquants, ou lignes produits non détectées).
-                      </p>
+                      <p className="text-sm text-muted-foreground">Aucun détail OM (destination ≠ DROM, HS manquants, ou lignes produits non détectées).</p>
                     ) : (
                       <>
                         <div className="max-h-[360px] overflow-auto rounded-lg border">
-                          <div className="min-w-[980px]">
+                          <div className="min-w-[900px]">
                             <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs font-medium bg-muted/60">
                               <div className="col-span-5">Désignation</div>
                               <div className="col-span-2">HS</div>
@@ -1131,48 +1107,38 @@ export default function InvoiceVerification() {
                               <div className="col-span-1 text-right">OM</div>
                             </div>
 
-                            {omLines.map((l) => {
-                              const tauxTxt =
-                                l.rateFound
-                                  ? `${formatRatePercent(l.omRateRaw)} + ${formatRatePercent(l.omrRateRaw)}`
-                                  : "—";
-                              return (
-                                <div key={l.key} className="grid grid-cols-12 gap-2 px-3 py-2 text-sm border-t">
-                                  <div className="col-span-5">
-                                    <div className="font-medium truncate" title={l.description}>
-                                      {l.description}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {formatCurrency(l.baseHT)} × {tauxTxt}
-                                    </div>
+                            {omLines.map((l) => (
+                              <div key={l.key} className="grid grid-cols-12 gap-2 px-3 py-2 text-sm border-t">
+                                <div className="col-span-5">
+                                  <div className="font-medium truncate" title={l.description}>
+                                    {l.description}
                                   </div>
-                                  <div className="col-span-2 font-mono text-xs">{l.hsCode || "-"}</div>
-                                  <div className="col-span-1 font-mono text-xs">{l.hs4 || "-"}</div>
-                                  <div className="col-span-2 text-right">{formatCurrency(l.baseHT)}</div>
-                                  <div className="col-span-1 text-right">
-                                    {l.rateFound ? `${(l.totalRateFraction * 100).toFixed(2)}%` : "—"}
-                                  </div>
-                                  <div className="col-span-1 text-right font-bold">
-                                    {l.rateFound ? formatCurrency(l.totalAmount) : "—"}
+                                  <div className="text-xs text-muted-foreground">
+                                    {formatCurrency(l.baseHT)} × {formatRatePercent(l.omRateRaw)}
                                   </div>
                                 </div>
-                              );
-                            })}
+                                <div className="col-span-2 font-mono text-xs">{l.hsCode || "-"}</div>
+                                <div className="col-span-1 font-mono text-xs">{l.hs4}</div>
+                                <div className="col-span-2 text-right">{formatCurrency(l.baseHT)}</div>
+                                <div className="col-span-1 text-right">{formatRatePercent(l.omRateRaw)}</div>
+                                <div className="col-span-1 text-right font-bold">{formatCurrency(l.omAmount)}</div>
+                              </div>
+                            ))}
                           </div>
                         </div>
 
                         <div className="grid grid-cols-3 gap-4">
                           <div className="p-3 rounded-lg bg-muted/50">
-                            <p className="text-xs text-muted-foreground">Base marchandise attendue</p>
-                            <p className="text-base font-bold">{formatCurrency(goodsValue)}</p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-muted/50">
-                            <p className="text-xs text-muted-foreground">Base détectée</p>
-                            <p className="text-base font-bold">{formatCurrency(omStats.baseAll)}</p>
+                            <p className="text-xs text-muted-foreground">Base OM totale</p>
+                            <p className="text-base font-bold">{formatCurrency(omStats.baseTotal)}</p>
                           </div>
                           <div className="p-3 rounded-lg bg-muted/50">
                             <p className="text-xs text-muted-foreground">OM théorique total</p>
                             <p className="text-base font-bold">{formatCurrency(omStats.omTotal)}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-muted/50">
+                            <p className="text-xs text-muted-foreground">Taux moyen</p>
+                            <p className="text-base font-bold">{(omStats.avgRate * 100).toFixed(2)}%</p>
                           </div>
                         </div>
                       </>
@@ -1203,7 +1169,7 @@ export default function InvoiceVerification() {
                 <Euro className="h-5 w-5 text-accent" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Marge moyenne (marchandise - OM facturé)</p>
+                <p className="text-sm text-muted-foreground">Marge moyenne (HT - transit)</p>
                 <p className="text-xl font-bold">
                   {trackedItems.length
                     ? `${(trackedItems.reduce((s, i) => s + (i.marginPercent || 0), 0) / trackedItems.length).toFixed(1)}%`
@@ -1219,7 +1185,7 @@ export default function InvoiceVerification() {
                 <Percent className="h-5 w-5 text-status-ok" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">OM facturé moyen (Transit)</p>
+                <p className="text-sm text-muted-foreground">Transit moyen</p>
                 <p className="text-xl font-bold">
                   {trackedItems.length
                     ? `${new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(
