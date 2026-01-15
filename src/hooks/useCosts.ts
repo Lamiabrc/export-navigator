@@ -2,6 +2,14 @@
 import * as React from "react";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
+export type DestinationRef = {
+  id: string;
+  name: string | null;
+  code: string | null;
+  zone: number | null;
+  logistic_mode: string | null;
+};
+
 export type CostLine = {
   id: string;
   date: string | null;
@@ -10,7 +18,13 @@ export type CostLine = {
 
   currency: string | null;
   market_zone: string | null;
-  destination: string | null; // UUID (souvent) -> export_destinations.id
+
+  // UUID FK -> export_destinations.id
+  destination: string | null;
+
+  // ✅ Résolution lisible pour l’UI
+  destination_ref?: DestinationRef | null;
+
   incoterm: string | null;
 
   client_id: string | null;
@@ -22,7 +36,9 @@ export type CostsFilters = {
   from?: string;
   to?: string;
   clientId?: string;
-  destinationId?: string; // ✅ UUID
+
+  // ✅ UUID (cost_lines.destination)
+  destinationId?: string;
 };
 
 type UseCostsResult = {
@@ -44,10 +60,47 @@ function asMessage(err: any): string {
   }
 }
 
+function chunk<T>(arr: T[], size: number) {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+async function fetchDestinationsByIds(ids: string[]): Promise<Map<string, DestinationRef>> {
+  const map = new Map<string, DestinationRef>();
+  const uniq = Array.from(new Set(ids.filter(Boolean)));
+
+  if (!uniq.length) return map;
+
+  // PostgREST supporte bien les IN, mais on chunk pour rester safe
+  for (const part of chunk(uniq, 500)) {
+    const { data, error } = await supabase
+      .from("export_destinations")
+      .select("id,name,code,zone,logistic_mode")
+      .in("id", part);
+
+    if (error) throw error;
+
+    for (const r of (data || []) as any[]) {
+      const id = String(r.id);
+      map.set(id, {
+        id,
+        name: r.name ?? null,
+        code: r.code ?? null,
+        zone: r.zone ?? null,
+        logistic_mode: r.logistic_mode ?? null,
+      });
+    }
+  }
+
+  return map;
+}
+
 async function fetchCostLines(params: CostsFilters): Promise<CostLine[]> {
   const pageSize = 5000;
   let offset = 0;
-  const all: CostLine[] = [];
+
+  const allRaw: any[] = [];
 
   while (true) {
     let q = supabase
@@ -67,27 +120,39 @@ async function fetchCostLines(params: CostsFilters): Promise<CostLine[]> {
     if (error) throw error;
     if (!data || data.length === 0) break;
 
-    all.push(
-      ...data.map((r: any) => ({
-        id: String(r.id),
-        date: r.date ?? null,
-        cost_type: r.cost_type ?? null,
-        amount: r.amount ?? null,
-        currency: r.currency ?? null,
-        market_zone: r.market_zone ?? null,
-        destination: r.destination ?? null,
-        incoterm: r.incoterm ?? null,
-        client_id: r.client_id ?? null,
-        product_id: r.product_id ?? null,
-        order_id: r.order_id ?? null,
-      }))
-    );
+    allRaw.push(...data);
 
     if (data.length < pageSize) break;
     offset += pageSize;
   }
 
-  return all;
+  // 1) Map brut -> CostLine
+  const rows: CostLine[] = allRaw.map((r: any) => ({
+    id: String(r.id),
+    date: r.date ?? null,
+    cost_type: r.cost_type ?? null,
+    amount: r.amount ?? null,
+    currency: r.currency ?? null,
+    market_zone: r.market_zone ?? null,
+    destination: r.destination ?? null,
+    incoterm: r.incoterm ?? null,
+    client_id: r.client_id ?? null,
+    product_id: r.product_id ?? null,
+    order_id: r.order_id ?? null,
+    destination_ref: null,
+  }));
+
+  // 2) Résolution destination UUID -> libellé
+  const destIds = rows.map((r) => r.destination).filter(Boolean) as string[];
+  if (destIds.length) {
+    const byId = await fetchDestinationsByIds(destIds);
+    for (const r of rows) {
+      if (!r.destination) continue;
+      r.destination_ref = byId.get(r.destination) || null;
+    }
+  }
+
+  return rows;
 }
 
 export function useCosts(filters: CostsFilters): UseCostsResult {
@@ -128,7 +193,7 @@ export function useCosts(filters: CostsFilters): UseCostsResult {
         msg.toLowerCase().includes("schema cache");
 
       if (hintMissing) {
-        setWarning("cost_lines manquante / non exposée / non accessible (RLS/schema cache).");
+        setWarning("cost_lines ou export_destinations manquante / non exposée / non accessible (RLS/schema cache).");
         setError(null);
       } else {
         setError(msg);
