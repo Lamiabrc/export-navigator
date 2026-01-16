@@ -4,17 +4,17 @@ import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
 export type CostLine = {
   id: string;
-  date: string | null;
-  destination: string | null; // ex: GP / MQ / RE ...
-  cost_type: string | null;   // ex: OM / OCTROI / DOUANE / DOSSIER / AUTRE
+  date: string | null; // date
+  destination: string | null; // ex: GP / MQ / FR...
   amount: number | null;
+  cost_type: string | null; // ex: DOUANE / TRANSPORT_PLUS / AUTRE ...
 };
 
 export type CostsFilters = {
   from?: string;
   to?: string;
-  destination?: string; // GP/MQ/...
-  costType?: string;    // optionnel
+  destination?: string; // filtre territoire (GP/MQ/...)
+  costType?: string; // filtre type
 };
 
 type UseCostsResult = {
@@ -42,7 +42,7 @@ async function fetchAllCostLines(filters?: CostsFilters): Promise<CostLine[]> {
 
     let q = supabase
       .from("cost_lines")
-      .select("id,date,destination,cost_type,amount")
+      .select("id,date,destination,amount,cost_type")
       .order("date", { ascending: false })
       .range(from, to);
 
@@ -53,6 +53,7 @@ async function fetchAllCostLines(filters?: CostsFilters): Promise<CostLine[]> {
 
     const { data, error } = await q;
     if (error) throw error;
+
     if (!data || data.length === 0) break;
 
     all.push(
@@ -60,8 +61,8 @@ async function fetchAllCostLines(filters?: CostsFilters): Promise<CostLine[]> {
         id: String(r.id),
         date: r.date ?? null,
         destination: r.destination ?? null,
-        cost_type: r.cost_type ?? null,
         amount: r.amount ?? null,
+        cost_type: r.cost_type ?? null,
       }))
     );
 
@@ -95,8 +96,20 @@ export function useCosts(filters?: CostsFilters): UseCostsResult {
       setRows(data);
     } catch (e: any) {
       const msg = asMessage(e);
+
+      const hintMissing =
+        msg.toLowerCase().includes("does not exist") ||
+        msg.toLowerCase().includes("relation") ||
+        msg.toLowerCase().includes("not found");
+
+      if (hintMissing) {
+        setWarning("Table cost_lines manquante ou non accessible (droits/RLS).");
+        setError(null);
+      } else {
+        setError(msg);
+      }
+
       setRows([]);
-      setError(msg);
     } finally {
       setIsLoading(false);
     }
