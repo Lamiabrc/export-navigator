@@ -1,4 +1,3 @@
-// src/pages/Costs.tsx
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -7,18 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Download, Plus } from "lucide-react";
-import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { ExportFiltersBar } from "@/components/export/ExportFiltersBar";
-import { fetchKpis } from "@/domain/export/queries";
 import { ExportFilters } from "@/domain/export/types";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
-
-import { useCosts, type CostLine } from "@/hooks/useCosts";
+import { toast } from "sonner";
+import { useCosts } from "@/hooks/useCosts";
 
 const DROM = ["GP", "MQ", "GF", "RE", "YT"];
-const DESTS = ["all", "FR", ...DROM, "UE"] as const;
 
 function safeNumber(v: unknown): number {
   const n = typeof v === "number" ? v : Number(v);
@@ -76,13 +72,10 @@ function SummaryTile({ label, value, hint }: { label: string; value: number; hin
 }
 
 type SalesInvoiceRow = {
-  id: string;
   invoice_number: string | null;
   invoice_date: string | null;
-  client_id: string | null;
-  client_name_norm: string | null;
   territory_code: string | null;
-  ile: string | null;
+  client_id: string | null;
   nb_colis: number | null;
   products_ht_eur: number | null;
   transit_fee_eur: number | null;
@@ -93,13 +86,14 @@ type SalesInvoiceRow = {
 export default function Costs() {
   const { resolvedRange, variables } = useGlobalFilters();
 
-  // Filtres globaux (période + territoire + client)
   const [filters, setFilters] = React.useState<ExportFilters>({
     from: resolvedRange.from,
     to: resolvedRange.to,
     territory: variables.territory_code || undefined,
     clientId: variables.client_id || undefined,
   });
+
+  const [invoiceQ, setInvoiceQ] = React.useState("");
 
   React.useEffect(() => {
     setFilters((prev) => ({
@@ -111,165 +105,145 @@ export default function Costs() {
     }));
   }, [resolvedRange.from, resolvedRange.to, variables.territory_code, variables.client_id]);
 
-  // --- OM/Octroi estimés via ton moteur (fetchKpis)
-  const kpisQuery = useQuery({
-    queryKey: ["costs-kpis", filters],
-    queryFn: () => fetchKpis(filters),
-  });
-
-  React.useEffect(() => {
-    if (kpisQuery.error) toast.error((kpisQuery.error as Error).message);
-  }, [kpisQuery.error]);
-
-  // --- Factures (réel transport + transit)
+  // ---- 1) Invoices (réel transport + transit)
   const invoicesQuery = useQuery({
     queryKey: ["costs-sales-invoices", filters],
-    queryFn: async () => {
+    queryFn: async (): Promise<SalesInvoiceRow[]> => {
       let q = supabase
         .from("sales_invoices")
         .select(
-          "id,invoice_number,invoice_date,client_id,client_name_norm,territory_code,ile,nb_colis,products_ht_eur,transit_fee_eur,transport_cost_eur,invoice_ht_eur"
+          "invoice_number,invoice_date,territory_code,client_id,nb_colis,products_ht_eur,transit_fee_eur,transport_cost_eur,invoice_ht_eur"
         )
+        .gte("invoice_date", filters.from!)
+        .lte("invoice_date", filters.to!)
         .order("invoice_date", { ascending: false })
         .limit(5000);
 
-      if (filters.from) q = q.gte("invoice_date", filters.from);
-      if (filters.to) q = q.lte("invoice_date", filters.to);
       if (filters.territory) q = q.eq("territory_code", filters.territory);
       if (filters.clientId) q = q.eq("client_id", filters.clientId);
 
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as any as SalesInvoiceRow[];
+      return (data as any) || [];
     },
+    enabled: Boolean(filters.from && filters.to),
   });
 
-  // --- Charges manuelles (cost_lines)
-  const [destination, setDestination] = React.useState<(typeof DESTS)[number]>(
-    (filters.territory as any) || "all"
-  );
-  const [costType, setCostType] = React.useState<string>("all");
-  const [search, setSearch] = React.useState("");
-
   React.useEffect(() => {
-    // si l’utilisateur a un territoire global, on l’applique comme destination par défaut (sauf si "all")
-    setDestination((prev) => {
-      if (prev !== "all") return prev;
-      return (filters.territory as any) || "all";
-    });
-  }, [filters.territory]);
+    if (invoicesQuery.error) toast.error((invoicesQuery.error as Error).message);
+  }, [invoicesQuery.error]);
 
-  const { rows: costRows, isLoading: costLoading, error: costError, warning: costWarning, refresh: refreshCosts } =
+  const invoicesFiltered = React.useMemo(() => {
+    const data = invoicesQuery.data || [];
+    const q = invoiceQ.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter((r) => String(r.invoice_number || "").toLowerCase().includes(q));
+  }, [invoicesQuery.data, invoiceQ]);
+
+  const totalTransportReal = React.useMemo(
+    () => invoicesFiltered.reduce((s, r) => s + safeNumber(r.transport_cost_eur), 0),
+    [invoicesFiltered]
+  );
+  const totalTransitBilled = React.useMemo(
+    () => invoicesFiltered.reduce((s, r) => s + safeNumber(r.transit_fee_eur), 0),
+    [invoicesFiltered]
+  );
+  const gapTransport = totalTransportReal - totalTransitBilled;
+
+  // ---- 2) cost_lines (charges manuelles) filtrées sur même période + destination
+  const costLinesDestination = filters.territory && DROM.includes(filters.territory) ? filters.territory : undefined;
+
+  const { rows: costLines, isLoading: costLinesLoading, error: costLinesError, warning: costLinesWarning, refresh: refreshCostLines } =
     useCosts({
       from: filters.from,
       to: filters.to,
-      destination: destination === "all" ? undefined : destination,
-      costType: costType === "all" ? undefined : costType,
+      destination: costLinesDestination,
     });
 
-  const filteredCostRows = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return costRows;
+  React.useEffect(() => {
+    if (costLinesError) toast.error(costLinesError);
+  }, [costLinesError]);
 
-    return costRows.filter((r: CostLine) => {
-      const hay = [r.id, r.date, r.destination, r.cost_type, r.amount].filter(Boolean).join(" ").toLowerCase();
-      return hay.includes(q);
+  const totalManualCharges = React.useMemo(
+    () => (costLines || []).reduce((s, r) => s + safeNumber(r.amount), 0),
+    [costLines]
+  );
+
+  const totalNonRecovered = gapTransport + totalManualCharges;
+
+  const byType = React.useMemo(() => {
+    const m = new Map<string, number>();
+    (costLines || []).forEach((r) => {
+      const k = String(r.cost_type || "AUTRE").toUpperCase();
+      m.set(k, (m.get(k) || 0) + safeNumber(r.amount));
     });
-  }, [costRows, search]);
-
-  // Totaux factures
-  const invoices = invoicesQuery.data || [];
-  const totalsInvoices = React.useMemo(() => {
-    const transport = invoices.reduce((s, r) => s + safeNumber(r.transport_cost_eur), 0);
-    const transit = invoices.reduce((s, r) => s + safeNumber(r.transit_fee_eur), 0);
-    const products = invoices.reduce((s, r) => s + safeNumber(r.products_ht_eur), 0);
-    const invoiceHT = invoices.reduce((s, r) => s + safeNumber(r.invoice_ht_eur), 0);
-    const colis = invoices.reduce((s, r) => s + safeNumber(r.nb_colis), 0);
-    return { transport, transit, products, invoiceHT, colis, nb: invoices.length };
-  }, [invoices]);
-
-  // Totaux cost_lines
-  const totalsCostLines = React.useMemo(() => {
-    const total = filteredCostRows.reduce((s, r) => s + safeNumber(r.amount), 0);
-    const transport = filteredCostRows.reduce(
-      (s, r) => s + (String(r.cost_type || "").toUpperCase() === "TRANSPORT" ? safeNumber(r.amount) : 0),
-      0
-    );
-    const transit = filteredCostRows.reduce(
-      (s, r) => s + (String(r.cost_type || "").toUpperCase() === "TRANSIT" ? safeNumber(r.amount) : 0),
-      0
-    );
-    return { total, transport, transit, nb: filteredCostRows.length };
-  }, [filteredCostRows]);
-
-  const estimated = kpisQuery.data?.estimatedExportCosts;
-  const estDouanes = safeNumber(estimated?.om) + safeNumber(estimated?.octroi);
-
-  // KPI demandé : Transport + OM - Transit
-  // On prend le "réel" transport/transit depuis sales_invoices, et on ajoute éventuellement du manuel cost_lines TRANSPORT.
-  const kpiNonRepercute =
-    totalsInvoices.transport +
-    totalsCostLines.transport +
-    estDouanes -
-    totalsInvoices.transit;
+    return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
+  }, [costLines]);
 
   function exportInvoicesCsv() {
     const csv = toCsv(
-      invoices.map((r) => ({
+      invoicesFiltered.map((r) => ({
         invoice_number: r.invoice_number ?? "",
         invoice_date: r.invoice_date ?? "",
-        client: r.client_name_norm ?? "",
         territory_code: r.territory_code ?? "",
-        ile: r.ile ?? "",
         nb_colis: r.nb_colis ?? "",
         products_ht_eur: r.products_ht_eur ?? "",
         transit_fee_eur: r.transit_fee_eur ?? "",
         transport_cost_eur: r.transport_cost_eur ?? "",
+        gap_transport_eur: safeNumber(r.transport_cost_eur) - safeNumber(r.transit_fee_eur),
         invoice_ht_eur: r.invoice_ht_eur ?? "",
       }))
     );
-    downloadText(csv, `sales_invoices_${new Date().toISOString().slice(0, 10)}.csv`);
+    downloadText(csv, `costs_invoices_${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
   function exportCostLinesCsv() {
     const csv = toCsv(
-      filteredCostRows.map((r) => ({
-        id: r.id ?? "",
+      (costLines || []).map((r) => ({
+        id: r.id,
         date: r.date ?? "",
         destination: r.destination ?? "",
         cost_type: r.cost_type ?? "",
-        amount: r.amount ?? "",
+        amount: r.amount ?? 0,
       }))
     );
     downloadText(csv, `cost_lines_${new Date().toISOString().slice(0, 10)}.csv`);
   }
 
-  // Ajout cost_line (ton id est text -> on génère un UUID en string côté front)
-  const [newDate, setNewDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
-  const [newDest, setNewDest] = React.useState<string>((filters.territory as any) || "FR");
-  const [newType, setNewType] = React.useState<string>("TRANSPORT");
-  const [newAmount, setNewAmount] = React.useState<string>("");
+  // ---- 3) Ajout charge manuelle
+  const [clDate, setClDate] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const [clDestination, setClDestination] = React.useState<string>(costLinesDestination || "GP");
+  const [clType, setClType] = React.useState<string>("OM");
+  const [clAmount, setClAmount] = React.useState<string>("");
   const [saving, setSaving] = React.useState(false);
 
-  async function addCostLine() {
-    const amount = safeNumber(newAmount);
-    if (!newDate) return toast.error("Date obligatoire.");
-    if (!newDest) return toast.error("Destination obligatoire.");
-    if (!newType) return toast.error("Type obligatoire.");
-    if (amount <= 0) return toast.error("Montant invalide.");
+  React.useEffect(() => {
+    if (costLinesDestination) setClDestination(costLinesDestination);
+  }, [costLinesDestination]);
 
-    const id = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).toString();
+  async function addCostLine() {
+    const amount = safeNumber(clAmount);
+    if (!clDate) return toast.error("Date manquante");
+    if (!clDestination) return toast.error("Destination manquante");
+    if (!clType) return toast.error("Type manquant");
+    if (amount <= 0) return toast.error("Montant invalide");
 
     setSaving(true);
     try {
-      const { error } = await supabase.from("cost_lines").insert([
-        { id, date: newDate, destination: newDest, cost_type: newType, amount },
-      ] as any);
+      const payload = {
+        id: crypto.randomUUID(),
+        date: clDate,
+        destination: clDestination,
+        cost_type: clType,
+        amount,
+      };
+
+      const { error } = await supabase.from("cost_lines").insert(payload as any);
       if (error) throw error;
 
-      setNewAmount("");
+      setClAmount("");
       toast.success("Charge ajoutée ✅");
-      await refreshCosts();
+      await refreshCostLines();
     } catch (e: any) {
       toast.error(e?.message || "Erreur insertion cost_lines");
     } finally {
@@ -277,17 +251,17 @@ export default function Costs() {
     }
   }
 
-  const loading = kpisQuery.isLoading || invoicesQuery.isLoading || costLoading;
+  const loading = invoicesQuery.isLoading || costLinesLoading;
 
   return (
     <MainLayout contentClassName="md:p-8">
       <div className="space-y-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm text-muted-foreground">Pilotage</p>
-            <h1 className="text-2xl font-bold">Charges & coûts non répercutés</h1>
+            <p className="text-sm text-muted-foreground">Coûts export</p>
+            <h1 className="text-2xl font-bold">Costs</h1>
             <p className="text-sm text-muted-foreground">
-              KPI = Transport (réel) + Douanes (OM+Octroi) − Transit facturé.
+              Suivi des coûts non répercutés : transport réel + charges (OM/douane…) – frais de transit.
             </p>
           </div>
 
@@ -295,9 +269,8 @@ export default function Costs() {
             <Button
               variant="outline"
               onClick={() => {
-                kpisQuery.refetch();
                 invoicesQuery.refetch();
-                refreshCosts();
+                refreshCostLines();
               }}
               disabled={loading}
               className="gap-2"
@@ -306,24 +279,14 @@ export default function Costs() {
               Actualiser
             </Button>
 
-            <Button
-              variant="outline"
-              onClick={exportInvoicesCsv}
-              disabled={loading || invoices.length === 0}
-              className="gap-2"
-            >
+            <Button variant="outline" onClick={exportInvoicesCsv} disabled={invoicesFiltered.length === 0} className="gap-2">
               <Download className="h-4 w-4" />
-              Export factures
+              Export invoices
             </Button>
 
-            <Button
-              variant="outline"
-              onClick={exportCostLinesCsv}
-              disabled={loading || filteredCostRows.length === 0}
-              className="gap-2"
-            >
+            <Button variant="outline" onClick={exportCostLinesCsv} disabled={(costLines?.length ?? 0) === 0} className="gap-2">
               <Download className="h-4 w-4" />
-              Export charges
+              Export cost_lines
             </Button>
           </div>
         </div>
@@ -332,49 +295,69 @@ export default function Costs() {
           value={filters}
           onChange={setFilters}
           onRefresh={() => {
-            kpisQuery.refetch();
             invoicesQuery.refetch();
-            refreshCosts();
+            refreshCostLines();
           }}
           loading={loading}
         />
 
-        {(costError || costWarning) && (
-          <Card className={costError ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"}>
-            <CardContent className="pt-4 text-sm">{costError || costWarning}</CardContent>
-          </Card>
-        )}
-
+        {/* KPI */}
         <Card>
           <CardHeader>
             <CardTitle>KPI “coûts non répercutés”</CardTitle>
             <CardDescription>
-              Transport & transit réels depuis <code className="text-xs">sales_invoices</code>, douanes via{" "}
-              <code className="text-xs">fetchKpis</code>, charges manuelles via <code className="text-xs">cost_lines</code>.
+              Période + filtre territoire/client. Pour <b>cost_lines</b>, on filtre sur destination quand le territoire est DROM.
             </CardDescription>
           </CardHeader>
+
           <CardContent className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <SummaryTile label="Transport (factures)" value={totalsInvoices.transport} hint={`${totalsInvoices.nb} factures`} />
-            <SummaryTile label="Transit facturé" value={totalsInvoices.transit} hint="transit_fee_eur" />
-            <SummaryTile label="OM+Octroi (estimés)" value={estDouanes} hint="via fetchKpis()" />
-            <SummaryTile label="Transport (ajustements)" value={totalsCostLines.transport} hint="cost_lines TRANSPORT" />
-            <SummaryTile label="KPI non répercuté" value={kpiNonRepercute} hint="Transport + Douanes − Transit" />
+            <SummaryTile label="Transport réel" value={totalTransportReal} hint="SUM(sales_invoices.transport_cost_eur)" />
+            <SummaryTile label="Transit facturé" value={totalTransitBilled} hint="SUM(sales_invoices.transit_fee_eur)" />
+            <SummaryTile label="Gap transport" value={gapTransport} hint="transport - transit" />
+            <SummaryTile label="Charges (cost_lines)" value={totalManualCharges} hint="OM / Octroi / Douane / Dossier…" />
+            <SummaryTile label="Total non répercuté" value={totalNonRecovered} hint="gap + charges" />
+
+            <div className="md:col-span-5 flex flex-wrap gap-2 pt-2 text-xs">
+              <Badge variant="secondary">Invoices: {invoicesFiltered.length}</Badge>
+              <Badge variant="secondary">Cost lines: {costLines?.length ?? 0}</Badge>
+              {costLinesDestination ? <Badge variant="outline">Destination cost_lines: {costLinesDestination}</Badge> : null}
+            </div>
+
+            {byType.length ? (
+              <div className="md:col-span-5 rounded-lg border p-3 bg-muted/20">
+                <div className="text-xs text-muted-foreground mb-2">Breakdown charges par type</div>
+                <div className="flex flex-wrap gap-2">
+                  {byType.map(([t, v]) => (
+                    <Badge key={t} variant="outline">
+                      {t}: {formatMoney(v, 0)}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
-        {/* TABLE FACTURES */}
+        {(costLinesWarning || costLinesError) ? (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="pt-4 text-sm text-foreground">
+              {costLinesWarning || costLinesError}
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {/* Invoices table */}
         <Card>
           <CardHeader>
-            <CardTitle>Factures (sales_invoices)</CardTitle>
-            <CardDescription>Ce tableau est le plus important : il contient tes coûts réels.</CardDescription>
+            <CardTitle>Invoices (réel transport vs transit)</CardTitle>
+            <CardDescription>Table actionnable : repérer les factures qui créent le gap.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2 text-xs">
-              <Badge variant="secondary">Factures: {totalsInvoices.nb}</Badge>
-              <Badge variant="secondary">Colis: {totalsInvoices.colis}</Badge>
-              <Badge variant="secondary">Produits HT: {formatMoney(totalsInvoices.products, 0)}</Badge>
-              <Badge variant="secondary">Transport: {formatMoney(totalsInvoices.transport, 0)}</Badge>
-              <Badge variant="secondary">Transit: {formatMoney(totalsInvoices.transit, 0)}</Badge>
+            <div className="flex flex-col md:flex-row md:items-end gap-3">
+              <div className="flex-1">
+                <p className="text-xs text-muted-foreground mb-1">Recherche invoice</p>
+                <Input value={invoiceQ} onChange={(e) => setInvoiceQ(e.target.value)} placeholder="Ex: FV3330-2507..." />
+              </div>
             </div>
 
             <div className="overflow-auto border rounded-md">
@@ -382,13 +365,13 @@ export default function Costs() {
                 <thead className="sticky top-0 bg-background">
                   <tr className="border-b text-muted-foreground">
                     <th className="py-2 px-3 text-left font-medium">Date</th>
-                    <th className="py-2 px-3 text-left font-medium">Facture</th>
-                    <th className="py-2 px-3 text-left font-medium">Client</th>
+                    <th className="py-2 px-3 text-left font-medium">Invoice</th>
                     <th className="py-2 px-3 text-left font-medium">Territoire</th>
                     <th className="py-2 px-3 text-right font-medium">Colis</th>
                     <th className="py-2 px-3 text-right font-medium">Produits HT</th>
                     <th className="py-2 px-3 text-right font-medium">Transit</th>
                     <th className="py-2 px-3 text-right font-medium">Transport</th>
+                    <th className="py-2 px-3 text-right font-medium">Gap</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -398,25 +381,28 @@ export default function Costs() {
                         Chargement…
                       </td>
                     </tr>
-                  ) : invoices.length === 0 ? (
+                  ) : invoicesFiltered.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-4 px-3 text-center text-muted-foreground">
-                        Aucune facture sur la période.
+                        Aucune invoice sur la période.
                       </td>
                     </tr>
                   ) : (
-                    invoices.map((r) => (
-                      <tr key={r.id} className="border-b last:border-0">
-                        <td className="py-2 px-3">{r.invoice_date ?? "—"}</td>
-                        <td className="py-2 px-3">{r.invoice_number ?? "—"}</td>
-                        <td className="py-2 px-3">{r.client_name_norm ?? "—"}</td>
-                        <td className="py-2 px-3">{r.territory_code ?? r.ile ?? "—"}</td>
-                        <td className="py-2 px-3 text-right tabular-nums">{r.nb_colis ?? "—"}</td>
-                        <td className="py-2 px-3 text-right tabular-nums">{formatMoney(safeNumber(r.products_ht_eur), 2)}</td>
-                        <td className="py-2 px-3 text-right tabular-nums">{formatMoney(safeNumber(r.transit_fee_eur), 2)}</td>
-                        <td className="py-2 px-3 text-right tabular-nums">{formatMoney(safeNumber(r.transport_cost_eur), 2)}</td>
-                      </tr>
-                    ))
+                    invoicesFiltered.map((r, idx) => {
+                      const gap = safeNumber(r.transport_cost_eur) - safeNumber(r.transit_fee_eur);
+                      return (
+                        <tr key={`${r.invoice_number}-${idx}`} className="border-b last:border-0">
+                          <td className="py-2 px-3">{r.invoice_date ?? "—"}</td>
+                          <td className="py-2 px-3">{r.invoice_number ?? "—"}</td>
+                          <td className="py-2 px-3">{r.territory_code ?? "—"}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{r.nb_colis ?? "—"}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{formatMoney(safeNumber(r.products_ht_eur), 0)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{formatMoney(safeNumber(r.transit_fee_eur), 0)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{formatMoney(safeNumber(r.transport_cost_eur), 0)}</td>
+                          <td className="py-2 px-3 text-right tabular-nums">{formatMoney(gap, 0)}</td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -424,84 +410,88 @@ export default function Costs() {
           </CardContent>
         </Card>
 
-        {/* CHARGES MANUELLES */}
+        {/* cost_lines table + add */}
         <Card>
           <CardHeader>
             <CardTitle>Charges manuelles (cost_lines)</CardTitle>
-            <CardDescription>Pour compléter/corriger (ex: transport non importé dans sales_invoices).</CardDescription>
+            <CardDescription>OM / Octroi / Douane / Dossier… exportable en CSV.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Date</p>
+                <Input value={clDate} onChange={(e) => setClDate(e.target.value)} type="date" />
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Destination</p>
                 <select
                   className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value as any)}
+                  value={clDestination}
+                  onChange={(e) => setClDestination(e.target.value)}
                 >
-                  {DESTS.map((d) => (
+                  {DROM.map((d) => (
                     <option key={d} value={d}>
                       {d}
                     </option>
                   ))}
+                  <option value="FR">FR</option>
+                  <option value="UE">UE</option>
                 </select>
               </div>
-
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Type</p>
                 <select
                   className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  value={costType}
-                  onChange={(e) => setCostType(e.target.value)}
+                  value={clType}
+                  onChange={(e) => setClType(e.target.value)}
                 >
-                  {["all", "TRANSPORT", "TRANSIT", "OM", "OCTROI", "AUTRE"].map((t) => (
+                  {["OM", "OCTROI", "DOUANE", "DOSSIER", "AUTRE"].map((t) => (
                     <option key={t} value={t}>
                       {t}
                     </option>
                   ))}
                 </select>
               </div>
-
-              <div className="md:col-span-2">
-                <p className="text-xs text-muted-foreground mb-1">Recherche</p>
-                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ex: GP, TRANSPORT, 2026-01..." />
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Montant (€)</p>
+                <Input value={clAmount} onChange={(e) => setClAmount(e.target.value)} type="number" inputMode="decimal" />
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 text-xs">
-              <Badge variant="secondary">Lignes: {totalsCostLines.nb}</Badge>
-              <Badge variant="secondary">Total: {formatMoney(totalsCostLines.total, 2)}</Badge>
-            </div>
+            <Button onClick={addCostLine} disabled={saving} className="gap-2">
+              <Plus className="h-4 w-4" />
+              {saving ? "Ajout..." : "Ajouter une charge"}
+            </Button>
 
             <div className="overflow-auto border rounded-md">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-background">
                   <tr className="border-b text-muted-foreground">
                     <th className="py-2 px-3 text-left font-medium">Date</th>
-                    <th className="py-2 px-3 text-left font-medium">Type</th>
                     <th className="py-2 px-3 text-left font-medium">Destination</th>
+                    <th className="py-2 px-3 text-left font-medium">Type</th>
                     <th className="py-2 px-3 text-right font-medium">Montant</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {costLoading ? (
+                  {costLinesLoading ? (
                     <tr>
                       <td colSpan={4} className="py-4 px-3 text-center text-muted-foreground">
                         Chargement…
                       </td>
                     </tr>
-                  ) : filteredCostRows.length === 0 ? (
+                  ) : (costLines?.length ?? 0) === 0 ? (
                     <tr>
                       <td colSpan={4} className="py-4 px-3 text-center text-muted-foreground">
-                        Aucune charge.
+                        Aucune charge sur la période.
                       </td>
                     </tr>
                   ) : (
-                    filteredCostRows.map((r) => (
+                    costLines.map((r) => (
                       <tr key={r.id} className="border-b last:border-0">
                         <td className="py-2 px-3">{r.date ?? "—"}</td>
-                        <td className="py-2 px-3">{r.cost_type ?? "—"}</td>
                         <td className="py-2 px-3">{r.destination ?? "—"}</td>
+                        <td className="py-2 px-3">{r.cost_type ?? "—"}</td>
                         <td className="py-2 px-3 text-right tabular-nums">{formatMoney(safeNumber(r.amount), 2)}</td>
                       </tr>
                     ))
@@ -509,71 +499,13 @@ export default function Costs() {
                 </tbody>
               </table>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* AJOUT CHARGE */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Plus className="h-5 w-5" />
-              Ajouter une charge (cost_lines)
-            </CardTitle>
-            <CardDescription>Id auto généré (texte) pour éviter les erreurs d’insertion.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Date</p>
-                <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
-              </div>
-
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Destination</p>
-                <select
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  value={newDest}
-                  onChange={(e) => setNewDest(e.target.value)}
-                >
-                  {["FR", ...DROM, "UE"].map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Type</p>
-                <select
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  value={newType}
-                  onChange={(e) => setNewType(e.target.value)}
-                >
-                  {["TRANSPORT", "TRANSIT", "OM", "OCTROI", "AUTRE"].map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Montant (€)</p>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  value={newAmount}
-                  onChange={(e) => setNewAmount(e.target.value)}
-                  placeholder="Ex: 12.50"
-                />
-              </div>
-            </div>
-
-            <Button onClick={addCostLine} disabled={saving} className="gap-2 w-full md:w-auto">
-              <Plus className="h-4 w-4" />
-              {saving ? "Ajout..." : "Ajouter"}
-            </Button>
+            <Card className="border-slate-200 bg-slate-50">
+              <CardContent className="pt-4 text-sm text-slate-700">
+                <b>DHL / estimation</b> : tu as les tables de configuration ({`destination_carrier_zones, transport_rate_lines, transport_increment_rules, transport_country_zones`}).
+                Dès que tu me colles le résultat du SQL “colonnes + exemples”, je te fais la vue/func qui calcule un devis et on l’affiche ici.
+              </CardContent>
+            </Card>
           </CardContent>
         </Card>
       </div>
