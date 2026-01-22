@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
-const STORAGE_KEY = "orliman_assistant_chat_v2";
+const STORAGE_KEY = "mpl_assistant_chat_v2";
 
 type AssistantSections = Record<string, string[]>;
 type Citation = { title: string; chunk_index: number; similarity?: number; published_at?: string };

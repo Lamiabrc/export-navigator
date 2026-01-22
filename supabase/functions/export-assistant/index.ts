@@ -409,7 +409,7 @@ Deno.serve(async (req) => {
   }
 
   const system =
-    "Tu es l’assistant IA Export d’Orliman (Export Navigator). " +
+    "Tu es l’assistant IA Export d’MPL Conseil Export (Export Navigator). " +
     "Tu as 2 types de sources: (1) DONNÉES INTERNES (tables Supabase: produits, ventes, clients, coûts, om_rates) " +
     "et (2) DOCUMENTS (extraits PDF). " +
     "Règles: " +

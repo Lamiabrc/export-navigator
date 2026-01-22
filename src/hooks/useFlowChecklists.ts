@@ -12,7 +12,7 @@ export interface ChecklistItem {
 
 type ChecklistMap = Record<string, ChecklistItem[]>;
 
-const CHECKLIST_KEY = 'orliman_flow_checklists';
+const CHECKLIST_KEY = 'mpl_flow_checklists';
 
 const baseItems = (flow: Flow): ChecklistItem[] => {
   const common: ChecklistItem[] = [

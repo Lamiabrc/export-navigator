@@ -14,17 +14,17 @@ interface AuthState {
   isLoading: boolean;
 }
 
-const USERS_KEY = 'orliman_users';
-const SESSION_KEY = 'orliman_session';
-const PASSWORD_KEY = 'orliman_passwords';
+const USERS_KEY = 'mpl_users';
+const SESSION_KEY = 'mpl_session';
+const PASSWORD_KEY = 'mpl_passwords';
 const DEFAULT_USER: LocalUser = {
   id: 'lamia-admin',
-  email: 'lamia.brechetighil@orliman.fr',
+  email: 'lamia.brechetighil@mpl.fr',
   name: 'Lamia Brechetighil',
   role: 'admin',
   createdAt: new Date('2024-01-01').toISOString(),
 };
-const DEFAULT_PASSWORD = 'Orliman2025!';
+const DEFAULT_PASSWORD = 'MPL Conseil Export2025!';
 
 export function useLocalAuth() {
   const [authState, setAuthState] = useState<AuthState>({
@@ -109,7 +109,7 @@ export function useLocalAuth() {
     async (email: string, password: string): Promise<{ error: string | null }> => {
       const normalizedEmail = email.toLowerCase();
       if (normalizedEmail !== DEFAULT_USER.email) {
-        return { error: 'Acces reserve au compte administrateur ORLIMAN.' };
+        return { error: 'Acces reserve au compte administrateur MPL.' };
       }
 
       const user = ensureDefaultUserExists();

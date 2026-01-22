@@ -147,7 +147,7 @@ export default function WatchRegulatory() {
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm text-muted-foreground">Veille export — SME Europe / Orliman France</p>
+            <p className="text-sm text-muted-foreground">Veille export — SME Europe / MPL Conseil Export France</p>
             <h1 className="text-2xl font-bold">DROM • UE • Suisse — Fiscalité, Douane, Dispositifs médicaux</h1>
             <div className="mt-2 flex flex-wrap gap-2">
               {scopeBadges.map((b) => (
@@ -276,7 +276,7 @@ export default function WatchRegulatory() {
               <CardHeader>
                 <CardTitle>Sources de veille</CardTitle>
                 <CardDescription>
-                  Ciblées Orliman/SME Europe : fiscalité DROM, JOUE (UE), Suisse (Swissmedic), actus économie/export.
+                  Ciblées MPL Conseil Export/SME Europe : fiscalité DROM, JOUE (UE), Suisse (Swissmedic), actus économie/export.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">

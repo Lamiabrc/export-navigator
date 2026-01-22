@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import logoOrliman from "@/assets/logo-orliman.png";
+import logoMPL Conseil Export from "@/assets/logo-mpl.png";
 
 type BrandSize = "sm" | "md" | "lg";
 
@@ -32,7 +32,7 @@ export function BrandLogo({
   locationClassName,
   showText = true,
   title = "Export Navigator",
-  subtitle = "Orliman France",
+  subtitle = "MPL Conseil Export France",
   location = "Lieu-dit de la Herbetaie, La Mézière (Bretagne)",
   size = "md",
 }: BrandLogoProps) {
@@ -41,8 +41,8 @@ export function BrandLogo({
   return (
     <div className={cn("flex items-center", styles.gap, className)}>
       <img
-        src={logoOrliman}
-        alt="Logo Orliman"
+        src={logoMPL Conseil Export}
+        alt="Logo MPL Conseil Export"
         className={cn(styles.img, "w-auto drop-shadow-sm shrink-0", imageClassName)}
         loading="lazy"
       />

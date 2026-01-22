@@ -11,8 +11,8 @@ export default function Welcome() {
     <div className="min-h-screen relative overflow-hidden bg-slate-950 text-slate-50">
       <div className="absolute inset-0">
         <img
-          src="/assets/orliman-beach.jpg"
-          alt="Clinique Orliman en bord de plage"
+          src="/assets/mpl-beach.jpg"
+          alt="Clinique MPL Conseil Export en bord de plage"
           className="h-full w-full object-cover"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).src = "/assets/drom-hero.jpg";
@@ -44,7 +44,7 @@ export default function Welcome() {
               Veille & Contrôle Facture Export
             </p>
             <h1 className="text-4xl md:text-5xl font-bold leading-tight text-white drop-shadow-xl">
-              Bienvenue dans l’outil Orliman de suivi et de stratégie Export DROM
+              Bienvenue dans l’outil MPL Conseil Export de suivi et de stratégie Export DROM
             </h1>
             <p className="text-lg text-slate-200/85 leading-relaxed">
               Contrôlez vos factures, calculez la marge réelle (HT + transport + OM/OMR par HS),

@@ -626,7 +626,7 @@ export default function WatchCommercial() {
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="font-semibold text-slate-900">Provenance</div>
                     <ul className="mt-2 space-y-1 text-xs text-slate-700">
-                      <li>• Prix (Orliman + concurrents) : <span className="font-mono">product_prices</span></li>
+                      <li>• Prix (MPL Conseil Export + concurrents) : <span className="font-mono">product_prices</span></li>
                       <li>• LPPR : <span className="font-mono">products.tarif_lppr_eur</span></li>
                       <li>• LPPR DROM : <span className="font-mono">lpp_majoration_coefficients</span></li>
                       <li>• OM/OMR : <span className="font-mono">om_rates</span> (clé hs4)</li>
@@ -637,7 +637,7 @@ export default function WatchCommercial() {
                     <div className="font-semibold text-slate-900">Définitions</div>
                     <ul className="mt-2 space-y-1 text-xs text-slate-700">
                       <li>• Best concurrent = prix le plus bas disponible (Thuasne / Enovis / Gibaud)</li>
-                      <li>• Gap % = (Orliman − Best) / Best</li>
+                      <li>• Gap % = (MPL Conseil Export − Best) / Best</li>
                       <li>• Premium = gap &gt; +5% (action baisser/justifier)</li>
                       <li>• Sous-pricé = gap &lt; −5% (action monter/optimiser)</li>
                       <li>• OM total = OM + OMR ; Thuasne OM facturé = OM total × 1.025</li>
@@ -680,7 +680,7 @@ export default function WatchCommercial() {
                 <TrendingDown className="h-4 w-4 text-amber-700" />
                 À baisser (premium)
               </CardTitle>
-              <CardDescription className="text-slate-600">Orliman au-dessus du best concurrent.</CardDescription>
+              <CardDescription className="text-slate-600">MPL Conseil Export au-dessus du best concurrent.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {isLoading ? (
@@ -733,7 +733,7 @@ export default function WatchCommercial() {
                 <TrendingUp className="h-4 w-4 text-emerald-700" />
                 À monter (sous-pricé)
               </CardTitle>
-              <CardDescription className="text-slate-600">Orliman sous le marché.</CardDescription>
+              <CardDescription className="text-slate-600">MPL Conseil Export sous le marché.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {isLoading ? (
@@ -931,7 +931,7 @@ export default function WatchCommercial() {
                     </Badge>
 
                     <Badge variant="outline" className="text-slate-800 border-slate-200 bg-white">
-                      Rang Orliman : {selected.rank ?? "—"}
+                      Rang MPL Conseil Export : {selected.rank ?? "—"}
                     </Badge>
 
                     <Badge variant="outline" className="text-slate-800 border-slate-200 bg-white">
@@ -947,7 +947,7 @@ export default function WatchCommercial() {
                     </CardHeader>
                     <CardContent className="space-y-2 text-sm text-slate-800">
                       <div className="flex items-center justify-between">
-                        <div className="font-medium">Orliman</div>
+                        <div className="font-medium">MPL Conseil Export</div>
                         <div className="font-semibold">{money(selected.ourPrice)}</div>
                       </div>
 
@@ -1038,7 +1038,7 @@ export default function WatchCommercial() {
           <CardHeader>
             <CardTitle className="text-lg text-slate-900">Positionnement (liste)</CardTitle>
             <CardDescription className="text-slate-600">
-              Lecture : <span className="font-semibold">LPPR</span> → Orliman → best concurrent → gap/rang.
+              Lecture : <span className="font-semibold">LPPR</span> → MPL Conseil Export → best concurrent → gap/rang.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1057,7 +1057,7 @@ export default function WatchCommercial() {
                       <TableHead>Produit</TableHead>
                       <TableHead className="text-right">LPPR FR</TableHead>
                       <TableHead className="text-right">LPPR DROM</TableHead>
-                      <TableHead className="text-right">Orliman TTC</TableHead>
+                      <TableHead className="text-right">MPL Conseil Export TTC</TableHead>
                       <TableHead>Best concurrent</TableHead>
                       <TableHead className="text-right">Gap %</TableHead>
                       <TableHead className="text-right">Rang</TableHead>

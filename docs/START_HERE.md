@@ -18,7 +18,7 @@
 - products.csv : `id, sku, name, category` (+ `lpp_code, cost, currency`)
 - competitors.csv : `id, name` (+ `brand_code` enum THUASNE|DONJOY_ENOVIS|GIBAUD|AUTRE)
 - markets.csv : `id, label, zone` (UE|DROM|HORS_UE), `country_code` (ISO) (+ `currency`)
-- price_points.csv : `id, product_id, brand` (ORLIMAN|THUASNE|DONJOY_ENOVIS|GIBAUD), `market, channel, currency, price, price_type` (HT|TTC), `date` (ISO), `source_label, confidence`
+- price_points.csv : `id, product_id, brand` (MPL|THUASNE|DONJOY_ENOVIS|GIBAUD), `market, channel, currency, price, price_type` (HT|TTC), `date` (ISO), `source_label, confidence`
 - fx_rates.csv : `base_currency, quote_currency, rate, date`
 - shipments.csv : `id, flow_code, incoterm, destination, departure_date, delivery_date` (+ `carrier, awb, bl`)
 - invoices.csv : `invoice_number, client_name, invoice_date, currency, amount_ht` (+ `amount_ttc, tva_amount, incoterm, destination, flow_code, awb, bl`)
@@ -35,7 +35,7 @@ Règles générales : valeurs numériques > 0, dates au format ISO `YYYY-MM-DD`,
 ## Exemple rapide (price_points.csv)
 ```
 id,product_id,brand,market,channel,currency,price,price_type,date,source_label,confidence
-pp-1,p1,ORLIMAN,FR,Pharmacie,EUR,42,TTC,2024-12-01,Retail panel,90
+pp-1,p1,MPL,FR,Pharmacie,EUR,42,TTC,2024-12-01,Retail panel,90
 pp-2,p1,THUASNE,FR,Pharmacie,EUR,39,TTC,2024-12-01,Retail panel,90
 ```
 

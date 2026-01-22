@@ -1,4 +1,4 @@
-# Guide de compilation ORLIMAN Export Manager
+# Guide de compilation MPL Export Manager
 
 ## Prérequis
 

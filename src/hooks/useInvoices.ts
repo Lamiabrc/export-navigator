@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { Invoice, InvoiceType } from '@/types';
 
-const INVOICES_KEY = 'orliman_invoices';
+const INVOICES_KEY = 'mpl_invoices';
 
 export function useInvoices() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);

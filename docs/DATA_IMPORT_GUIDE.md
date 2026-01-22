@@ -32,7 +32,7 @@ Placez vos fichiers CSV dans le dossier `data-import/` à la racine du projet. L
 
 ### price_points.csv
 - Clé: `id`
-- Colonnes obligatoires: `id`, `product_id`, `brand` (ORLIMAN | THUASNE | DONJOY_ENOVIS | GIBAUD), `market`, `channel`, `currency` (ISO), `price` (>0), `price_type` (HT|TTC), `date` (ISO), `source_label`, `confidence` (0–100)
+- Colonnes obligatoires: `id`, `product_id`, `brand` (MPL | THUASNE | DONJOY_ENOVIS | GIBAUD), `market`, `channel`, `currency` (ISO), `price` (>0), `price_type` (HT|TTC), `date` (ISO), `source_label`, `confidence` (0–100)
 - Règles: `confidence` >= min confiance (par défaut 65) pour être exploité; `price` > 0
 
 ### fx_rates.csv (optionnel)
@@ -59,7 +59,7 @@ Placez vos fichiers CSV dans le dossier `data-import/` à la racine du projet. L
 
 ## Validation
 - Types numériques > 0, dates en ISO `YYYY-MM-DD`, devises en ISO 4217.
-- `zone` doit appartenir à {UE, DROM, HORS_UE}, `price_type` à {HT, TTC}, `brand` à {ORLIMAN, THUASNE, DONJOY_ENOVIS, GIBAUD}.
+- `zone` doit appartenir à {UE, DROM, HORS_UE}, `price_type` à {HT, TTC}, `brand` à {MPL, THUASNE, DONJOY_ENOVIS, GIBAUD}.
 
 ## Templates
 - Des templates CSV téléchargeables sont exposés dans la page `Imports` (section Ordre recommandé). Vous pouvez aussi les copier depuis `src/lib/csvSchemas.ts` (fonction `getCsvTemplate`).

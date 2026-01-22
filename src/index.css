@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    /* ORLIMAN light theme */
+    /* MPL light theme */
     --background: 220 33% 96%;
     --foreground: 222 40% 14%;
 
@@ -16,7 +16,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 40% 14%;
 
-    /* Primary: ORLIMAN Orange */
+    /* Primary: MPL Orange */
     --primary: 25 96% 54%;
     --primary-foreground: 0 0% 100%;
 
@@ -61,7 +61,7 @@
     --zone-drom: 280 67% 50%;
     --zone-hors-ue: 25 95% 53%;
 
-    /* Sidebar - ORLIMAN Navy Blue */
+    /* Sidebar - MPL Navy Blue */
     --sidebar-background: 220 60% 18%;
     --sidebar-foreground: 0 0% 100%;
     --sidebar-primary: 25 95% 53%;

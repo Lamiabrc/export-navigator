@@ -4,23 +4,23 @@
 - Mission : outil de contrôle/cohérence export (Incoterms, TVA DOM/DDP, coûts transport/douane/transit) + dashboards.
 - Données front uniquement (localStorage + JSON de référence). Aucune dépendance backend en V1.
 - Règle d’architecture : **zéro logique métier dans les pages** (`src/pages`). Les pages orchestrent l’UI et appellent des fonctions pures depuis `src/lib/*`.
-- Clefs de stockage : flows (`orliman_flows`), factures importées (`SAGE_INVOICES_KEY`), coûts réels (`COST_DOCS_KEY`), référentiel override (`reference_overrides`), factures upload locales historique (`orliman_invoices` existant).
+- Clefs de stockage : flows (`mpl_flows`), factures importées (`SAGE_INVOICES_KEY`), coûts réels (`COST_DOCS_KEY`), référentiel override (`reference_overrides`), factures upload locales historique (`mpl_invoices` existant).
 
 ## Pages et missions (1 phrase chacune) + sources de données (lecture/écriture)
 - `Auth.tsx` : écran de connexion local ; ne lit/écrit que l’état d’auth local (provider, pas de localStorage direct).
 - `Index.tsx` : redirection vers le dashboard ; aucun accès données.
-- `Dashboard.tsx` : vision directionnelle (KPIs synthèse flux) ; lecture `orliman_flows` via hook.
-- `ExportDashboard.tsx` : vue détaillée export avec exports CSV/JSON ; lecture `orliman_flows`.
-- `Flows.tsx` : catalogue des circuits et mind-map ; lecture données statiques circuits + dérivés `orliman_flows` si besoin.
-- `CircuitDetail.tsx` : fiche d’un circuit/flux, alerts & rapprochements ; lecture `orliman_flows`, `SAGE_INVOICES_KEY`, `COST_DOCS_KEY`, référentiel.
-- `Logistics.tsx` : suivi logistique/checklists ; lecture/écriture `orliman_flows`.
-- `Finance.tsx` : calcul charges/déductibilité ; lecture `orliman_flows` + référentiel règles.
-- `MarginAnalysis.tsx` : analyse marge/couverture ; lecture `orliman_flows`, rapprochements (`SAGE_INVOICES_KEY`, `COST_DOCS_KEY`).
+- `Dashboard.tsx` : vision directionnelle (KPIs synthèse flux) ; lecture `mpl_flows` via hook.
+- `ExportDashboard.tsx` : vue détaillée export avec exports CSV/JSON ; lecture `mpl_flows`.
+- `Flows.tsx` : catalogue des circuits et mind-map ; lecture données statiques circuits + dérivés `mpl_flows` si besoin.
+- `CircuitDetail.tsx` : fiche d’un circuit/flux, alerts & rapprochements ; lecture `mpl_flows`, `SAGE_INVOICES_KEY`, `COST_DOCS_KEY`, référentiel.
+- `Logistics.tsx` : suivi logistique/checklists ; lecture/écriture `mpl_flows`.
+- `Finance.tsx` : calcul charges/déductibilité ; lecture `mpl_flows` + référentiel règles.
+- `MarginAnalysis.tsx` : analyse marge/couverture ; lecture `mpl_flows`, rapprochements (`SAGE_INVOICES_KEY`, `COST_DOCS_KEY`).
 - `Simulator.tsx` : simulation coûts/marge ; lecture référentiel, aucune écriture.
 - `Guide.tsx` : guide opérationnel ; lecture référentiel (incoterms/destinations).
 - `ReferenceLibrary.tsx` : consultation/édition du référentiel ; lecture/écriture référentiel (`reference_overrides`).
 - `Settings.tsx` : paramètres, import/export référentiel ; lecture/écriture référentiel (`reference_overrides`).
-- `Invoices.tsx` : contrôle factures + rapprochement ; lecture/écriture `SAGE_INVOICES_KEY`, `COST_DOCS_KEY`, dérivés `orliman_flows`.
+- `Invoices.tsx` : contrôle factures + rapprochement ; lecture/écriture `SAGE_INVOICES_KEY`, `COST_DOCS_KEY`, dérivés `mpl_flows`.
 - `Imports.tsx` : import CSV factures Sage et coûts réels ; lecture/écriture `SAGE_INVOICES_KEY`, `COST_DOCS_KEY`.
 - `NotFound.tsx` : 404, aucune donnée.
 

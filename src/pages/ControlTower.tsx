@@ -44,7 +44,7 @@ type CompetitionRow = {
   sku: string;
   label: string | null;
   territory_code: string | null;
-  orliman: number | null;
+  mpl: number | null;
   bestCompetitor: number | null;
   bestName: string | null;
   gapPct: number | null;
@@ -184,7 +184,7 @@ export default function ControlTower() {
 
   // ✅ Destinations : on réutilise territoryCoords.ts (plus “inutile”)
   const DESTINATIONS: Destination[] = React.useMemo(() => {
-    const hub = TERRITORY_COORDS.HUB; // Orliman FR
+    const hub = TERRITORY_COORDS.HUB; // MPL Conseil Export FR
     return [
       { code: "FR", name: "Metropole", lat: hub?.lat ?? 48.86, lon: hub?.lng ?? 2.35, color: COLORS.FR },
       { code: "GP", name: "Guadeloupe", lat: TERRITORY_COORDS.GP?.lat ?? 16.265, lon: TERRITORY_COORDS.GP?.lng ?? -61.551, color: COLORS.GP },
@@ -294,7 +294,7 @@ export default function ControlTower() {
 
         const rows: CompetitionRow[] = (data || []).map((row: any) => {
           const territory = row.territory_code || "FR";
-          const orliman =
+          const mpl =
             territory === "FR"
               ? Number(row.plv_metropole_ttc) || null
               : Number(row.plv_om_ttc) || Number(row.plv_metropole_ttc) || null;
@@ -306,7 +306,7 @@ export default function ControlTower() {
           ].filter((c) => c.price !== null) as { name: string; price: number }[];
 
           const best = competitors.length ? competitors.reduce((m, c) => (c.price < m.price ? c : m), competitors[0]) : null;
-          const gapPct = orliman && best ? ((orliman - best.price) / best.price) * 100 : null;
+          const gapPct = mpl && best ? ((mpl - best.price) / best.price) * 100 : null;
 
           let status: CompetitionRow["status"] = "no_data";
           if (gapPct !== null) {
@@ -319,7 +319,7 @@ export default function ControlTower() {
             sku: row.sku,
             label: row.label,
             territory_code: territory,
-            orliman,
+            mpl,
             bestCompetitor: best?.price ?? null,
             bestName: best?.name ?? null,
             gapPct,

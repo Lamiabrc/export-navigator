@@ -1,9 +1,9 @@
-export type Brand = "ORLIMAN" | "THUASNE" | "DONJOY_ENOVIS" | "GIBAUD" | "AUTRE";
+export type Brand = "MPL" | "THUASNE" | "DONJOY_ENOVIS" | "GIBAUD" | "AUTRE";
 
 export type Competitor = {
   id: string;
   name: string;
-  brand_code: "ORLIMAN" | "THUASNE" | "DONJOY_ENOVIS" | "GIBAUD" | "AUTRE";
+  brand_code: "MPL" | "THUASNE" | "DONJOY_ENOVIS" | "GIBAUD" | "AUTRE";
   notes?: string;
 };
 
@@ -57,7 +57,7 @@ export type PositionRow = {
   product: Product;
   market: string;
   channel: string;
-  orlimanPrice?: number;
+  mplPrice?: number;
   bestCompetitor?: { brand: PricePoint["brand"]; price: number };
   avgCompetitorPrice?: number;
   gapBestPct?: number;

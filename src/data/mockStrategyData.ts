@@ -32,8 +32,8 @@ export const competitors: Competitor[] = [
     markets: ["FR", "DROM", "IT"],
   },
   {
-    id: "orliman",
-    name: "ORLIMAN",
+    id: "mpl",
+    name: "MPL",
     positioning: "Equilibre prix / innovation, focus DROM",
     strengths: ["Agilite DROM", "Mix remboursement / sport", "Relations grossistes"],
     weaknesses: ["Visibilite marque", "Equipe reduite"],
@@ -78,14 +78,14 @@ export const priceObservations: PriceObservation[] = [
   },
   {
     id: "obs-4",
-    competitorId: "orliman",
+    competitorId: "mpl",
     category: "Chevillere",
     productName: "Chevillere premium",
     market: "DROM",
     currency: "EUR",
     price: 72,
     date: "2025-01-10",
-    sourceLabel: "Orliman distrib",
+    sourceLabel: "MPL Conseil Export distrib",
   },
 ];
 

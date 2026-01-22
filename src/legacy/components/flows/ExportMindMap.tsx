@@ -187,7 +187,7 @@ const defaultDestinations: DestinationNode[] = [
   }
 ];
 
-const STORAGE_KEY = 'orliman_mindmap_data';
+const STORAGE_KEY = 'mpl_mindmap_data';
 
 const iconComponents = {
   truck: Truck,

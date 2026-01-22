@@ -12,7 +12,7 @@ type GraphRangeResponse = {
 // Config
 // ─────────────────────────────────────────────────────────────
 const GRAPH_TOKEN = process.env.GRAPH_TOKEN;
-// ex: "orlimanfr.sharepoint.com:/sites/ADV274:"  (format Graph "site path")
+// ex: "mplfr.sharepoint.com:/sites/ADV274:"  (format Graph "site path")
 const GRAPH_SITE_PATH = process.env.GRAPH_SITE_PATH;
 // ex: "/Documents/Exports/ton-fichier.xlsx"
 const GRAPH_FILE_PATH = process.env.GRAPH_FILE_PATH;
@@ -72,7 +72,7 @@ function requireConfig() {
     throw new Error("Missing GRAPH_TOKEN (Microsoft Graph bearer token).");
   }
   if (!GRAPH_SITE_PATH) {
-    throw new Error("Missing GRAPH_SITE_PATH (e.g. orlimanfr.sharepoint.com:/sites/ADV274:).");
+    throw new Error("Missing GRAPH_SITE_PATH (e.g. mplfr.sharepoint.com:/sites/ADV274:).");
   }
   if (!GRAPH_FILE_PATH) {
     throw new Error("Missing GRAPH_FILE_PATH (e.g. /Documents/Exports/file.xlsx).");

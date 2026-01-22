@@ -7,7 +7,7 @@ export type TerritoryCoord = {
 
 // Source de vérité minimale pour les territoires export / DROM + quelques pays UE
 export const TERRITORY_COORDS: Record<string, TerritoryCoord> = {
-  HUB: { code: "HUB", name: "Orliman FR", lat: 48.86, lng: 2.35 },
+  HUB: { code: "HUB", name: "MPL Conseil Export FR", lat: 48.86, lng: 2.35 },
   GP: { code: "GP", name: "Guadeloupe", lat: 16.25, lng: -61.55 },
   MQ: { code: "MQ", name: "Martinique", lat: 14.64, lng: -61.02 },
   GF: { code: "GF", name: "Guyane", lat: 3.93, lng: -53.12 },

@@ -2,8 +2,8 @@
  * @type {import('electron-builder').Configuration}
  */
 module.exports = {
-  appId: 'com.orliman.export-manager',
-  productName: 'ORLIMAN Export Manager',
+  appId: 'com.mpl.export-manager',
+  productName: 'MPL Export Manager',
   directories: {
     buildResources: 'electron',
     output: 'release'
@@ -27,7 +27,7 @@ module.exports = {
     allowToChangeInstallationDirectory: true,
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
-    shortcutName: 'ORLIMAN Export Manager',
+    shortcutName: 'MPL Export Manager',
     installerIcon: 'electron/icon.ico',
     uninstallerIcon: 'electron/icon.ico',
     installerHeaderIcon: 'electron/icon.ico',

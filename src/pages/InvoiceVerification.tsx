@@ -212,13 +212,13 @@ function detectTotalLignesHT(rawText: string): number | null {
 }
 
 /**
- * Fallback Orliman (robuste) :
+ * Fallback MPL Conseil Export (robuste) :
  * - EAN 13 OU 14 chiffres ✅
  * - multi-pages ✅
  * - qty = "1UN" ou "1 UN" ✅
  * - Total HT = avant-dernier montant (dernier = Taxe souvent 0,00)
  */
-function parseOrlimanLineItemsFromRawText(rawText: string) {
+function parseMPL Conseil ExportLineItemsFromRawText(rawText: string) {
   const lines = (rawText || "")
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -418,8 +418,8 @@ export default function InvoiceVerification() {
         if (tl) (invoice as any).goodsLinesHT = tl;
       }
 
-      // ✅ Fallback Orliman : récupérer toutes les lignes produit (multi-pages)
-      const fallbackItems = parseOrlimanLineItemsFromRawText(rawText);
+      // ✅ Fallback MPL Conseil Export : récupérer toutes les lignes produit (multi-pages)
+      const fallbackItems = parseMPL Conseil ExportLineItemsFromRawText(rawText);
       const currentItems: any[] = (((invoice as any).lineItems || []) as any[]) || [];
 
       const sumItems = (arr: any[]) =>

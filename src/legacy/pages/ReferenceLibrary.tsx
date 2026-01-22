@@ -537,7 +537,7 @@ export default function ReferenceLibrary() {
 
       await saveLogisticsMode(logisticModes[0]);
 
-      toast.success('Préremplissage Orliman appliqué (Supabase, sans doublons)');
+      toast.success('Préremplissage MPL Conseil Export appliqué (Supabase, sans doublons)');
       await fetchAll(false);
     } catch (e: any) {
       console.error(e);
@@ -873,7 +873,7 @@ export default function ReferenceLibrary() {
             </Button>
             <Button variant="secondary" onClick={handlePrefill} disabled={loading}>
               <Sparkles className="h-4 w-4 mr-2" />
-              Préremplir (Orliman)
+              Préremplir (MPL Conseil Export)
             </Button>
             <Button variant="outline" onClick={handleExport}>
               <Download className="h-4 w-4 mr-2" />

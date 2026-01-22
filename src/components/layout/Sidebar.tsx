@@ -179,7 +179,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
       <nav className="flex-1 space-y-4 px-3 py-4 overflow-y-auto">
         {navigation.map((section) => {
           const visibleItems = section.items.filter((it) => {
-            if (it.adminOnly && user?.email !== "lamia.brechetighil@orliman.fr") return false;
+            if (it.adminOnly && user?.email !== "lamia.brechetighil@mpl.fr") return false;
             return true;
           });
           if (!visibleItems.length) return null;

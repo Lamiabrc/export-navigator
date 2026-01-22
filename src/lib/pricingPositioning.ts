@@ -27,22 +27,22 @@ const selectPrice = (points: PricePoint[]) => {
 };
 
 /**
- * Essaie de déduire un "prix Orliman" depuis la fiche produit DB
+ * Essaie de déduire un "prix MPL Conseil Export" depuis la fiche produit DB
  * (sans imposer un schéma strict : on lit plusieurs clés possibles).
  *
  * On garde ça volontairement permissif car ton type `Product` côté pricing
  * n’est pas forcément le même que ta table `products`.
  */
-const getFallbackOrlimanPriceFromProduct = (product: Product): number | undefined => {
+const getFallbackMPL Conseil ExportPriceFromProduct = (product: Product): number | undefined => {
   const p: any = product as any;
 
   // Priorités (ajuste si besoin) :
-  // 1) un champ "orlimanPrice" si tu l’ajoutes dans le futur
+  // 1) un champ "mplPrice" si tu l’ajoutes dans le futur
   // 2) tarif_catalogue_2025 (table products)
   // 3) tarif_lppr_eur (si tu veux piloter par LPPR)
   // 4) catalogPrice / price (si ton type pricing le contient)
   return (
-    safeNumber(p?.orlimanPrice) ??
+    safeNumber(p?.mplPrice) ??
     safeNumber(p?.tarif_catalogue_2025) ??
     safeNumber(p?.tarif_lppr_eur) ??
     safeNumber(p?.catalogPrice) ??
@@ -63,13 +63,13 @@ export const computeAvgCompetitorPrice = (points: PricePoint[]) => {
 };
 
 export const computeGaps = (
-  orlimanPrice?: number,
+  mplPrice?: number,
   best?: { brand: Brand; price: number },
   avg?: number
 ): { gapBestPct?: number; gapAvgPct?: number } => {
-  if (orlimanPrice === undefined) return {};
-  const gapBestPct = best ? ((orlimanPrice - best.price) / best.price) * 100 : undefined;
-  const gapAvgPct = avg ? ((orlimanPrice - avg) / avg) * 100 : undefined;
+  if (mplPrice === undefined) return {};
+  const gapBestPct = best ? ((mplPrice - best.price) / best.price) * 100 : undefined;
+  const gapAvgPct = avg ? ((mplPrice - avg) / avg) * 100 : undefined;
   return { gapBestPct, gapAvgPct };
 };
 
@@ -94,7 +94,7 @@ export const recommendAction = (
   if (positioning === "no_data") {
     return {
       recommendation: "Collecter données",
-      hint: "Pas assez de prix concurrents ou prix Orliman manquant",
+      hint: "Pas assez de prix concurrents ou prix MPL Conseil Export manquant",
     };
   }
 
@@ -149,22 +149,22 @@ export const groupByProductMarketChannel = (
       byMarketChannel.set(key, arr);
     });
 
-    // ✅ Fallback ORLIMAN si absent (prix “catalogue”)
-    const fallbackOrlimanPrice = getFallbackOrlimanPriceFromProduct(product);
+    // ✅ Fallback MPL si absent (prix “catalogue”)
+    const fallbackMPL Conseil ExportPrice = getFallbackMPL Conseil ExportPriceFromProduct(product);
 
-    if (fallbackOrlimanPrice !== undefined) {
-      // Pour chaque couple market/channel existant : si pas de ORLIMAN, on injecte un point synthétique
+    if (fallbackMPL Conseil ExportPrice !== undefined) {
+      // Pour chaque couple market/channel existant : si pas de MPL, on injecte un point synthétique
       byMarketChannel.forEach((points, key) => {
-        const hasOrliman = points.some((p) => p.brand === "ORLIMAN");
-        if (hasOrliman) return;
+        const hasMPL Conseil Export = points.some((p) => p.brand === "MPL");
+        if (hasMPL Conseil Export) return;
 
         const [market, channel] = key.split("__");
 
         points.push({
-          id: `synthetic-orliman-${product.id}-${market}-${channel}`,
+          id: `synthetic-mpl-${product.id}-${market}-${channel}`,
           productId: product.id,
-          brand: "ORLIMAN",
-          price: fallbackOrlimanPrice,
+          brand: "MPL",
+          price: fallbackMPL Conseil ExportPrice,
           market,
           channel,
           confidence: 90,
@@ -178,10 +178,10 @@ export const groupByProductMarketChannel = (
         const key = `DEFAULT__DEFAULT`;
         byMarketChannel.set(key, [
           {
-            id: `synthetic-orliman-${product.id}-DEFAULT-DEFAULT`,
+            id: `synthetic-mpl-${product.id}-DEFAULT-DEFAULT`,
             productId: product.id,
-            brand: "ORLIMAN",
-            price: fallbackOrlimanPrice,
+            brand: "MPL",
+            price: fallbackMPL Conseil ExportPrice,
             market: "DEFAULT",
             channel: "DEFAULT",
             confidence: 80,
@@ -195,14 +195,14 @@ export const groupByProductMarketChannel = (
     byMarketChannel.forEach((points, key) => {
       const [market, channel] = key.split("__");
 
-      const orlimanPoints = points.filter((p) => p.brand === "ORLIMAN");
-      const competitorPoints = points.filter((p) => p.brand !== "ORLIMAN");
+      const mplPoints = points.filter((p) => p.brand === "MPL");
+      const competitorPoints = points.filter((p) => p.brand !== "MPL");
 
-      const chosenOrliman = selectPrice(orlimanPoints);
+      const chosenMPL Conseil Export = selectPrice(mplPoints);
       const best = computeBestCompetitorPrice(competitorPoints);
       const avg = computeAvgCompetitorPrice(competitorPoints);
 
-      const { gapBestPct, gapAvgPct } = computeGaps(chosenOrliman?.price, best, avg);
+      const { gapBestPct, gapAvgPct } = computeGaps(chosenMPL Conseil Export?.price, best, avg);
       const positioning = classifyPositioning(gapAvgPct, config);
 
       const { recommendation, hint } = recommendAction(
@@ -223,7 +223,7 @@ export const groupByProductMarketChannel = (
         product,
         market,
         channel,
-        orlimanPrice: chosenOrliman?.price,
+        mplPrice: chosenMPL Conseil Export?.price,
         bestCompetitor: best,
         avgCompetitorPrice: avg,
         gapBestPct,

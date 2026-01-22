@@ -7,8 +7,8 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { BrandLogo } from '@/components/BrandLogo';
 
-const FORCED_EMAIL = 'lamia.brechetighil@orliman.fr';
-const DEFAULT_PASSWORD_HINT = 'Orliman2025!';
+const FORCED_EMAIL = 'lamia.brechetighil@mpl.fr';
+const DEFAULT_PASSWORD_HINT = 'MPL Conseil Export2025!';
 
 export default function AuthPage() {
   const [email] = useState(FORCED_EMAIL);
@@ -53,7 +53,7 @@ export default function AuthPage() {
             Connexion
           </h1>
           <p className="text-center text-muted-foreground mb-6">
-            Acces reserve - compte administrateur ORLIMAN
+            Acces reserve - compte administrateur MPL
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">

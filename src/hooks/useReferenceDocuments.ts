@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { ReferenceDocument, DocumentCategory } from '@/types/referenceDocument';
 import { builtInDocuments, generateDocumentId } from '@/data/referenceDocuments';
 
-const STORAGE_KEY = 'orliman_reference_documents';
+const STORAGE_KEY = 'mpl_reference_documents';
 
 export function useReferenceDocuments() {
   const [documents, setDocuments] = useState<ReferenceDocument[]>([]);
