@@ -1,23 +1,90 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BrandLogo } from "@/components/BrandLogo";
 
+function getErrorMessage(err: unknown): string {
+  if (!err) return "Une erreur inconnue est survenue.";
+  if (typeof err === "string") return err;
+  if (err instanceof Error) return err.message;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const anyErr = err as any;
+  if (typeof anyErr?.message === "string") return anyErr.message;
+  return "Une erreur est survenue. Réessaie.";
+}
+
 export default function SetPassword() {
   const { isAuthenticated, isLoading, setPassword } = useAuth();
+
   const [p1, setP1] = useState("");
   const [p2, setP2] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  const [linkLoading, setLinkLoading] = useState(true);
+  const [linkOk, setLinkOk] = useState(false);
+
   const navigate = useNavigate();
 
-  useEffect(() => {
-    // Si l'utilisateur arrive depuis l'email, la session se crée automatiquement via l'URL,
-    // puis isAuthenticated passera à true.
+  const urlInfo = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      code: params.get("code"),
+      errorDesc: params.get("error_description") || params.get("error"),
+    };
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+
+    const init = async () => {
+      setError(null);
+      setLinkLoading(true);
+
+      try {
+        if (!SUPABASE_ENV_OK) throw new Error("Supabase non configuré.");
+
+        if (urlInfo.errorDesc) {
+          throw new Error(decodeURIComponent(urlInfo.errorDesc));
+        }
+
+        // ✅ Cas principal: /set-password?code=...
+        if (urlInfo.code) {
+          const { error: exErr } = await supabase.auth.exchangeCodeForSession(urlInfo.code);
+          if (exErr) throw exErr;
+
+          // Nettoie l’URL après échange (évite re-exchange au refresh)
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        const { data, error: sessErr } = await supabase.auth.getSession();
+        if (sessErr) throw sessErr;
+
+        if (!alive) return;
+        const ok = !!data.session?.user;
+        setLinkOk(ok);
+        setLinkLoading(false);
+
+        if (!ok) {
+          setError("Lien invalide ou expiré. Redemande un lien.");
+        }
+      } catch (e) {
+        if (!alive) return;
+        setLinkOk(false);
+        setLinkLoading(false);
+        setError(getErrorMessage(e));
+      }
+    };
+
+    void init();
+    return () => {
+      alive = false;
+    };
+  }, [urlInfo.code, urlInfo.errorDesc]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -25,7 +92,10 @@ export default function SetPassword() {
 
     if (p1.length < 8) return setError("Mot de passe trop court (min 8).");
     if (p1 !== p2) return setError("Les mots de passe ne correspondent pas.");
-    if (!isAuthenticated) return setError("Lien invalide ou expiré. Redemande un lien.");
+
+    if (!linkOk || !isAuthenticated) {
+      return setError("Session manquante. Ouvre à nouveau le lien reçu par email ou redemande un lien.");
+    }
 
     const { error } = await setPassword(p1);
     if (error) return setError(error);
@@ -34,8 +104,12 @@ export default function SetPassword() {
     navigate("/hub", { replace: true });
   };
 
-  if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50">Chargement…</div>;
+  if (isLoading || linkLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50">
+        Chargement…
+      </div>
+    );
   }
 
   return (
@@ -52,8 +126,19 @@ export default function SetPassword() {
 
         <h1 className="text-xl font-semibold">Choisir un mot de passe</h1>
 
+        {error ? <p className="text-sm text-red-300">{error}</p> : null}
+
         {done ? (
           <p>Mot de passe défini ✅</p>
+        ) : !linkOk ? (
+          <div className="space-y-3">
+            <Button className="w-full" variant="outline" onClick={() => navigate("/forgot-password", { replace: true })}>
+              Redemander un lien
+            </Button>
+            <Button className="w-full" onClick={() => navigate("/login", { replace: true })}>
+              Retour login
+            </Button>
+          </div>
         ) : (
           <form onSubmit={onSubmit} className="space-y-3">
             <Input
@@ -72,8 +157,9 @@ export default function SetPassword() {
               placeholder="Confirmer le mot de passe"
               className="bg-slate-950 border-slate-800 text-white"
             />
-            {error && <p className="text-sm text-red-300">{error}</p>}
-            <Button className="w-full" type="submit">Valider</Button>
+            <Button className="w-full" type="submit">
+              Valider
+            </Button>
           </form>
         )}
       </div>

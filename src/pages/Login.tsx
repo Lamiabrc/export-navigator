@@ -17,11 +17,15 @@ function getErrorMessage(err: unknown): string {
   if (!err) return "Une erreur inconnue est survenue.";
   if (typeof err === "string") return err;
   if (err instanceof Error) return err.message;
-  // Supabase-like errors sometimes have { message }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const anyErr = err as any;
   if (typeof anyErr?.message === "string") return anyErr.message;
   return "Une erreur est survenue. Réessaie.";
+}
+
+function safeNextPath(candidate: unknown, fallback = "/hub") {
+  const v = typeof candidate === "string" ? candidate : "";
+  return v && v.startsWith("/") ? v : fallback;
 }
 
 export default function Login() {
@@ -35,12 +39,21 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  // Permet de faire /welcome?next=/hub ou /login?next=/hub
   const nextPath = useMemo(() => {
     const params = new URLSearchParams(location.search);
-    const next = params.get("next");
-    return next && next.startsWith("/") ? next : "/hub";
-  }, [location.search]);
+    const qNext = params.get("next");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stateAny = location.state as any;
+    const stateFromPath = stateAny?.from?.pathname;
+    const stateFromSearch = stateAny?.from?.search || "";
+    const stateNext = stateAny?.next;
+
+    if (qNext) return safeNextPath(qNext, "/hub");
+    if (stateFromPath) return safeNextPath(`${stateFromPath}${stateFromSearch}`, "/hub");
+    if (stateNext) return safeNextPath(stateNext, "/hub");
+    return "/hub";
+  }, [location.search, location.state]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -72,14 +85,11 @@ export default function Login() {
   };
 
   const goForgotPassword = () => {
-    // tu peux aussi passer l’email en query si tu veux
-    // navigate(`/forgot-password?email=${encodeURIComponent(email.trim().toLowerCase())}`);
     navigate("/forgot-password");
   };
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-slate-950 text-slate-50">
-      {/* VISUEL GAUCHE */}
       <div className="relative hidden lg:block">
         <img
           src="/assets/sea-login.jpg"
@@ -103,7 +113,6 @@ export default function Login() {
         </div>
       </div>
 
-      {/* LOGIN */}
       <div className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md space-y-6">
           <BrandLogo
@@ -158,10 +167,7 @@ export default function Login() {
                     Mot de passe oublié / Première connexion
                   </button>
 
-                  {/* Si tu veux, tu peux afficher la destination */}
-                  <span className="text-xs text-slate-500">
-                    → {nextPath}
-                  </span>
+                  <span className="text-xs text-slate-500">→ {nextPath}</span>
                 </div>
 
                 {error && (

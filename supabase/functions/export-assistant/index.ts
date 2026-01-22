@@ -1,4 +1,3 @@
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -7,168 +6,142 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type DestinationKey =
-  | "UE"
-  | "HORS_UE"
-  | "MONACO"
-  | "PTOM_NOUVELLE_CALEDONIE"
-  | `DROM_${string}`;
-
 type AssistantRequest = {
   question: string;
 
-  // contexte optionnel (pour enrichir la réponse)
-  destination?: DestinationKey | string | null;
+  // contexte UI
+  destination?: string | null; // "Guadeloupe" ou "GP"
   incoterm?: string | null;
+  transport_mode?: string | null;
 
+  // contexte DB (optionnel)
   client_id?: string | null;
   product_ids?: string[] | null;
 
-  // filtre docs
+  // période (optionnel) pour stats ventes/coûts
+  from?: string | null; // YYYY-MM-DD
+  to?: string | null;   // YYYY-MM-DD
+
+  // RAG
+  match_count?: number;
+  strict_docs_only?: boolean;
   doc_filter?: {
     doc_type?: string | null;
     tags?: string[] | null;
     export_zone?: string | null;
     incoterm?: string | null;
+    territory_code?: string | null;
+    destination?: string | null;
   };
+};
 
-  // options
-  match_count?: number;
-  strict_docs_only?: boolean; // true => pas de fallback KB
+type RagMatch = {
+  document_id: string;
+  title: string;
+  doc_type: string | null;
+  published_at: string | null;
+  chunk_index: number;
+  content: string;
+  similarity: number;
 };
 
 function json(status: number, data: unknown) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      ...corsHeaders,
-    },
+    headers: { "content-type": "application/json; charset=utf-8", ...corsHeaders },
   });
 }
 
-function normalizeDestination(raw?: string | null): DestinationKey {
-  const x = (raw ?? "").toUpperCase().trim();
-  if (!x) return "HORS_UE";
-  if (x === "UE" || x.includes("EU")) return "UE";
-  if (x.includes("MONACO")) return "MONACO";
-  if (x.includes("NOUVELLE") || x.includes("CALEDONIE") || x.includes("NC")) return "PTOM_NOUVELLE_CALEDONIE";
-  if (x.startsWith("DROM_")) return x as DestinationKey;
-  if (x.includes("DROM")) return "DROM_OUTRE-MER";
-  return "HORS_UE";
+function normStr(x: any) {
+  return String(x ?? "").trim();
 }
 
-/**
- * ==== TON "KB destination" (fallback) ====
- * (reprend la logique de ton snippet, sans la partie "invoice" et en orientant ventes/charges/OM/taxes)
- */
-function kbForDestination(destination: DestinationKey) {
-  const commonRegulatory = [
-    "Dispositifs médicaux : vérifier statut, étiquetage, notice/IFU, langue exigée, traçabilité, vigilance.",
-    "Vérifier si un importateur/distributeur local est requis (responsabilités, réclamations, vigilance).",
-    "Ne jamais figer une exigence réglementaire sans vérifier la règle locale (autorité sanitaire + exigences de mise sur le marché).",
-  ];
-
-  const commonTransport = [
-    "Clarifier l’Incoterm + le lieu (EXW/FCA/DAP/DDP...) : qui paie transport, assurance, taxes/droits, dédouanement ?",
-    "Toujours verrouiller HS code + origine + valeur : causes n°1 de blocages/coûts à l’import.",
-    "Preuve de transport (AWB/BL/CMR) + packing list propre (poids, volumes, nb colis).",
-  ];
-
-  const commonDocs = [
-    "Facture commerciale (mentions complètes) + packing list",
-    "Document transport (AWB/BL/CMR) + preuve d’expédition/livraison",
-    "Origine (si utile) + HS code (au moins en interne)",
-    "Certificats/attestations de conformité selon produit et destination",
-  ];
-
-  const commonRisks = [
-    "Incoterm flou → litiges et surcoûts (transport/taxes/droits)",
-    "HS/origine/valeur incohérents → retards, taxes imprévues, contrôles",
-    "Documents incomplets → blocage douane/transporteur",
-    "Étiquetage/notice non conforme → refus distribution/mise sur le marché",
-  ];
-
-  const base = {
-    regulatory_basics: commonRegulatory,
-    taxes_and_costs_basics: [
-      "Ne pas annoncer de taux fixe sans validation : taxes/droits/TVA varient selon destination, incoterm, statut client, classification.",
-      "Point clé : définir qui est l’importateur de référence (IOR) et qui supporte taxes/droits (DAP vs DDP).",
-      "Pour ta logique interne : ventes, charges (transport, assurance), OM/OMR, TVA, droits → doivent être séparés.",
-    ],
-    transport_customs_basics: commonTransport,
-    documents_checklist: commonDocs,
-    risks_and_pitfalls: commonRisks,
-    next_steps: [
-      "Confirmer destination exacte + incoterm + lieu",
-      "Valider HS code + origine + valeur + IOR",
-      "Préparer pack documentaire (facture/packing/transport/conformité) + preuves",
-      "Verrouiller qui paie taxes/droits et qui dédouane (client/transitaire/vous)",
-    ],
-  };
-
-  if (destination.startsWith("DROM_")) {
-    return {
-      ...base,
-      taxes_and_costs_basics: [
-        "Métropole → DROM : flux à sécuriser (preuves d’expédition/livraison + traitement fiscal selon cas).",
-        "Octroi de mer (OM/OMR) : taxe spécifique DROM, à anticiper (qui paie ? selon incoterm).",
-        ...base.taxes_and_costs_basics,
-      ],
-    };
-  }
-
-  if (destination === "MONACO") {
-    return {
-      ...base,
-      taxes_and_costs_basics: [
-        "Monaco : traitement souvent proche France (à valider selon cas réel : B2B/B2C, lieu livraison, preuves).",
-        ...base.taxes_and_costs_basics,
-      ],
-    };
-  }
-
-  if (destination === "UE") {
-    return {
-      ...base,
-      taxes_and_costs_basics: [
-        "UE : pas de dédouanement ; focus TVA intracom (statut client + preuve transport) + conformité/étiquetage/langue.",
-        ...base.taxes_and_costs_basics,
-      ],
-    };
-  }
-
-  if (destination === "PTOM_NOUVELLE_CALEDONIE") {
-    return {
-      ...base,
-      taxes_and_costs_basics: [
-        "Nouvelle-Calédonie (PTOM) : flux à traiter comme ‘hors UE’ côté formalités (souvent).",
-        "Point clé : IOR + taxes/droits à l’arrivée (DAP vs DDP).",
-        ...base.taxes_and_costs_basics,
-      ],
-    };
-  }
-
-  // HORS_UE
-  return {
-    ...base,
-    taxes_and_costs_basics: [
-      "Hors UE : export souvent HT si preuve d’export ; taxes/droits payés à l’import selon pays.",
-      "DDP hors UE : attention immatriculation/IOR (risque de blocage si non cadré).",
-      ...base.taxes_and_costs_basics,
-    ],
-  };
+function normalizeIncoterm(x?: string | null) {
+  const v = normStr(x).toUpperCase();
+  return v || null;
 }
 
-async function embedQueryOpenAI(apiKey: string, model: string, text: string) {
+function stripAccents(s: string) {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+const TERRITORY_ALIASES: Record<string, string> = {
+  FR: "FR",
+  METROPOLE: "FR",
+  "MÉTROPOLE": "FR",
+  FRANCE: "FR",
+
+  GP: "GP",
+  GUADELOUPE: "GP",
+
+  MQ: "MQ",
+  MARTINIQUE: "MQ",
+
+  GF: "GF",
+  GUYANE: "GF",
+  "GUYANE FRANCAISE": "GF",
+  "GUYANE FRANÇAISE": "GF",
+
+  RE: "RE",
+  REUNION: "RE",
+  "RÉUNION": "RE",
+
+  YT: "YT",
+  MAYOTTE: "YT",
+
+  BL: "BL",
+  "SAINT BARTHELEMY": "BL",
+  "SAINT-BARTHELEMY": "BL",
+  "SAINT BARTHELEMY ": "BL",
+  "SAINT BARTH": "BL",
+  "SAINT-BARTH": "BL",
+
+  MF: "MF",
+  "SAINT MARTIN": "MF",
+  "SAINT-MARTIN": "MF",
+
+  SPM: "SPM",
+  "SAINT PIERRE ET MIQUELON": "SPM",
+  "SAINT-PIERRE-ET-MIQUELON": "SPM",
+};
+
+function normalizeTerritoryCode(raw?: string | null): string | null {
+  if (!raw) return null;
+  const cleaned = stripAccents(raw).toUpperCase().trim();
+  // si "Guadeloupe" -> "GUADELOUPE"
+  if (TERRITORY_ALIASES[cleaned]) return TERRITORY_ALIASES[cleaned];
+  // si l’utilisateur met "DROM_GP" etc.
+  if (cleaned.startsWith("DROM_")) return cleaned.slice(5);
+  // fallback: si c’est déjà un code
+  if (/^[A-Z]{2,3}$/.test(cleaned)) return cleaned;
+  return null;
+}
+
+function classifyExportZone(territoryCode: string | null) {
+  if (!territoryCode) return null;
+  const drom = new Set(["GP", "MQ", "GF", "RE", "YT"]);
+  const com = new Set(["BL", "MF", "SPM"]);
+  if (territoryCode === "FR") return "METROPOLE";
+  if (drom.has(territoryCode)) return "DROM";
+  if (com.has(territoryCode)) return "COM";
+  return "AUTRE";
+}
+
+function extractHsCandidates(text: string) {
+  const matches = text.match(/\b\d{4,10}\b/g) || [];
+  // uniq
+  return Array.from(new Set(matches.map((m) => m.trim())));
+}
+
+async function embedOpenAI(apiKey: string, model: string, input: string | string[]) {
   const res = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model, input: text }),
+    body: JSON.stringify({ model, input }),
   });
   if (!res.ok) throw new Error(await res.text());
   const data = await res.json();
-  return data.data[0].embedding as number[];
+  return data.data.map((d: any) => d.embedding as number[]);
 }
 
 async function chatOpenAI(apiKey: string, model: string, system: string, user: string) {
@@ -177,13 +150,24 @@ async function chatOpenAI(apiKey: string, model: string, system: string, user: s
     headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
-      messages: [{ role: "system", content: system }, { role: "user", content: user }],
       temperature: 0.2,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
     }),
   });
   if (!res.ok) throw new Error(await res.text());
   const data = await res.json();
   return data.choices?.[0]?.message?.content ?? "";
+}
+
+function safeJsonParse(s: string) {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
 }
 
 Deno.serve(async (req) => {
@@ -199,6 +183,7 @@ Deno.serve(async (req) => {
 
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return json(500, { error: "Missing supabase env" });
 
+  // ✅ service role: accès tables + docs (plus simple pour toi maintenant)
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
   let body: AssistantRequest;
@@ -208,118 +193,309 @@ Deno.serve(async (req) => {
     return json(400, { error: "Invalid JSON body" });
   }
 
-  const question = (body?.question ?? "").trim();
+  const question = normStr(body?.question);
   if (!question) return json(400, { error: "question is required" });
 
-  const destination = normalizeDestination(body.destination ?? null);
-  const incoterm = (body.incoterm ?? null)?.toUpperCase() ?? null;
+  const territoryCode = normalizeTerritoryCode(body.destination ?? null);
+  const exportZone = classifyExportZone(territoryCode);
+  const incoterm = normalizeIncoterm(body.incoterm ?? null);
 
-  // --- Enrichissement DB (optionnel)
+  // période par défaut : 30 jours
+  const today = new Date();
+  const dTo = body.to ? new Date(body.to) : today;
+  const dFrom = body.from
+    ? new Date(body.from)
+    : new Date(dTo.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const from = dFrom.toISOString().slice(0, 10);
+  const to = dTo.toISOString().slice(0, 10);
+
+  // -------------------------
+  // 1) DB context (produits / clients / ventes / coûts / taxes)
+  // -------------------------
+  const hsCandidates = extractHsCandidates(question);
+  const hs4FromQuestion = hsCandidates.length ? hsCandidates[0].slice(0, 4) : null;
+
+  // client
   let client: any = null;
   if (body.client_id) {
     const { data } = await supabase.from("clients").select("*").eq("id", body.client_id).maybeSingle();
     client = data ?? null;
   }
 
+  // produits: si product_ids fournis -> ceux-là, sinon recherche légère par HS / mots-clés
   let products: any[] = [];
   if (body.product_ids?.length) {
     const { data } = await supabase.from("products").select("*").in("id", body.product_ids);
     products = data ?? [];
+  } else {
+    // recherche “safe” : HS d’abord
+    if (hs4FromQuestion) {
+      const { data } = await supabase
+        .from("products")
+        .select("id,code_article,libelle_article,hs_code,hs4")
+        .eq("hs4", hs4FromQuestion)
+        .limit(25);
+      products = data ?? [];
+    } else {
+      // sinon: essayer un mot-clé simple (plus long mot)
+      const tokens = stripAccents(question)
+        .toLowerCase()
+        .split(/[^a-z0-9]+/g)
+        .filter((t) => t.length >= 5 && !["comment", "pourquoi", "quelle", "quels", "quelles", "export", "incoterm"].includes(t));
+
+      const term = tokens.sort((a, b) => b.length - a.length)[0] ?? null;
+      if (term) {
+        const { data } = await supabase
+          .from("products")
+          .select("id,code_article,libelle_article,hs_code,hs4")
+          .or(`code_article.ilike.%${term}%,libelle_article.ilike.%${term}%`)
+          .limit(25);
+        products = data ?? [];
+      }
+    }
   }
 
-  // --- 1) RAG docs-first si OPENAI dispo + RPC dispo
-  const matchCount = body.match_count ?? 8;
-  const filter = body.doc_filter ?? {};
+  // ventes / coûts : agrégats simples
+  const { data: salesRows } = await supabase
+    .from("sales")
+    .select("territory_code,amount_ht,amount_ttc,sale_date")
+    .gte("sale_date", from)
+    .lte("sale_date", to)
+    .limit(5000);
 
-  let citations: any[] = [];
-  let docAnswer: string | null = null;
+  const { data: costRows, error: costErr } = await supabase
+    .from("cost_lines")
+    .select("destination,amount,cost_type,date")
+    .gte("date", from)
+    .lte("date", to)
+    .limit(5000);
+
+  // fallback si cost_lines absente -> costs
+  let costs = costRows ?? [];
+  if (costErr) {
+    const { data: costsFallback } = await supabase
+      .from("costs")
+      .select("destination,amount,cost_type,date")
+      .gte("date", from)
+      .lte("date", to)
+      .limit(5000);
+    costs = costsFallback ?? [];
+  }
+
+  // agrégation
+  const aggSales: Record<string, { ca_ht: number; ca_ttc: number; lignes: number }> = {};
+  for (const r of salesRows ?? []) {
+    const code = normStr((r as any).territory_code) || "FR";
+    aggSales[code] ||= { ca_ht: 0, ca_ttc: 0, lignes: 0 };
+    aggSales[code].ca_ht += Number((r as any).amount_ht ?? 0);
+    aggSales[code].ca_ttc += Number((r as any).amount_ttc ?? 0);
+    aggSales[code].lignes += 1;
+  }
+
+  const aggCosts: Record<string, { total: number; lignes: number }> = {};
+  for (const r of costs ?? []) {
+    const code = normStr((r as any).destination) || "FR";
+    aggCosts[code] ||= { total: 0, lignes: 0 };
+    aggCosts[code].total += Number((r as any).amount ?? 0);
+    aggCosts[code].lignes += 1;
+  }
+
+  // OM/OMR (si territoire DROM et HS connu)
+  let omRateRow: any = null;
+  if (territoryCode && ["GP", "MQ", "GF", "RE", "YT"].includes(territoryCode)) {
+    const hs4 =
+      (products?.[0]?.hs4 ? String(products[0].hs4) : null) ??
+      hs4FromQuestion;
+
+    if (hs4) {
+      const { data } = await supabase
+        .from("om_rates")
+        .select("*")
+        .eq("territory_code", territoryCode)
+        .eq("hs4", String(hs4).slice(0, 4))
+        .order("year", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      omRateRow = data ?? null;
+    }
+  }
+
+  // -------------------------
+  // 2) RAG documents (document_chunks)
+  // -------------------------
+  const matchCount = body.match_count ?? 8;
+  const strictDocsOnly = Boolean(body.strict_docs_only);
+
+  let ragMatches: RagMatch[] = [];
   let ragError: string | null = null;
 
   if (OPENAI_API_KEY) {
     try {
-      const queryEmbedding = await embedQueryOpenAI(OPENAI_API_KEY, EMB_MODEL, question);
+      const [qEmb] = await embedOpenAI(OPENAI_API_KEY, EMB_MODEL, question);
 
-      const { data: matches, error: mErr } = await supabase.rpc("match_document_chunks", {
-        query_embedding: queryEmbedding,
+      const f = body.doc_filter ?? {};
+      const { data, error } = await supabase.rpc("match_document_chunks", {
+        query_embedding: qEmb,
         match_count: matchCount,
-        filter_doc_type: filter.doc_type ?? null,
-        filter_tags: filter.tags ?? null,
-        filter_export_zone: filter.export_zone ?? null,
-        filter_incoterm: filter.incoterm ?? incoterm ?? null,
+        filter_doc_type: f.doc_type ?? null,
+        filter_tags: f.tags ?? null,
+        filter_export_zone: f.export_zone ?? exportZone ?? null,
+        filter_incoterm: f.incoterm ?? incoterm ?? null,
       });
 
-      if (mErr) throw new Error(mErr.message);
-
-      const rows = (matches ?? []) as any[];
-
-      const context = rows
-        .map(
-          (r, i) =>
-            `#${i + 1} ${r.title} (${r.doc_type ?? "doc"}, ${r.published_at ?? "n/a"}) [chunk ${r.chunk_index}]\n${r.content}`,
-        )
-        .join("\n\n---\n\n");
-
-      const system =
-        "Tu es l’assistant Export Navigator. Réponds uniquement à partir des extraits de documents fournis. " +
-        "Si l’information n’est pas présente dans les extraits, dis-le clairement. " +
-        "Réponse courte, structurée en points. Cite tes sources (titre + chunk).";
-
-      const user =
-        `Question:\n${question}\n\n` +
-        `Contexte opérationnel:\n- destination=${destination}\n- incoterm=${incoterm ?? "n/a"}\n` +
-        (client ? `- client=${client.libelle_client ?? client.id}\n` : "") +
-        (products.length ? `- produits=${products.map((p) => p.name ?? p.id).slice(0, 12).join(", ")}\n` : "") +
-        `\nExtraits documents:\n${context}\n\n` +
-        "Important: ne parle pas de 'facture' comme objet principal; parle plutôt ventes/charges/OM/taxes.";
-
-      docAnswer = await chatOpenAI(OPENAI_API_KEY, CHAT_MODEL, system, user);
-
-      citations = rows.map((r) => ({
-        document_id: r.document_id,
-        title: r.title,
-        published_at: r.published_at,
-        chunk_index: r.chunk_index,
-        similarity: r.similarity,
-      }));
-    } catch (e) {
-      ragError = String(e);
+      if (error) throw new Error(error.message);
+      ragMatches = (data ?? []) as RagMatch[];
+    } catch (e: any) {
+      ragError = String(e?.message || e);
     }
+  } else {
+    ragError = "OPENAI_API_KEY manquant";
   }
 
-  // --- 2) Fallback KB si RAG indispo / vide (sauf si strict_docs_only)
-  if (docAnswer && citations.length) {
-    return json(200, {
-      ok: true,
-      mode: "docs_rag",
-      answer: docAnswer,
-      citations,
-      debug: { destination, incoterm, ragError: ragError ?? null },
-    });
-  }
+  const docsContext = ragMatches
+    .slice(0, matchCount)
+    .map(
+      (r, i) =>
+        `#${i + 1} ${r.title} (${r.doc_type ?? "doc"}, ${r.published_at ?? "n/a"}) [chunk ${r.chunk_index} | sim=${Number(r.similarity).toFixed(3)}]\n${r.content}`,
+    )
+    .join("\n\n---\n\n");
 
-  if (body.strict_docs_only) {
+  const citations = ragMatches.map((r) => ({
+    document_id: r.document_id,
+    title: r.title,
+    published_at: r.published_at,
+    chunk_index: r.chunk_index,
+    similarity: r.similarity,
+  }));
+
+  // -------------------------
+  // 3) Réponse IA (docs + tables)
+  // -------------------------
+  if (strictDocsOnly && !docsContext) {
     return json(200, {
       ok: true,
       mode: "docs_only",
       answer:
-        "Je ne trouve pas la réponse dans la base documentaire disponible (ou elle n’est pas accessible). " +
-        "Ajoute les documents pertinents dans la Reference Library (PDF) puis relance.",
+        "Je ne trouve pas la réponse dans les documents indexés. " +
+        "Tes PDFs sont probablement non extraits/non chunkés. Lance parse+chunk+embed puis relance.",
       citations: [],
-      debug: { destination, incoterm, ragError: ragError ?? "No docs / no matches" },
+      debug: { territoryCode, exportZone, incoterm, ragError },
     });
   }
 
-  // --- KB fallback (destination)
-  const kb = kbForDestination(destination);
+  // fallback sans OpenAI
+  if (!OPENAI_API_KEY) {
+    return json(200, {
+      ok: true,
+      mode: "no_openai_fallback",
+      answer:
+        "OPENAI_API_KEY manquant. Je peux afficher des données brutes, mais pas générer une réponse IA.",
+      db_context: {
+        territoryCode,
+        exportZone,
+        incoterm,
+        from,
+        to,
+        client: client ? { id: client.id, libelle_client: client.libelle_client } : null,
+        products_count: products?.length ?? 0,
+        sales_summary: aggSales,
+        costs_summary: aggCosts,
+        om_rate: omRateRow,
+      },
+      citations,
+      debug: { ragError },
+    });
+  }
+
+  const system =
+    "Tu es l’assistant IA Export d’Orliman (Export Navigator). " +
+    "Tu as 2 types de sources: (1) DONNÉES INTERNES (tables Supabase: produits, ventes, clients, coûts, om_rates) " +
+    "et (2) DOCUMENTS (extraits PDF). " +
+    "Règles: " +
+    "- Priorise DOCUMENTS quand ils répondent clairement; sinon utilise DONNÉES INTERNES. " +
+    "- Ne JAMAIS inventer un taux ou une règle: si absent des sources, dire 'info non disponible dans les sources'. " +
+    "- Réponds en FR, court, actionnable, structuré en points." +
+    "- Termine par 2-4 questions de précision si nécessaire." +
+    "Format de sortie STRICT: renvoie un JSON valide avec les clés: " +
+    "`answer` (string), `sections` (object titre -> string[]), `questions` (string[]), `actionsSuggested` (string[]).";
+
+  const dbContext = {
+    territoryCode,
+    exportZone,
+    destination_raw: body.destination ?? null,
+    incoterm,
+    transport_mode: body.transport_mode ?? null,
+    period: { from, to },
+    client: client
+      ? {
+          id: client.id,
+          libelle_client: client.libelle_client,
+          email: client.email ?? null,
+          pays: client.pays ?? null,
+          export_zone: client.export_zone ?? null,
+          drom_code: client.drom_code ?? null,
+        }
+      : null,
+    products: (products ?? []).slice(0, 12).map((p: any) => ({
+      id: p.id,
+      code_article: p.code_article ?? null,
+      libelle_article: p.libelle_article ?? p.name ?? null,
+      hs_code: p.hs_code ?? null,
+      hs4: p.hs4 ?? null,
+    })),
+    sales_summary: aggSales,
+    costs_summary: aggCosts,
+    om_rate: omRateRow
+      ? {
+          territory_code: omRateRow.territory_code,
+          hs4: omRateRow.hs4,
+          om_rate: omRateRow.om_rate,
+          omr_rate: omRateRow.omr_rate,
+          year: omRateRow.year,
+          source: omRateRow.source ?? null,
+        }
+      : null,
+  };
+
+  const user =
+    `QUESTION:\n${question}\n\n` +
+    `CONTEXTE UI:\n- destination=${body.destination ?? "n/a"} (code=${territoryCode ?? "n/a"})\n- export_zone=${exportZone ?? "n/a"}\n- incoterm=${incoterm ?? "n/a"}\n- transport=${body.transport_mode ?? "n/a"}\n- période stats=${from} -> ${to}\n\n` +
+    `DONNÉES INTERNES (JSON):\n${JSON.stringify(dbContext, null, 2)}\n\n` +
+    `DOCUMENTS (extraits):\n${docsContext || "(aucun extrait pertinent trouvé)"}\n\n` +
+    `Consignes:\n- Si tu cites un doc: mentionne (Titre + chunk_index).\n- Si tu cites une donnée interne: mentionne la table (ex: products/sales/clients/om_rates).\n`;
+
+  let raw = "";
+  try {
+    raw = await chatOpenAI(OPENAI_API_KEY, CHAT_MODEL, system, user);
+  } catch (e: any) {
+    return json(200, {
+      ok: true,
+      mode: "openai_error_fallback",
+      answer: "Erreur IA. Je te renvoie le contexte interne disponible.",
+      db_context: dbContext,
+      citations,
+      debug: { territoryCode, exportZone, incoterm, ragError: ragError ?? null, openai: String(e?.message || e) },
+    });
+  }
+
+  const parsed = safeJsonParse(raw);
+  if (!parsed || typeof parsed.answer !== "string") {
+    // fallback si le modèle ne respecte pas le JSON
+    return json(200, {
+      ok: true,
+      mode: "model_non_json",
+      answer: raw || "Réponse vide.",
+      citations,
+      debug: { territoryCode, exportZone, incoterm, ragError },
+    });
+  }
 
   return json(200, {
     ok: true,
-    mode: "fallback_kb",
-    answer:
-      `Je n’ai pas pu m’appuyer sur la base documentaire (ou je n’ai pas trouvé d’extraits pertinents). ` +
-      `Voici une synthèse opérationnelle (fallback) pour ${destination}${incoterm ? ` / ${incoterm}` : ""}.`,
-    kb,
-    citations: [],
-    debug: { destination, incoterm, ragError: ragError ?? "No docs / no matches" },
+    mode: docsContext ? "docs_plus_db" : "db_only",
+    ...parsed,
+    citations,
+    debug: { territoryCode, exportZone, incoterm, ragError },
   });
 });

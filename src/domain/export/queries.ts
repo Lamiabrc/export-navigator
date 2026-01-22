@@ -148,15 +148,45 @@ async function loadRatesContext(): Promise<{ context: RatesContext; warning?: st
   return { context, warning: cachedRatesWarning };
 }
 
+function normalizeTerritoryCode(rawTerritory: any, rawIle: any): string | null {
+  const t = String(rawTerritory ?? "").trim();
+  if (t) return t.toUpperCase();
+
+  const ile = String(rawIle ?? "").trim().toLowerCase();
+  if (!ile) return null;
+
+  // DROM
+  if (ile.includes("guadeloupe")) return "GP";
+  if (ile.includes("martinique")) return "MQ";
+  if (ile.includes("guyane")) return "GF";
+  if (ile.includes("réunion") || ile.includes("reunion")) return "RE";
+  if (ile.includes("mayotte")) return "YT";
+
+  return null;
+}
+
 function mapInvoiceRow(row: any, source: string, ctx: RatesContext): Invoice {
   const invoiceNumber = row?.invoice_number || row?.number || row?.invoice_no || row?.id || "N/A";
-  const invoiceDate = row?.invoice_date || row?.date || null;
+  const invoiceDate = row?.invoice_date || row?.date || row?.created_at || null;
+
   const invoiceHt = num(row?.invoice_ht_eur ?? row?.amount_ht ?? row?.total_ht);
   const transitFee = num(row?.transit_fee_eur ?? row?.transit_fee);
   const providedProducts = row?.products_ht_eur ?? row?.products_amount_ht;
   const productsHt = providedProducts !== undefined && providedProducts !== null ? num(providedProducts) : num(invoiceHt - transitFee);
   const transportCost = num(row?.transport_cost_eur ?? row?.transport_cost ?? row?.transport_fee_eur);
-  const territory = row?.territory_code ?? row?.market_zone ?? row?.ile ?? row?.island ?? null;
+
+  // IMPORTANT: tes colonnes réelles
+  const ile = row?.ile ?? row?.island ?? null;
+  const territory = normalizeTerritoryCode(row?.territory_code ?? row?.market_zone, ile);
+
+  // IMPORTANT: tes colonnes réelles dans sales_invoices: client_name_norm / client_name_raw
+  const clientName =
+    row?.client_name_norm ??
+    row?.client_name ??
+    row?.client_label ??
+    row?.client_name_raw ??
+    row?.libelle_client ??
+    null;
 
   const estimatedCosts = estimateExportCosts(productsHt, territory, ctx);
   const margin = productsHt - (transitFee + estimatedCosts.total + transportCost);
@@ -166,10 +196,10 @@ function mapInvoiceRow(row: any, source: string, ctx: RatesContext): Invoice {
     invoice_number: invoiceNumber,
     invoice_date: invoiceDate,
     client_id: row?.client_id ?? null,
-    client_label: row?.client_label ?? row?.client_name ?? row?.client_name_raw ?? row?.client_id ?? null,
-    client_name: row?.client_name ?? row?.client_label ?? null,
-    territory_code: row?.territory_code ?? null,
-    ile: row?.ile ?? row?.island ?? null,
+    client_label: clientName ?? row?.client_id ?? null,
+    client_name: clientName ?? null,
+    territory_code: territory ?? null,
+    ile,
     nb_colis: row?.nb_colis ?? row?.parcel_count ?? row?.nb_parcels ?? null,
     currency: row?.currency ?? "EUR",
     invoice_ht_eur: invoiceHt,
@@ -198,21 +228,19 @@ function buildInvoiceQuery(source: string, filters: ExportFilters, pagination: P
   }
 
   query.order(dateColumn, { ascending: false });
+
   const size = pagination?.pageSize ?? DEFAULT_PAGE_SIZE;
   const page = Math.max(1, pagination?.page ?? 1);
   const fromIdx = (page - 1) * size;
   const toIdx = fromIdx + size - 1;
   query.range(fromIdx, toIdx);
+
   return query;
 }
 
 export async function fetchInvoices(filters: ExportFilters = {}, pagination: Pagination = {}): Promise<FetchResult<Invoice>> {
   if (!SUPABASE_ENV_OK) {
-    return {
-      data: [],
-      total: 0,
-      warning: "Supabase non configure: aucune facture chargee",
-    };
+    return { data: [], total: 0, warning: "Supabase non configure: aucune facture chargee" };
   }
 
   const { context, warning: rateWarning } = await loadRatesContext();
@@ -221,18 +249,15 @@ export async function fetchInvoices(filters: ExportFilters = {}, pagination: Pag
   const missingSources: string[] = [];
 
   for (const source of INVOICE_SOURCES) {
-    let usedDateColumn = "invoice_date";
     let attemptError: any = null;
+
     for (const dateCol of DATE_COLUMNS) {
-      usedDateColumn = dateCol;
       const query = buildInvoiceQuery(source, filters, pagination, dateCol);
       const { data, error, count } = await query;
 
       if (error) {
         attemptError = error;
-        if (shouldFallbackToNextSource(error)) {
-          continue; // try next date column or next source
-        }
+        if (shouldFallbackToNextSource(error)) continue;
         lastError = error;
         break;
       }
@@ -288,14 +313,13 @@ export async function fetchInvoiceByNumber(invoiceNumber: string): Promise<Invoi
     }
   }
 
-  if (!invoice) {
-    throw new Error(`Facture ${invoiceNumber} introuvable`);
-  }
+  if (!invoice) throw new Error(`Facture ${invoiceNumber} introuvable`);
 
   const linesRes = await fetchInvoiceLines(invoiceNumber);
-  const competitorRes = await fetchCompetitorPrices(invoice.territory_code ?? invoice.ile ?? null, (linesRes.data || [])
-    .map((l) => l.product_id)
-    .filter(Boolean) as string[]);
+  const competitorRes = await fetchCompetitorPrices(
+    invoice.territory_code ?? invoice.ile ?? null,
+    (linesRes.data || []).map((l) => l.product_id).filter(Boolean) as string[],
+  );
 
   return {
     ...invoice,
@@ -318,6 +342,7 @@ export async function fetchKpis(filters: ExportFilters = {}): Promise<KPIResult>
   const totalProducts = invoices.reduce((s, inv) => s + num(inv.products_ht_eur), 0);
   const totalTransit = invoices.reduce((s, inv) => s + num(inv.transit_fee_eur), 0);
   const totalTransport = invoices.reduce((s, inv) => s + num(inv.transport_cost_eur), 0);
+
   const estimatedCosts = invoices.reduce(
     (acc, inv) => {
       acc.vat += num(inv.estimated_export_costs.vat);
@@ -328,6 +353,7 @@ export async function fetchKpis(filters: ExportFilters = {}): Promise<KPIResult>
     },
     { vat: 0, om: 0, octroi: 0, extraRules: 0 },
   );
+
   const estimatedExportCosts: ExportCostComponents = {
     ...estimatedCosts,
     total: estimatedCosts.vat + estimatedCosts.om + estimatedCosts.octroi + estimatedCosts.extraRules,
@@ -355,6 +381,7 @@ export async function fetchKpis(filters: ExportFilters = {}): Promise<KPIResult>
 export async function fetchTopClients(filters: ExportFilters = {}): Promise<TopClient[]> {
   const invoicesRes = await fetchInvoices(filters, { page: 1, pageSize: MAX_ROWS });
   const invoices = invoicesRes.data;
+
   const map = new Map<string, TopClient>();
 
   invoices.forEach((inv) => {
@@ -368,13 +395,16 @@ export async function fetchTopClients(filters: ExportFilters = {}): Promise<TopC
       margin_estimee: 0,
       territory_code: inv.territory_code ?? null,
     };
+
     cur.ca_ht += num(inv.invoice_ht_eur);
     cur.products_ht += num(inv.products_ht_eur);
     cur.margin_estimee += num(inv.marge_estimee);
     map.set(key, cur);
   });
 
-  return Array.from(map.values()).sort((a, b) => b.margin_estimee - a.margin_estimee).slice(0, 12);
+  return Array.from(map.values())
+    .sort((a, b) => b.margin_estimee - a.margin_estimee)
+    .slice(0, 12);
 }
 
 export async function fetchAlerts(filters: ExportFilters = {}): Promise<Alert[]> {
@@ -413,10 +443,11 @@ export async function fetchAlerts(filters: ExportFilters = {}): Promise<Alert[]>
   }
 
   const transitHeavy = invoices.filter((i) => {
-    const invoiceHt = num(i.invoice_ht_eur);
+    const invoiceHt = num(i.invoice_ht_eur); // ✅ FIX: pas "invoice_ht_el"
     const transit = num(i.transit_fee_eur);
     return invoiceHt > 0 && transit / invoiceHt > TRANSIT_ALERT_PCT;
   }).length;
+
   if (transitHeavy) {
     alerts.push({
       id: "transit-high",
@@ -455,7 +486,12 @@ function isMissingColumnError(error: any): boolean {
 export async function fetchSalesLines(filters: ExportFilters = {}, pagination: Pagination = {}): Promise<FetchResult<SaleLine>> {
   if (!SUPABASE_ENV_OK) return { data: [], total: 0, warning: "Supabase non configure" };
 
-  const query = supabase.from("sales").select("id,sale_date,client_id,product_id,territory_code,destination_id,quantity,unit_price_ht,amount_ht,vat_amount,amount_ttc,invoice_number", { count: "exact" });
+  const query = supabase
+    .from("sales")
+    .select(
+      "id,sale_date,client_id,product_id,territory_code,destination_id,quantity,unit_price_ht,amount_ht,vat_amount,amount_ttc,invoice_number",
+      { count: "exact" },
+    );
 
   if (filters.from) query.gte("sale_date", filters.from);
   if (filters.to) query.lte("sale_date", filters.to);
@@ -464,6 +500,7 @@ export async function fetchSalesLines(filters: ExportFilters = {}, pagination: P
   if (filters.invoiceNumber) query.ilike("invoice_number", `%${filters.invoiceNumber}%`);
 
   query.order("sale_date", { ascending: false });
+
   const size = pagination.pageSize ?? DEFAULT_PAGE_SIZE;
   const page = Math.max(1, pagination.page ?? 1);
   const fromIdx = (page - 1) * size;
@@ -488,6 +525,7 @@ export async function fetchSalesLines(filters: ExportFilters = {}, pagination: P
     amount_ht: row.amount_ht ?? null,
     vat_amount: row.vat_amount ?? null,
     amount_ttc: row.amount_ttc ?? null,
+    invoice_number: row.invoice_number ?? null,
   }));
 
   return { data: mapped, total: count ?? mapped.length };
@@ -497,17 +535,19 @@ export async function fetchInvoiceLines(invoiceNumber: string): Promise<FetchRes
   if (!SUPABASE_ENV_OK) return { data: [], total: 0, warning: "Supabase non configure" };
 
   const possibleFilters = ["invoice_number", "invoice_no", "order_id"];
+
   for (const column of possibleFilters) {
-    const query = supabase.from("sales").select("id,invoice_number,product_id,quantity,unit_price_ht,amount_ht,total_ht,weight_kg,territory_code,product_label", { count: "exact" }).eq(column, invoiceNumber).limit(500);
+    const query = supabase
+      .from("sales")
+      .select("id,invoice_number,product_id,quantity,unit_price_ht,amount_ht,total_ht,weight_kg,territory_code,product_label", { count: "exact" })
+      .eq(column, invoiceNumber)
+      .limit(500);
+
     const { data, error, count } = await query;
 
     if (error) {
-      if (isMissingTableError(error)) {
-        return { data: [], total: 0, warning: "Table sales manquante" };
-      }
-      if (isMissingColumnError(error)) {
-        continue;
-      }
+      if (isMissingTableError(error)) return { data: [], total: 0, warning: "Table sales manquante" };
+      if (isMissingColumnError(error)) continue;
       throw error;
     }
 

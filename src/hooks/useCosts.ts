@@ -4,21 +4,17 @@ import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
 export type CostLine = {
   id: string;
-
-  date: string | null;
-  cost_type: string | null;
+  date: string | null; // date
+  destination: string | null; // ex: GP / MQ / FR...
   amount: number | null;
+  cost_type: string | null; // ex: DOUANE / TRANSPORT_PLUS / AUTRE ...
+};
 
-  currency: string | null;
-  market_zone: string | null;
-  destination: string | null;
-  incoterm: string | null;
-
-  client_id: string | null;
-  product_id: string | null;
-
-  // ✅ nouveau champ pour charges "par commande"
-  order_id: string | null;
+export type CostsFilters = {
+  from?: string;
+  to?: string;
+  destination?: string; // filtre territoire (GP/MQ/...)
+  costType?: string; // filtre type
 };
 
 type UseCostsResult = {
@@ -36,7 +32,7 @@ function asMessage(err: any): string {
   return JSON.stringify(err);
 }
 
-async function fetchAllCostLines(): Promise<CostLine[]> {
+async function fetchAllCostLines(filters?: CostsFilters): Promise<CostLine[]> {
   const pageSize = 5000;
   let from = 0;
   const all: CostLine[] = [];
@@ -44,30 +40,29 @@ async function fetchAllCostLines(): Promise<CostLine[]> {
   while (true) {
     const to = from + pageSize - 1;
 
-    const { data, error } = await supabase
+    let q = supabase
       .from("cost_lines")
-      .select(
-        "id,date,cost_type,amount,currency,market_zone,destination,incoterm,client_id,product_id,order_id"
-      )
+      .select("id,date,destination,amount,cost_type")
       .order("date", { ascending: false })
       .range(from, to);
 
+    if (filters?.from) q = q.gte("date", filters.from);
+    if (filters?.to) q = q.lte("date", filters.to);
+    if (filters?.destination) q = q.eq("destination", filters.destination);
+    if (filters?.costType) q = q.eq("cost_type", filters.costType);
+
+    const { data, error } = await q;
     if (error) throw error;
+
     if (!data || data.length === 0) break;
 
     all.push(
       ...data.map((r: any) => ({
         id: String(r.id),
         date: r.date ?? null,
-        cost_type: r.cost_type ?? null,
-        amount: r.amount ?? null,
-        currency: r.currency ?? null,
-        market_zone: r.market_zone ?? null,
         destination: r.destination ?? null,
-        incoterm: r.incoterm ?? null,
-        client_id: r.client_id ?? null,
-        product_id: r.product_id ?? null,
-        order_id: r.order_id ?? null,
+        amount: r.amount ?? null,
+        cost_type: r.cost_type ?? null,
       }))
     );
 
@@ -78,7 +73,7 @@ async function fetchAllCostLines(): Promise<CostLine[]> {
   return all;
 }
 
-export function useCosts(): UseCostsResult {
+export function useCosts(filters?: CostsFilters): UseCostsResult {
   const [rows, setRows] = React.useState<CostLine[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -97,13 +92,11 @@ export function useCosts(): UseCostsResult {
     setWarning(null);
 
     try {
-      const data = await fetchAllCostLines();
+      const data = await fetchAllCostLines(filters);
       setRows(data);
     } catch (e: any) {
-      // Cas fréquent: table manquante / RLS / permissions / etc.
       const msg = asMessage(e);
 
-      // PostgREST peut remonter des codes, on met une warning si "relation ... does not exist"
       const hintMissing =
         msg.toLowerCase().includes("does not exist") ||
         msg.toLowerCase().includes("relation") ||
@@ -120,16 +113,14 @@ export function useCosts(): UseCostsResult {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [filters?.from, filters?.to, filters?.destination, filters?.costType]);
 
   React.useEffect(() => {
     let cancelled = false;
-
     (async () => {
       if (cancelled) return;
       await refresh();
     })();
-
     return () => {
       cancelled = true;
     };

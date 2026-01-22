@@ -9,6 +9,16 @@
    mapsvg:geoViewBox="-169.110266 83.600842 190.486279 -58.508473"
    width="1009.6727"
    height="665.96301">
+  <g id="export-anchors" opacity="0">
+    <!-- Invisible anchors for Export Navigator overlays -->
+    <circle id="anchor-HUB_FR" cx="530.078" cy="166.491" r="3" />
+    <circle id="anchor-GP" cx="302.902" cy="309.673" r="3" />
+    <circle id="anchor-MQ" cx="306.941" cy="322.992" r="3" />
+    <circle id="anchor-GF" cx="351.366" cy="382.929" r="3" />
+    <circle id="anchor-RE" cx="724.945" cy="462.844" r="3" />
+    <circle id="anchor-YT" cx="694.655" cy="427.548" r="3" />
+  </g>
+
  
   <path
      d="m 479.68275,331.6274 -0.077,0.025 -0.258,0.155 -0.147,0.054 -0.134,0.027 -0.105,-0.011 -0.058,-0.091 0.006,-0.139 -0.024,-0.124 -0.02,-0.067 0.038,-0.181 0.086,-0.097 0.119,-0.08 0.188,0.029 0.398,0.116 0.083,0.109 10e-4,0.072 -0.073,0.119 z"

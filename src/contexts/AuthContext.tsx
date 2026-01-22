@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
 type AuthCtx = {
   user: User | null;
@@ -21,45 +21,88 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // charge la session au démarrage + écoute les changements
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session ?? null);
-      setUser(data.session?.user ?? null);
-      setIsLoading(false);
-    });
+    let alive = true;
+
+    const init = async () => {
+      try {
+        if (!SUPABASE_ENV_OK) {
+          if (!alive) return;
+          setSession(null);
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
+        const { data, error } = await supabase.auth.getSession();
+        if (!alive) return;
+
+        if (error) {
+          setSession(null);
+          setUser(null);
+        } else {
+          setSession(data.session ?? null);
+          setUser(data.session?.user ?? null);
+        }
+
+        setIsLoading(false);
+      } catch {
+        if (!alive) return;
+        setSession(null);
+        setUser(null);
+        setIsLoading(false);
+      }
+    };
+
+    void init();
+
+    // ✅ Ne pas s’abonner si env KO (client placeholder)
+    if (!SUPABASE_ENV_OK) {
+      return () => {
+        alive = false;
+      };
+    }
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (!alive) return;
       setSession(newSession);
       setUser(newSession?.user ?? null);
+      // ⚠️ ici on ne remet pas isLoading à true, on garde un état stable
       setIsLoading(false);
     });
 
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      alive = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const value = useMemo<AuthCtx>(
     () => ({
       user,
       session,
-      isAuthenticated: !!session,
+      isAuthenticated: !!session?.user,
       isLoading,
 
       async signIn(email, password) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password }); // :contentReference[oaicite:1]{index=1}
+        if (!SUPABASE_ENV_OK) return { error: "Supabase non configuré." };
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         return { error: error ? error.message : null };
       },
 
       async signOut() {
+        if (!SUPABASE_ENV_OK) return;
         await supabase.auth.signOut();
       },
 
       async sendPasswordLink(email) {
+        if (!SUPABASE_ENV_OK) return { error: "Supabase non configuré." };
         const redirectTo = `${window.location.origin}/set-password`;
-        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo }); // :contentReference[oaicite:2]{index=2}
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
         return { error: error ? error.message : null };
       },
 
       async setPassword(newPassword) {
+        if (!SUPABASE_ENV_OK) return { error: "Supabase non configuré." };
         const { error } = await supabase.auth.updateUser({ password: newPassword });
         return { error: error ? error.message : null };
       },

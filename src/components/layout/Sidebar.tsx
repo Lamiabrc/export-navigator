@@ -60,7 +60,7 @@ const navigation: NavSection[] = [
         icon: Receipt,
       },
       {
-        name: "Simulator",
+        name: "Simulateur Expedition",
         href: "/simulator",
         icon: Calculator,
       },
