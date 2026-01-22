@@ -1,5 +1,4 @@
 import { cn } from "@/lib/utils";
-import logoMPL Conseil Export from "@/assets/logo-mpl.png";
 
 type BrandSize = "sm" | "md" | "lg";
 
@@ -15,6 +14,7 @@ type BrandLogoProps = {
   subtitle?: string;
   location?: string;
   size?: BrandSize;
+  logoSrc?: string;
 };
 
 const sizeConfig: Record<BrandSize, { img: string; title: string; subtitle: string; location: string; gap: string }> = {
@@ -31,17 +31,18 @@ export function BrandLogo({
   subtitleClassName,
   locationClassName,
   showText = true,
-  title = "Export Navigator",
-  subtitle = "MPL Conseil Export France",
-  location = "Lieu-dit de la Herbetaie, La Mézière (Bretagne)",
+  title = "MPL Conseil Export",
+  subtitle = "Audit · Reglementation · Veille",
+  location = "Conseil Export",
   size = "md",
+  logoSrc = "/placeholder.svg",
 }: BrandLogoProps) {
   const styles = sizeConfig[size];
 
   return (
     <div className={cn("flex items-center", styles.gap, className)}>
       <img
-        src={logoMPL Conseil Export}
+        src={logoSrc}
         alt="Logo MPL Conseil Export"
         className={cn(styles.img, "w-auto drop-shadow-sm shrink-0", imageClassName)}
         loading="lazy"
