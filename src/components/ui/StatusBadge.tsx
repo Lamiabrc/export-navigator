@@ -30,7 +30,6 @@ const riskConfig: Record<RiskLevel, { label: string; className: string }> = {
 const zoneConfig: Record<Zone, { label: string; className: string }> = {
   UE: { label: 'UE', className: 'badge-ue' },
   'Hors UE': { label: 'Hors UE', className: 'badge-hors-ue' },
-  DROM: { label: 'DROM', className: 'badge-drom' },
 };
 
 export function StatusBadge({ status, type = 'flow', className }: StatusBadgeProps) {

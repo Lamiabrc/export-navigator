@@ -406,7 +406,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
     }
   }
 
-  // 9) TVA IMPORT (DROM / Hors UE) — modèle simplifié
+  // 9) TVA IMPORT (Hors UE) — modele simplifie
   if (zone !== "UE" && vatRate) {
     const rate = productType === "regulated" ? vatRate.rate_regulated : vatRate.rate_standard;
 
@@ -531,13 +531,11 @@ function estimateTransportCost(zone: Zone, mode: TransportMode, weight: number):
   const costPerKg: Record<Zone, Record<TransportMode, number>> = {
     UE: { Routier: 0.15, Maritime: 0.2, Aerien: 2.5, Express: 5, Ferroviaire: 0.12 },
     "Hors UE": { Routier: 0.25, Maritime: 0.3, Aerien: 4, Express: 8, Ferroviaire: 0.2 },
-    DROM: { Routier: 0.5, Maritime: 0.5, Aerien: 4, Express: 7, Ferroviaire: 0.5 },
   };
 
   const minCost: Record<Zone, number> = {
     UE: 200,
     "Hors UE": 400,
-    DROM: 800,
   };
 
   return Math.max(weight * (costPerKg[zone]?.[mode] || 0.3), minCost[zone] || 300);
