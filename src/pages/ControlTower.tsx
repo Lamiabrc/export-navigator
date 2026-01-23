@@ -337,7 +337,7 @@ export default function ControlTower() {
       <div className="space-y-8 px-6 pb-10 pt-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Control Tower export</p>
+            <p className="text-xs uppercase tracking-[0.35em] text-blue-700">Control Tower export</p>
             <h1 className="text-3xl font-bold text-slate-900">France vers le monde</h1>
             <p className="text-sm text-slate-600">
               Choisis un HS code pour voir les pays acheteurs, les leaders mondiaux et les signaux de veille.
@@ -346,7 +346,7 @@ export default function ControlTower() {
 
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-[220px]">
-              <label className="text-xs text-slate-500">HS code (prefix ok)</label>
+              <label className="text-xs text-blue-700">HS code (prefix ok)</label>
               <Input
                 value={hsCode}
                 onChange={(e) => setHsCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
@@ -356,7 +356,7 @@ export default function ControlTower() {
             </div>
 
             <div className="min-w-[220px]">
-              <label className="text-xs text-slate-500">Destination (filtre)</label>
+              <label className="text-xs text-blue-700">Destination (filtre)</label>
               <Select value={market} onValueChange={setMarket}>
                 <SelectTrigger className="bg-white border-slate-200 text-slate-900">
                   <SelectValue placeholder="Tous pays" />
@@ -391,12 +391,12 @@ export default function ControlTower() {
                 <img
                   src="/assets/sea-login.jpg"
                   alt="Ocean"
-                  className="h-full w-full object-cover opacity-15"
+                  className="h-full w-full object-cover opacity-12"
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = "none";
                   }}
                 />
-                <div className="absolute inset-0 bg-gradient-to-br from-white/80 via-white/70 to-slate-50/90" />
+                <div className="absolute inset-0 bg-gradient-to-br from-white/85 via-white/75 to-blue-50/90" />
               </div>
               <div className="absolute inset-0">
                 <svg viewBox={`0 0 ${svgMeta.width} ${svgMeta.height}`} className="h-full w-full">
@@ -450,7 +450,7 @@ export default function ControlTower() {
                           cx={node.x}
                           cy={node.y}
                           r={active ? 5.5 : 4}
-                          fill={node.code_iso2 === "FR" ? "#ef4444" : "#1e293b"}
+                          fill={node.code_iso2 === "FR" ? "#dc2626" : "#1e293b"}
                           opacity={0.9}
                           className="cursor-pointer"
                           onMouseEnter={(evt) => {
@@ -472,19 +472,19 @@ export default function ControlTower() {
 
               <div className="absolute left-4 top-4 flex flex-wrap gap-3">
                 <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm">
-                  <div className="text-xs text-slate-500">Export FR (periode)</div>
+                  <div className="text-xs text-blue-700">Export FR (periode)</div>
                   <div className="text-xl font-semibold">{formatMoney(totalFrExport)}</div>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm">
-                  <div className="text-xs text-slate-500">Top destination</div>
+                  <div className="text-xs text-blue-700">Top destination</div>
                   <div className="text-xl font-semibold">{topMarket}</div>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm">
-                  <div className="text-xs text-slate-500">Marches actifs</div>
+                  <div className="text-xs text-blue-700">Marches actifs</div>
                   <div className="text-xl font-semibold">{marketsCount || 0}</div>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm">
-                  <div className="text-xs text-slate-500">Rang FR (exports)</div>
+                  <div className="text-xs text-blue-700">Rang FR (exports)</div>
                   <div className="text-xl font-semibold">{frRank ? `#${frRank}` : "n/a"}</div>
                 </div>
               </div>
@@ -515,7 +515,7 @@ export default function ControlTower() {
 
           <div className="col-span-12 lg:col-span-4 space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="text-xs text-slate-500 uppercase tracking-[0.25em]">Top destinations FR</div>
+              <div className="text-xs text-blue-700 uppercase tracking-[0.25em]">Top destinations FR</div>
               <div className="mt-3 space-y-2">
                 {topDestinations.length ? (
                   topDestinations.map((r, idx) => (
@@ -534,7 +534,7 @@ export default function ControlTower() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="text-xs text-slate-500 uppercase tracking-[0.25em]">Top exportateurs (monde)</div>
+              <div className="text-xs text-blue-700 uppercase tracking-[0.25em]">Top exportateurs (monde)</div>
               <div className="mt-3 space-y-2">
                 {globalExporters.length ? (
                   globalExporters.map((r, idx) => (
@@ -553,7 +553,7 @@ export default function ControlTower() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="text-xs text-slate-500 uppercase tracking-[0.25em]">Top importateurs (monde)</div>
+              <div className="text-xs text-blue-700 uppercase tracking-[0.25em]">Top importateurs (monde)</div>
               <div className="mt-3 space-y-2">
                 {globalImporters.length ? (
                   globalImporters.map((r, idx) => (
@@ -577,7 +577,7 @@ export default function ControlTower() {
           <div className="col-span-12 lg:col-span-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs text-slate-500 uppercase tracking-[0.25em]">Veille concurrentielle</div>
+                <div className="text-xs text-blue-700 uppercase tracking-[0.25em]">Veille concurrentielle</div>
                 <div className="text-lg font-semibold text-slate-900">Signaux marche (France)</div>
               </div>
               <div className="text-xs text-slate-400">Comparaison vs periode precedente</div>
@@ -603,7 +603,7 @@ export default function ControlTower() {
           </div>
 
           <div className="col-span-12 lg:col-span-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="text-xs text-slate-500 uppercase tracking-[0.25em]">Lecture rapide</div>
+            <div className="text-xs text-blue-700 uppercase tracking-[0.25em]">Lecture rapide</div>
             <div className="mt-3 space-y-2 text-sm text-slate-700">
               <div className="flex items-center justify-between">
                 <span>HS code filtre</span>

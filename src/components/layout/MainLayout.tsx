@@ -1,7 +1,7 @@
 import React from "react";
 import { Sidebar } from "./Sidebar";
 import { Link, useNavigate } from "react-router-dom";
-import { Menu, Search, FileCheck2, Bot, LogOut } from "lucide-react";
+import { Search, FileCheck2, Bot, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,7 +22,6 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({ children, contentClassName, wrapperClassName, variant = "default" }: MainLayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const { signOut } = useAuth();
   const navigate = useNavigate();
 
@@ -49,37 +48,13 @@ export function MainLayout({ children, contentClassName, wrapperClassName, varia
         }}
       />
 
-      <div className="hidden md:block">
-        <Sidebar />
-      </div>
+      <Sidebar />
 
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-[90] md:hidden">
-          <button
-            aria-label="Fermer le menu"
-            className="absolute inset-0 bg-black/30"
-            onClick={() => setSidebarOpen(false)}
-          />
-          <Sidebar
-            onNavigate={() => setSidebarOpen(false)}
-            className="z-[95] bg-card/95 backdrop-blur-xl border-r border-border shadow-2xl"
-          />
-        </div>
-      )}
-
-      <main className="relative z-10 md:pl-64">
+      <main className="relative z-10 pl-64">
         <header className="sticky top-0 z-20 border-b border-border/70 bg-[hsl(var(--background))/0.85] backdrop-blur-xl">
           <div className="flex flex-col gap-3 px-4 py-3 md:px-6">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <button
-                  className="lg:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card shadow-sm hover:-translate-y-0.5 hover:shadow-md transition"
-                  onClick={() => setSidebarOpen(true)}
-                  aria-label="Ouvrir le menu"
-                >
-                  <Menu className="h-5 w-5" />
-                </button>
-
                 <BrandLogo
                   size="md"
                   className="hidden sm:flex min-w-0"

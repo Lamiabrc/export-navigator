@@ -29,7 +29,7 @@ export default function Welcome() {
   return (
     <div className="min-h-screen bg-white text-slate-900">
       <div className="h-2 bg-gradient-to-r from-blue-600 via-white to-red-600" />
-      <div className="absolute inset-x-0 top-0 h-[320px] bg-gradient-to-br from-white via-slate-50 to-blue-50" />
+      <div className="absolute inset-x-0 top-0 h-[320px] bg-gradient-to-br from-white via-blue-50 to-red-50" />
       <div className="relative z-10 max-w-6xl mx-auto px-6 pt-10 pb-16 space-y-16">
         <header className="flex items-center justify-between">
           <BrandLogo
@@ -140,7 +140,7 @@ export default function Welcome() {
                 </div>
                 <div className="font-semibold text-slate-900">290 EUR HT / mois</div>
               </div>
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                 Options : optimisation couts, etude concurrentielle, kit export, TJM 450-650 EUR HT/jour.
               </div>
             </div>
