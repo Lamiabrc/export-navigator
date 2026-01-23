@@ -162,7 +162,7 @@ export default function LeadMagnet() {
       localStorage.setItem("mpl_lead_email", trimmedEmail);
 
       const pdfBlob = await postPdf({
-        title: "Rapport de contr?le export",
+        title: "Rapport de contrÃ´le export",
         email: trimmedEmail,
         destination: destinationLabel || destinationIso2,
         incoterm,
@@ -211,7 +211,7 @@ export default function LeadMagnet() {
     try {
       setLoading(true);
       const pdfBlob = await postPdf({
-        title: "Rapport de contr?le export",
+        title: "Rapport de contrÃ´le export",
         destination: entry.payload?.destinationIso2,
         incoterm: entry.payload?.incoterm,
         value: entry.payload?.value,
@@ -242,9 +242,9 @@ export default function LeadMagnet() {
     <PublicLayout>
       <section className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="space-y-6">
-          <p className="text-xs uppercase tracking-[0.35em] text-blue-700">Audit • R?glementation • Veille</p>
+          <p className="text-xs uppercase tracking-[0.35em] text-blue-700">Audit • RÃ©glementation • Veille</p>
           <h1 className="text-4xl md:text-5xl font-semibold leading-tight text-slate-900">
-            Votre contr?le export en 30 secondes.
+            Votre contrÃ´le export en 30 secondes.
           </h1>
           <p className="text-lg text-slate-600">
             Estimation immediate des droits/taxes, documents requis et risques sanctions. Rapport PDF MPL + veille personnalisee.
@@ -368,7 +368,7 @@ export default function LeadMagnet() {
             </Accordion>
 
             <Button onClick={handleEstimate} disabled={loading} className="w-full">
-              {loading ? "Calcul en cours..." : "Calculer mon contr?le export"}
+              {loading ? "Calcul en cours..." : "Calculer mon contrÃ´le export"}
             </Button>
             <p className="text-xs text-slate-500">
               Resultat immediat, sans email. L'email sert uniquement a recevoir le PDF et activer la veille.
@@ -385,7 +385,7 @@ export default function LeadMagnet() {
                 <div className="text-xs uppercase tracking-[0.25em] text-slate-400">Resume</div>
                 <div className="text-2xl font-semibold">Estimation & conformite</div>
               </div>
-              <div className="text-xs text-slate-500">Derni?re mise ? jour: {formatDateTimeFr(result?.updatedAt)}</div>
+              <div className="text-xs text-slate-500">DerniÃ¨re mise Ã  jour: {formatDateTimeFr(result?.updatedAt)}</div>
             </div>
             {!result ? (
               <p className="mt-4 text-sm text-slate-500">Saisis un HS ou produit pour obtenir un resume.</p>

@@ -172,7 +172,7 @@ export default function WatchRegulatory() {
             <Card className="lg:col-span-2">
               <CardHeader className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Derni?res alertes</CardTitle>
+                  <CardTitle>DerniÃ¨res alertes</CardTitle>
                   <CardDescription>Triees par date de publication</CardDescription>
                 </div>
                 <Badge variant="outline">{filtered.length}</Badge>

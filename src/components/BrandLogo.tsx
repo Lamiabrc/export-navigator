@@ -32,7 +32,7 @@ export function BrandLogo({
   locationClassName,
   showText = true,
   title = "MPL Conseil Export",
-  subtitle = "Audit - R?glementation - Veille",
+  subtitle = "Audit - RÃ©glementation - Veille",
   location = "Conseil Export",
   size = "md",
   logoSrc = "/mpl-logo.png",

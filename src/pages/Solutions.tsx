@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 const solutions = [
   {
     title: "Validation express",
-    description: "Contr?le rapide HS, documents, taxes, sanctions avant expedition.",
+    description: "ContrÃ´le rapide HS, documents, taxes, sanctions avant expedition.",
   },
   {
     title: "Centre veille",

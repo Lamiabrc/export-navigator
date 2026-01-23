@@ -31,7 +31,7 @@ export default function Newsletter() {
               <CardTitle>Alerte export hebdo</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-2">
-              <p>Sanctions, evolution docs, taxes et contr?les par pays/HS.</p>
+              <p>Sanctions, evolution docs, taxes et contrÃ´les par pays/HS.</p>
               <p>Resume actionnable, 5 minutes de lecture.</p>
             </CardContent>
           </Card>

@@ -109,9 +109,9 @@ export const demoAlerts: DemoAlert[] = [
   { id: "demo-alert-1", title: "Sanctions UE - Russie", message: "Blocage partiel sur HS 8708.", severity: "high", country_iso2: "RU", hs_prefix: "8708", detected_at: daysAgo(2) },
   { id: "demo-alert-2", title: "Taxes additionnelles US", message: "Droits additionnels sur 8504.", severity: "medium", country_iso2: "US", hs_prefix: "8504", detected_at: daysAgo(4) },
   { id: "demo-alert-3", title: "Documentation Maroc", message: "Certificat d'origine obligatoire pour 2204.", severity: "medium", country_iso2: "MA", hs_prefix: "2204", detected_at: daysAgo(5) },
-  { id: "demo-alert-4", title: "Contr?le maritime Chine", message: "Delais portuaires en hausse.", severity: "low", country_iso2: "CN", hs_prefix: "9403", detected_at: daysAgo(7) },
+  { id: "demo-alert-4", title: "ContrÃ´le maritime Chine", message: "Delais portuaires en hausse.", severity: "low", country_iso2: "CN", hs_prefix: "9403", detected_at: daysAgo(7) },
   { id: "demo-alert-5", title: "Alertes conformite UE", message: "Verification renforcee des dossiers pharma.", severity: "high", country_iso2: "DE", hs_prefix: "3004", detected_at: daysAgo(9) },
-  { id: "demo-alert-6", title: "US - Contr?les douane", message: "Focus sur HS 3304.", severity: "medium", country_iso2: "US", hs_prefix: "3304", detected_at: daysAgo(12) },
+  { id: "demo-alert-6", title: "US - ContrÃ´les douane", message: "Focus sur HS 3304.", severity: "medium", country_iso2: "US", hs_prefix: "3304", detected_at: daysAgo(12) },
 ];
 
 export function getDemoTradeFlows(): DemoTradeFlow[] {
