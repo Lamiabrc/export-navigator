@@ -334,31 +334,31 @@ export default function ControlTower() {
       <div className="relative">
         <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-blue-600 via-white to-red-600" />
       </div>
-      <div className="space-y-6 px-4 pb-8 pt-6">
+      <div className="space-y-8 px-6 pb-10 pt-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.35em] text-amber-200/80">Control Tower export</p>
-            <h1 className="text-3xl font-bold text-slate-50">France vers le monde</h1>
-            <p className="text-sm text-slate-300/80">
+            <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Control Tower export</p>
+            <h1 className="text-3xl font-bold text-slate-900">France vers le monde</h1>
+            <p className="text-sm text-slate-600">
               Choisis un HS code pour voir les pays acheteurs, les leaders mondiaux et les signaux de veille.
             </p>
           </div>
 
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-[220px]">
-              <label className="text-xs text-slate-300">HS code (prefix ok)</label>
+              <label className="text-xs text-slate-500">HS code (prefix ok)</label>
               <Input
                 value={hsCode}
                 onChange={(e) => setHsCode(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
                 placeholder="ex: 3004"
-                className="bg-slate-900/60 border-slate-700 text-slate-100 placeholder:text-slate-500"
+                className="bg-white border-slate-200 text-slate-900 placeholder:text-slate-400"
               />
             </div>
 
             <div className="min-w-[220px]">
-              <label className="text-xs text-slate-300">Destination (filtre)</label>
+              <label className="text-xs text-slate-500">Destination (filtre)</label>
               <Select value={market} onValueChange={setMarket}>
-                <SelectTrigger className="bg-slate-900/60 border-slate-700 text-slate-100">
+                <SelectTrigger className="bg-white border-slate-200 text-slate-900">
                   <SelectValue placeholder="Tous pays" />
                 </SelectTrigger>
                 <SelectContent>
@@ -379,14 +379,25 @@ export default function ControlTower() {
         </div>
 
         {error ? (
-          <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {error}
           </div>
         ) : null}
 
         <div className="grid grid-cols-12 gap-4">
           <div className="col-span-12 lg:col-span-8">
-            <div className="relative h-[460px] overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#0f1a2b] via-[#0b1324] to-[#1b0f2a] shadow-2xl">
+            <div className="relative h-[620px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="absolute inset-0">
+                <img
+                  src="/assets/sea-login.jpg"
+                  alt="Ocean"
+                  className="h-full w-full object-cover opacity-15"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-br from-white/80 via-white/70 to-slate-50/90" />
+              </div>
               <div className="absolute inset-0">
                 <svg viewBox={`0 0 ${svgMeta.width} ${svgMeta.height}`} className="h-full w-full">
                   <defs>
@@ -406,8 +417,8 @@ export default function ControlTower() {
                     width={svgMeta.width}
                     height={svgMeta.height}
                     preserveAspectRatio="xMidYMid meet"
-                    opacity="0.5"
-                    style={{ pointerEvents: "none", filter: "invert(1) contrast(1.1) brightness(1.1)" }}
+                    opacity="0.55"
+                    style={{ pointerEvents: "none" }}
                   />
 
                   {frNode
@@ -421,9 +432,9 @@ export default function ControlTower() {
                               key={node.code_iso2}
                               d={d}
                               fill="none"
-                              stroke={isActive ? "#f97316" : "#60a5fa"}
+                              stroke={isActive ? "#1d4ed8" : "#94a3b8"}
                               strokeWidth={isActive ? 2.4 : 1.2}
-                              strokeOpacity={isActive ? 0.9 : 0.35}
+                              strokeOpacity={isActive ? 0.9 : 0.55}
                               filter="url(#softGlow)"
                             />
                           );
@@ -434,12 +445,12 @@ export default function ControlTower() {
                     const active = hovered === node.code_iso2;
                     return (
                       <g key={node.code_iso2}>
-                        <circle cx={node.x} cy={node.y} r={active ? 10 : 7} fill="#f59e0b" opacity={node.code_iso2 === "FR" ? 0.85 : 0.6} />
+                        <circle cx={node.x} cy={node.y} r={active ? 10 : 7} fill="#1d4ed8" opacity={node.code_iso2 === "FR" ? 0.9 : 0.45} />
                         <circle
                           cx={node.x}
                           cy={node.y}
                           r={active ? 5.5 : 4}
-                          fill={node.code_iso2 === "FR" ? "#22d3ee" : "#f8fafc"}
+                          fill={node.code_iso2 === "FR" ? "#ef4444" : "#1e293b"}
                           opacity={0.9}
                           className="cursor-pointer"
                           onMouseEnter={(evt) => {
@@ -460,41 +471,41 @@ export default function ControlTower() {
               </div>
 
               <div className="absolute left-4 top-4 flex flex-wrap gap-3">
-                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100">
-                  <div className="text-xs text-slate-400">Export FR (periode)</div>
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm">
+                  <div className="text-xs text-slate-500">Export FR (periode)</div>
                   <div className="text-xl font-semibold">{formatMoney(totalFrExport)}</div>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100">
-                  <div className="text-xs text-slate-400">Top destination</div>
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm">
+                  <div className="text-xs text-slate-500">Top destination</div>
                   <div className="text-xl font-semibold">{topMarket}</div>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100">
-                  <div className="text-xs text-slate-400">Marches actifs</div>
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm">
+                  <div className="text-xs text-slate-500">Marches actifs</div>
                   <div className="text-xl font-semibold">{marketsCount || 0}</div>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-100">
-                  <div className="text-xs text-slate-400">Rang FR (exports)</div>
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm">
+                  <div className="text-xs text-slate-500">Rang FR (exports)</div>
                   <div className="text-xl font-semibold">{frRank ? `#${frRank}` : "n/a"}</div>
                 </div>
               </div>
 
               {loading ? (
-                <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-200">
+                <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-600">
                   Chargement des flux...
                 </div>
               ) : flows.length === 0 ? (
-                <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-200">
+                <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-600">
                   Aucune donnee sur la periode. Importe les flux CSV pour activer la tour.
                 </div>
               ) : null}
 
               {hovered && tooltipPos ? (
                 <div
-                  className="pointer-events-none fixed z-[9999] rounded-lg border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs text-slate-100 shadow-xl"
+                  className="pointer-events-none fixed z-[9999] rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 shadow-xl"
                   style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 30 }}
                 >
                   <div className="font-semibold">{hovered}</div>
-                  <div className="text-slate-300">
+                  <div className="text-slate-500">
                     {countryLookup.get(hovered)?.label || "Pays"}
                   </div>
                 </div>
@@ -503,17 +514,17 @@ export default function ControlTower() {
           </div>
 
           <div className="col-span-12 lg:col-span-4 space-y-4">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="text-xs text-slate-400 uppercase tracking-[0.25em]">Top destinations FR</div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="text-xs text-slate-500 uppercase tracking-[0.25em]">Top destinations FR</div>
               <div className="mt-3 space-y-2">
                 {topDestinations.length ? (
                   topDestinations.map((r, idx) => (
                     <div key={r.code} className="flex items-center justify-between text-sm">
-                      <div className="text-slate-200">
-                        <span className="text-slate-500 mr-2">#{idx + 1}</span>
+                      <div className="text-slate-700">
+                        <span className="text-slate-400 mr-2">#{idx + 1}</span>
                         {r.code}
                       </div>
-                      <div className="font-semibold text-amber-200">{formatMoney(r.value)}</div>
+                      <div className="font-semibold text-slate-900">{formatMoney(r.value)}</div>
                     </div>
                   ))
                 ) : (
@@ -522,17 +533,17 @@ export default function ControlTower() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="text-xs text-slate-400 uppercase tracking-[0.25em]">Top exportateurs (monde)</div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="text-xs text-slate-500 uppercase tracking-[0.25em]">Top exportateurs (monde)</div>
               <div className="mt-3 space-y-2">
                 {globalExporters.length ? (
                   globalExporters.map((r, idx) => (
                     <div key={r.code} className="flex items-center justify-between text-sm">
-                      <div className="text-slate-200">
-                        <span className="text-slate-500 mr-2">#{idx + 1}</span>
+                      <div className="text-slate-700">
+                        <span className="text-slate-400 mr-2">#{idx + 1}</span>
                         {r.code}
                       </div>
-                      <div className="font-semibold text-slate-100">{formatMoney(r.value)}</div>
+                      <div className="font-semibold text-slate-900">{formatMoney(r.value)}</div>
                     </div>
                   ))
                 ) : (
@@ -541,17 +552,17 @@ export default function ControlTower() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="text-xs text-slate-400 uppercase tracking-[0.25em]">Top importateurs (monde)</div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="text-xs text-slate-500 uppercase tracking-[0.25em]">Top importateurs (monde)</div>
               <div className="mt-3 space-y-2">
                 {globalImporters.length ? (
                   globalImporters.map((r, idx) => (
                     <div key={r.code} className="flex items-center justify-between text-sm">
-                      <div className="text-slate-200">
-                        <span className="text-slate-500 mr-2">#{idx + 1}</span>
+                      <div className="text-slate-700">
+                        <span className="text-slate-400 mr-2">#{idx + 1}</span>
                         {r.code}
                       </div>
-                      <div className="font-semibold text-slate-100">{formatMoney(r.value)}</div>
+                      <div className="font-semibold text-slate-900">{formatMoney(r.value)}</div>
                     </div>
                   ))
                 ) : (
@@ -563,11 +574,11 @@ export default function ControlTower() {
         </div>
 
         <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-12 lg:col-span-8 rounded-2xl border border-white/10 bg-white/5 p-5">
+          <div className="col-span-12 lg:col-span-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs text-slate-400 uppercase tracking-[0.25em]">Veille concurrentielle</div>
-                <div className="text-lg font-semibold text-slate-100">Signaux marche (France)</div>
+                <div className="text-xs text-slate-500 uppercase tracking-[0.25em]">Veille concurrentielle</div>
+                <div className="text-lg font-semibold text-slate-900">Signaux marche (France)</div>
               </div>
               <div className="text-xs text-slate-400">Comparaison vs periode precedente</div>
             </div>
@@ -575,14 +586,14 @@ export default function ControlTower() {
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
               {watchSignals.length ? (
                 watchSignals.map((s) => (
-                  <div key={s.code} className="rounded-xl border border-white/10 bg-slate-950/30 p-3">
-                    <div className="flex items-center justify-between text-sm text-slate-200">
+                  <div key={s.code} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between text-sm text-slate-700">
                       <span>{s.code}</span>
-                      <span className={s.delta !== null && s.delta > 0 ? "text-emerald-300" : "text-rose-300"}>
+                      <span className={s.delta !== null && s.delta > 0 ? "text-emerald-600" : "text-rose-600"}>
                         {s.delta === null ? "n/a" : `${s.delta.toFixed(1)}%`}
                       </span>
                     </div>
-                    <div className="text-xs text-slate-400">Valeur: {formatMoney(s.value)}</div>
+                    <div className="text-xs text-slate-500">Valeur: {formatMoney(s.value)}</div>
                   </div>
                 ))
               ) : (
@@ -591,20 +602,20 @@ export default function ControlTower() {
             </div>
           </div>
 
-          <div className="col-span-12 lg:col-span-4 rounded-2xl border border-white/10 bg-white/5 p-5">
-            <div className="text-xs text-slate-400 uppercase tracking-[0.25em]">Lecture rapide</div>
-            <div className="mt-3 space-y-2 text-sm text-slate-200">
+          <div className="col-span-12 lg:col-span-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="text-xs text-slate-500 uppercase tracking-[0.25em]">Lecture rapide</div>
+            <div className="mt-3 space-y-2 text-sm text-slate-700">
               <div className="flex items-center justify-between">
                 <span>HS code filtre</span>
-                <span className="font-semibold">{hsCode || "Tous"}</span>
+                <span className="font-semibold text-slate-900">{hsCode || "Tous"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span>Destination filtre</span>
-                <span className="font-semibold">{market === ALL ? "Tous" : market}</span>
+                <span className="font-semibold text-slate-900">{market === ALL ? "Tous" : market}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span>Flux charges</span>
-                <span className="font-semibold">{flows.length}</span>
+                <span className="font-semibold text-slate-900">{flows.length}</span>
               </div>
             </div>
             <div className="mt-4">

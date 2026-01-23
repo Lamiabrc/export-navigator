@@ -121,27 +121,27 @@
 
 /* Control Tower world */
 .control-tower-world {
-  --background: 223 40% 8%;
-  --foreground: 210 25% 96%;
-  --card: 223 32% 12%;
-  --card-foreground: 210 25% 96%;
-  --border: 220 28% 20%;
-  --accent: 28 95% 58%;
-  --primary: 28 95% 58%;
-  --primary-foreground: 0 0% 10%;
-  --secondary: 200 90% 55%;
-  --muted: 223 18% 22%;
-  --muted-foreground: 220 16% 70%;
-  --chart-1: 28 95% 58%;
-  --chart-2: 200 90% 55%;
-  --chart-3: 160 70% 48%;
-  --chart-4: 350 78% 60%;
-  --chart-5: 45 92% 62%;
+  --background: 210 36% 97%;
+  --foreground: 222 34% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 34% 12%;
+  --border: 214 20% 86%;
+  --accent: 217 76% 46%;
+  --primary: 217 76% 46%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 78% 52%;
+  --muted: 210 30% 94%;
+  --muted-foreground: 220 14% 45%;
+  --chart-1: 217 76% 46%;
+  --chart-2: 0 78% 52%;
+  --chart-3: 160 60% 38%;
+  --chart-4: 25 90% 50%;
+  --chart-5: 205 68% 50%;
   background:
-    radial-gradient(circle at 15% 20%, rgba(255, 162, 74, 0.16), transparent 35%),
-    radial-gradient(circle at 85% 10%, rgba(56, 189, 248, 0.18), transparent 40%),
-    radial-gradient(circle at 20% 85%, rgba(244, 63, 94, 0.12), transparent 45%),
-    #0b1220;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.9)),
+    radial-gradient(circle at 20% 15%, rgba(37, 99, 235, 0.08), transparent 40%),
+    radial-gradient(circle at 80% 10%, rgba(239, 68, 68, 0.08), transparent 45%),
+    #f8fafc;
 }
 
 @layer base {
