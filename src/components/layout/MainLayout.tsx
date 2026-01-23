@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { BrandLogo } from "../BrandLogo";
+import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
 import {
   TimeRangePicker,
   AutoRefreshControl,
@@ -32,6 +33,7 @@ export function MainLayout({ children, contentClassName, wrapperClassName, varia
         wrapperClassName
       )}
     >
+      <CinematicBackdrop variant="app" showMap={false} className="opacity-40" />
       <div
         className="pointer-events-none absolute inset-0 opacity-30"
         style={{

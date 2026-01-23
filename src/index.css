@@ -204,6 +204,67 @@
   .glass {
     @apply bg-card/70 backdrop-blur-lg border border-white/10 shadow-xl shadow-black/40;
   }
+
+  .cinematic-gradient {
+    background: radial-gradient(circle at 20% 10%, rgba(30, 64, 175, 0.35), transparent 45%),
+      radial-gradient(circle at 85% 20%, rgba(220, 38, 38, 0.28), transparent 40%),
+      linear-gradient(180deg, rgba(2, 6, 23, 0.92), rgba(15, 23, 42, 0.85));
+    animation: cinematic-drift 16s ease-in-out infinite alternate;
+  }
+
+  .cinematic-grid {
+    background-image: linear-gradient(rgba(148, 197, 255, 0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 197, 255, 0.12) 1px, transparent 1px);
+    background-size: 120px 120px;
+    mask-image: radial-gradient(circle at 40% 40%, rgba(0, 0, 0, 0.7), transparent 70%);
+  }
+
+  .cinematic-sweep {
+    background: linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.08) 45%, transparent 60%);
+    animation: cinematic-scan 10s linear infinite;
+    opacity: 0.7;
+  }
+
+  .cinematic-map-glow {
+    background: radial-gradient(circle at 25% 25%, rgba(59, 130, 246, 0.22), transparent 45%),
+      radial-gradient(circle at 75% 35%, rgba(239, 68, 68, 0.18), transparent 40%),
+      linear-gradient(135deg, rgba(15, 23, 42, 0.45), rgba(15, 23, 42, 0.1));
+    animation: cinematic-pulse 6s ease-in-out infinite;
+    mix-blend-mode: screen;
+  }
+}
+
+@keyframes cinematic-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-2%, -1%, 0) scale(1.02);
+  }
+  100% {
+    transform: translate3d(2%, 1%, 0) scale(1.03);
+  }
+}
+
+@keyframes cinematic-scan {
+  0% {
+    transform: translateX(-60%);
+  }
+  100% {
+    transform: translateX(60%);
+  }
+}
+
+@keyframes cinematic-pulse {
+  0% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0.55;
+  }
 }
 
 @layer components {

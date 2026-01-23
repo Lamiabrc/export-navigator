@@ -623,6 +623,7 @@ export default function ControlTower() {
             <div className="relative h-[620px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="absolute inset-0">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/85 via-white/75 to-blue-50/90" />
+                <div className="absolute inset-0 cinematic-map-glow pointer-events-none" />
               </div>
               <div className="absolute inset-0">
                 <svg viewBox={`0 0 ${svgMeta.width} ${svgMeta.height}`} className="h-full w-full">

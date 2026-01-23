@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
 
 const NAV_ITEMS = [
   { label: "Solutions", to: "/solutions" },
@@ -16,7 +17,8 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(37,99,235,0.08),_transparent_45%),linear-gradient(180deg,_#f8fafc,_#eef2f7)] text-slate-900">
+    <div className="relative min-h-screen bg-slate-950 text-white">
+      <CinematicBackdrop variant="public" className="z-0" />
       <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <BrandLogo imageClassName="h-9" titleClassName="text-base font-semibold" subtitleClassName="text-xs" />
@@ -49,7 +51,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         <div className="h-1 bg-gradient-to-r from-blue-700 via-white to-red-600" />
       </header>
 
-      <main className="mx-auto w-full max-w-6xl px-6 py-10">
+      <main className="relative z-10 mx-auto w-full max-w-6xl px-6 py-10 text-slate-900 bg-white/90 backdrop-blur-xl rounded-[32px] border border-white/40 shadow-2xl shadow-blue-900/20">
         {children ?? <Outlet />}
       </main>
 
