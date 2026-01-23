@@ -318,7 +318,9 @@ export async function fetchInvoiceByNumber(invoiceNumber: string): Promise<Invoi
   const linesRes = await fetchInvoiceLines(invoiceNumber);
   const competitorRes = await fetchCompetitorPrices(
     invoice.territory_code ?? invoice.ile ?? null,
-    (linesRes.data || []).map((l) => l.product_id).filter(Boolean) as string[],
+    (linesRes.data || [])
+      .map((l) => (l.product_label ?? l.product_id ?? "").toString().trim())
+      .filter(Boolean) as string[],
   );
 
   return {
@@ -580,40 +582,54 @@ export async function fetchCompetitorPrices(
   const trimmedSkus = Array.from(new Set(skus.filter(Boolean)));
 
   const { data, error } = await supabase
-    .from("v_export_pricing")
-    .select("sku,label,territory_code,thuasne_price_ttc,donjoy_price_ttc,gibaud_price_ttc,competitor_price")
-    .in("sku", trimmedSkus)
+    .from("competitor_snapshots")
+    .select("product_ref,product_name,territory_code,competitor_id,net_price_est,list_price,snapshot_date")
+    .in("product_ref", trimmedSkus)
     .limit(2000);
 
   if (error) {
-    if (isMissingTableError(error)) return { data: [], total: 0, warning: "v_export_pricing manquante pour la concurrence" };
+    if (isMissingTableError(error)) return { data: [], total: 0, warning: "Table competitor_snapshots manquante pour la concurrence" };
     throw error;
   }
 
   const rows = Array.isArray(data) ? data : data ? [data] : [];
 
   const mapped: CompetitorPrice[] = [];
+  const labelMap = new Map<string, Map<string, string>>();
+
   rows
     .filter((r) => !territory || !r?.territory_code || String(r.territory_code).toUpperCase() === String(territory).toUpperCase())
     .forEach((r: any) => {
+      const sku = String(r.product_ref || "");
+      if (!sku) return;
+
+      const territoryCode = r.territory_code ?? territory ?? null;
       const base: CompetitorPrice = {
-        source: "v_export_pricing",
-        sku: r.sku,
-        label: r.label ?? null,
-        territory_code: r.territory_code ?? territory ?? null,
+        source: "competitor_snapshots",
+        sku,
+        label: r.product_name ?? null,
+        territory_code: territoryCode,
       };
 
-      const competitors: Array<{ competitor: string; price: number | null }> = [
-        { competitor: "Thuasne", price: num(r.thuasne_price_ttc, NaN) },
-        { competitor: "Donjoy", price: num(r.donjoy_price_ttc, NaN) },
-        { competitor: "Gibaud", price: num(r.gibaud_price_ttc, NaN) },
-        { competitor: "Autre", price: num(r.competitor_price, NaN) },
-      ];
+      const price = Number.isFinite(num(r.net_price_est, NaN))
+        ? num(r.net_price_est, NaN)
+        : Number.isFinite(num(r.list_price, NaN))
+        ? num(r.list_price, NaN)
+        : NaN;
 
-      competitors
-        .filter((c) => Number.isFinite(c.price))
-        .forEach((c) => mapped.push({ ...base, price: c.price as number, competitor: c.competitor }));
+      if (!Number.isFinite(price)) return;
+
+      const key = `${sku}__${territoryCode ?? "NA"}`;
+      const compId = String(r.competitor_id || "unknown");
+      const byComp = labelMap.get(key) || new Map<string, string>();
+      if (!byComp.has(compId)) {
+        byComp.set(compId, `Concurrent ${byComp.size + 1}`);
+      }
+      labelMap.set(key, byComp);
+
+      const competitor = byComp.get(compId) || "Concurrent";
+      mapped.push({ ...base, price: price as number, competitor });
     });
 
-  return { data: mapped, total: mapped.length, source: "v_export_pricing" };
+  return { data: mapped, total: mapped.length, source: "competitor_snapshots" };
 }
