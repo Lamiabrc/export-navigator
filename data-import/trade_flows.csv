@@ -1,0 +1,4 @@
+flow_date,hs_code,reporter_country,partner_country,flow_type,value_eur,volume_kg,source
+2025-01-15,3004,FR,US,export,1250000,8200,DOUANES_FR
+2025-01-15,3004,FR,DE,export,940000,6200,DOUANES_FR
+2025-01-15,3004,US,FR,export,2100000,12000,UN_COMTRADE

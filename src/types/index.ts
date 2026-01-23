@@ -59,7 +59,7 @@ export interface Flow {
   incoterm_place: string;
   transport_mode: TransportMode;
   weight?: number;
-  product_type?: 'lppr' | 'standard';
+  product_type?: "regulated" | "standard";
   margin?: number;
   departure_date: string;
   delivery_date: string;

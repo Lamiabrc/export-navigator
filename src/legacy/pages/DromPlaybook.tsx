@@ -9,9 +9,9 @@ import { PageHeader } from "@/components/PageHeader";
 
 const sections = [
   {
-    id: "lpp",
-    title: "Remboursement & LPP",
-    content: "Placeholder : liste des references, modalites DROM, validations CPAM.",
+    id: "ref",
+    title: "References & tarifs",
+    content: "Placeholder : liste des references, modalites DROM, validations.",
   },
   {
     id: "coeff",

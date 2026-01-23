@@ -1,7 +1,7 @@
 import type { ProductRow } from "@/hooks/useProducts";
 import { safeNumber } from "@/hooks/useProducts";
 
-export type PricingMode = "CATALOGUE_2025" | "LPPR" | "MANUAL";
+export type PricingMode = "CATALOGUE_2025" | "REFERENCE" | "MANUAL";
 
 export type QuoteLine = {
   code_article: string;
@@ -19,7 +19,7 @@ export type QuoteContext = {
 export const getUnitPriceHT = (p?: ProductRow, mode: PricingMode = "CATALOGUE_2025", manual?: number) => {
   if (mode === "MANUAL") return safeNumber(manual);
   if (!p) return 0;
-  if (mode === "LPPR") return safeNumber(p.tarif_lppr_eur);
+  if (mode === "REFERENCE") return safeNumber(p.tarif_ref_eur);
   return safeNumber(p.tarif_catalogue_2025);
 };
 

@@ -36,11 +36,11 @@ export default function Products() {
       const hay = [
         p.code_article,
         p.libelle_article,
-        p.code_acl13_ou_ean13,
+        p.code_ean13,
         p.code_acl7,
-        p.code_lppr_generique,
-        p.code_lppr_individuel,
-        p.nom_du_fabricant,
+        p.code_tarif_ref_generique,
+        p.code_tarif_ref_individuel,
+        p.manufacturer_name,
         p.classement_groupe,
         p.classement_produit_libelle,
         p.hs_code,
@@ -63,7 +63,7 @@ export default function Products() {
               Produits
             </h1>
             <p className="text-sm text-muted-foreground">
-              Référentiel Supabase : recherche, contrôle des champs (TVA, LPPR, HS code…).
+              Referentiel Supabase: recherche et controle des champs (TVA, tarif ref., HS code).
             </p>
           </div>
 
@@ -77,16 +77,16 @@ export default function Products() {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Rechercher (code article, libellé, EAN/ACL, fabricant, LPPR, HS code...)"
+            placeholder="Rechercher (code article, libelle, EAN/ACL, fabricant, tarif ref., HS code...)"
             className="md:max-w-2xl"
           />
 
           <div className="flex flex-wrap gap-2 text-xs">
             <Badge variant="secondary">Total: {stats.total}</Badge>
-            <Badge variant="secondary">Nouveautés: {stats.nouveautes}</Badge>
-            <Badge variant="secondary">LPPR: {stats.lppr}</Badge>
+            <Badge variant="secondary">Nouveautes: {stats.nouveautes}</Badge>
+            <Badge variant="secondary">Tarif ref.: {stats.tarif_ref}</Badge>
             <Badge variant="secondary">TVA OK: {stats.withTva}</Badge>
-            <Badge variant="outline">Filtrés: {filtered.length}</Badge>
+            <Badge variant="outline">Filtres: {filtered.length}</Badge>
           </div>
         </div>
 
@@ -97,10 +97,10 @@ export default function Products() {
             <thead className="bg-muted/50 sticky top-0 z-10">
               <tr className="text-left">
                 <th className="p-3">Code article</th>
-                <th className="p-3">Libellé</th>
+                <th className="p-3">Libelle</th>
                 <th className="p-3">TVA</th>
                 <th className="p-3">Tarif cat. 2025</th>
-                <th className="p-3">LPPR</th>
+                <th className="p-3">Tarif ref.</th>
                 <th className="p-3">HS code</th>
                 <th className="p-3">Classement</th>
                 <th className="p-3">Fabricant</th>
@@ -111,7 +111,7 @@ export default function Products() {
               {isLoading ? (
                 <tr>
                   <td className="p-3 text-muted-foreground" colSpan={8}>
-                    Chargement…
+                    Chargement...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
@@ -139,7 +139,7 @@ export default function Products() {
                         {missingTarif ? "Manquant" : fmtEur(p.tarif_catalogue_2025)}
                       </td>
 
-                      <td className="p-3">{p.tarif_lppr_eur != null ? fmtEur(p.tarif_lppr_eur) : ""}</td>
+                      <td className="p-3">{p.tarif_ref_eur != null ? fmtEur(p.tarif_ref_eur) : ""}</td>
 
                       <td className={`p-3 ${missingHs ? "text-red-600 font-medium" : ""}`}>
                         {missingHs ? "Manquant" : safeText(p.hs_code)}
@@ -149,7 +149,7 @@ export default function Products() {
                         {safeText(p.classement_groupe || p.classement_produit_libelle || p.classement_detail)}
                       </td>
 
-                      <td className="p-3">{safeText(p.nom_du_fabricant)}</td>
+                      <td className="p-3">{safeText(p.manufacturer_name)}</td>
                     </tr>
                   );
                 })
@@ -159,7 +159,7 @@ export default function Products() {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Affichage limité à 500 lignes pour garder l’UI fluide (le filtre recherche agit sur l’ensemble).
+          Affichage limite a 500 lignes pour garder l'UI fluide (le filtre recherche agit sur l'ensemble).
         </p>
       </div>
     </MainLayout>

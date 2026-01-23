@@ -15,12 +15,12 @@ export type Product = {
   height_cm?: number;
   unit?: string;
   notes?: string;
-  lpp_code?: string;
+  ref_code?: string;
   cost?: number;
   // Compat legacy
   id?: string;
   name?: string;
-  lppCode?: string;
+  refCode?: string;
 };
 
 export type PricePoint = {
@@ -35,7 +35,7 @@ export type PricePoint = {
   date: string; // YYYY-MM-DD
   confidence: number; // 0..100
   source_label: string;
-  lppr_reimbursement_ttc?: number;
+  ref_reimbursement_ttc?: number;
   vat_rate?: number;
   // Compat legacy
   id?: string;

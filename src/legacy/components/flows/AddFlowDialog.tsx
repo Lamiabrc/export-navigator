@@ -63,7 +63,7 @@ const formSchema = z.object({
   delivery_date: z.string().min(1, 'Date de livraison requise'),
   goods_value: z.coerce.number().min(0, 'Valeur positive requise'),
   weight: z.coerce.number().min(0).optional(),
-  product_type: z.enum(['lppr', 'standard']),
+  product_type: z.enum(["regulated", "standard"]),
   margin: z.coerce.number().min(0).max(100).optional(),
   comment: z.string().optional(),
 });
@@ -93,7 +93,7 @@ export function AddFlowDialog({ open, onOpenChange }: AddFlowDialogProps) {
       delivery_date: '',
       goods_value: 0,
       weight: 100,
-      product_type: 'lppr',
+      product_type: "regulated",
       margin: 25,
       comment: '',
     },
@@ -111,7 +111,7 @@ export function AddFlowDialog({ open, onOpenChange }: AddFlowDialogProps) {
       goodsValue: watchedValues.goods_value,
       destination: watchedValues.destination as Destination,
       incoterm: watchedValues.incoterm as Incoterm,
-      productType: (watchedValues.product_type || 'lppr') as ProductType,
+      productType: (watchedValues.product_type || "regulated") as ProductType,
       transportMode: watchedValues.transport_mode as TransportMode,
       weight: watchedValues.weight || 100,
       margin: watchedValues.margin || 25,
@@ -426,7 +426,7 @@ export function AddFlowDialog({ open, onOpenChange }: AddFlowDialogProps) {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="lppr">LPPR (remboursé)</SelectItem>
+                            <SelectItem value="regulated">Tarif reglemente</SelectItem>
                             <SelectItem value="standard">Standard</SelectItem>
                           </SelectContent>
                         </Select>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
-/** Helper partagé (Simulator.tsx l’importe) */
+// Shared helper (Simulator.tsx imports it)
 export const safeNumber = (value: unknown, fallback = 0): number => {
   if (value === null || value === undefined) return fallback;
   if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
@@ -19,15 +19,15 @@ export type ProductRow = {
   code_article: string | null;
   libelle_article: string | null;
   hs_code?: string | null;
-  code_acl13_ou_ean13: string | null;
+  code_ean13: string | null;
   code_acl7: string | null;
   code_iud_id: string | null;
 
   tarif_catalogue_2025: number | null;
 
-  code_lppr_generique: string | null;
-  tarif_lppr_eur: number | null;
-  code_lppr_individuel: string | null;
+  code_tarif_ref_generique: string | null;
+  tarif_ref_eur: number | null;
+  code_tarif_ref_individuel: string | null;
 
   tva_percent: number | null;
 
@@ -39,12 +39,12 @@ export type ProductRow = {
   unite_vente_hauteur_mm: number | null;
   unite_vente_poids_brut_g: number | null;
 
-  marquage_ce: boolean | null;
-  type_du_dispositif: string | null;
-  classe_du_dispositif: string | null;
-  type_de_vigilance: string | null;
-  nom_du_fabricant: string | null;
-  conditionnement_conforme_dss_lpp: boolean | null;
+  conformity_mark: boolean | null;
+  product_type_label: string | null;
+  product_class_label: string | null;
+  vigilance_type: string | null;
+  manufacturer_name: string | null;
+  packaging_compliance: boolean | null;
 
   created_at: string | null;
   updated_at: string | null;
@@ -97,18 +97,64 @@ export function useProducts(options: UseProductsOptions = {}) {
       const all: ProductRow[] = [];
       let from = 0;
 
-      // Pagination : .range(from, to)
+      // Pagination: .range(from, to)
       // eslint-disable-next-line no-constant-condition
       while (true) {
         const to = from + pageSize - 1;
 
         const { data, error: sbError } = await supabase
-          .from("products")
-          .select("*")
+          .from("v_products_enriched")
+          .select(
+            [
+              "id",
+              "nouveaute",
+              "code_article",
+              "libelle_article",
+              "hs_code",
+              "code_ean13",
+              "code_acl7",
+              "code_iud_id",
+              "tarif_catalogue_2025",
+              "code_tarif_ref_generique",
+              "tarif_ref_eur",
+              "code_tarif_ref_individuel",
+              "tva_percent",
+              "caracteristiques",
+              "indications",
+              "unite_vente_longueur_mm",
+              "unite_vente_largeur_mm",
+              "unite_vente_hauteur_mm",
+              "unite_vente_poids_brut_g",
+              "conformity_mark",
+              "product_type_label",
+              "product_class_label",
+              "vigilance_type",
+              "manufacturer_name",
+              "packaging_compliance",
+              "created_at",
+              "updated_at",
+              "classement_groupe",
+              "classement_produit_code",
+              "classement_produit_num",
+              "classement_produit_libelle",
+              "classement_sous_famille_code",
+              "classement_detail",
+              "classement_taille",
+              "classement_variante",
+              "classement_ancien_code",
+            ].join(",")
+          )
           .order(String(orderBy), { ascending: true, nullsFirst: false })
           .range(from, to);
 
-        if (sbError) throw sbError;
+        if (sbError) {
+          if (String(sbError.message || "").toLowerCase().includes("does not exist")) {
+            throw new Error(
+              "Vue manquante: v_products_enriched. Cree une vue avec des champs generiques (tarif_ref_eur, code_tarif_ref_generique, code_tarif_ref_individuel, manufacturer_name...)."
+            );
+          }
+          throw sbError;
+        }
 
         const rows = (data ?? []) as ProductRow[];
         all.push(...rows);
@@ -158,7 +204,7 @@ export function useProducts(options: UseProductsOptions = {}) {
         .filter((p) => {
           const code = (p.code_article || "").toLowerCase();
           const label = (p.libelle_article || "").toLowerCase();
-          const ean = (p.code_acl13_ou_ean13 || "").toLowerCase();
+          const ean = (p.code_ean13 || "").toLowerCase();
           return code.includes(q) || label.includes(q) || ean.includes(q);
         })
         .slice(0, limit);
@@ -168,7 +214,7 @@ export function useProducts(options: UseProductsOptions = {}) {
 
   const topProductsByZone = useCallback(
     (zone: string, limit = 10) => {
-      // En l'absence de volumes par zone, on retourne les produits triés alpha pour préfigurer l'analytics.
+      // No zone volumes yet; return alpha list as a placeholder.
       const list = [...products].sort((a, b) => (a.libelle_article || "").localeCompare(b.libelle_article || ""));
       return zone ? list.slice(0, limit) : list.slice(0, limit);
     },
@@ -178,10 +224,12 @@ export function useProducts(options: UseProductsOptions = {}) {
   const stats = useMemo(() => {
     const total = products.length;
     const nouveautes = products.filter((p) => Boolean(p.nouveaute)).length;
-    const lppr = products.filter((p) => safeNumber(p.tarif_lppr_eur, 0) > 0 || Boolean(p.code_lppr_individuel || p.code_lppr_generique)).length;
+    const tarif_ref = products.filter(
+      (p) => safeNumber(p.tarif_ref_eur, 0) > 0 || Boolean(p.code_tarif_ref_individuel || p.code_tarif_ref_generique)
+    ).length;
     const withTva = products.filter((p) => safeNumber(p.tva_percent, 0) > 0).length;
 
-    return { total, nouveautes, lppr, withTva };
+    return { total, nouveautes, tarif_ref, withTva };
   }, [products]);
 
   return {

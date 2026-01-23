@@ -27,10 +27,10 @@ type ProductRow = {
   code_article: string | null; // SKU
   libelle_article: string | null; // label
   hs_code: string | null;
-  tarif_lppr_eur: number | null;
+  tarif_ref_eur: number | null;
 };
 
-type LppCoefRow = { territory_code: string; coef: number | null };
+type PricingCoefRow = { territory_code: string; coef: number | null };
 type OmRow = { territory_code: string; hs4: string; om_rate: number | null; omr_rate: number | null };
 
 type CompetitorPrice = { name: string; price: number };
@@ -41,8 +41,8 @@ type PositionRow = {
   label: string | null;
   territory: string;
 
-  lpprMetropole: number | null;
-  lpprDrom: number | null;
+  tarif_refMetropole: number | null;
+  tarif_refDrom: number | null;
 
   ourPrice: number | null;
 
@@ -210,23 +210,37 @@ export default function WatchCommercial() {
         }
 
         const { data: products, error: pErr } = await supabase
-          .from("products")
-          .select("id, code_article, libelle_article, hs_code, tarif_lppr_eur")
+          .from("v_products_enriched")
+          .select("id, code_article, libelle_article, hs_code, tarif_ref_eur")
           .in("id", productIds);
 
         if (!active) return;
-        if (pErr) throw pErr;
+        if (pErr) {
+          if (String(pErr.message || "").toLowerCase().includes("does not exist")) {
+            throw new Error(
+              "Vue manquante: v_products_enriched. Cree une vue avec des champs generiques (tarif_ref_eur, code_article, libelle_article, hs_code)."
+            );
+          }
+          throw pErr;
+        }
 
         const productMap = new Map<string, ProductRow>();
         (products || []).forEach((p: any) => productMap.set(p.id, p as ProductRow));
 
-        const { data: coefData } = await supabase
-          .from("lpp_majoration_coefficients")
+        const { data: coefData, error: coefErr } = await supabase
+          .from("pricing_coefficients")
           .select("territory_code, coef")
           .limit(2000);
 
+        if (coefErr) {
+          if (String(coefErr.message || "").toLowerCase().includes("does not exist")) {
+            throw new Error("Table manquante: pricing_coefficients (coef DROM par territoire).");
+          }
+          throw coefErr;
+        }
+
         const coefMap = new Map<string, number>();
-        ((coefData || []) as unknown as LppCoefRow[]).forEach((c) => {
+        ((coefData || []) as unknown as PricingCoefRow[]).forEach((c) => {
           const code = (c.territory_code || "").toUpperCase();
           const v = num(c.coef);
           if (code && v !== null) coefMap.set(code, v);
@@ -268,9 +282,9 @@ export default function WatchCommercial() {
 
             const isDrom = territoryIsDrom(terr);
 
-            const lpprMetropole = num(p?.tarif_lppr_eur ?? null);
+            const tarif_refMetropole = num(p?.tarif_ref_eur ?? null);
             const coef = terr === "FR" ? 1 : num(coefMap.get(terr) ?? null) ?? 1;
-            const lpprDrom = lpprMetropole !== null ? lpprMetropole * coef : null;
+            const tarif_refDrom = tarif_refMetropole !== null ? tarif_refMetropole * coef : null;
 
             const ourPrice =
               terr === "FR"
@@ -323,8 +337,8 @@ export default function WatchCommercial() {
               label,
               territory: terr,
 
-              lpprMetropole,
-              lpprDrom,
+              tarif_refMetropole,
+              tarif_refDrom,
 
               ourPrice,
 
@@ -358,7 +372,7 @@ export default function WatchCommercial() {
       } catch (e: any) {
         console.error(e);
         if (!active) return;
-        setError(e?.message || "Erreur chargement (product_prices / products / coefficients / om_rates)");
+        setError(e?.message || "Erreur chargement (product_prices / v_products_enriched / pricing_coefficients / om_rates)");
         setRows([]);
         setSelectedSku("");
       } finally {
@@ -627,8 +641,8 @@ export default function WatchCommercial() {
                     <div className="font-semibold text-slate-900">Provenance</div>
                     <ul className="mt-2 space-y-1 text-xs text-slate-700">
                       <li>• Prix (MPL Conseil Export + concurrents) : <span className="font-mono">product_prices</span></li>
-                      <li>• LPPR : <span className="font-mono">products.tarif_lppr_eur</span></li>
-                      <li>• LPPR DROM : <span className="font-mono">lpp_majoration_coefficients</span></li>
+                      <li>• Tarif ref. : <span className="font-mono">v_products_enriched.tarif_ref_eur</span></li>
+                      <li>• Tarif ref. DROM : <span className="font-mono">pricing_coefficients</span></li>
                       <li>• OM/OMR : <span className="font-mono">om_rates</span> (clé hs4)</li>
                     </ul>
                   </div>
@@ -702,10 +716,10 @@ export default function WatchCommercial() {
                         <div className="text-sm text-slate-900 font-semibold line-clamp-1">{r.label || "Produit"}</div>
                         <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
                           <Badge variant="outline" className="border-slate-200 text-slate-700">
-                            LPPR FR: {money(r.lpprMetropole)}
+                            Tarif ref. FR: {money(r.tarif_refMetropole)}
                           </Badge>
                           <Badge variant="outline" className="border-slate-200 text-slate-700">
-                            LPPR DROM: {money(r.lpprDrom)}
+                            Tarif ref. DROM: {money(r.tarif_refDrom)}
                           </Badge>
                         </div>
                       </div>
@@ -713,7 +727,7 @@ export default function WatchCommercial() {
                         <Badge variant="outline" className="border-amber-200 text-amber-800">
                           {pctLabel(r.gapPct)}
                         </Badge>
-                        <div className="text-[11px] text-slate-600 mt-1">Orli: {money(r.ourPrice)}</div>
+                        <div className="text-[11px] text-slate-600 mt-1">MPL: {money(r.ourPrice)}</div>
                         <div className="text-[11px] text-slate-600">
                           Best: {r.bestCompetitor ? `${money(r.bestCompetitor.price)} (${r.bestCompetitor.name})` : "—"}
                         </div>
@@ -755,10 +769,10 @@ export default function WatchCommercial() {
                         <div className="text-sm text-slate-900 font-semibold line-clamp-1">{r.label || "Produit"}</div>
                         <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
                           <Badge variant="outline" className="border-slate-200 text-slate-700">
-                            LPPR FR: {money(r.lpprMetropole)}
+                            Tarif ref. FR: {money(r.tarif_refMetropole)}
                           </Badge>
                           <Badge variant="outline" className="border-slate-200 text-slate-700">
-                            LPPR DROM: {money(r.lpprDrom)}
+                            Tarif ref. DROM: {money(r.tarif_refDrom)}
                           </Badge>
                         </div>
                       </div>
@@ -766,7 +780,7 @@ export default function WatchCommercial() {
                         <Badge variant="outline" className="border-emerald-200 text-emerald-800">
                           {pctLabel(r.gapPct)}
                         </Badge>
-                        <div className="text-[11px] text-slate-600 mt-1">Orli: {money(r.ourPrice)}</div>
+                        <div className="text-[11px] text-slate-600 mt-1">MPL: {money(r.ourPrice)}</div>
                         <div className="text-[11px] text-slate-600">
                           Best: {r.bestCompetitor ? `${money(r.bestCompetitor.price)} (${r.bestCompetitor.name})` : "—"}
                         </div>
@@ -808,10 +822,10 @@ export default function WatchCommercial() {
                         <div className="text-sm text-slate-900 font-semibold line-clamp-1">{r.label || "Produit"}</div>
                         <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
                           <Badge variant="outline" className="border-slate-200 text-slate-700">
-                            LPPR FR: {money(r.lpprMetropole)}
+                            Tarif ref. FR: {money(r.tarif_refMetropole)}
                           </Badge>
                           <Badge variant="outline" className="border-slate-200 text-slate-700">
-                            LPPR DROM: {money(r.lpprDrom)}
+                            Tarif ref. DROM: {money(r.tarif_refDrom)}
                           </Badge>
                         </div>
                       </div>
@@ -861,15 +875,15 @@ export default function WatchCommercial() {
                         <div className="text-sm text-slate-900 font-semibold line-clamp-1">{r.label || "Produit"}</div>
                         <div className="mt-1 flex flex-wrap gap-1 text-[11px]">
                           <Badge variant="outline" className="border-slate-200 text-slate-700">
-                            LPPR FR: {money(r.lpprMetropole)}
+                            Tarif ref. FR: {money(r.tarif_refMetropole)}
                           </Badge>
                           <Badge variant="outline" className="border-slate-200 text-slate-700">
-                            LPPR DROM: {money(r.lpprDrom)}
+                            Tarif ref. DROM: {money(r.tarif_refDrom)}
                           </Badge>
                         </div>
                       </div>
                       <div className="text-right text-[11px] text-slate-600">
-                        <div>Orli: {money(r.ourPrice)}</div>
+                        <div>MPL: {money(r.ourPrice)}</div>
                         <div>Concurrents: {r.competitorCount}</div>
                       </div>
                     </div>
@@ -887,7 +901,7 @@ export default function WatchCommercial() {
           <CardHeader>
             <CardTitle className="text-lg text-slate-900">Produit sélectionné</CardTitle>
             <CardDescription className="text-slate-600">
-              LPPR en référence (Métropole/DROM) avant lecture des prix et des écarts.
+              Tarif ref. en référence (Métropole/DROM) avant lecture des prix et des écarts.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -905,10 +919,10 @@ export default function WatchCommercial() {
 
                     <div className="mt-2 flex flex-wrap gap-2">
                       <Badge variant="outline" className="border-slate-200 text-slate-800">
-                        LPPR Métropole : {money(selected.lpprMetropole)}
+                        Tarif ref. Métropole : {money(selected.tarif_refMetropole)}
                       </Badge>
                       <Badge variant="outline" className="border-slate-200 text-slate-800">
-                        LPPR DROM : {money(selected.lpprDrom)}
+                        Tarif ref. DROM : {money(selected.tarif_refDrom)}
                       </Badge>
                     </div>
                   </div>
@@ -1033,12 +1047,12 @@ export default function WatchCommercial() {
           </CardContent>
         </Card>
 
-        {/* Table : LPPR AVANT prix */}
+        {/* Table : Tarif ref. AVANT prix */}
         <Card className={neonCard}>
           <CardHeader>
             <CardTitle className="text-lg text-slate-900">Positionnement (liste)</CardTitle>
             <CardDescription className="text-slate-600">
-              Lecture : <span className="font-semibold">LPPR</span> → MPL Conseil Export → best concurrent → gap/rang.
+              Lecture : <span className="font-semibold">Tarif ref.</span> → MPL Conseil Export → best concurrent → gap/rang.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1055,8 +1069,8 @@ export default function WatchCommercial() {
                     <TableRow className="bg-slate-50">
                       <TableHead>SKU</TableHead>
                       <TableHead>Produit</TableHead>
-                      <TableHead className="text-right">LPPR FR</TableHead>
-                      <TableHead className="text-right">LPPR DROM</TableHead>
+                      <TableHead className="text-right">Tarif ref. FR</TableHead>
+                      <TableHead className="text-right">Tarif ref. DROM</TableHead>
                       <TableHead className="text-right">MPL Conseil Export TTC</TableHead>
                       <TableHead>Best concurrent</TableHead>
                       <TableHead className="text-right">Gap %</TableHead>
@@ -1076,8 +1090,8 @@ export default function WatchCommercial() {
                         <TableCell className="font-mono text-xs text-slate-700">{row.sku}</TableCell>
                         <TableCell className="font-medium text-slate-900">{row.label || "—"}</TableCell>
 
-                        <TableCell className="text-right text-slate-900">{money(row.lpprMetropole)}</TableCell>
-                        <TableCell className="text-right text-slate-900">{money(row.lpprDrom)}</TableCell>
+                        <TableCell className="text-right text-slate-900">{money(row.tarif_refMetropole)}</TableCell>
+                        <TableCell className="text-right text-slate-900">{money(row.tarif_refDrom)}</TableCell>
 
                         <TableCell className="text-right font-semibold text-slate-900">{money(row.ourPrice)}</TableCell>
 

@@ -154,7 +154,8 @@ export default function Simulator() {
   const product = useMemo(() => products.find((p) => p.code_article === sku), [products, sku]);
 
   const unitPrice = useMemo(() => {
-    const fallback = safeNumber((product as any)?.tarif_catalogue_2025) || safeNumber((product as any)?.tarif_lppr_eur) || 0;
+    const fallback =
+      safeNumber((product as any)?.tarif_catalogue_2025) || safeNumber((product as any)?.tarif_ref_eur) || 0;
     return manualPrice === "" ? fallback : Number(manualPrice) || 0;
   }, [product, manualPrice]);
 
@@ -345,7 +346,7 @@ export default function Simulator() {
                 <div>
                   <Label>Prix unitaire (€) (optionnel)</Label>
                   <Input type="number" value={manualPrice} onChange={(e) => setManualPrice(e.target.value === "" ? "" : Number(e.target.value))} />
-                  <p className="text-[11px] text-muted-foreground">Auto : tarif_catalogue_2025 / LPPR.</p>
+                  <p className="text-[11px] text-muted-foreground">Auto : tarif_catalogue_2025 / Tarif ref..</p>
                 </div>
               </div>
 

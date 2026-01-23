@@ -27,24 +27,24 @@ const selectPrice = (points: PricePoint[]) => {
 };
 
 /**
- * Essaie de déduire un "prix MPL Conseil Export" depuis la fiche produit DB
- * (sans imposer un schéma strict : on lit plusieurs clés possibles).
+ * Essaie de deduire un prix MPL depuis la fiche produit DB
+ * (sans imposer un schema strict : on lit plusieurs cles possibles).
  *
- * On garde ça volontairement permissif car ton type `Product` côté pricing
- * n’est pas forcément le même que ta table `products`.
+ * On garde ca volontairement permissif car ton type `Product` cote pricing
+ * n'est pas forcement le meme que ta table `products`.
  */
-const getFallbackMPL Conseil ExportPriceFromProduct = (product: Product): number | undefined => {
+const getFallbackMplPriceFromProduct = (product: Product): number | undefined => {
   const p: any = product as any;
 
-  // Priorités (ajuste si besoin) :
-  // 1) un champ "mplPrice" si tu l’ajoutes dans le futur
+  // Priorites (ajuste si besoin) :
+  // 1) un champ "mplPrice" si tu l'ajoutes dans le futur
   // 2) tarif_catalogue_2025 (table products)
-  // 3) tarif_lppr_eur (si tu veux piloter par LPPR)
+  // 3) tarif_ref_eur (si tu veux piloter via tarif reference)
   // 4) catalogPrice / price (si ton type pricing le contient)
   return (
     safeNumber(p?.mplPrice) ??
     safeNumber(p?.tarif_catalogue_2025) ??
-    safeNumber(p?.tarif_lppr_eur) ??
+    safeNumber(p?.tarif_ref_eur) ??
     safeNumber(p?.catalogPrice) ??
     safeNumber(p?.price)
   );
@@ -88,13 +88,13 @@ export const recommendAction = (
   config?: PricingConfig
 ): { recommendation: string; hint: string } => {
   if (!config) {
-    return { recommendation: "Collecter données", hint: "Config pricing manquante" };
+    return { recommendation: "Collecter donnees", hint: "Config pricing manquante" };
   }
 
   if (positioning === "no_data") {
     return {
-      recommendation: "Collecter données",
-      hint: "Pas assez de prix concurrents ou prix MPL Conseil Export manquant",
+      recommendation: "Collecter donnees",
+      hint: "Pas assez de prix concurrents ou prix MPL manquant",
     };
   }
 
@@ -108,16 +108,16 @@ export const recommendAction = (
 
   if (positioning === "premium") {
     const deltaBest = gapBestPct !== undefined ? `${gapBestPct.toFixed(0)}%` : "";
-    const marginInfo = cost !== undefined ? ` (coût ${cost}€ estimé)` : "";
+    const marginInfo = cost !== undefined ? ` (cout ${cost} EUR estime)` : "";
     return {
       recommendation: "Aligner partiellement",
-      hint: `Au-dessus du marché ${deltaBest}. Vérifier valeur perçue${marginInfo} ou descendre vers best.`,
+      hint: `Au-dessus du marche ${deltaBest}. Verifier valeur percue${marginInfo} ou descendre vers best.`,
     };
   }
 
   return {
     recommendation: "Maintenir",
-    hint: "Prix aligné. Monitorer volumes et signaux concurrence.",
+    hint: "Prix aligne. Monitorer volumes et signaux concurrence.",
   };
 };
 
@@ -149,14 +149,14 @@ export const groupByProductMarketChannel = (
       byMarketChannel.set(key, arr);
     });
 
-    // ✅ Fallback MPL si absent (prix “catalogue”)
-    const fallbackMPL Conseil ExportPrice = getFallbackMPL Conseil ExportPriceFromProduct(product);
+    // Fallback MPL si absent (prix "catalogue")
+    const fallbackMplPrice = getFallbackMplPriceFromProduct(product);
 
-    if (fallbackMPL Conseil ExportPrice !== undefined) {
-      // Pour chaque couple market/channel existant : si pas de MPL, on injecte un point synthétique
+    if (fallbackMplPrice !== undefined) {
+      // Pour chaque couple market/channel existant : si pas de MPL, on injecte un point synthetique
       byMarketChannel.forEach((points, key) => {
-        const hasMPL Conseil Export = points.some((p) => p.brand === "MPL");
-        if (hasMPL Conseil Export) return;
+        const hasMpl = points.some((p) => p.brand === "MPL");
+        if (hasMpl) return;
 
         const [market, channel] = key.split("__");
 
@@ -164,7 +164,7 @@ export const groupByProductMarketChannel = (
           id: `synthetic-mpl-${product.id}-${market}-${channel}`,
           productId: product.id,
           brand: "MPL",
-          price: fallbackMPL Conseil ExportPrice,
+          price: fallbackMplPrice,
           market,
           channel,
           confidence: 90,
@@ -173,7 +173,7 @@ export const groupByProductMarketChannel = (
         } as any);
       });
 
-      // Si aucun point du tout sur ce produit, on crée au moins 1 ligne “DEFAULT”
+      // Si aucun point du tout sur ce produit, on cree au moins 1 ligne "DEFAULT"
       if (byMarketChannel.size === 0) {
         const key = `DEFAULT__DEFAULT`;
         byMarketChannel.set(key, [
@@ -181,7 +181,7 @@ export const groupByProductMarketChannel = (
             id: `synthetic-mpl-${product.id}-DEFAULT-DEFAULT`,
             productId: product.id,
             brand: "MPL",
-            price: fallbackMPL Conseil ExportPrice,
+            price: fallbackMplPrice,
             market: "DEFAULT",
             channel: "DEFAULT",
             confidence: 80,
@@ -198,11 +198,11 @@ export const groupByProductMarketChannel = (
       const mplPoints = points.filter((p) => p.brand === "MPL");
       const competitorPoints = points.filter((p) => p.brand !== "MPL");
 
-      const chosenMPL Conseil Export = selectPrice(mplPoints);
+      const chosenMpl = selectPrice(mplPoints);
       const best = computeBestCompetitorPrice(competitorPoints);
       const avg = computeAvgCompetitorPrice(competitorPoints);
 
-      const { gapBestPct, gapAvgPct } = computeGaps(chosenMPL Conseil Export?.price, best, avg);
+      const { gapBestPct, gapAvgPct } = computeGaps(chosenMpl?.price, best, avg);
       const positioning = classifyPositioning(gapAvgPct, config);
 
       const { recommendation, hint } = recommendAction(
@@ -223,7 +223,7 @@ export const groupByProductMarketChannel = (
         product,
         market,
         channel,
-        mplPrice: chosenMPL Conseil Export?.price,
+        mplPrice: chosenMpl?.price,
         bestCompetitor: best,
         avgCompetitorPrice: avg,
         gapBestPct,

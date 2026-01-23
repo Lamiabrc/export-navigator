@@ -13,7 +13,7 @@ import {
   type ServiceCharge,
 } from "@/data/referenceRates";
 
-export type ProductType = "lppr" | "standard";
+export type ProductType = "regulated" | "standard";
 
 // Custom rates interface for overriding defaults
 export interface CustomRates {
@@ -144,8 +144,8 @@ function findOmRateForDrom(params: {
   // 2) fallback catégorie (comportement historique)
   const ratesForCategory = ratesForDest; // mêmes rates, mais on cherche "category"
   const byCategory =
-    productType === "lppr"
-      ? ratesForCategory.find((r) => (r as any).category === "Orthopedie") ||
+    productType === "regulated"
+      ? ratesForCategory.find((r) => (r as any).category === "Reglemente") ||
         ratesForCategory.find((r) => (r as any).category === "Standard")
       : ratesForCategory.find((r) => (r as any).category === "Standard");
 
@@ -345,7 +345,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
 
   // 7) DROITS DE DOUANE (Hors UE) — placeholder (sera remplacé par HS catalog + règles)
   if (zone === "Hors UE") {
-    const droitsRate = productType === "lppr" ? 0 : 3;
+    const droitsRate = productType === "regulated" ? 0 : 3;
     const amount = goodsValue * (droitsRate / 100);
 
     if (amount > 0) {
@@ -408,7 +408,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
 
   // 9) TVA IMPORT (DROM / Hors UE) — modèle simplifié
   if (zone !== "UE" && vatRate) {
-    const rate = productType === "lppr" ? vatRate.rate_lppr : vatRate.rate_standard;
+    const rate = productType === "regulated" ? vatRate.rate_regulated : vatRate.rate_standard;
 
     if (rate > 0) {
       const taxesAmount = lines.filter((l) => l.category === "taxe").reduce((s, l) => s + l.amount, 0);
