@@ -69,7 +69,7 @@ export default function Welcome() {
               <a className="text-slate-900 hover:underline" href="tel:+33676435551">
                 06 76 43 55 51
               </a>
-              <span className="text-slate-400">Email: [ton email]</span>
+              <span className="text-slate-400">Email: lamia.brechet@outlook.fr</span>
             </div>
           </div>
 
@@ -158,7 +158,7 @@ export default function Welcome() {
 
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="text-sm text-slate-600">
-            MPL Conseil Export - Lamia Brechet - Email: [ton email] - Telephone: 06 76 43 55 51
+            MPL Conseil Export - Lamia Brechet - Email: lamia.brechet@outlook.fr - Telephone: 06 76 43 55 51
           </div>
           <div className="flex items-center gap-3">
             <Button variant="outline" onClick={() => navigate("/login")}>

@@ -1,5 +1,6 @@
 import * as React from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -132,6 +133,7 @@ function buildArc(sx: number, sy: number, ex: number, ey: number) {
 const ALL = "__all__";
 
 export default function ControlTower() {
+  const navigate = useNavigate();
   const { resolvedRange, refreshToken } = useGlobalFilters();
 
   const [svgMeta, setSvgMeta] = React.useState<SvgMeta>(FALLBACK_META);
@@ -611,7 +613,9 @@ export default function ControlTower() {
               </div>
             </div>
             <div className="mt-4">
-              <Button className="w-full">Ouvrir veille reglementaire</Button>
+              <Button className="w-full" onClick={() => navigate("/watch/regulatory")}>
+                Ouvrir veille reglementaire
+              </Button>
             </div>
           </div>
         </div>
