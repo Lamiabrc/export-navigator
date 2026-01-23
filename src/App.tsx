@@ -11,6 +11,10 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ThemeProvider } from "@/components/theme-provider";
 
 import Welcome from "@/pages/Welcome";
+import LeadMagnet from "@/pages/LeadMagnet";
+import WatchCenter from "@/pages/WatchCenter";
+import InvoiceCheck from "@/pages/InvoiceCheck";
+import Newsletter from "@/pages/Newsletter";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -51,7 +55,7 @@ export default function App() {
             <BrowserRouter>
               <GlobalFiltersProvider>
                 <Routes>
-                  <Route path="/" element={<Navigate to="/control-tower" replace />} />
+                  <Route path="/" element={<LeadMagnet />} />
 
                   {/* Alias legacy / bookmarks */}
                   <Route path="/hub" element={<Navigate to="/control-tower" replace />} />
@@ -63,6 +67,9 @@ export default function App() {
                   <Route path="/register" element={<Register />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/set-password" element={<SetPassword />} />
+                  <Route path="/invoice-check" element={<InvoiceCheck />} />
+                  <Route path="/newsletter" element={<Newsletter />} />
+                  <Route path="/watch" element={<WatchCenter />} />
 
                   {/* Pilotage */}
                   <Route path="/control-tower" element={<ControlTower />} />

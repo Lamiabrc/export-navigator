@@ -3,7 +3,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { Activity, BookOpen, Bot, Calculator, LogOut, Package, Receipt, Scale, Settings, Target, TrendingUp, Users } from "lucide-react";
+import { Activity, BookOpen, Bot, Calculator, Home, LogOut, Package, Receipt, Scale, Settings, Target, TrendingUp, Users } from "lucide-react";
 
 type NavItem = {
   name: string;
@@ -21,6 +21,16 @@ type NavSection = {
 };
 
 const navigation: NavSection[] = [
+  {
+    title: "Accueil",
+    items: [
+      {
+        name: "Lead Magnet",
+        href: "/",
+        icon: Home,
+      },
+    ],
+  },
   {
     title: "Pilotage & Ventes",
     items: [
@@ -65,6 +75,11 @@ const navigation: NavSection[] = [
         icon: Calculator,
       },
       {
+        name: "Controle facture",
+        href: "/invoice-check",
+        icon: Receipt,
+      },
+      {
         name: "Taxes/OM",
         href: "/taxes-om",
         icon: Scale,
@@ -87,6 +102,11 @@ const navigation: NavSection[] = [
       {
         name: "Veille reglementaire",
         href: "/watch/regulatory",
+        icon: BookOpen,
+      },
+      {
+        name: "Centre veille",
+        href: "/watch",
         icon: BookOpen,
       },
     ],

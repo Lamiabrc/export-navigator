@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { isMissingTableError } from "@/domain/calc";
+import { getAlerts } from "@/lib/leadMagnetApi";
+import { OnboardingPrefsModal } from "@/components/OnboardingPrefsModal";
 import worldMap from "@/assets/world-map.svg";
 
 type CountryRow = {
@@ -146,6 +148,10 @@ export default function ControlTower() {
   const [error, setError] = React.useState<string | null>(null);
   const [hovered, setHovered] = React.useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = React.useState<{ x: number; y: number } | null>(null);
+  const [alerts, setAlerts] = React.useState<Array<{ id: string; title: string; message: string; severity: string; detectedAt?: string | null }>>([]);
+  const [alertsUpdatedAt, setAlertsUpdatedAt] = React.useState<string>("");
+  const [prefsOpen, setPrefsOpen] = React.useState(false);
+  const [leadEmail, setLeadEmail] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let alive = true;
@@ -157,6 +163,15 @@ export default function ControlTower() {
     return () => {
       alive = false;
     };
+  }, []);
+
+  React.useEffect(() => {
+    const email = localStorage.getItem("mpl_lead_email");
+    setLeadEmail(email);
+    const prefs = localStorage.getItem("mpl_user_prefs");
+    if (email && !prefs) {
+      setPrefsOpen(true);
+    }
   }, []);
 
   React.useEffect(() => {
@@ -240,6 +255,27 @@ export default function ControlTower() {
       active = false;
     };
   }, [resolvedRange.from, resolvedRange.to, refreshToken, hsCode, market]);
+
+  React.useEffect(() => {
+    let active = true;
+    const loadAlerts = async () => {
+      try {
+        const email = localStorage.getItem("mpl_lead_email") || undefined;
+        const res = await getAlerts(email);
+        if (!active) return;
+        setAlerts(res.alerts.slice(0, 4));
+        setAlertsUpdatedAt(res.updatedAt);
+      } catch {
+        if (!active) return;
+        setAlerts([]);
+        setAlertsUpdatedAt("");
+      }
+    };
+    void loadAlerts();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const frExports = React.useMemo(
     () => flows.filter((f) => f.flow_type === "export" && (f.reporter_country || "").toUpperCase() === "FR"),
@@ -333,6 +369,7 @@ export default function ControlTower() {
 
   return (
     <MainLayout wrapperClassName="control-tower-world" variant="bare">
+      <OnboardingPrefsModal open={prefsOpen} onOpenChange={setPrefsOpen} email={leadEmail} />
       <div className="relative">
         <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-blue-600 via-white to-red-600" />
       </div>
@@ -509,6 +546,53 @@ export default function ControlTower() {
 
           <div className="col-span-12 lg:col-span-4 space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-blue-700 uppercase tracking-[0.25em]">Alertes de la semaine</div>
+                  <div className="text-sm text-slate-500">Derniere mise a jour: {alertsUpdatedAt || "—"}</div>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => navigate("/watch")}>
+                  Voir la veille
+                </Button>
+              </div>
+              <div className="mt-3 space-y-2 text-sm">
+                {alerts.length ? (
+                  alerts.map((alert) => (
+                    <div key={alert.id} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                      <div className="font-semibold text-slate-900">{alert.title}</div>
+                      <div className="text-xs text-slate-600">{alert.message}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-slate-500">Aucune alerte pour le moment.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="text-xs text-blue-700 uppercase tracking-[0.25em]">A faire</div>
+              <div className="mt-3 space-y-2 text-sm text-slate-700">
+                <div className="flex items-center justify-between">
+                  <span>Saisir un HS prioritaire</span>
+                  <Button size="sm" variant="outline" onClick={() => setPrefsOpen(true)}>
+                    Activer
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Verifier une facture export</span>
+                  <Button size="sm" variant="outline" onClick={() => navigate("/invoice-check")}>
+                    Ouvrir
+                  </Button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Simuler un cout export</span>
+                  <Button size="sm" variant="outline" onClick={() => navigate("/simulator")}>
+                    Simuler
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="text-xs text-blue-700 uppercase tracking-[0.25em]">Top destinations FR</div>
               <div className="mt-3 space-y-2">
                 {topDestinations.length ? (
@@ -611,10 +695,14 @@ export default function ControlTower() {
                 <span>Flux charges</span>
                 <span className="font-semibold text-slate-900">{flows.length}</span>
               </div>
+              <div className="flex items-center justify-between">
+                <span>Derniere mise a jour</span>
+                <span className="font-semibold text-slate-900">{alertsUpdatedAt || "—"}</span>
+              </div>
             </div>
             <div className="mt-4">
-              <Button className="w-full" onClick={() => navigate("/watch/regulatory")}>
-                Ouvrir veille reglementaire
+              <Button className="w-full" onClick={() => navigate("/watch")}>
+                Ouvrir centre veille
               </Button>
             </div>
           </div>
