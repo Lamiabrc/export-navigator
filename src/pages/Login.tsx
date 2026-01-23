@@ -143,7 +143,7 @@ export default function Login() {
                     Mot de passe oublie
                   </button>
 
-                  <span className="text-xs text-slate-500">-> {nextPath}</span>
+                  <span className="text-xs text-slate-500">-&gt; {nextPath}</span>
                 </div>
 
                 {error && (
