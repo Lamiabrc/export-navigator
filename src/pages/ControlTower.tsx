@@ -388,14 +388,6 @@ export default function ControlTower() {
           <div className="col-span-12 lg:col-span-8">
             <div className="relative h-[620px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="absolute inset-0">
-                <img
-                  src="/assets/sea-login.jpg"
-                  alt="Ocean"
-                  className="h-full w-full object-cover opacity-12"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display = "none";
-                  }}
-                />
                 <div className="absolute inset-0 bg-gradient-to-br from-white/85 via-white/75 to-blue-50/90" />
               </div>
               <div className="absolute inset-0">

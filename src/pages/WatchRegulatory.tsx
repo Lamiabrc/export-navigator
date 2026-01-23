@@ -32,12 +32,14 @@ type Item = {
 const CATEGORIES = [
   { value: "audit", label: "Audit" },
   { value: "reglementation", label: "Reglementation" },
-  { value: "concurrence", label: "Concurrence" },
   { value: "douane", label: "Douane" },
-  { value: "export_dom", label: "Export DOM-TOM" },
+  { value: "sanctions", label: "Sanctions" },
+  { value: "incoterms", label: "Incoterms" },
+  { value: "marche", label: "Marche" },
+  { value: "concurrence", label: "Concurrence" },
 ];
 
-const TERRITORIES = ["FR", "GP", "MQ", "GF", "RE", "YT", "SPM", "BL", "MF"];
+const TERRITORIES = ["FR", "EU", "US", "UK", "CHINA", "MEA", "AFRICA", "APAC", "LATAM", "GLOBAL"];
 
 function toDateLabel(d: string | null) {
   if (!d) return "Date inconnue";
@@ -105,13 +107,20 @@ export default function WatchRegulatory() {
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm text-muted-foreground">Veille audit et reglementation</p>
-            <h1 className="text-2xl font-bold">Audit · Reglementation · Export DROM</h1>
+            <h1 className="text-2xl font-bold">Audit - Reglementation - Export mondial</h1>
             <p className="text-sm text-muted-foreground">
-              Flux depuis regulatory_feeds / regulatory_items. Filtres : categorie, territoire, recherche.
+              Flux depuis regulatory_feeds / regulatory_items. Filtres : categorie, zone, recherche.
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => { feedsQuery.refetch(); itemsQuery.refetch(); }}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                feedsQuery.refetch();
+                itemsQuery.refetch();
+              }}
+            >
               Rafraichir
             </Button>
           </div>
@@ -123,22 +132,30 @@ export default function WatchRegulatory() {
           </div>
           <div className="space-y-1">
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger><SelectValue placeholder="Categorie" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Categorie" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Toutes categories</SelectItem>
                 {CATEGORIES.map((c) => (
-                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1">
             <Select value={territory} onValueChange={setTerritory}>
-              <SelectTrigger><SelectValue placeholder="Territoire" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Zone" />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tous territoires</SelectItem>
+                <SelectItem value="all">Toutes zones</SelectItem>
                 {TERRITORIES.map((t) => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -179,7 +196,9 @@ export default function WatchRegulatory() {
                       <div className="flex flex-wrap gap-1 justify-end">
                         <Badge variant="secondary">{it.category || "audit"}</Badge>
                         {(it.tags || []).slice(0, 3).map((t) => (
-                          <Badge key={t} variant="outline" className="text-[11px]">{t}</Badge>
+                          <Badge key={t} variant="outline" className="text-[11px]">
+                            {t}
+                          </Badge>
                         ))}
                       </div>
                     </div>
@@ -246,7 +265,7 @@ export default function WatchRegulatory() {
                 </div>
                 <div className="flex items-start gap-2">
                   <Target className="h-4 w-4 text-primary mt-0.5" />
-                  <span>Tagger les items avec categorie et territoire (GP, MQ, GF, RE, YT...).</span>
+                  <span>Tagger les items avec categorie et zone (EU, US, CHINA, MEA...).</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <Zap className="h-4 w-4 text-primary mt-0.5" />
