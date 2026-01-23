@@ -331,7 +331,10 @@ export default function ControlTower() {
 
   return (
     <MainLayout wrapperClassName="control-tower-world" variant="bare">
-      <div className="space-y-6 px-4 pb-8">
+      <div className="relative">
+        <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-blue-600 via-white to-red-600" />
+      </div>
+      <div className="space-y-6 px-4 pb-8 pt-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.35em] text-amber-200/80">Control Tower export</p>

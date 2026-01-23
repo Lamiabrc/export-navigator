@@ -27,8 +27,9 @@ export default function Welcome() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="absolute inset-x-0 top-0 h-[360px] bg-gradient-to-br from-white via-amber-50 to-cyan-50" />
+    <div className="min-h-screen bg-white text-slate-900">
+      <div className="h-2 bg-gradient-to-r from-blue-600 via-white to-red-600" />
+      <div className="absolute inset-x-0 top-0 h-[320px] bg-gradient-to-br from-white via-slate-50 to-blue-50" />
       <div className="relative z-10 max-w-6xl mx-auto px-6 pt-10 pb-16 space-y-16">
         <header className="flex items-center justify-between">
           <BrandLogo
@@ -52,7 +53,7 @@ export default function Welcome() {
           className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-10 items-start"
         >
           <div className="space-y-6">
-            <div className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-4 py-1 text-xs uppercase tracking-[0.35em] text-amber-700">
+            <div className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-4 py-1 text-xs uppercase tracking-[0.35em] text-blue-700">
               Offre de services MPL Conseil Export
             </div>
             <h1 className="text-4xl md:text-5xl font-semibold leading-tight text-slate-900">

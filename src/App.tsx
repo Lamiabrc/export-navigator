@@ -51,27 +51,21 @@ export default function App() {
             <BrowserRouter>
               <GlobalFiltersProvider>
                 <Routes>
-                  <Route path="/" element={<Navigate to="/welcome" replace />} />
+                  <Route path="/" element={<Navigate to="/control-tower" replace />} />
 
                   {/* Alias legacy / bookmarks */}
                   <Route path="/hub" element={<Navigate to="/control-tower" replace />} />
 
                   {/* Public */}
-                  <Route path="/welcome" element={<Welcome />} />
+                  <Route path="/services" element={<Welcome />} />
+                  <Route path="/welcome" element={<Navigate to="/services" replace />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/set-password" element={<SetPassword />} />
 
                   {/* Pilotage */}
-                  <Route
-                    path="/control-tower"
-                    element={
-                      <ProtectedRoute>
-                        <ControlTower />
-                      </ProtectedRoute>
-                    }
-                  />
+                  <Route path="/control-tower" element={<ControlTower />} />
                   <Route
                     path="/command-center"
                     element={
