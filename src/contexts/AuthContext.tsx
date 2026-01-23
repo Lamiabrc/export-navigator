@@ -7,6 +7,7 @@ type AuthCtx = {
   session: Session | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   sendPasswordLink: (email: string) => Promise<{ error: string | null }>;
@@ -55,7 +56,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     void init();
 
-    // ✅ Ne pas s’abonner si env KO (client placeholder)
     if (!SUPABASE_ENV_OK) {
       return () => {
         alive = false;
@@ -66,7 +66,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!alive) return;
       setSession(newSession);
       setUser(newSession?.user ?? null);
-      // ⚠️ ici on ne remet pas isLoading à true, on garde un état stable
       setIsLoading(false);
     });
 
@@ -83,8 +82,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated: !!session?.user,
       isLoading,
 
+      async signUp(email, password) {
+        if (!SUPABASE_ENV_OK) return { error: "Supabase non configure." };
+        const { error } = await supabase.auth.signUp({ email, password });
+        return { error: error ? error.message : null };
+      },
+
       async signIn(email, password) {
-        if (!SUPABASE_ENV_OK) return { error: "Supabase non configuré." };
+        if (!SUPABASE_ENV_OK) return { error: "Supabase non configure." };
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         return { error: error ? error.message : null };
       },
@@ -95,14 +100,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
 
       async sendPasswordLink(email) {
-        if (!SUPABASE_ENV_OK) return { error: "Supabase non configuré." };
+        if (!SUPABASE_ENV_OK) return { error: "Supabase non configure." };
         const redirectTo = `${window.location.origin}/set-password`;
         const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
         return { error: error ? error.message : null };
       },
 
       async setPassword(newPassword) {
-        if (!SUPABASE_ENV_OK) return { error: "Supabase non configuré." };
+        if (!SUPABASE_ENV_OK) return { error: "Supabase non configure." };
         const { error } = await supabase.auth.updateUser({ password: newPassword });
         return { error: error ? error.message : null };
       },

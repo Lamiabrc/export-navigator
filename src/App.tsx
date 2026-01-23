@@ -12,6 +12,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 
 import Welcome from "@/pages/Welcome";
 import Login from "@/pages/Login";
+import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
 import SetPassword from "@/pages/SetPassword";
 
@@ -58,6 +59,7 @@ export default function App() {
                   {/* Public */}
                   <Route path="/welcome" element={<Welcome />} />
                   <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/set-password" element={<SetPassword />} />
 

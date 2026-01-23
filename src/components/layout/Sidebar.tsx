@@ -178,17 +178,13 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
       {/* Nav */}
       <nav className="flex-1 space-y-4 px-3 py-4 overflow-y-auto">
         {navigation.map((section) => {
-          const visibleItems = section.items.filter((it) => {
-            if (it.adminOnly && user?.email !== "lamia.brechetighil@mpl.fr") return false;
-            return true;
-          });
-          if (!visibleItems.length) return null;
+          if (!section.items.length) return null;
           return (
             <div key={section.title}>
               <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {section.title}
               </div>
-              <div className="space-y-1.5">{visibleItems.map(renderLink)}</div>
+              <div className="space-y-1.5">{section.items.map(renderLink)}</div>
             </div>
           );
         })}

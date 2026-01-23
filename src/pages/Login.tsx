@@ -3,13 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 
@@ -17,13 +11,12 @@ function getErrorMessage(err: unknown): string {
   if (!err) return "Une erreur inconnue est survenue.";
   if (typeof err === "string") return err;
   if (err instanceof Error) return err.message;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const anyErr = err as any;
+  const anyErr = err as { message?: string };
   if (typeof anyErr?.message === "string") return anyErr.message;
-  return "Une erreur est survenue. Réessaie.";
+  return "Une erreur est survenue. Reessaie.";
 }
 
-function safeNextPath(candidate: unknown, fallback = "/hub") {
+function safeNextPath(candidate: unknown, fallback = "/control-tower") {
   const v = typeof candidate === "string" ? candidate : "";
   return v && v.startsWith("/") ? v : fallback;
 }
@@ -35,24 +28,20 @@ export default function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   const nextPath = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const qNext = params.get("next");
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stateAny = location.state as any;
+    const stateAny = location.state as { from?: { pathname?: string; search?: string }; next?: string } | null;
     const stateFromPath = stateAny?.from?.pathname;
     const stateFromSearch = stateAny?.from?.search || "";
     const stateNext = stateAny?.next;
-
-    if (qNext) return safeNextPath(qNext, "/hub");
-    if (stateFromPath) return safeNextPath(`${stateFromPath}${stateFromSearch}`, "/hub");
-    if (stateNext) return safeNextPath(stateNext, "/hub");
-    return "/hub";
+    if (qNext) return safeNextPath(qNext, "/control-tower");
+    if (stateFromPath) return safeNextPath(`${stateFromPath}${stateFromSearch}`, "/control-tower");
+    if (stateNext) return safeNextPath(stateNext, "/control-tower");
+    return "/control-tower";
   }, [location.search, location.state]);
 
   const onSubmit = async (e: FormEvent) => {
@@ -84,30 +73,17 @@ export default function Login() {
     }
   };
 
-  const goForgotPassword = () => {
-    navigate("/forgot-password");
-  };
-
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-slate-950 text-slate-50">
       <div className="relative hidden lg:block">
-        <img
-          src="/assets/sea-login.jpg"
-          alt="Mer et îles"
-          className="h-full w-full object-cover"
-        />
+        <img src="/assets/sea-login.jpg" alt="Ocean" className="h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-slate-900/70" />
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center px-10 space-y-4">
-            <p className="uppercase tracking-[0.3em] text-cyan-200 font-semibold">
-              Contrôle Export
-            </p>
-            <h2 className="text-4xl font-bold text-white drop-shadow-lg">
-              Pilotage DROM / UE / Hors UE
-            </h2>
+            <p className="uppercase tracking-[0.3em] text-cyan-200 font-semibold">Export Navigator</p>
+            <h2 className="text-4xl font-bold text-white drop-shadow-lg">Conformite, couts, veille</h2>
             <p className="text-slate-100/80 max-w-xl mx-auto">
-              Factures, OM/OMR, transport, concurrence, veille réglementaire, IA Export.
-              Accès sécurisé via Supabase.
+              Analyse par HS code et pays. Outil universel pour tout exportateur francais.
             </p>
           </div>
         </div>
@@ -126,7 +102,7 @@ export default function Login() {
             <CardHeader>
               <CardTitle>Se connecter</CardTitle>
               <CardDescription className="text-slate-300">
-                Connecte-toi pour accéder à l’outil. En cas de première connexion, définis ton mot de passe.
+                Connexion par compte utilisateur. Tu peux creer un compte gratuitement.
               </CardDescription>
             </CardHeader>
 
@@ -152,7 +128,7 @@ export default function Login() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder="********"
                     autoComplete="current-password"
                     className="bg-slate-950 border-slate-800 text-white"
                   />
@@ -161,13 +137,13 @@ export default function Login() {
                 <div className="flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={goForgotPassword}
+                    onClick={() => navigate("/forgot-password")}
                     className="text-sm text-cyan-200 hover:underline"
                   >
-                    Mot de passe oublié / Première connexion
+                    Mot de passe oublie
                   </button>
 
-                  <span className="text-xs text-slate-500">→ {nextPath}</span>
+                  <span className="text-xs text-slate-500">-> {nextPath}</span>
                 </div>
 
                 {error && (
@@ -177,11 +153,7 @@ export default function Login() {
                   </div>
                 )}
 
-                <Button
-                  type="submit"
-                  className="w-full h-11 font-semibold"
-                  disabled={pending || isLoading}
-                >
+                <Button type="submit" className="w-full h-11 font-semibold" disabled={pending || isLoading}>
                   {pending || isLoading ? "Connexion..." : "Se connecter"}
                 </Button>
               </form>
@@ -189,7 +161,10 @@ export default function Login() {
           </Card>
 
           <div className="text-center text-sm text-slate-400">
-            Besoin d’un accès ? Demande à l’administrateur de créer ton compte.
+            Pas de compte ?{" "}
+            <button className="text-cyan-200 hover:underline" onClick={() => navigate("/register")}>
+              Creer un compte
+            </button>
           </div>
         </div>
       </div>
