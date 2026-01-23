@@ -17,14 +17,13 @@ import { isMissingTableError } from "@/domain/calc";
 type Territory = { code: string; name: string };
 
 const TERRITORIES: Territory[] = [
-  { code: "GP", name: "Guadeloupe" },
-  { code: "MQ", name: "Martinique" },
-  { code: "GF", name: "Guyane" },
-  { code: "RE", name: "Réunion" },
-  { code: "YT", name: "Mayotte" },
-  { code: "BL", name: "Saint-Barthélemy" },
-  { code: "MF", name: "Saint-Martin" },
-  { code: "SPM", name: "Saint-Pierre-et-Miquelon" },
+  { code: "FR", name: "France" },
+  { code: "DE", name: "Allemagne" },
+  { code: "ES", name: "Espagne" },
+  { code: "US", name: "Etats-Unis" },
+  { code: "CN", name: "Chine" },
+  { code: "GB", name: "Royaume-Uni" },
+  { code: "CH", name: "Suisse" },
 ];
 
 const HS_CODES = [
@@ -98,14 +97,13 @@ function percentFormat(raw: any) {
 }
 
 function vatFallbackForTerritory(code: string) {
-  if (code === "GP" || code === "MQ" || code === "RE")
-    return "DOM: 8,5 / 2,1 / 1,75 / 1,05";
-  if (code === "GF") return "TVA non applicable";
-  if (code === "YT") return "TVA non applicable";
-  if (code === "BL" || code === "MF" || code === "SPM") return "COM: souvent HT";
-  return "—";
+  if (code === "FR") return "TVA 20% (reference France)";
+  if (code === "DE") return "TVA 19% (indicatif)";
+  if (code === "ES") return "TVA 21% (indicatif)";
+  if (code === "US") return "Sales tax selon Etat (indicatif)";
+  if (code === "GB") return "TVA 20% (indicatif)";
+  return "-";
 }
-
 function firstExistingKey(obj: any, candidates: string[]) {
   if (!obj) return null;
   const keys = new Set(Object.keys(obj));
@@ -377,7 +375,7 @@ export default function TaxesOM() {
             <p className="text-sm text-muted-foreground">Dashboard</p>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Scale className="h-6 w-6" />
-              OM & Taxes — Récapitulatif par territoire × HS
+              OM & Taxes — Récapitulatif par territoire �- HS
             </h1>
             <p className="text-sm text-muted-foreground">
               Page dédiée uniquement au récapitulatif : <b>OM/OMR</b> + <b>TVA</b> + <b>Taxes extra</b>.
@@ -547,7 +545,7 @@ export default function TaxesOM() {
         <Card className="border-muted">
           <CardHeader>
             <CardTitle className="text-base">
-              Détails — {selected ? `${selected.territory} × HS ${selected.hs} (HS4 ${hs4Of(selected.hs)})` : "clique une cellule"}
+              Détails — {selected ? `${selected.territory} �- HS ${selected.hs} (HS4 ${hs4Of(selected.hs)})` : "clique une cellule"}
             </CardTitle>
             <CardDescription>Détails bruts (OM/VAT/Extra) pour validation.</CardDescription>
           </CardHeader>
@@ -633,3 +631,9 @@ export default function TaxesOM() {
     </MainLayout>
   );
 }
+
+
+
+
+
+

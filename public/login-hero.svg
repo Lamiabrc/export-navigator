@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-label="Background illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1b3a"/>
+      <stop offset="0.5" stop-color="#1b2f5f"/>
+      <stop offset="1" stop-color="#3a0b1b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1d4ed8"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#dc2626"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <circle cx="240" cy="220" r="160" fill="#1d4ed8" opacity="0.25"/>
+  <circle cx="980" cy="260" r="210" fill="#dc2626" opacity="0.2"/>
+  <circle cx="820" cy="720" r="260" fill="#0f172a" opacity="0.45"/>
+  <rect x="80" y="620" width="1040" height="26" rx="13" fill="url(#accent)" opacity="0.7"/>
+  <rect x="120" y="660" width="720" height="10" rx="5" fill="#93c5fd" opacity="0.35"/>
+  <rect x="120" y="690" width="880" height="10" rx="5" fill="#fca5a5" opacity="0.28"/>
+</svg>

@@ -169,7 +169,7 @@ export default function Assistant() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-sm text-muted-foreground">IA Export (RAG docs + fallback)</p>
-            <h1 className="text-2xl font-bold">Assistant DROM / UE / Hors UE</h1>
+            <h1 className="text-2xl font-bold">Assistant UE / Hors UE</h1>
             <p className="text-sm text-muted-foreground">
               Réponses courtes, actions suggérées, checklists, et citations quand la base documentaire répond.
             </p>

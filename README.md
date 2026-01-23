@@ -7,7 +7,7 @@
 
 ## 📋 Description
 
-**Export Navigator** est un outil professionnel de contrôle et de cohérence pour les opérations d'export vers les DOM-TOM et l'international. Il permet de gérer, suivre et analyser l'ensemble des flux d'exportation avec une vision complète sur les coûts, marges et conformité réglementaire.
+**Export Navigator** est un outil professionnel de contrôle et de cohérence pour les opérations d'export a l'international. Il permet de gérer, suivre et analyser l'ensemble des flux d'exportation avec une vision complète sur les coûts, marges et conformité réglementaire.
 
 ---
 
@@ -15,7 +15,7 @@
 
 Assurer la maîtrise et la cohérence des opérations d'export en centralisant :
 - La gestion des **Incoterms** (EXW, FCA, CIF, DAP, DDP, etc.)
-- Le contrôle **TVA DOM/DDP** et taxes d'octroi de mer
+- Le contrôle **TVA import/DDP** et taxes d'droits de douane
 - Le suivi des **coûts** (transport, douane, transit, assurance)
 - L'analyse des **marges** et de la rentabilité
 - La vérification de la **conformité documentaire**
@@ -53,11 +53,11 @@ Assurer la maîtrise et la cohérence des opérations d'export en centralisant :
 
 ### 🧮 Simulateur de Coûts
 - Simulation complète par destination et Incoterm
-- Calcul des frais de transport, douane, octroi de mer
+- Calcul des frais de transport, douane, droits de douane
 - Estimation du prix de vente et marge prévisionnelle
 
 ### 📚 Bibliothèque de Référence
-- Taux de change, taux d'octroi de mer par zone
+- Taux de change, taux d'droits de douane par zone
 - Documents réglementaires (CDU, guides douane, DEB)
 - Données de référence (destinations, Incoterms)
 
@@ -163,3 +163,4 @@ Pour toute question relative à cet outil, veuillez contacter directement la pro
 ---
 
 *Export Navigator - Maîtrisez vos exports en toute confiance*
+

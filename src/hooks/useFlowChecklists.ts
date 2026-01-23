@@ -27,9 +27,6 @@ const baseItems = (flow: Flow): ChecklistItem[] => {
   if (flow.zone !== 'UE') {
     items.push({ id: 'ex1', label: 'EX1 / Déclaration export', status: 'a_faire' });
   }
-  if (flow.zone === 'DROM') {
-    items.push({ id: 'dau_om', label: 'DAU + OM/OMR DROM', status: 'a_faire' });
-  }
   if (flow.destination === 'Suisse') {
     items.push({ id: 'eur1', label: 'EUR.1 / Déclaration origine', status: 'a_faire' });
     items.push({ id: 'e_dec', label: 'e-dec import Suisse', status: 'a_faire' });

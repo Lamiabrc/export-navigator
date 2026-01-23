@@ -1,7 +1,6 @@
 import React from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
 export type DashboardFilters = {
@@ -12,7 +11,6 @@ export type DashboardFilters = {
   incoterm: string;
   client: string;
   product: string;
-  dromOnly: boolean;
 };
 
 export function FiltersBar({ value, onChange, onRefresh }: { value: DashboardFilters; onChange: (v: DashboardFilters) => void; onRefresh?: () => void }) {
@@ -38,10 +36,6 @@ export function FiltersBar({ value, onChange, onRefresh }: { value: DashboardFil
       <div>
         <Label className="text-xs">Incoterm</Label>
         <Input placeholder="DAP/FOB..." value={value.incoterm} onChange={(e) => set({ incoterm: e.target.value })} />
-      </div>
-      <div className="flex items-center gap-2">
-        <Switch checked={value.dromOnly} onCheckedChange={(checked) => set({ dromOnly: checked })} />
-        <Label className="text-xs">DROM only</Label>
       </div>
       <div>
         <Label className="text-xs">Client</Label>

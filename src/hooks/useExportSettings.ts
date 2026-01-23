@@ -19,11 +19,10 @@ export type ExportSettings = {
 };
 
 const DEFAULT_SETTINGS: ExportSettings = {
-  vat: { FR: 20, GP: 0, MQ: 0, GF: 0, RE: 0, YT: 0 },
-  localTaxes: { GP: 8.5, MQ: 8.5, GF: 0, RE: 8.5, YT: 8.5 },
+  vat: { FR: 20, UE: 0, HORS_UE: 0 },
+  localTaxes: {},
   transport_estimation: {
     zones: {
-      DROM: { base: 40, perKg: 3.5 },
       UE: { base: 18, perKg: 1.2 },
       HORS_UE: { base: 55, perKg: 4.5 },
     },

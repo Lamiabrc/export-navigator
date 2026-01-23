@@ -17,14 +17,14 @@
 ## Colonnes attendues (resume)
 - products.csv : `id, sku, name, category` (+ `ref_code, cost, currency`)
 - competitors.csv : `id, name` (+ `brand_code` enum THUASNE|DONJOY_ENOVIS|GIBAUD|AUTRE)
-- markets.csv : `id, label, zone` (UE|DROM|HORS_UE), `country_code` (ISO) (+ `currency`)
+- markets.csv : `id, label, zone` (UE|HORS_UE), `country_code` (ISO) (+ `currency`)
 - price_points.csv : `id, product_id, brand` (MPL|THUASNE|DONJOY_ENOVIS|GIBAUD), `market, channel, currency, price, price_type` (HT|TTC), `date` (ISO), `source_label, confidence`
 - fx_rates.csv : `base_currency, quote_currency, rate, date`
 - shipments.csv : `id, flow_code, incoterm, destination, departure_date, delivery_date` (+ `carrier, awb, bl`)
 - invoices.csv : `invoice_number, client_name, invoice_date, currency, amount_ht` (+ `amount_ttc, tva_amount, incoterm, destination, flow_code, awb, bl`)
 - ref_reference.csv : `code, label` (+ `reimbursement_rate, notes`)
 
-Regles generales : valeurs numeriques > 0, dates au format ISO `YYYY-MM-DD`, devises ISO 4217, zones = UE/DROM/HORS_UE, price_type = HT|TTC, brand conforme a la liste.
+Regles generales : valeurs numeriques > 0, dates au format ISO `YYYY-MM-DD`, devises ISO 4217, zones = UE/HORS_UE, price_type = HT|TTC, brand conforme a la liste.
 
 ## Comment importer
 1. Ouvrez la page **Imports** dans l'app.

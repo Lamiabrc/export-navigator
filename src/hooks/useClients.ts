@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { fetchAllWithPagination } from "@/utils/supabasePagination";
 
-type ExportZone = "UE" | "DROM" | "Hors UE" | "France" | string;
+type ExportZone = "UE" | "Hors UE" | "France" | string;
 type SalesChannel = "direct" | "indirect" | "depositaire" | "grossiste" | string | null;
 
 export type ClientRow = {
@@ -18,7 +18,6 @@ export type ClientRow = {
   notes?: string | null;
   code_ets?: string | null;
   export_zone: ExportZone | null;
-  drom_code: string | null;
   canal: string | null;
   sales_channel: SalesChannel;
   depositaire_id: string | null;
@@ -53,8 +52,8 @@ export function useClients() {
     const pageSize = 1000;
 
     const fullSelect =
-      "id,libelle_client,email,telephone,adresse,cp,ville,pays,tva_number,notes,code_ets,export_zone,drom_code,canal,sales_channel,depositaire_id,groupement_id,groupement,groupement_remise,default_destination";
-    const minimalSelect = "id,libelle_client,pays,export_zone,drom_code,default_destination,tva_number,email";
+      "id,libelle_client,email,telephone,adresse,cp,ville,pays,tva_number,notes,code_ets,export_zone,canal,sales_channel,depositaire_id,groupement_id,groupement,groupement_remise,default_destination";
+    const minimalSelect = "id,libelle_client,pays,export_zone,default_destination,tva_number,email";
 
     try {
       try {
@@ -103,11 +102,6 @@ export function useClients() {
     [clients],
   );
 
-  const filterByDrom = useCallback(
-    (dromCode: string | null) => clients.filter((c) => (dromCode ? c.drom_code === dromCode : true)),
-    [clients],
-  );
-
   const computeClientType = useCallback((c: ClientRow): ClientType => {
     const channel = normalizeString(c.sales_channel || c.canal).toLowerCase();
     if (channel === "depositaire") return "depositaire";
@@ -141,7 +135,6 @@ export function useClients() {
     envOk,
     fetchClients,
     filterByZone,
-    filterByDrom,
     computeClientType,
     stats,
   };

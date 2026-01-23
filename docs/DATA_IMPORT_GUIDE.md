@@ -27,7 +27,7 @@ Placez vos fichiers CSV dans le dossier `data-import/` a la racine du projet. L'
 
 ### markets.csv
 - Cle: `id`
-- Colonnes obligatoires: `id`, `label`, `zone` (enum: UE | DROM | HORS_UE), `country_code` (ISO 3166-1 alpha-2)
+- Colonnes obligatoires: `id`, `label`, `zone` (enum: UE | HORS_UE), `country_code` (ISO 3166-1 alpha-2)
 - Colonnes recommandees: `currency` (ISO 4217)
 
 ### price_points.csv
@@ -59,7 +59,7 @@ Placez vos fichiers CSV dans le dossier `data-import/` a la racine du projet. L'
 
 ## Validation
 - Types numeriques > 0, dates en ISO `YYYY-MM-DD`, devises en ISO 4217.
-- `zone` doit appartenir a {UE, DROM, HORS_UE}, `price_type` a {HT, TTC}, `brand` a {MPL, THUASNE, DONJOY_ENOVIS, GIBAUD}.
+- `zone` doit appartenir a {UE, HORS_UE}, `price_type` a {HT, TTC}, `brand` a {MPL, THUASNE, DONJOY_ENOVIS, GIBAUD}.
 
 ## Templates
 - Des templates CSV telechargeables sont exposes dans la page `Imports` (section Ordre recommande). Vous pouvez aussi les copier depuis `src/lib/csvSchemas.ts` (fonction `getCsvTemplate`).

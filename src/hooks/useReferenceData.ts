@@ -106,13 +106,13 @@ export const defaultReferenceData: ReferenceData = {
       restrictions: "Pas de controle specifique identifie sur ce segment.",
     },
     {
-      destination: "DROM (Guadeloupe, Martinique, Reunion)",
-      zone: "DROM",
-      tvaRegime: "TVA locale 8.5% + Octroi de mer/OMR",
-      taxesPossibles: ["OM", "OMR", "frais dock / manutention"],
-      flags: ["Port sature en haute saison", "Anticiper HS code pour liquidation"],
-      documents: ["Facture detaillee", "Document d'accompagnement douanier"],
-      restrictions: "Aligner valeur douane et facture commerciale.",
+      destination: "International (hors UE)",
+      zone: "Hors UE",
+      tvaRegime: "TVA import selon pays",
+      taxesPossibles: ["droits de douane", "taxes locales", "frais de dossier"],
+      flags: ["Verifier HS code avant devis", "Prevoir delais douane"],
+      documents: ["Facture detaillee", "Declaration export", "Packing list"],
+      restrictions: "Adapter incoterm et declarant selon pays.",
     },
     {
       destination: "Suisse",
@@ -148,7 +148,7 @@ export const defaultReferenceData: ReferenceData = {
       trigger: "Import hors UE selon HS",
       comment: "Anticiper impact prix de vente pour DDP.",
       mandatoryDocs: ["Declaration en douane", "Calcul droits"],
-      scope: "Hors UE / DROM",
+      scope: "Hors UE",
     },
     {
       name: "TVA import",
@@ -156,27 +156,19 @@ export const defaultReferenceData: ReferenceData = {
       trigger: "Importation (DDP = vendeur avance)",
       comment: "Autoliquidation parfois possible en UE, sinon transit facture.",
       mandatoryDocs: ["Declaration TVA import", "Decompte douane"],
-      scope: "Hors UE / DROM",
-    },
-    {
-      name: "Octroi de mer / OMR",
-      payer: "Client",
-      trigger: "Entree DROM",
-      comment: "Necessite HS code precis et valeur transport.",
-      mandatoryDocs: ["Document douanier DROM", "Calcul OM/OMR"],
-      scope: "DROM",
+      scope: "Hors UE",
     },
   ],
   cheatSheets: [
     {
-      title: "DROM",
+      title: "International",
       reminders: [
-        "Mentionner HS code + valeur transport sur facture.",
-        "Anticiper OM/OMR dans devis ou proposer EXW/FCA.",
-        "Delais maritimes longs : valider stock dispo localement.",
+        "Verifier HS code + origine avant devis.",
+        "Adapter incoterm et droits import selon pays.",
+        "Prevoir marge de delai douane.",
       ],
-      documents: ["Facture commerciale detaillee", "Declaration export France", "Preuve livraison"],
-      warning: "Ports satures en haute saison : prevoir 10-15j de marge.",
+      documents: ["Facture commerciale detaillee", "Declaration export", "Preuve livraison"],
+      warning: "Verifier sanctions et exigences documentaires selon pays.",
     },
     {
       title: "UE",
@@ -201,7 +193,7 @@ export const defaultReferenceData: ReferenceData = {
   logistics: [
     {
       mode: "Depositaire (stock local)",
-      bestFor: "Livraison express en DROM / Suisse avec stock tampon",
+      bestFor: "Livraison express en hors UE avec stock tampon",
       leadTime: "24-72h selon zone",
       cutoffs: "M-1 : reassort maritime / M-2 : reassort aerien si urgent",
       responsibilities: ["Suivi stock", "Gestion douane import", "Facturation locale si applicable"],
@@ -213,7 +205,7 @@ export const defaultReferenceData: ReferenceData = {
       leadTime: "4-12 jours selon mode (aerien vs maritime)",
       cutoffs: "J-1 12h : cut-off preparation",
       responsibilities: ["Preparer colis avec HS code", "Partager facture + packing list", "Informer client incoterm"],
-      notes: "Couts variables ; verifier impact OM/OMR ou droits avant devis.",
+      notes: "Couts variables ; verifier impact droits et taxes avant devis.",
     },
   ],
   nomenclature: [

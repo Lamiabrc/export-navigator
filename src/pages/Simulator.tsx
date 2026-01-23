@@ -11,52 +11,29 @@ import { Separator } from "@/components/ui/separator";
 import { useProducts, safeNumber } from "@/hooks/useProducts";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
-const DESTINATIONS = [
-  "Metropole",
-  "Guadeloupe",
-  "Martinique",
-  "Guyane",
-  "Reunion",
-  "Mayotte",
-  "Belgique",
-  "Espagne",
-] as const;
+const DESTINATIONS = ["France", "Belgique", "Espagne", "Allemagne", "Suisse", "Etats-Unis", "Chine"] as const;
 
 const INCOTERMS = ["EXW", "DAP", "DDP"] as const;
 
 type Destination = (typeof DESTINATIONS)[number];
 type Incoterm = (typeof INCOTERMS)[number];
-type TerritoryCode = "GP" | "MQ" | "GF" | "RE" | "YT";
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(Number.isFinite(n) ? n : 0);
 }
 
-function isDromDestination(dest: Destination) {
-  return ["Guadeloupe", "Martinique", "Guyane", "Reunion", "Mayotte"].includes(dest);
-}
+const EU_DESTINATIONS = new Set<Destination>(["France", "Belgique", "Espagne", "Allemagne"]);
 
 function getZoneLabel(dest: Destination) {
-  if (dest === "Metropole") return "FR";
-  if (isDromDestination(dest)) return "DROM";
-  // simplifié: Belgique/Espagne => UE
-  return "UE";
-}
-
-function getTerritoryCode(dest: Destination): TerritoryCode | null {
-  if (dest === "Guadeloupe") return "GP";
-  if (dest === "Martinique") return "MQ";
-  if (dest === "Guyane") return "GF";
-  if (dest === "Reunion") return "RE";
-  if (dest === "Mayotte") return "YT";
-  return null;
+  if (EU_DESTINATIONS.has(dest)) return "UE";
+  return "Hors UE";
 }
 
 function estimateTransport(dest: Destination, weightKg: number) {
   const w = Math.max(0.5, weightKg || 0);
-  const isDrom = isDromDestination(dest);
-  const base = isDrom ? 35 : 18;
-  const perKg = isDrom ? 3.2 : 1.4;
+  const zone = getZoneLabel(dest);
+  const base = zone === "Hors UE" ? 55 : 18;
+  const perKg = zone === "Hors UE" ? 4.5 : 1.4;
   return base + perKg * w;
 }
 
@@ -140,7 +117,7 @@ export default function Simulator() {
 
   const [sku, setSku] = useState("");
   const [qty, setQty] = useState(1);
-  const [destination, setDestination] = useState<Destination>("Martinique");
+  const [destination, setDestination] = useState<Destination>("France");
   const [incoterm, setIncoterm] = useState<Incoterm>("DDP");
 
   const [manualPrice, setManualPrice] = useState<number | "">("");
@@ -168,7 +145,7 @@ export default function Simulator() {
   const ht = unitPrice * qty;
 
   const zone = useMemo(() => getZoneLabel(destination), [destination]);
-  const territory = useMemo(() => getTerritoryCode(destination), [destination]);
+  const territory = useMemo(() => destination, [destination]);
 
   const hsCode = useMemo(() => {
     const raw = String((product as any)?.hs_code || (product as any)?.hsCode || "").replace(/[^\d]/g, "");
@@ -192,7 +169,7 @@ export default function Simulator() {
   const omTotalRate = omRate + omrRate;
 
   const omTheoretical = useMemo(() => {
-    if (zone !== "DROM") return 0;
+    if (zone !== "Hors UE") return 0;
     if (!hs4) return 0;
     return ht * omTotalRate;
   }, [zone, hs4, ht, omTotalRate]);
@@ -218,7 +195,7 @@ export default function Simulator() {
       if (!SUPABASE_ENV_OK) return;
       if (!envOk) return;
 
-      if (zone !== "DROM") return;
+      if (zone !== "Hors UE") return;
       if (!territory) return;
       if (!hs4) return;
 
@@ -257,7 +234,7 @@ export default function Simulator() {
   }, [envOk, zone, territory, hs4]);
 
   const omStatus = useMemo(() => {
-    if (zone !== "DROM") return { ok: true, label: "Non applicable (hors DROM)" };
+    if (zone !== "Hors UE") return { ok: true, label: "Non applicable (hors Hors UE)" };
     if (!hs4) return { ok: false, label: "HS manquant" };
     if (omLoading) return { ok: false, label: "Chargement..." };
     if (!omRow || (omRow.om_rate == null && omRow.omr_rate == null)) return { ok: false, label: "Taux OM non trouvé" };
@@ -331,7 +308,7 @@ export default function Simulator() {
                   <div className="flex flex-wrap gap-2 pt-2">
                     <Badge variant="outline">Zone: {zone}</Badge>
                     <Badge variant="outline">HS: {hsCode || "non renseigné"}</Badge>
-                    {zone === "DROM" ? (
+                    {zone === "Hors UE" ? (
                       <Badge variant={omStatus.ok ? "default" : "destructive"}>OM: {omStatus.label}</Badge>
                     ) : null}
                   </div>
@@ -410,8 +387,8 @@ export default function Simulator() {
                   <div>
                     <div className="text-sm font-semibold">OM théorique</div>
                     <div className="text-xs text-muted-foreground">
-                      {zone !== "DROM"
-                        ? "Destination hors DROM : pas d'OM"
+                      {zone !== "Hors UE"
+                        ? "Destination hors Hors UE : pas d'OM"
                         : !hs4
                         ? "HS manquant : OM non calculable"
                         : omLoading
@@ -459,7 +436,7 @@ export default function Simulator() {
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 <Badge variant="outline">Poids : {weightKg.toFixed(2)} kg</Badge>
                 <Badge variant="outline">Tarif : {formatCurrency(unitPrice)} /u</Badge>
-                {zone === "DROM" && territory ? <Badge variant="outline">Territoire : {territory}</Badge> : null}
+                {zone === "Hors UE" && territory ? <Badge variant="outline">Territoire : {territory}</Badge> : null}
               </div>
             </CardContent>
           </Card>
@@ -468,3 +445,6 @@ export default function Simulator() {
     </MainLayout>
   );
 }
+
+
+

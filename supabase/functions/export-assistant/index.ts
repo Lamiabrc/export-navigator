@@ -109,22 +109,43 @@ function normalizeTerritoryCode(raw?: string | null): string | null {
   if (!raw) return null;
   const cleaned = stripAccents(raw).toUpperCase().trim();
   // si "Guadeloupe" -> "GUADELOUPE"
-  if (TERRITORY_ALIASES[cleaned]) return TERRITORY_ALIASES[cleaned];
-  // si l’utilisateur met "DROM_GP" etc.
-  if (cleaned.startsWith("DROM_")) return cleaned.slice(5);
-  // fallback: si c’est déjà un code
+  if (TERRITORY_ALIASES[cleaned]) return TERRITORY_ALIASES[cleaned];  // fallback: si c’est déjà un code
   if (/^[A-Z]{2,3}$/.test(cleaned)) return cleaned;
   return null;
 }
 
 function classifyExportZone(territoryCode: string | null) {
   if (!territoryCode) return null;
-  const drom = new Set(["GP", "MQ", "GF", "RE", "YT"]);
-  const com = new Set(["BL", "MF", "SPM"]);
-  if (territoryCode === "FR") return "METROPOLE";
-  if (drom.has(territoryCode)) return "DROM";
-  if (com.has(territoryCode)) return "COM";
-  return "AUTRE";
+  const eu = new Set([
+    "FR",
+    "DE",
+    "ES",
+    "IT",
+    "BE",
+    "NL",
+    "LU",
+    "PT",
+    "IE",
+    "AT",
+    "SE",
+    "FI",
+    "DK",
+    "PL",
+    "CZ",
+    "SK",
+    "HU",
+    "RO",
+    "BG",
+    "HR",
+    "SI",
+    "EE",
+    "LV",
+    "LT",
+    "GR",
+    "CY",
+    "MT",
+  ]);
+  return eu.has(territoryCode) ? "UE" : "HORS_UE";
 }
 
 function extractHsCandidates(text: string) {
@@ -301,7 +322,7 @@ Deno.serve(async (req) => {
     aggCosts[code].lignes += 1;
   }
 
-  // OM/OMR (si territoire DROM et HS connu)
+  // Droits/taxes import (si HS connu)
   let omRateRow: any = null;
   if (territoryCode && ["GP", "MQ", "GF", "RE", "YT"].includes(territoryCode)) {
     const hs4 =
@@ -499,3 +520,6 @@ Deno.serve(async (req) => {
     debug: { territoryCode, exportZone, incoterm, ragError },
   });
 });
+
+
+

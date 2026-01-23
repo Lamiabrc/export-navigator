@@ -32,7 +32,6 @@ export function useDashboardData(
     incoterm?: string;
     client?: string;
     product?: string;
-    dromOnly?: boolean;
   },
   settings: ExportSettings,
 ) {

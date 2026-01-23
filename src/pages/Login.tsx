@@ -76,7 +76,7 @@ export default function Login() {
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-slate-950 text-slate-50">
       <div className="relative hidden lg:block">
-        <img src="/assets/sea-login.jpg" alt="Ocean" className="h-full w-full object-cover" />
+        <img src="/login-hero.svg" alt="Illustration" className="h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-slate-900/70" />
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center px-10 space-y-4">

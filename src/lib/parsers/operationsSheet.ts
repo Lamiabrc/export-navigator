@@ -206,9 +206,9 @@ const normalizeIncoterm = (raw: string | null, zone: OperationZone, comment: str
   }
 
   // Heuristiques “terrain”
-  // - DROM : par défaut beaucoup d’expéditions sont traitées en "DDP" dans les process (transport + taxes gérées),
+  // - Hors UE : par défaut beaucoup d’expéditions sont traitées en "DDP" dans les process (transport + taxes gérées),
   //   mais si tu sais que chez toi c’est plutôt DAP, change ici.
-  if (zone === "DROM") return "DDP";
+  if (zone === "HORS_UE") return "DDP";
 
   // - Affrètement / Ubipharm : souvent enlèvement / gestion tiers → EXW (dans ton process actuel)
   if (comment && /affret|affr[eè]t|ubipharm/i.test(comment)) return "EXW";
@@ -228,11 +228,11 @@ const zoneFromIle = (ile: string | null): OperationZone => {
   if (!ile) return "AUTRE";
   const lower = ile.toLowerCase();
 
-  // ✅ DROM : ajoute Guyane + variantes
+  // ✅ Hors UE : ajoute Guyane + variantes
   if (
     /(guadeloupe|martinique|guyane|réunion|reunion|mayotte|971\b|972\b|973\b|974\b|976\b)/.test(lower)
   ) {
-    return "DROM";
+    return "HORS_UE";
   }
 
   return "AUTRE";
@@ -316,3 +316,4 @@ export const normalizeOperationRow = (row: RawOperationRow): OperationEntry => {
 export const normalizeSheet = (rows: RawOperationRow[]): OperationEntry[] => {
   return rows.map(normalizeOperationRow);
 };
+

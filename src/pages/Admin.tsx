@@ -45,10 +45,10 @@ export default function Admin() {
           <Card>
             <CardHeader>
               <CardTitle>Playbooks & contenus</CardTitle>
-              <CardDescription>playbooks, playbook_sections, guide DROM</CardDescription>
+              <CardDescription>playbooks, playbook_sections, guide export</CardDescription>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-2">
-              <p>Structure guide DROM / contenus versionnés pour l’IA et le Guide.</p>
+              <p>Structure guide export / contenus versionnes pour l'IA et le Guide.</p>
               <Badge variant="outline">CRUD à implémenter</Badge>
             </CardContent>
           </Card>
@@ -57,3 +57,4 @@ export default function Admin() {
     </MainLayout>
   );
 }
+

@@ -114,7 +114,7 @@ function normalizeHsCode(input?: string): string {
   return String(input).replace(/[^0-9]/g, "").trim();
 }
 
-function findOmRateForDrom(params: {
+function findDutyRate(params: {
   destination: Destination;
   productType: ProductType;
   customsCode?: string;
@@ -364,7 +364,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
 
   // 8) DROITS IMPORT (si disponibles)
   if (zone === "Hors UE") {
-    const omRate = findOmRateForDrom({
+    const omRate = findDutyRate({
       destination,
       productType,
       customsCode,

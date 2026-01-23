@@ -15,26 +15,14 @@ type Props = {
   selectedTerritory: string | null;
   onSelectTerritory: (code: string | null) => void;
   dateRangeLabel?: string;
-  mode?: "overview" | "drom";
+  mode?: "overview";
 };
 
-const DROM = ["GP", "MQ", "GF", "RE", "YT"] as const;
-
 const OFFSETS: Record<string, { dx: number; dy: number }> = {
-  GP: { dx: -10, dy: -12 },
-  MQ: { dx: -10, dy: 12 },
-  GF: { dx: 10, dy: 0 },
-  RE: { dx: 10, dy: 0 },
-  YT: { dx: 10, dy: -10 },
 };
 
 const COLORS: Record<string, string> = {
   FR: "#38bdf8",
-  GP: "#fb7185",
-  MQ: "#f59e0b",
-  GF: "#22c55e",
-  RE: "#a855f7",
-  YT: "#38bdf8",
   HUB_FR: "#38bdf8",
 };
 
@@ -54,7 +42,7 @@ function parseSvg(raw: string) {
 }
 
 function pickColor(code: string) {
-  return COLORS[code] || ((DROM as readonly string[]).includes(code) ? "#22d3ee" : "#60a5fa");
+  return COLORS[code] || "#60a5fa";
 }
 
 function markerSize(ca: number) {
@@ -107,12 +95,12 @@ export function SvgMapWorld({
     oy: number;
   }>({ active: false, pointerId: null, startX: 0, startY: 0, ox: 0, oy: 0 });
 
-  // ✅ Lire les ancres directement dans le SVG (anchor-HUB_FR, anchor-GP, ...)
+  // Lire les ancres directement dans le SVG (anchor-HUB_FR, anchor-XX)
   React.useLayoutEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
 
-    const codes = ["HUB_FR", ...DROM] as string[];
+    const codes = ["HUB_FR", ...Object.keys(dataByTerritory)] as string[];
     const next: Record<string, { x: number; y: number }> = {};
 
     for (const code of codes) {
@@ -129,15 +117,15 @@ export function SvgMapWorld({
   const hub = anchors["HUB_FR"];
 
   const points = React.useMemo(() => {
-    const list = (DROM as readonly string[]).map((code) => ({
+    const list = Object.keys(dataByTerritory).map((code) => ({
       code,
       x: anchors[code]?.x ?? 0,
       y: anchors[code]?.y ?? 0,
       data: dataByTerritory[code],
       name: code,
     }));
-    return mode === "drom" ? list : list; // (si tu ajoutes d'autres ancres plus tard, on élargira ici)
-  }, [anchors, dataByTerritory, mode]);
+    return list;
+  }, [anchors, dataByTerritory]);
 
   const totalLines = React.useMemo(
     () => Object.values(dataByTerritory).reduce((s, d) => s + (Number(d?.lines) || 0), 0),

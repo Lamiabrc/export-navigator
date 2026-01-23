@@ -2,7 +2,7 @@
 
 ## Pages / Routes (état & cible)
 - Contrôle unifié : `CommandCenter` sur `/control-tower` (Dashboard + Strategy + Conformité). Routes legacy `/dashboard`, `/strategy`, `/control-tower-legacy`, `/dashboard-legacy`, `/strategy-hub` redirigées/masquées.
-- Référentiels : `Flows` (`/flows/:id?`), `Clients`, `Products`, `ReferenceLibrary`, `Guide` (incl. DROM Playbook), `Settings`/`Admin`.
+- Référentiels : `Flows` (`/flows/:id?`), `Clients`, `Products`, `ReferenceLibrary`, `Guide` (export), `Settings`/`Admin`.
 - Facturation : `Invoices`, `InvoiceVerification` (à renommer/faire évoluer en “Invoice Control”), `Simulator`, `MarginAnalysis`.
 - Autres/legacy à isoler : `Imports` (CSV), `PricingPositioning`, `CompetitiveIntel`, `ScenarioLab`, dossier `pages/_unused`.
 
@@ -15,9 +15,9 @@
 
 ## Modèle de données (Supabase – source de vérité)
 - `products` : id, code_article, libelle_article, hs_code, tva_percent, prix/catalogue, poids/dimensions…
-- `clients` : id, name, export_zone (UE/DROM/Hors UE), drom_code, canal (direct/indirect/depositaire), depositaire_id, groupement_id, groupement, groupement_remise.
+- `clients` : id, name, export_zone (UE/Hors UE), canal (direct/indirect/depositaire), depositaire_id, groupement_id, groupement, groupement_remise.
 - `flows` : id, flow_code, data (jsonb) validée, created_at/updated_at.
-- `export_settings` : clés structurées (`reference_rates`, `guide_drom`, futur `transit_fee_pct` par destination/mode).
+- `export_settings` : clés structurées (`reference_rates`, `guide_export`, futur `transit_fee_pct` par destination/mode).
 - `export_hs_catalog` : destination + hs_code + om_rate + omr_rate + label/notes.
 - `export_destinations` : paramètres par destination (zone, transit_fee_pct, éventuels plafonds).
 - `export_incoterms` : payeur par incoterm/transport (transport principal, douane export/import, droits, OM, TVA).
@@ -26,15 +26,15 @@
 ## Navigation cible (Sidebar)
 - Pilotage : **Control Center** (unique), Flows.
 - Facturation & conformité : Invoices, Invoice Control, Simulator, Margin Analysis.
-- Référentiels : Clients, Products, Reference Library, Guide (onglet DROM Playbook).
+- Référentiels : Clients, Products, Reference Library, Guide (export).
 - Administration : Settings/Admin (guard UI rôle admin).
 - Legacy cachés : Dashboard/ControlTower/StrategyHub/Imports/Competitive/PricingPositioning/ScenarioLab (accessibles seulement via route directe si besoin).
 
 ## Pages à conserver / fusionner
-- Conserver : CommandCenter (Control Center), Flows/CircuitDetail, Finance, Guide (+ DROM Playbook), Invoices, InvoiceVerification→Invoice Control, Simulator, MarginAnalysis, ReferenceLibrary, Products, Clients, Settings/Admin.
+- Conserver : CommandCenter (Control Center), Flows/CircuitDetail, Finance, Guide (export), Invoices, InvoiceVerification→Invoice Control, Simulator, MarginAnalysis, ReferenceLibrary, Products, Clients, Settings/Admin.
 - Fusion/suppression : remplacer Dashboard + ControlTower + StrategyHub par Control Center ; ne plus afficher Imports dans la nav.
 
 ## Data layer (priorités)
 - Supprimer localStorage pour données métier : `useReferenceRates`, `useProducts`, `useClients`, `useFlows` doivent lire Supabase avec typage strict + fallback message si env absentes.
-- Helpers : produits (`getProductByCodeArticle`, `searchProducts`, `topProductsByZone`), clients (`filterByZone`, `filterByDrom`, `computeClientType`), flows (validation schema data jsonb).
+- Helpers : produits (`getProductByCodeArticle`, `searchProducts`, `topProductsByZone`), clients (`filterByZone`, `computeClientType`), flows (validation schema data jsonb).
 - Mode dégradé : si `VITE_SUPABASE_URL/ANON_KEY` manquants, afficher message et utiliser defaults non persistants.

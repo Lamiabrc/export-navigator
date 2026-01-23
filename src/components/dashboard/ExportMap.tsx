@@ -15,18 +15,11 @@ type Props = {
   selectedTerritory: string | null;
   onSelectTerritory: (code: string | null) => void;
   dateRangeLabel?: string;
-  mode?: "overview" | "drom";
+  mode?: "overview";
 };
-
-const DROM_CODES = ["GP", "MQ", "GF", "RE", "YT"] as const;
 
 const TERRITORY_META: Record<string, { label: string; dx: number; dy: number }> = {
   HUB_FR: { label: "Hub", dx: 14, dy: 4 },
-  GP: { label: "Guadeloupe", dx: -10, dy: -12 },
-  MQ: { label: "Martinique", dx: -10, dy: 12 },
-  GF: { label: "Guyane", dx: 10, dy: 0 },
-  RE: { label: "Réunion", dx: 10, dy: 0 },
-  YT: { label: "Mayotte", dx: 10, dy: -10 },
 };
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
@@ -78,8 +71,8 @@ function scaleStroke(ca: number, max: number) {
   return clamp(1 + ratio * 6, 1.2, 8);
 }
 
-function pickColor(code: string) {
-  return (DROM_CODES as readonly string[]).includes(code) ? "#22d3ee" : "#60a5fa";
+function pickColor() {
+  return "#60a5fa";
 }
 
 export function ExportMap({
@@ -113,7 +106,7 @@ export function ExportMap({
     const svg = svgRef.current;
     if (!svg) return;
 
-    const codes = ["HUB_FR", ...DROM_CODES] as string[];
+    const codes = ["HUB_FR", ...Object.keys(dataByTerritory)] as string[];
     const next: Record<string, { x: number; y: number }> = {};
 
     for (const code of codes) {
@@ -128,17 +121,14 @@ export function ExportMap({
   }, [map.inner]);
 
   const points = React.useMemo(() => {
-    const list = (DROM_CODES as readonly string[])
-      .filter((c) => (mode === "drom" ? true : true))
-      .map((code) => ({
-        code,
-        label: TERRITORY_META[code]?.label || code,
-        x: anchors[code]?.x ?? 0,
-        y: anchors[code]?.y ?? 0,
-        data: dataByTerritory[code],
-      }));
-    return mode === "drom" ? list : list;
-  }, [anchors, dataByTerritory, mode]);
+    return Object.keys(dataByTerritory).map((code) => ({
+      code,
+      label: TERRITORY_META[code]?.label || code,
+      x: anchors[code]?.x ?? 0,
+      y: anchors[code]?.y ?? 0,
+      data: dataByTerritory[code],
+    }));
+  }, [anchors, dataByTerritory]);
 
   const hub = anchors["HUB_FR"];
 
@@ -402,3 +392,4 @@ export function ExportMap({
     </div>
   );
 }
+

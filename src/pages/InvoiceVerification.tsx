@@ -450,7 +450,7 @@ export default function InvoiceVerification() {
         setDestinationConfidence(hint.confidence);
       } else {
         setDestinationSource("default");
-        setDestinationEvidence("Aucune preuve trouvée dans la facture (CP DOM / mots-clés)");
+        setDestinationEvidence("Aucune preuve trouvée dans la facture (code postal / mots-cles)");
         setDestinationConfidence("none");
       }
 
@@ -504,7 +504,7 @@ export default function InvoiceVerification() {
     const terr = getTerritoryCodeFromDestination(dest);
     const z = getZoneFromDestination(dest);
 
-    if (!terr || z !== "DROM") {
+    if (!terr || z !== "Hors UE") {
       setOmLines([]);
       return [];
     }
@@ -604,9 +604,9 @@ export default function InvoiceVerification() {
       })
       .reduce((s, it) => s + getLineHT(it), 0);
 
-    // OM théorique (DROM uniquement)
+    // OM théorique (Hors UE uniquement)
     let omTheoreticalTotal: number | null = null;
-    if (z === "DROM" && terr) {
+    if (z === "Hors UE" && terr) {
       const computed = await buildOmLines(parsed, destination);
       const total = computed.reduce((s, l) => s + safeNum(l.omAmount), 0);
       omTheoreticalTotal = total >= 0 ? total : 0;
@@ -850,7 +850,7 @@ export default function InvoiceVerification() {
                   </Select>
 
                   <div className="flex gap-2 flex-wrap">
-                    <Badge variant={zone === "UE" ? "default" : zone === "DROM" ? "secondary" : "outline"}>Zone {zone}</Badge>
+                    <Badge variant={zone === "UE" ? "default" : zone === "Hors UE" ? "secondary" : "outline"}>Zone {zone}</Badge>
                     {territory && <Badge variant="outline">Territory {territory}</Badge>}
                   </div>
 
@@ -859,7 +859,7 @@ export default function InvoiceVerification() {
                   </div>
                 </div>
 
-                {zone === "DROM" && destinationSource === "default" && (
+                {zone === "Hors UE" && destinationSource === "default" && (
                   <div className="p-3 rounded-lg bg-status-warning/10 text-sm flex gap-2">
                     <AlertTriangle className="h-4 w-4 text-status-warning mt-0.5" />
                     <div>
@@ -1075,7 +1075,7 @@ export default function InvoiceVerification() {
                     </div>
 
                     {omByHs4.length === 0 && (
-                      <p className="text-sm text-muted-foreground">Aucune donnée HS4/OM à afficher (HS manquants ou destination non DROM).</p>
+                      <p className="text-sm text-muted-foreground">Aucune donnée HS4/OM à afficher (HS manquants ou destination non Hors UE).</p>
                     )}
                   </CardContent>
                 </Card>
@@ -1093,7 +1093,7 @@ export default function InvoiceVerification() {
 
                   <CardContent className="space-y-3">
                     {!omLines.length ? (
-                      <p className="text-sm text-muted-foreground">Aucun détail OM (destination ≠ DROM, HS manquants, ou lignes produits non détectées).</p>
+                      <p className="text-sm text-muted-foreground">Aucun détail OM (destination ≠ Hors UE, HS manquants, ou lignes produits non détectées).</p>
                     ) : (
                       <>
                         <div className="max-h-[360px] overflow-auto rounded-lg border">
@@ -1201,3 +1201,4 @@ export default function InvoiceVerification() {
     </MainLayout>
   );
 }
+

@@ -9,7 +9,7 @@ import { Plus, Trash2, RefreshCw, Download } from "lucide-react";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { fetchAllWithPagination } from "@/utils/supabasePagination";
 
-type ExportZone = "UE" | "DROM" | "Suisse" | "Hors UE" | "France";
+type ExportZone = "UE" | "Suisse" | "Hors UE" | "France";
 type SalesChannel = "direct" | "indirect" | "depositaire" | "grossiste";
 
 type ClientRow = {
@@ -23,7 +23,6 @@ type ClientRow = {
   pays: string | null;
 
   export_zone: ExportZone | string | null;
-  drom_code: string | null;
 
   // "canal" = brut (si tu l’alimentes), "sales_channel" = canonique (déduit)
   canal: string | null;
@@ -92,13 +91,12 @@ export default function Clients() {
   // filtres
   const [search, setSearch] = useState("");
   const [zoneFilter, setZoneFilter] = useState<"" | ExportZone>("");
-  const [dromFilter, setDromFilter] = useState<string>("");
   const [paysFilter, setPaysFilter] = useState<string>("");
   const [salesChannelFilter, setSalesChannelFilter] = useState<"" | SalesChannel>("");
   const [depoFilter, setDepoFilter] = useState<DepoFilter>("");
   const [groupementFilter, setGroupementFilter] = useState<string>("");
 
-  // formulaire ajout (minimal, trigger SQL complète export_zone/drom_code/sales_channel)
+  // formulaire ajout (minimal, trigger SQL complète export_zone/sales_channel)
   const [form, setForm] = useState({
     code_ets: "",
     libelle_client: "",
@@ -110,12 +108,6 @@ export default function Clients() {
     canal: "",
     groupement: "",
   });
-
-  // Options DROM/COM (tu peux en ajouter si besoin)
-  const dromOptions = useMemo(
-    () => ["GP", "MQ", "GF", "RE", "YT", "SPM", "BL", "MF", "NC", "PF", "WF", "TF", "OUTRE-MER"] as const,
-    [],
-  );
 
   async function fetchClients() {
     if (!SUPABASE_ENV_OK) {
@@ -135,7 +127,7 @@ export default function Clients() {
         let q = supabase
           .from("clients")
           .select(
-            "id,code_ets,libelle_client,telephone,adresse,cp,ville,pays,export_zone,drom_code,canal,sales_channel,depositaire_id,groupement_id,groupement",
+            "id,code_ets,libelle_client,telephone,adresse,cp,ville,pays,export_zone,canal,sales_channel,depositaire_id,groupement_id,groupement",
           );
 
         // Recherche
@@ -154,7 +146,6 @@ export default function Clients() {
         }
 
         if (zoneFilter) q = q.eq("export_zone", zoneFilter);
-        if (dromFilter) q = q.eq("drom_code", dromFilter);
 
         const p = paysFilter.trim();
         if (p) q = q.ilike("pays", `%${p}%`);
@@ -190,10 +181,6 @@ export default function Clients() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    // auto-reset DROM filter si on quitte DROM
-    if (zoneFilter !== "DROM") setDromFilter("");
-  }, [zoneFilter]);
 
   async function handleAdd() {
     const name = form.libelle_client.trim();
@@ -259,7 +246,6 @@ export default function Clients() {
       libelle_client: c.libelle_client,
       pays: c.pays ?? "",
       export_zone: c.export_zone ?? "",
-      drom_code: c.drom_code ?? "",
       sales_channel: c.sales_channel ?? "",
       canal: c.canal ?? "",
       groupement: c.groupement ?? "",
@@ -392,27 +378,9 @@ export default function Clients() {
                   onChange={(e) => setZoneFilter(e.target.value as any)}
                 >
                   <option value="">Toutes</option>
-                  <option value="DROM">DROM</option>
                   <option value="UE">UE</option>
                   <option value="Suisse">Suisse</option>
                   <option value="Hors UE">Hors UE</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label>DROM / OM</Label>
-                <select
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  value={dromFilter}
-                  onChange={(e) => setDromFilter(e.target.value)}
-                  disabled={zoneFilter !== "DROM"}
-                >
-                  <option value="">Tous</option>
-                  {dromOptions.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
                 </select>
               </div>
 
@@ -479,7 +447,6 @@ export default function Clients() {
                 <TableHead>Client</TableHead>
                 <TableHead>Pays</TableHead>
                 <TableHead>Zone</TableHead>
-                <TableHead>DROM</TableHead>
                 <TableHead>Sales</TableHead>
                 <TableHead>Canal (brut)</TableHead>
                 <TableHead>Groupement</TableHead>
@@ -502,7 +469,6 @@ export default function Clients() {
 
                   <TableCell className="text-sm">{c.pays ?? "-"}</TableCell>
                   <TableCell className="text-sm">{humanZone(c.export_zone)}</TableCell>
-                  <TableCell className="text-sm">{c.drom_code ?? "-"}</TableCell>
                   <TableCell className="text-sm">{humanSalesChannel(c.sales_channel)}</TableCell>
                   <TableCell className="text-sm">{c.canal ?? "-"}</TableCell>
                   <TableCell className="text-sm">{c.groupement ?? "-"}</TableCell>

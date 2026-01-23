@@ -1,7 +1,7 @@
 # Export Navigator — TOOL_BLUEPRINT
 
 ## Principes de gouvernance
-- Mission : outil de contrôle/cohérence export (Incoterms, TVA DOM/DDP, coûts transport/douane/transit) + dashboards.
+- Mission : outil de contrôle/cohérence export (Incoterms, TVA import/DDP, coûts transport/douane/transit) + dashboards.
 - Données front uniquement (localStorage + JSON de référence). Aucune dépendance backend en V1.
 - Règle d’architecture : **zéro logique métier dans les pages** (`src/pages`). Les pages orchestrent l’UI et appellent des fonctions pures depuis `src/lib/*`.
 - Clefs de stockage : flows (`mpl_flows`), factures importées (`SAGE_INVOICES_KEY`), coûts réels (`COST_DOCS_KEY`), référentiel override (`reference_overrides`), factures upload locales historique (`mpl_invoices` existant).

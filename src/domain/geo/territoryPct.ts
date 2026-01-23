@@ -12,7 +12,7 @@ export const TERRITORY_PCT: Record<
    */
   HUB_FR: { x: 53.5, y: 30.8, label: "Métropole" },
 
-  // DROM (déjà calibrés)
+  // Territoires (coordonnees historiques)
   GP: { x: 30.0, y: 46.5, label: "Guadeloupe" },
   MQ: { x: 30.4, y: 48.5, label: "Martinique" },
   GF: { x: 34.8, y: 57.5, label: "Guyane" },

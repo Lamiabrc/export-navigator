@@ -155,7 +155,7 @@ function normalizeTerritoryCode(rawTerritory: any, rawIle: any): string | null {
   const ile = String(rawIle ?? "").trim().toLowerCase();
   if (!ile) return null;
 
-  // DROM
+  // Territories mapped from island labels (if provided)
   if (ile.includes("guadeloupe")) return "GP";
   if (ile.includes("martinique")) return "MQ";
   if (ile.includes("guyane")) return "GF";

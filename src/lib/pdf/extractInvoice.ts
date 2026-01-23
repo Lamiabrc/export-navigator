@@ -130,7 +130,7 @@ function isTotalsOrSummaryLine(line: string) {
   ];
   if (totals.some((k) => low.includes(k))) return true;
 
-  // ✅ lignes "tax summary" typiques (ex: "DROM TVA 0% ... Transit 434,28")
+  // ✅ lignes "tax summary" typiques (ex: "TVA 0% ... Transit 434,28")
   if (/\b(drom|tva)\b/i.test(line) && /\btransit\b/i.test(line)) return true;
 
   return false;
