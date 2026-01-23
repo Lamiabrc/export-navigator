@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+ï»¿import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
 const FALLBACK_ALERTS = [
@@ -7,19 +7,19 @@ const FALLBACK_ALERTS = [
     title: "Mise a jour sanctions (UE)",
     message: "Verifier les restrictions sur certains pays sensibles.",
     severity: "high",
-    country_iso2: "RU",
-    hs_prefix: null,
-    detected_at: new Date().toISOString(),
+    country: "RU",
+    hsPrefix: null,
+    detectedAt: new Date().toISOString(),
     source: "EU",
   },
   {
     id: "al-2",
     title: "Evolution taxes import US",
-    message: "Certaines lignes HS 3004 impactees par un relèvement de droits.",
+    message: "Certaines lignes HS 3004 impactees par un relevement de droits.",
     severity: "medium",
-    country_iso2: "US",
-    hs_prefix: "3004",
-    detected_at: new Date().toISOString(),
+    country: "US",
+    hsPrefix: "3004",
+    detectedAt: new Date().toISOString(),
     source: "WITS",
   },
 ];
@@ -65,9 +65,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     title: a.title,
     message: a.message,
     severity: a.severity,
-    country_iso2: a.country_iso2,
-    hs_prefix: a.hs_prefix,
-    detected_at: a.detected_at,
+    country: a.country_iso2,
+    hsPrefix: a.hs_prefix,
+    detectedAt: a.detected_at,
     source: a.source,
   }));
 

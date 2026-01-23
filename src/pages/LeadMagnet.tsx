@@ -1,4 +1,4 @@
-﻿import * as React from "react";
+import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
@@ -38,8 +38,14 @@ const COUNTRIES = [
 const SOURCES = [
   "OFAC Sanctions List Service",
   "ONU Consolidated List",
-  "EU Sanctions Map",
+  "EU Sanctions Map (PDF)",
   "WITS / UNCTAD TRAINS",
+];
+
+const TRUST_ITEMS = [
+  "Maj sanctions quotidienne",
+  "Regles export verifiees",
+  "Estimation immediate",
 ];
 
 export default function LeadMagnet() {
@@ -236,7 +242,7 @@ export default function LeadMagnet() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f7fb] text-slate-900" style={{ fontFamily: "Inter, system-ui, sans-serif" }}>
+    <div className="min-h-screen bg-[#f6f7fb] text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <BrandLogo imageClassName="h-9" titleClassName="text-base font-semibold" subtitleClassName="text-xs" />
@@ -251,17 +257,18 @@ export default function LeadMagnet() {
             <Button onClick={() => navigate("/invoice-check")}>Validation express</Button>
           </div>
         </div>
+        <div className="h-1 bg-gradient-to-r from-blue-700 via-white to-red-600" />
       </header>
 
       <section className="mx-auto max-w-6xl px-6 py-12">
         <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-6">
-            <p className="text-xs uppercase tracking-[0.32em] text-slate-500">Audit • Reglementation • Veille</p>
+            <p className="text-xs uppercase tracking-[0.35em] text-blue-700">Audit • Reglementation • Veille</p>
             <h1 className="text-4xl md:text-5xl font-semibold leading-tight text-slate-900">
               Votre controle export en 30 secondes.
             </h1>
             <p className="text-lg text-slate-600">
-              Estimation immediate des droits/taxes, documents et risques sanctions. Rapport PDF MPL + veille personnalisee.
+              Estimation immediate des droits/taxes, documents requis et risques sanctions. Rapport PDF MPL + veille personnalisee.
             </p>
             <div className="flex flex-wrap gap-2">
               {HS_CHIPS.map((chip) => (
@@ -269,10 +276,17 @@ export default function LeadMagnet() {
                   key={chip}
                   type="button"
                   onClick={() => setHsInput(chip)}
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm"
+                  className="rounded-full border border-blue-200 bg-white px-3 py-1 text-sm text-blue-700"
                 >
                   HS {chip}
                 </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+              {TRUST_ITEMS.map((item) => (
+                <span key={item} className="rounded-full border border-slate-200 bg-white px-3 py-1">
+                  {item}
+                </span>
               ))}
             </div>
           </div>
@@ -371,6 +385,9 @@ export default function LeadMagnet() {
               <Button onClick={handleEstimate} disabled={loading} className="w-full">
                 {loading ? "Calcul en cours..." : "Calculer mon controle export"}
               </Button>
+              <p className="text-xs text-slate-500">
+                Estimation indicative. Verification humaine recommandee pour decision finale.
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -425,6 +442,9 @@ export default function LeadMagnet() {
                       </ul>
                     </div>
                   </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                    Confiance: {result.confidence} • Sources: {result.sources?.join(", ") || "Regles internes"}
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -466,28 +486,67 @@ export default function LeadMagnet() {
         </div>
       </section>
 
-      <section className="bg-white border-t border-slate-200">
-        <div className="mx-auto max-w-6xl px-6 py-10 grid gap-6 md:grid-cols-3">
-          <div>
-            <div className="text-xs uppercase text-slate-400">Sources officielles</div>
-            <ul className="mt-3 text-sm text-slate-600 space-y-1">
-              {SOURCES.map((src) => (
-                <li key={src}>• {src}</li>
-              ))}
-            </ul>
+      <section className="border-t border-slate-200 bg-white">
+        <div className="mx-auto max-w-6xl px-6 py-12">
+          <div className="grid gap-6 md:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
+              <div className="text-xs uppercase tracking-[0.24em] text-blue-700">Ce que vous obtenez</div>
+              <ul className="mt-4 space-y-2 text-sm text-slate-600">
+                <li>• Estimation duties & taxes</li>
+                <li>• Documents requis par pays</li>
+                <li>• Risques sanctions & compliance</li>
+                <li>• Rapport PDF brandé MPL</li>
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-6">
+              <div className="text-xs uppercase tracking-[0.24em] text-blue-700">Comment ca marche</div>
+              <ol className="mt-4 space-y-2 text-sm text-slate-600">
+                <li>1. Saisis HS ou produit + pays</li>
+                <li>2. Obtiens estimation & alertes</li>
+                <li>3. Telecharge le rapport PDF</li>
+              </ol>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
+              <div className="text-xs uppercase tracking-[0.24em] text-blue-700">Veille & alertes</div>
+              <p className="mt-4 text-sm text-slate-600">
+                Signaux sanctions, documents & taxes. Personnalise les pays et HS suivis pour recevoir la veille.
+              </p>
+              <Button className="mt-4" variant="outline" onClick={() => navigate("/watch")}>
+                Voir la veille
+              </Button>
+            </div>
           </div>
-          <div>
-            <div className="text-xs uppercase text-slate-400">Ce que vous obtenez</div>
-            <ul className="mt-3 text-sm text-slate-600 space-y-1">
-              <li>• Estimation duties & taxes</li>
-              <li>• Documents requis par pays</li>
-              <li>• Risques sanctions & compliance</li>
-            </ul>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6">
+              <div className="text-xs uppercase tracking-[0.24em] text-blue-700">Cas d'usage</div>
+              <ul className="mt-4 space-y-2 text-sm text-slate-600">
+                <li>• PME/ETI qui exportent ou souhaitent exporter</li>
+                <li>• Directions ADV, supply, douane, finance</li>
+                <li>• Verification rapide avant expedition</li>
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-6">
+              <div className="text-xs uppercase tracking-[0.24em] text-blue-700">Sources officielles</div>
+              <ul className="mt-4 space-y-2 text-sm text-slate-600">
+                {SOURCES.map((src) => (
+                  <li key={src}>• {src}</li>
+                ))}
+              </ul>
+            </div>
           </div>
-          <div>
-            <div className="text-xs uppercase text-slate-400">CTA conseil</div>
-            <p className="mt-3 text-sm text-slate-600">Besoin d'une validation rapide ? 15 minutes avec un consultant export.</p>
-            <Button className="mt-3" onClick={() => navigate("/invoice-check")}>Demander une validation</Button>
+
+          <div className="mt-10 flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-700 via-blue-900 to-red-600 p-6 text-white md:flex-row md:items-center">
+            <div>
+              <div className="text-xs uppercase tracking-[0.25em] text-white/70">Besoin d'une validation ?</div>
+              <div className="text-2xl font-semibold">Demandez un audit complet ou une validation express.</div>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="secondary" onClick={() => navigate("/invoice-check")}>Validation express</Button>
+              <Button variant="outline" className="border-white text-white hover:bg-white/10" onClick={() => navigate("/newsletter")}>
+                Recevoir la veille
+              </Button>
+            </div>
           </div>
         </div>
       </section>

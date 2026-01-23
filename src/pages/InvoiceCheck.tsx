@@ -25,6 +25,16 @@ function calcScore(lines: Line[], incoterm: string, destination: string) {
   return Math.max(40, score);
 }
 
+function getIssues(lines: Line[], incoterm: string, destination: string) {
+  const issues: string[] = [];
+  const missingHs = lines.filter((l) => l.hs.replace(/[^0-9]/g, "").length < 4).length;
+  if (missingHs) issues.push("HS incomplet sur certaines lignes");
+  if (!incoterm) issues.push("Incoterm manquant");
+  if (!destination) issues.push("Destination manquante");
+  if (issues.length === 0) issues.push("Aucun risque majeur detecte");
+  return issues;
+}
+
 export default function InvoiceCheck() {
   const { toast } = useToast();
   const [destination, setDestination] = React.useState("");
@@ -41,6 +51,7 @@ export default function InvoiceCheck() {
 
   const totalValue = lines.reduce((sum, l) => sum + l.qty * l.price, 0);
   const score = calcScore(lines, incoterm, destination);
+  const issues = getIssues(lines, incoterm, destination);
 
   const updateLine = (idx: number, patch: Partial<Line>) => {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
@@ -185,6 +196,15 @@ export default function InvoiceCheck() {
                 </Button>
                 <Button variant="outline" onClick={openAudit}>Demander un audit complet</Button>
               </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-white p-4">
+              <div className="text-xs text-muted-foreground">Explications</div>
+              <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                {issues.map((issue) => (
+                  <li key={issue}>• {issue}</li>
+                ))}
+              </ul>
             </div>
           </CardContent>
         </Card>

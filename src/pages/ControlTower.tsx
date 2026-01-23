@@ -1,15 +1,19 @@
 import * as React from "react";
-import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { isMissingTableError } from "@/domain/calc";
 import { getAlerts, postPdf } from "@/lib/leadMagnetApi";
 import { OnboardingPrefsModal } from "@/components/OnboardingPrefsModal";
+import { useToast } from "@/hooks/use-toast";
 import worldMap from "@/assets/world-map.svg";
 
 type CountryRow = {
@@ -28,6 +32,16 @@ type TradeFlowRow = {
   value_eur: number | null;
   volume_kg: number | null;
   source: string | null;
+};
+
+type BriefResponse = {
+  estimate: { duty: number; taxes: number; total: number; currency: string };
+  documents: string[];
+  risks: Array<{ title: string; level: "low" | "medium" | "high"; message: string }>;
+  complianceScore: number;
+  updatedAt: string;
+  confidence: "low" | "medium" | "high";
+  sources: string[];
 };
 
 type SvgMeta = {
@@ -108,6 +122,10 @@ function formatMoney(n: number) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 }
 
+function formatCurrency(n: number, currency: string) {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency, maximumFractionDigits: 0 }).format(n);
+}
+
 function groupSum(items: TradeFlowRow[], key: (r: TradeFlowRow) => string) {
   const map = new Map<string, number>();
   for (const r of items) {
@@ -137,6 +155,7 @@ const ALL = "__all__";
 export default function ControlTower() {
   const navigate = useNavigate();
   const { resolvedRange, refreshToken } = useGlobalFilters();
+  const { toast } = useToast();
 
   const [svgMeta, setSvgMeta] = React.useState<SvgMeta>(FALLBACK_META);
   const [countries, setCountries] = React.useState<CountryRow[]>(COUNTRY_FALLBACKS);
@@ -153,6 +172,22 @@ export default function ControlTower() {
   const [prefsOpen, setPrefsOpen] = React.useState(false);
   const [leadEmail, setLeadEmail] = React.useState<string | null>(null);
   const [downloading, setDownloading] = React.useState(false);
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [drawerCountry, setDrawerCountry] = React.useState<CountryRow | null>(null);
+  const [drawerHs, setDrawerHs] = React.useState("");
+  const [drawerProduct, setDrawerProduct] = React.useState("");
+  const [drawerValue, setDrawerValue] = React.useState("10000");
+  const [drawerCurrency, setDrawerCurrency] = React.useState("EUR");
+  const [drawerIncoterm, setDrawerIncoterm] = React.useState("DAP");
+  const [drawerMode, setDrawerMode] = React.useState("sea");
+  const [drawerResult, setDrawerResult] = React.useState<BriefResponse | null>(null);
+  const [drawerLoading, setDrawerLoading] = React.useState(false);
+  const [drawerError, setDrawerError] = React.useState<string | null>(null);
+  const [contactOpen, setContactOpen] = React.useState(false);
+  const [contactCompany, setContactCompany] = React.useState("");
+  const [contactEmail, setContactEmail] = React.useState("");
+  const [contactMessage, setContactMessage] = React.useState("");
+  const [contactSending, setContactSending] = React.useState(false);
 
   React.useEffect(() => {
     let alive = true;
@@ -202,6 +237,110 @@ export default function ControlTower() {
       setError(err?.message || "Impossible de generer le rapport.");
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const requestBriefWith = async ({
+    country,
+    hs,
+    product,
+    valueInput,
+    currencyInput,
+    incotermInput,
+    modeInput,
+  }: {
+    country: CountryRow | null;
+    hs: string;
+    product: string;
+    valueInput: string;
+    currencyInput: string;
+    incotermInput: string;
+    modeInput: string;
+  }) => {
+    if (!country?.code_iso2) {
+      setDrawerError("Selectionne un pays de destination.");
+      return;
+    }
+    const hsNormalized = hs.replace(/[^0-9]/g, "");
+    if (!product.trim() && hsNormalized.length < 2) {
+      setDrawerError("Saisis un produit ou un code HS.");
+      return;
+    }
+    try {
+      setDrawerLoading(true);
+      setDrawerError(null);
+      const payload = {
+        hsInput: hsNormalized || undefined,
+        productText: product.trim() || undefined,
+        destinationIso2: country.code_iso2,
+        value: Number(valueInput || 0),
+        currency: currencyInput,
+        incoterm: incotermInput,
+        mode: modeInput,
+      };
+      const res = await fetch("/api/export/brief", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      }).then((r) => r.json());
+      if (res.error) throw new Error(res.error);
+      setDrawerResult(res as BriefResponse);
+    } catch (err: any) {
+      setDrawerError(err?.message || "Impossible de charger la fiche export.");
+    } finally {
+      setDrawerLoading(false);
+    }
+  };
+
+  const openDrawer = (code: string) => {
+    const upper = code.toUpperCase();
+    const row = countryLookup.get(upper) || { code_iso2: upper, label: upper, lat: null, lon: null };
+    setDrawerCountry(row);
+    setDrawerHs(hsCode);
+    setDrawerOpen(true);
+    if (hsCode.trim()) {
+      void requestBriefWith({
+        country: row,
+        hs: hsCode,
+        product: drawerProduct,
+        valueInput: drawerValue,
+        currencyInput: drawerCurrency,
+        incotermInput: drawerIncoterm,
+        modeInput: drawerMode,
+      });
+    }
+  };
+
+  const sendContact = async () => {
+    if (!contactEmail.trim()) {
+      toast({ title: "Email requis", description: "Ajoute un email pour la demande." });
+      return;
+    }
+    try {
+      setContactSending(true);
+      await fetch("/api/contact", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: contactEmail.trim().toLowerCase(),
+          offer_type: "audit",
+          message: contactMessage,
+          context: {
+            company: contactCompany,
+            country: drawerCountry?.code_iso2 || market,
+            hs: drawerHs || hsCode,
+            product: drawerProduct,
+            estimate: drawerResult?.estimate,
+          },
+        }),
+      });
+      toast({ title: "Demande envoyee", description: "Nous revenons vers vous rapidement." });
+      setContactOpen(false);
+      setContactMessage("");
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err?.message || "Impossible d'envoyer la demande." });
+    } finally {
+      setContactSending(false);
     }
   };
 
@@ -524,7 +663,11 @@ export default function ControlTower() {
                             setHovered(null);
                             setTooltipPos(null);
                           }}
-                          onClick={() => setMarket(node.code_iso2 === "FR" ? ALL : node.code_iso2)}
+                          onClick={() => {
+                            const next = node.code_iso2 === "FR" ? ALL : node.code_iso2;
+                            setMarket(next);
+                            openDrawer(node.code_iso2);
+                          }}
                         />
                       </g>
                     );
@@ -744,6 +887,191 @@ export default function ControlTower() {
           </div>
         </div>
       </div>
+
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Fiche export</SheetTitle>
+            <SheetDescription>
+              Destination: {drawerCountry?.label || drawerCountry?.code_iso2 || "Selectionner un pays"}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>HS code</Label>
+                <Input value={drawerHs} onChange={(e) => setDrawerHs(e.target.value)} placeholder="Ex: 3004" />
+              </div>
+              <div className="space-y-2">
+                <Label>Produit</Label>
+                <Input value={drawerProduct} onChange={(e) => setDrawerProduct(e.target.value)} placeholder="Ex: cosmetique" />
+              </div>
+              <div className="space-y-2">
+                <Label>Valeur</Label>
+                <Input value={drawerValue} onChange={(e) => setDrawerValue(e.target.value)} type="number" />
+              </div>
+              <div className="space-y-2">
+                <Label>Devise</Label>
+                <Select value={drawerCurrency} onValueChange={setDrawerCurrency}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EUR">EUR</SelectItem>
+                    <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="GBP">GBP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Incoterm</Label>
+                <Select value={drawerIncoterm} onValueChange={setDrawerIncoterm}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EXW">EXW</SelectItem>
+                    <SelectItem value="FCA">FCA</SelectItem>
+                    <SelectItem value="DAP">DAP</SelectItem>
+                    <SelectItem value="DDP">DDP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Mode transport</Label>
+                <Select value={drawerMode} onValueChange={setDrawerMode}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="air">Air</SelectItem>
+                    <SelectItem value="sea">Sea</SelectItem>
+                    <SelectItem value="road">Road</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Button
+              onClick={() =>
+                requestBriefWith({
+                  country: drawerCountry,
+                  hs: drawerHs,
+                  product: drawerProduct,
+                  valueInput: drawerValue,
+                  currencyInput: drawerCurrency,
+                  incotermInput: drawerIncoterm,
+                  modeInput: drawerMode,
+                })
+              }
+              disabled={drawerLoading}
+              className="w-full"
+            >
+              {drawerLoading ? "Calcul..." : "Calculer la fiche export"}
+            </Button>
+            {drawerError ? <div className="text-sm text-rose-600">{drawerError}</div> : null}
+          </div>
+
+          <div className="mt-6 space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-xs uppercase tracking-[0.24em] text-blue-700">Resume</div>
+              {drawerResult ? (
+                <div className="mt-3 space-y-3">
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <div className="text-xs text-slate-500">Duty</div>
+                      <div className="font-semibold">{formatCurrency(drawerResult.estimate.duty, drawerResult.estimate.currency)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">Taxes</div>
+                      <div className="font-semibold">{formatCurrency(drawerResult.estimate.taxes, drawerResult.estimate.currency)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">Total</div>
+                      <div className="font-semibold">{formatCurrency(drawerResult.estimate.total, drawerResult.estimate.currency)}</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    Score conformite: {drawerResult.complianceScore}/100 • Confiance: {drawerResult.confidence}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    Sources: {drawerResult.sources?.join(", ") || "Regles internes"}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-slate-500">Lance un calcul pour afficher les estimations.</p>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="text-xs uppercase tracking-[0.24em] text-blue-700">Documents requis</div>
+              {drawerResult?.documents?.length ? (
+                <ul className="mt-3 space-y-1 text-sm text-slate-700">
+                  {drawerResult.documents.map((doc) => (
+                    <li key={doc}>• {doc}</li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="mt-3 text-sm text-slate-500">Documents generiques en attente.</div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="text-xs uppercase tracking-[0.24em] text-blue-700">Risques & sanctions</div>
+              {drawerResult?.risks?.length ? (
+                <div className="mt-3 space-y-2 text-sm">
+                  {drawerResult.risks.map((risk) => (
+                    <div key={risk.title} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                      <div className="font-semibold">{risk.title}</div>
+                      <div className="text-slate-600">{risk.message}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 text-sm text-slate-500">Aucune alerte pour le moment.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="sticky bottom-0 mt-6 border-t border-slate-200 bg-white pt-4">
+            <div className="grid gap-2">
+              <Button onClick={() => navigate("/invoice-check")}>Validation express (15 min)</Button>
+              <Button variant="outline" onClick={() => setContactOpen(true)}>Demander un audit complet</Button>
+              <Button variant="secondary" onClick={() => navigate("/newsletter")}>Recevoir PDF + veille</Button>
+            </div>
+            <div className="mt-2 text-xs text-slate-500">Derniere maj: {drawerResult?.updatedAt || "—"}</div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Dialog open={contactOpen} onOpenChange={setContactOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Demande d'audit complet</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>Entreprise</Label>
+              <Input value={contactCompany} onChange={(e) => setContactCompany(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Message</Label>
+              <Textarea value={contactMessage} onChange={(e) => setContactMessage(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setContactOpen(false)}>Annuler</Button>
+            <Button onClick={sendContact} disabled={contactSending}>
+              {contactSending ? "Envoi..." : "Envoyer la demande"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }
