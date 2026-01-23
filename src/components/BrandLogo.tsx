@@ -32,10 +32,10 @@ export function BrandLogo({
   locationClassName,
   showText = true,
   title = "MPL Conseil Export",
-  subtitle = "Audit · Reglementation · Veille",
+  subtitle = "Audit - Reglementation - Veille",
   location = "Conseil Export",
   size = "md",
-  logoSrc = "/placeholder.svg",
+  logoSrc = "/mpl-logo.png",
 }: BrandLogoProps) {
   const styles = sizeConfig[size];
 
