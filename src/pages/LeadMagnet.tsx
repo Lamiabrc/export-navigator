@@ -181,7 +181,12 @@ export default function LeadMagnet() {
                 </div>
                 <div className="space-y-2">
                   <Label>HS code (2/4/6 chiffres)</Label>
-                  <Input value={hsInput} onChange={(e) => setHsInput(e.target.value)} placeholder="Ex: 3004" />
+                  <Input value={hsInput} onChange={(e) => setHsInput(e.target.value)} placeholder="Ex: 3004" list="hs-list" />
+                  <datalist id="hs-list">
+                    {hsOptions.map((code) => (
+                      <option key={code} value={code} />
+                    ))}
+                  </datalist>
                 </div>
                 <div className="space-y-2">
                   <Label>Pays destination</Label>
@@ -323,6 +328,34 @@ export default function LeadMagnet() {
                     {loading ? "Generation..." : "Recevoir le rapport PDF"}
                   </Button>
                 </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                  <div className="text-sm font-semibold">Historique des simulations</div>
+                  {history.length === 0 ? (
+                    <p className="text-sm text-slate-500">Aucune simulation recente.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {history.map((entry, idx) => (
+                        <div key={idx} className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
+                          <div className="font-semibold">
+                            {entry.payload?.destination || "Destination"} • HS {entry.payload?.hsInput || "n/a"}
+                          </div>
+                          <div className="text-slate-600">
+                            {entry.payload?.value || 0} {entry.payload?.currency || "EUR"} • {entry.payload?.incoterm || "DAP"}
+                          </div>
+                          <div className="mt-2 flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => reuseHistory(entry)}>
+                              Reutiliser
+                            </Button>
+                            <Button size="sm" onClick={() => downloadHistoryReport(entry)}>
+                              PDF
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -361,6 +394,7 @@ export default function LeadMagnet() {
     </div>
   );
 }
+
 
 
 
