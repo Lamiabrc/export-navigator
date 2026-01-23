@@ -7,27 +7,20 @@ const FALLBACK_ALERTS = [
     title: "Mise a jour sanctions (UE)",
     message: "Verifier les restrictions sur certains pays sensibles.",
     severity: "high",
-    country: "RU",
+    country_iso2: "RU",
     hs_prefix: null,
     detected_at: new Date().toISOString(),
+    source: "EU",
   },
   {
     id: "al-2",
     title: "Evolution taxes import US",
     message: "Certaines lignes HS 3004 impactees par un relèvement de droits.",
     severity: "medium",
-    country: "US",
+    country_iso2: "US",
     hs_prefix: "3004",
     detected_at: new Date().toISOString(),
-  },
-  {
-    id: "al-3",
-    title: "Nouveaux documents requis",
-    message: "Declaration additionnelle demandee sur CN pour produits electriques.",
-    severity: "medium",
-    country: "CN",
-    hs_prefix: "8504",
-    detected_at: new Date().toISOString(),
+    source: "WITS",
   },
 ];
 
@@ -53,9 +46,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (prefs?.hs_json) hsFilters = prefs.hs_json as string[];
   }
 
-  let query = sb.from("alerts").select("id,title,message,severity,country,hs_prefix,detected_at").order("detected_at", { ascending: false }).limit(20);
+  let query = sb
+    .from("alerts")
+    .select("id,title,message,severity,country_iso2,hs_prefix,detected_at,source")
+    .order("detected_at", { ascending: false })
+    .limit(20);
 
-  if (countryFilters.length) query = query.in("country", countryFilters);
+  if (countryFilters.length) query = query.in("country_iso2", countryFilters);
   if (hsFilters.length) query = query.in("hs_prefix", hsFilters);
 
   const { data, error } = await query;
@@ -68,9 +65,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     title: a.title,
     message: a.message,
     severity: a.severity,
-    country: a.country,
-    hsPrefix: a.hs_prefix,
-    detectedAt: a.detected_at,
+    country_iso2: a.country_iso2,
+    hs_prefix: a.hs_prefix,
+    detected_at: a.detected_at,
+    source: a.source,
   }));
 
   return res.status(200).json({ updatedAt: new Date().toISOString(), alerts });
