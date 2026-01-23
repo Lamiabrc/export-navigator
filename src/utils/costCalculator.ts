@@ -376,11 +376,11 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
       const omrAmount = goodsValue * (safeNumber((omRate as any).omr_rate) / 100);
       const payer = incotermRule?.octroi_mer || "Client";
 
-      const hsInfo = normalizeHsCode((omRate as any).hs_code) ? `HS ${normalizeHsCode((omRate as any).hs_code)}` : "catégorie";
+      const hsInfo = normalizeHsCode((omRate as any).hs_code) ? `HS ${normalizeHsCode((omRate as any).hs_code)}` : "categorie";
 
       if (omAmount > 0) {
         lines.push({
-          label: "Octroi de Mer",
+          label: "Droits import (base)",
           amount: omAmount,
           payer,
           tvaApplicable: false,
@@ -393,7 +393,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
 
       if (omrAmount > 0) {
         lines.push({
-          label: "Octroi de Mer Régional",
+          label: "Droits import (complement)",
           amount: omrAmount,
           payer,
           tvaApplicable: false,
