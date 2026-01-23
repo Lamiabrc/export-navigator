@@ -178,10 +178,6 @@
     @apply bg-[hsl(var(--zone-ue)/0.1)] text-[hsl(var(--zone-ue))] border border-[hsl(var(--zone-ue)/0.3)];
   }
 
-  .badge-drom {
-    @apply bg-[hsl(var(--zone-drom)/0.1)] text-[hsl(var(--zone-drom))] border border-[hsl(var(--zone-drom)/0.3)];
-  }
-
   .badge-hors-ue {
     @apply bg-[hsl(var(--zone-hors-ue)/0.1)] text-[hsl(var(--zone-hors-ue))] border border-[hsl(var(--zone-hors-ue)/0.3)];
   }
