@@ -19,12 +19,8 @@ export const vatRates: VatRate[] = [
   // Suisse
   { destination: "Suisse", zone: "Hors UE", rate_standard: 8.1, rate_regulated: 2.5, autoliquidation: false, notes: "TVA import suisse a payer" },
 
-  // DROM
-  { destination: "Guadeloupe", zone: "DROM", rate_standard: 8.5, rate_regulated: 2.1, autoliquidation: false, notes: "TVA DOM reduite" },
-  { destination: "Martinique", zone: "DROM", rate_standard: 8.5, rate_regulated: 2.1, autoliquidation: false, notes: "TVA DOM reduite" },
-  { destination: "Reunion", zone: "DROM", rate_standard: 8.5, rate_regulated: 2.1, autoliquidation: false, notes: "TVA DOM reduite" },
-  { destination: "Guyane", zone: "DROM", rate_standard: 0, rate_regulated: 0, autoliquidation: false, notes: "Exonere de TVA" },
-  { destination: "Mayotte", zone: "DROM", rate_standard: 0, rate_regulated: 0, autoliquidation: false, notes: "Exonere de TVA" },
+  // Hors UE (exemples)
+  { destination: "Suisse", zone: "Hors UE", rate_standard: 8.1, rate_regulated: 2.5, autoliquidation: false, notes: "TVA import a payer" },
 ];
 
 // ============= OCTROI DE MER =============
@@ -38,21 +34,7 @@ export interface OctroiMerRate {
   notes: string;
 }
 
-export const octroiMerRates: OctroiMerRate[] = [
-  // Reglemente (code 9021) exonere OM/OMR
-  { destination: "Guadeloupe", category: "Reglemente", code_nomenclature: "9021*", om_rate: 0, omr_rate: 0, exoneration_possible: true, notes: "Exonere OM/OMR" },
-  { destination: "Martinique", category: "Reglemente", code_nomenclature: "9021*", om_rate: 0, omr_rate: 0, exoneration_possible: true, notes: "Exonere OM/OMR" },
-  { destination: "Reunion", category: "Reglemente", code_nomenclature: "9021*", om_rate: 0, omr_rate: 0, exoneration_possible: true, notes: "Exonere OM/OMR" },
-  { destination: "Guyane", category: "Reglemente", code_nomenclature: "9021*", om_rate: 0, omr_rate: 0, exoneration_possible: true, notes: "Exonere OM/OMR" },
-  { destination: "Mayotte", category: "Reglemente", code_nomenclature: "9021*", om_rate: 0, omr_rate: 0, exoneration_possible: true, notes: "Exonere OM/OMR" },
-
-  // Standard (estimations)
-  { destination: "Guadeloupe", category: "Standard", code_nomenclature: "*", om_rate: 9.5, omr_rate: 2.5, exoneration_possible: false, notes: "Taux moyen" },
-  { destination: "Martinique", category: "Standard", code_nomenclature: "*", om_rate: 9.5, omr_rate: 2.5, exoneration_possible: false, notes: "Taux moyen" },
-  { destination: "Reunion", category: "Standard", code_nomenclature: "*", om_rate: 10, omr_rate: 2.5, exoneration_possible: false, notes: "Taux moyen" },
-  { destination: "Guyane", category: "Standard", code_nomenclature: "*", om_rate: 15, omr_rate: 0, exoneration_possible: false, notes: "Taux plus eleves" },
-  { destination: "Mayotte", category: "Standard", code_nomenclature: "*", om_rate: 12, omr_rate: 0, exoneration_possible: false, notes: "Taux moyen" },
-];
+export const octroiMerRates: OctroiMerRate[] = [];
 
 // ============= TRANSPORT COSTS (ESTIMATED) =============
 export interface TransportCost {
@@ -72,19 +54,6 @@ export const transportCosts: TransportCost[] = [
   { destination: "Luxembourg", transport_mode: "Routier", cost_per_kg: 0.12, min_cost: 150, transit_days_min: 1, transit_days_max: 2, notes: "Proche" },
   { destination: "Suisse", transport_mode: "Routier", cost_per_kg: 0.25, min_cost: 400, transit_days_min: 1, transit_days_max: 3, notes: "Passage douane" },
 
-  // DROM - Maritime
-  { destination: "Guadeloupe", transport_mode: "Maritime", cost_per_kg: 0.45, min_cost: 800, transit_days_min: 15, transit_days_max: 22, notes: "Fret maritime" },
-  { destination: "Martinique", transport_mode: "Maritime", cost_per_kg: 0.45, min_cost: 800, transit_days_min: 15, transit_days_max: 22, notes: "Fret maritime" },
-  { destination: "Guyane", transport_mode: "Maritime", cost_per_kg: 0.55, min_cost: 1000, transit_days_min: 18, transit_days_max: 28, notes: "Transit plus long" },
-  { destination: "Reunion", transport_mode: "Maritime", cost_per_kg: 0.5, min_cost: 1200, transit_days_min: 20, transit_days_max: 30, notes: "Ocean Indien" },
-  { destination: "Mayotte", transport_mode: "Maritime", cost_per_kg: 0.6, min_cost: 1500, transit_days_min: 22, transit_days_max: 35, notes: "Infrastructure limitee" },
-
-  // DROM - Aerien
-  { destination: "Guadeloupe", transport_mode: "Aerien", cost_per_kg: 3.5, min_cost: 250, transit_days_min: 2, transit_days_max: 5, notes: "Express aerien" },
-  { destination: "Martinique", transport_mode: "Aerien", cost_per_kg: 3.5, min_cost: 250, transit_days_min: 2, transit_days_max: 5, notes: "Express aerien" },
-  { destination: "Guyane", transport_mode: "Aerien", cost_per_kg: 4, min_cost: 300, transit_days_min: 3, transit_days_max: 6, notes: "Express aerien" },
-  { destination: "Reunion", transport_mode: "Aerien", cost_per_kg: 4.5, min_cost: 350, transit_days_min: 3, transit_days_max: 6, notes: "Express aerien" },
-  { destination: "Mayotte", transport_mode: "Aerien", cost_per_kg: 5, min_cost: 400, transit_days_min: 4, transit_days_max: 7, notes: "Connexions limitees" },
 ];
 
 // ============= SERVICE CHARGES =============
@@ -101,22 +70,18 @@ export const serviceCharges: ServiceCharge[] = [
   // Dedouanement export (France)
   { type: "dedouanement_export", zone: "UE", fixed_cost: 0, tva_on_service: 0, notes: "Pas de dedouanement UE" },
   { type: "dedouanement_export", zone: "Hors UE", fixed_cost: 180, tva_on_service: 20, notes: "Forfait transitaire France" },
-  { type: "dedouanement_export", zone: "DROM", fixed_cost: 150, tva_on_service: 20, notes: "Forfait transitaire France" },
 
   // Dedouanement import
   { type: "dedouanement_import", zone: "UE", fixed_cost: 0, tva_on_service: 0, notes: "Pas de dedouanement UE" },
   { type: "dedouanement_import", zone: "Hors UE", fixed_cost: 250, tva_on_service: 8.1, notes: "Transitaire destination" },
-  { type: "dedouanement_import", zone: "DROM", fixed_cost: 200, tva_on_service: 8.5, notes: "Transitaire destination" },
 
   // Manutention
   { type: "manutention", zone: "UE", fixed_cost: 50, tva_on_service: 20, notes: "Chargement/dechargement" },
   { type: "manutention", zone: "Hors UE", fixed_cost: 80, tva_on_service: 0, notes: "Variable" },
-  { type: "manutention", zone: "DROM", fixed_cost: 100, tva_on_service: 8.5, notes: "Manutention portuaire" },
 
   // Assurance
   { type: "assurance", zone: "UE", fixed_cost: 0, percentage: 0.25, tva_on_service: 0, notes: "% valeur marchandise" },
   { type: "assurance", zone: "Hors UE", fixed_cost: 0, percentage: 0.35, tva_on_service: 0, notes: "% valeur marchandise" },
-  { type: "assurance", zone: "DROM", fixed_cost: 0, percentage: 0.4, tva_on_service: 0, notes: "% valeur maritime" },
 ];
 
 // ============= ENVIRONMENTAL TAXES =============
@@ -193,10 +158,8 @@ export const incotermPayerRules: IncotermPayerRule[] = [
 
 // ============= HELPER FUNCTIONS =============
 export function getZoneFromDestination(destination: Destination): Zone {
-  const dromDestinations: Destination[] = ["Guadeloupe", "Martinique", "Guyane", "Reunion", "Mayotte"];
   const ueDestinations: Destination[] = ["Belgique", "Espagne", "Luxembourg"];
 
-  if (dromDestinations.includes(destination)) return "DROM";
   if (ueDestinations.includes(destination)) return "UE";
   return "Hors UE";
 }

@@ -1,12 +1,12 @@
 export type CircuitId =
   | 'fca_client_place'
   | 'ddp_direct'
-  | 'platform_drom'
+  | 'platform_international'
   | 'ue_intra'
   | 'suisse'
   | 'hors_ue';
 
-export type ZoneCode = 'UE' | 'DROM' | 'HORS_UE' | 'MULTI';
+export type ZoneCode = 'UE' | 'HORS_UE' | 'MULTI';
 
 export type IncotermCode =
   | 'EXW'
@@ -117,8 +117,6 @@ export const zoneLabel = (zone: ZoneCode): string => {
   switch (zone) {
     case 'UE':
       return 'UE';
-    case 'DROM':
-      return 'DROM';
     case 'HORS_UE':
       return 'Hors UE';
     case 'MULTI':

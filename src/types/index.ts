@@ -2,21 +2,12 @@
 export type FlowStatus = 'non_demarre' | 'en_cours' | 'termine' | 'bloque';
 export type ChecklistStatus = 'ok' | 'a_faire' | 'na' | 'bloque';
 export type RiskLevel = 'ok' | 'a_surveiller' | 'risque';
-export type Zone = 'UE' | 'Hors UE' | 'DROM';
+export type Zone = 'UE' | 'Hors UE';
 export type Incoterm = 'EXW' | 'FCA' | 'DAP' | 'DDP';
 export type TransportMode = 'Routier' | 'Maritime' | 'Aerien' | 'Express' | 'Ferroviaire';
 export type Payer = 'Fournisseur' | 'Client';
 
-export type Destination =
-  | 'Guadeloupe'
-  | 'Martinique'
-  | 'Guyane'
-  | 'Reunion'
-  | 'Mayotte'
-  | 'Belgique'
-  | 'Espagne'
-  | 'Luxembourg'
-  | 'Suisse';
+export type Destination = string;
 
 export type UserRole = 'direction' | 'adv_export' | 'logistique' | 'finance' | 'admin';
 

@@ -1,4 +1,4 @@
-export type OperationZone = 'DROM' | 'AUTRE';
+export type OperationZone = 'HORS_UE' | 'AUTRE';
 
 export interface OperationFlags {
   dateSaisieMissing?: boolean;

@@ -52,7 +52,7 @@ export interface CostCalculationParams {
 
   /**
    * ✅ HS code / code douanier (ex: "90211010")
-   * - utilisé pour Octroi de mer (DROM) et plus tard droits de douane
+   * - utilisé pour droits de douane (quand disponibles)
    */
   customsCode?: string;
 
@@ -362,8 +362,8 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
     }
   }
 
-  // 8) OCTROI DE MER (DROM) — ✅ maintenant support HS code
-  if (zone === "DROM") {
+  // 8) DROITS IMPORT (si disponibles)
+  if (zone === "Hors UE") {
     const omRate = findOmRateForDrom({
       destination,
       productType,
