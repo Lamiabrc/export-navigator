@@ -92,6 +92,12 @@ export function MainLayout({ children, contentClassName, wrapperClassName, varia
 
             <div className="flex flex-wrap items-center gap-2 justify-end">
               <Link
+                to="/resources"
+                className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-muted transition shrink-0"
+              >
+                Init DB
+              </Link>
+              <Link
                 to="/app/assistant"
                 className="inline-flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground border border-border hover:shadow-md hover:-translate-y-0.5 transition shrink-0"
               >
