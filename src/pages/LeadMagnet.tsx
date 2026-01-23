@@ -39,8 +39,24 @@ export default function LeadMagnet() {
   const [loading, setLoading] = React.useState(false);
   const [result, setResult] = React.useState<EstimateResponse | null>(null);
   const [simulationId, setSimulationId] = React.useState<string | null>(null);
+  const [history, setHistory] = React.useState<Array<{ payload: any; result: EstimateResponse }>>([]);
 
   const hsNormalized = hsInput.replace(/[^0-9]/g, "");
+  const hsOptions = React.useMemo(() => {
+    const fromHistory = history.map((h) => String(h.payload?.hsInput || "")).filter(Boolean);
+    return Array.from(new Set([...HS_CHIPS, ...fromHistory]));
+  }, [history]);
+
+  React.useEffect(() => {
+    const rawHistory = localStorage.getItem("mpl_sim_history");
+    if (rawHistory) {
+      try {
+        setHistory(JSON.parse(rawHistory));
+      } catch {
+        setHistory([]);
+      }
+    }
+  }, []);
 
   const handleEstimate = async () => {
     if (!productText.trim() && hsNormalized.length < 2) {
@@ -68,7 +84,11 @@ export default function LeadMagnet() {
       const res = await postEstimate(payload);
       setResult(res);
       setSimulationId(res.simulationId || null);
-      localStorage.setItem("mpl_last_simulation", JSON.stringify({ payload, result: res }));
+      const entry = { payload, result: res };
+      const nextHistory = [entry, ...history].slice(0, 6);
+      setHistory((prev) => [entry, ...prev].slice(0, 6));
+      localStorage.setItem("mpl_last_simulation", JSON.stringify(entry));
+      localStorage.setItem("mpl_sim_history", JSON.stringify(nextHistory));
     } catch (err: any) {
       toast({ title: "Erreur estimation", description: err?.message || "Impossible de calculer." });
     } finally {
@@ -130,6 +150,44 @@ export default function LeadMagnet() {
       navigate("/control-tower");
     } catch (err: any) {
       toast({ title: "Erreur lead", description: err?.message || "Impossible de finaliser." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reuseHistory = (entry: { payload: any; result: EstimateResponse }) => {
+    const p = entry.payload || {};
+    setProductText(p.productText || "");
+    setHsInput(p.hsInput || "");
+    setDestination(p.destination || "");
+    setValue(String(p.value || ""));
+    setCurrency(p.currency || "EUR");
+    setIncoterm(p.incoterm || "DAP");
+    setTransportMode(p.transportMode || "sea");
+    setWeightKg(p.weightKg ? String(p.weightKg) : "");
+    setInsurance(p.insurance ? String(p.insurance) : "");
+    setResult(entry.result);
+  };
+
+  const downloadHistoryReport = async (entry: { payload: any; result: EstimateResponse }) => {
+    try {
+      setLoading(true);
+      const pdfBlob = await postPdf({
+        title: "Rapport de controle export",
+        destination: entry.payload?.destination,
+        incoterm: entry.payload?.incoterm,
+        value: entry.payload?.value,
+        currency: entry.payload?.currency,
+        result: entry.result,
+      });
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `mpl-rapport-export-${Date.now()}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: "Erreur PDF", description: err?.message || "Impossible de generer le rapport." });
     } finally {
       setLoading(false);
     }
