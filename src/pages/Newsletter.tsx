@@ -1,4 +1,4 @@
-import { MainLayout } from "@/components/layout/MainLayout";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ export default function Newsletter() {
   };
 
   return (
-    <MainLayout>
+    <PublicLayout>
       <div className="space-y-8">
         <div>
           <p className="text-sm text-muted-foreground">Newsletter export</p>
@@ -31,7 +31,7 @@ export default function Newsletter() {
               <CardTitle>Alerte export hebdo</CardTitle>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground space-y-2">
-              <p>Sanctions, evolution docs, taxes et controles par pays/HS.</p>
+              <p>Sanctions, evolution docs, taxes et contr?les par pays/HS.</p>
               <p>Resume actionnable, 5 minutes de lecture.</p>
             </CardContent>
           </Card>
@@ -66,6 +66,6 @@ export default function Newsletter() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
+    </PublicLayout>
   );
 }

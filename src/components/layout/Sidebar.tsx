@@ -25,7 +25,7 @@ const navigation: NavSection[] = [
     title: "Accueil",
     items: [
       {
-        name: "Lead Magnet",
+        name: "Vitrine",
         href: "/",
         icon: Home,
       },
@@ -36,17 +36,17 @@ const navigation: NavSection[] = [
     items: [
       {
         name: "Control Tower",
-        href: "/control-tower",
+        href: "/app/control-tower",
         icon: Activity,
         badge: "Live",
         featured: true,
-        aliases: ["/dashboard", "/command-center", "/hub"],
+        aliases: ["/dashboard", "/command-center", "/hub", "/control-tower", "/app"],
       },
       {
         name: "Analyse des ventes",
-        href: "/explore",
+        href: "/app/explore",
         icon: TrendingUp,
-        aliases: ["/sales"],
+        aliases: ["/sales", "/explore"],
       },
     ],
   },
@@ -55,33 +55,33 @@ const navigation: NavSection[] = [
     items: [
       {
         name: "Concurrence",
-        href: "/concurrence",
+        href: "/app/centre-veille/concurrence",
         icon: Target,
-        aliases: ["/competition", "/watch/commercial", "/watch/competitive"],
+        aliases: ["/competition", "/watch/commercial", "/watch/competitive", "/concurrence"],
       },
     ],
   },
   {
-    title: "Couts & Pricing",
+    title: "Coûts & Pricing",
     items: [
       {
-        name: "Costs (charges)",
-        href: "/costs",
+        name: "Coûts (charges)",
+        href: "/app/costs",
         icon: Receipt,
       },
       {
-        name: "Simulateur Expedition",
-        href: "/simulator",
+        name: "Simulateur Expédition",
+        href: "/app/simulator",
         icon: Calculator,
       },
       {
-        name: "Controle facture",
-        href: "/invoice-check",
+        name: "Contrôle facture",
+        href: "/app/invoice-check",
         icon: Receipt,
       },
       {
         name: "Taxes/OM",
-        href: "/taxes-om",
+        href: "/app/taxes-om",
         icon: Scale,
       },
     ],
@@ -91,33 +91,33 @@ const navigation: NavSection[] = [
     items: [
       {
         name: "Produits",
-        href: "/products",
+        href: "/app/produits",
         icon: Package,
       },
       {
         name: "Clients",
-        href: "/clients",
+        href: "/app/clients",
         icon: Users,
       },
       {
-        name: "Veille reglementaire",
-        href: "/watch/regulatory",
+        name: "Veille réglementaire",
+        href: "/app/centre-veille/reglementation",
         icon: BookOpen,
       },
       {
         name: "Centre veille",
-        href: "/watch",
+        href: "/app/centre-veille",
         icon: BookOpen,
       },
     ],
   },
   {
     title: "IA & Assistance",
-    items: [{ name: "Assistant", href: "/assistant", icon: Bot }],
+    items: [{ name: "Assistant", href: "/app/assistant", icon: Bot }],
   },
   {
     title: "Admin",
-    items: [{ name: "Admin", href: "/admin", icon: Settings, adminOnly: true }],
+    items: [{ name: "Admin", href: "/app/admin", icon: Settings, adminOnly: true }],
   },
 ];
 
@@ -195,7 +195,6 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
       )}
       aria-label="Navigation principale"
     >
-      {/* Nav */}
       <nav className="flex-1 space-y-4 px-3 py-4 overflow-y-auto">
         {navigation.map((section) => {
           if (!section.items.length) return null;
@@ -210,7 +209,6 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
         })}
       </nav>
 
-      {/* Footer */}
       <div className="border-t border-border p-4 bg-muted/30">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary border border-primary/20">

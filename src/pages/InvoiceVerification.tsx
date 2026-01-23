@@ -1,6 +1,6 @@
 // src/pages/InvoiceVerification.tsx
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -746,7 +746,7 @@ export default function InvoiceVerification() {
   }, [destinationSource, destinationConfidence]);
 
   return (
-    <MainLayout>
+    <AppLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
@@ -1198,7 +1198,7 @@ export default function InvoiceVerification() {
           </Card>
         </div>
       </div>
-    </MainLayout>
+    </AppLayout>
   );
 }
 

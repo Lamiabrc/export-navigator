@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { RefreshCw, Download, Plus } from "lucide-react";
 
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { ExportFiltersBar } from "@/components/export/ExportFiltersBar";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 
@@ -381,11 +381,11 @@ export default function Costs() {
     const terrs = new Set(invoices.map((r) => normalizeIslandToTerritoryCode(r.island)));
     const missing = Array.from(terrs).filter((t) => t !== "UNK" && !omRateMap.has(t));
     if (!missing.length) return null;
-    return `Taux OM théorique manquant pour: ${missing.join(", ")} (v_om_max_rate_by_territory)`;
+    return `Taux OM theorique manquant pour: ${missing.join(", ")}`;
   }, [invoices, omRateMap]);
 
   return (
-    <MainLayout contentClassName="md:p-8">
+    <AppLayout contentClassName="md:p-8">
       <div className="space-y-5">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -559,6 +559,6 @@ export default function Costs() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
+    </AppLayout>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -128,17 +128,16 @@ export default function Simulator() {
   const [omLoading, setOmLoading] = useState(false);
   const [omError, setOmError] = useState<string | null>(null);
 
-  const product = useMemo(() => products.find((p) => p.code_article === sku), [products, sku]);
+  const product = useMemo(() => products.find((p) => p.code === sku), [products, sku]);
 
   const unitPrice = useMemo(() => {
-    const fallback =
-      safeNumber((product as any)?.tarif_catalogue_2025) || safeNumber((product as any)?.tarif_ref_eur) || 0;
+    const fallback = safeNumber((product as any)?.unit_price_eur) || 0;
     return manualPrice === "" ? fallback : Number(manualPrice) || 0;
   }, [product, manualPrice]);
 
   const weightKg = useMemo(() => {
-    const wG = safeNumber((product as any)?.unite_vente_poids_brut_g) || 0;
-    const auto = (wG * qty) / 1000;
+    const wKg = safeNumber((product as any)?.weight_kg) || 0;
+    const auto = wKg * qty;
     return manualWeight === "" ? auto : Number(manualWeight) || 0;
   }, [product, manualWeight, qty]);
 
@@ -156,7 +155,7 @@ export default function Simulator() {
 
   // TVA (simplifiée)
   const tvaRate = useMemo(() => {
-    if (destination === "Metropole") return Number((product as any)?.tva_percent ?? 20);
+    if (destination === "Metropole") return Number((product as any)?.tva ?? 20);
     return 0;
   }, [destination, product]);
 
@@ -243,7 +242,7 @@ export default function Simulator() {
 
   const bars = useMemo(
     () => [
-      { label: "Marchandise HT", value: ht, hint: product?.libelle_article ? product.libelle_article.slice(0, 40) : "" },
+      { label: "Marchandise HT", value: ht, hint: product?.label ? product.label.slice(0, 40) : "" },
       { label: `TVA (${tvaRate.toFixed(2)}%)`, value: tva, hint: destination === "Metropole" ? "TVA France" : "TVA 0% (export par défaut)" },
       { label: "Transport (vendeur)", value: transportSeller, hint: incoterm === "EXW" ? "EXW : non inclus vendeur" : "Estimé selon poids/destination" },
       { label: "Frais fixes", value: feesFixed, hint: "Dossier / gestion" },
@@ -253,7 +252,7 @@ export default function Simulator() {
   );
 
   return (
-    <MainLayout contentClassName="md:p-6">
+    <AppLayout contentClassName="md:p-6">
       <div className="space-y-4">
         <div>
           <p className="text-xs uppercase tracking-[0.35em] text-cyan-400">Simulateur export</p>
@@ -265,13 +264,13 @@ export default function Simulator() {
 
         {!SUPABASE_ENV_OK ? (
           <Card className="border-amber-300 bg-amber-50 text-amber-900">
-            <CardContent className="pt-4 text-sm">Supabase non configuré : impossible de charger les taux OM.</CardContent>
+            <CardContent className="pt-4 text-sm">Connexion base indisponible : taux OM en mode demo.</CardContent>
           </Card>
         ) : null}
 
         {!envOk ? (
           <Card className="border-amber-300 bg-amber-50 text-amber-900">
-            <CardContent className="pt-4 text-sm">Supabase non disponible : catalogue / taux en mode dégradé.</CardContent>
+            <CardContent className="pt-4 text-sm">Catalogue en mode demo : catalogue / taux en mode dégradé.</CardContent>
           </Card>
         ) : null}
 
@@ -297,8 +296,8 @@ export default function Simulator() {
                   </SelectTrigger>
                   <SelectContent className="max-h-80">
                     {products.slice(0, 800).map((p) => (
-                      <SelectItem key={p.code_article} value={p.code_article}>
-                        {p.code_article} — {(p.libelle_article || "").slice(0, 60)}
+                      <SelectItem key={p.code} value={p.code}>
+                        {p.code} — {(p.label || "").slice(0, 60)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -323,7 +322,7 @@ export default function Simulator() {
                 <div>
                   <Label>Prix unitaire (€) (optionnel)</Label>
                   <Input type="number" value={manualPrice} onChange={(e) => setManualPrice(e.target.value === "" ? "" : Number(e.target.value))} />
-                  <p className="text-[11px] text-muted-foreground">Auto : tarif_catalogue_2025 / Tarif ref..</p>
+                  <p className="text-[11px] text-muted-foreground">Auto : prix unitaire demo ou renseigne.</p>
                 </div>
               </div>
 
@@ -442,7 +441,7 @@ export default function Simulator() {
           </Card>
         </div>
       </div>
-    </MainLayout>
+    </AppLayout>
   );
 }
 

@@ -1,10 +1,10 @@
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export default function Admin() {
   return (
-    <MainLayout>
+    <AppLayout>
       <div className="space-y-6">
         <div>
           <p className="text-sm text-muted-foreground">Administration</p>
@@ -54,7 +54,7 @@ export default function Admin() {
           </Card>
         </div>
       </div>
-    </MainLayout>
+    </AppLayout>
   );
 }
 

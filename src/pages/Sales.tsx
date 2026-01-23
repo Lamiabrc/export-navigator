@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { ExportFiltersBar } from "@/components/export/ExportFiltersBar";
 import { fetchInvoices, fetchSalesLines } from "@/domain/export/queries";
 import { ExportFilters, Invoice, SaleLine } from "@/domain/export/types";
@@ -114,7 +114,7 @@ export default function Sales() {
   };
 
   return (
-    <MainLayout contentClassName="md:p-8">
+    <AppLayout contentClassName="md:p-8">
       <div className="space-y-5">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -264,6 +264,6 @@ export default function Sales() {
           </TabsContent>
         </Tabs>
       </div>
-    </MainLayout>
+    </AppLayout>
   );
 }

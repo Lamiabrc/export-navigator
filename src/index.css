@@ -26,6 +26,13 @@
     --secondary: 0 78% 52%;
     --secondary-foreground: 0 0% 100%;
 
+    /* MPL Brand */
+    --mpl-blue: 217 76% 46%;
+    --mpl-red: 0 78% 52%;
+    --mpl-white: 0 0% 100%;
+    --mpl-neutral-900: 222 40% 14%;
+    --mpl-neutral-100: 220 33% 96%;
+
     --muted: 220 25% 93%;
     --muted-foreground: 220 20% 45%;
 

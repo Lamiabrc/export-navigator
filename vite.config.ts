@@ -5,7 +5,7 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  base: './', // Important for Electron file:// protocol
+  base: mode === "electron" ? "./" : "/", // Electron needs relative paths; web needs absolute assets
   server: {
     host: "::",
     port: 8080,

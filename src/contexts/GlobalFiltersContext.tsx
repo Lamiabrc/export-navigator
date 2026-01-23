@@ -324,15 +324,15 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
 
     setSearchingProducts(true);
     try {
-      const q = supabase.from("products").select("id,libelle_article,code_article");
+      const q = supabase.from("products").select("id,label,code");
 
       const { data, error } =
         t.length >= 2
           ? await q
-              .or(`libelle_article.ilike.%${t}%,code_article.ilike.%${t}%`)
-              .order("libelle_article", { ascending: true })
+              .or(`label.ilike.%${t}%,code.ilike.%${t}%`)
+              .order("label", { ascending: true })
               .limit(30)
-          : await q.order("libelle_article", { ascending: true }).limit(30);
+          : await q.order("label", { ascending: true }).limit(30);
 
       if (error) throw error;
       if (reqId !== productReqIdRef.current) return;
@@ -340,8 +340,8 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
       const rows = ((data as any[]) ?? [])
         .map((p) => {
           const id = String(p.id);
-          const code = p.code_article ? String(p.code_article) : "";
-          const lib = p.libelle_article ? String(p.libelle_article) : "";
+          const code = p.code ? String(p.code) : "";
+          const lib = p.label ? String(p.label) : "";
           const label = code ? `${code} — ${lib}` : lib;
           return { id, label };
         })
@@ -384,13 +384,13 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
         if (productId && !productCacheRef.current[productId]) {
           const { data } = await supabase
             .from("products")
-            .select("id,libelle_article,code_article")
+            .select("id,label,code")
             .eq("id", productId)
             .maybeSingle();
 
           if (!cancelled && data?.id) {
-            const code = (data as any).code_article ? String((data as any).code_article) : "";
-            const lib = (data as any).libelle_article ? String((data as any).libelle_article) : "";
+            const code = (data as any).code ? String((data as any).code) : "";
+            const lib = (data as any).label ? String((data as any).label) : "";
             productCacheRef.current[String((data as any).id)] = code ? `${code} — ${lib}` : lib;
           }
         }

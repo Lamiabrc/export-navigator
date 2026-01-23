@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -262,7 +262,7 @@ export default function Clients() {
   }
 
   return (
-    <MainLayout>
+    <AppLayout>
       <div className="flex items-center justify-between mb-6">
         <div>
           <p className="text-sm text-muted-foreground">Base clients (Supabase)</p>
@@ -502,6 +502,6 @@ export default function Clients() {
           </Table>
         </CardContent>
       </Card>
-    </MainLayout>
+    </AppLayout>
   );
 }

@@ -16,7 +16,7 @@ function getErrorMessage(err: unknown): string {
   return "Une erreur est survenue. Reessaie.";
 }
 
-function safeNextPath(candidate: unknown, fallback = "/control-tower") {
+function safeNextPath(candidate: unknown, fallback = "/app/control-tower") {
   const v = typeof candidate === "string" ? candidate : "";
   return v && v.startsWith("/") ? v : fallback;
 }
@@ -38,10 +38,10 @@ export default function Login() {
     const stateFromPath = stateAny?.from?.pathname;
     const stateFromSearch = stateAny?.from?.search || "";
     const stateNext = stateAny?.next;
-    if (qNext) return safeNextPath(qNext, "/control-tower");
-    if (stateFromPath) return safeNextPath(`${stateFromPath}${stateFromSearch}`, "/control-tower");
-    if (stateNext) return safeNextPath(stateNext, "/control-tower");
-    return "/control-tower";
+    if (qNext) return safeNextPath(qNext, "/app/control-tower");
+    if (stateFromPath) return safeNextPath(`${stateFromPath}${stateFromSearch}`, "/app/control-tower");
+    if (stateNext) return safeNextPath(stateNext, "/app/control-tower");
+    return "/app/control-tower";
   }, [location.search, location.state]);
 
   const onSubmit = async (e: FormEvent) => {

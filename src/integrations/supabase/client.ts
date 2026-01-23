@@ -10,6 +10,7 @@ const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | unde
  * - L’app ne plantera plus, mais les requêtes échoueront tant que les env ne sont pas correctes.
  */
 export const SUPABASE_ENV_OK = Boolean(supabaseUrl && supabaseAnonKey);
+export const DEMO_MODE = !SUPABASE_ENV_OK;
 
 if (!SUPABASE_ENV_OK) {
   // eslint-disable-next-line no-console

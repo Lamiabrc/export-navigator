@@ -92,7 +92,7 @@ export function MainLayout({ children, contentClassName, wrapperClassName, varia
 
             <div className="flex flex-wrap items-center gap-2 justify-end">
               <Link
-                to="/assistant"
+                to="/app/assistant"
                 className="inline-flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground border border-border hover:shadow-md hover:-translate-y-0.5 transition shrink-0"
               >
                 <Bot className="h-4 w-4" />
@@ -100,11 +100,11 @@ export function MainLayout({ children, contentClassName, wrapperClassName, varia
               </Link>
 
               <Link
-                to="/invoice-check"
+                to="/app/invoice-check"
                 className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 border border-primary/40 hover:shadow-primary/40 hover:-translate-y-0.5 transition shrink-0"
               >
                 <FileCheck2 className="h-4 w-4" />
-                Controler une facture
+                Contrôler une facture
               </Link>
 
               <button
@@ -115,7 +115,7 @@ export function MainLayout({ children, contentClassName, wrapperClassName, varia
                 className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-muted transition shrink-0"
               >
                 <LogOut className="h-4 w-4" />
-                Logout
+                Déconnexion
               </button>
             </div>
           </div>

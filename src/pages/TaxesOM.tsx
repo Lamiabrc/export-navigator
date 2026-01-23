@@ -1,5 +1,5 @@
 import * as React from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import {
   Card,
   CardContent,
@@ -250,7 +250,7 @@ export default function TaxesOM() {
       setSelected(null);
 
       try {
-        if (!SUPABASE_ENV_OK) throw new Error("Supabase non configuré (VITE_SUPABASE_URL / KEY).");
+        if (!SUPABASE_ENV_OK) throw new Error("Connexion base indisponible.");
 
         // ✅ OM : table schema-compatible, puis fallback si vide après filtre
         const terrFilter = TERRITORIES.map((t) => t.code);
@@ -278,7 +278,7 @@ export default function TaxesOM() {
           if (preferred !== "om_rates") {
             used = "om_rates";
             data = await tryLoadOm("om_rates");
-            setWarning((p) => (p ? `${p}\nFallback OM: octroi_rates incompatible → om_rates utilisé.` : "Fallback OM: octroi_rates incompatible → om_rates utilisé."));
+            setWarning((p) => (p ? `${p}\nFallback OM: donnees secondaires utilisees.` : "Fallback OM: donnees secondaires utilisees."));
           } else {
             throw e;
           }
@@ -290,7 +290,7 @@ export default function TaxesOM() {
           if (omFallback.length > 0) {
             used = "om_rates";
             data = omFallback;
-            setWarning((p) => (p ? `${p}\nFallback OM: octroi_rates vide → om_rates utilisé.` : "Fallback OM: octroi_rates vide → om_rates utilisé."));
+            setWarning((p) => (p ? `${p}\nFallback OM: donnees secondaires utilisees.` : "Fallback OM: donnees secondaires utilisees."));
           }
         }
 
@@ -321,7 +321,7 @@ export default function TaxesOM() {
         } catch {
           setVatMeta(null);
           setVatRows([]);
-          setWarning((p) => (p ? `${p}\nvat_rates indisponible → repère TVA affiché.` : "vat_rates indisponible → repère TVA affiché."));
+          setWarning((p) => (p ? `${p}\nTaux TVA indisponibles : repere TVA affiche.` : "Taux TVA indisponibles : repere TVA affiche."));
         }
 
         // ✅ Taxes extra (best effort)
@@ -350,7 +350,7 @@ export default function TaxesOM() {
         } catch {
           setTaxMeta(null);
           setTaxRows([]);
-          setWarning((p) => (p ? `${p}\ntax_rules_extra indisponible.` : "tax_rules_extra indisponible."));
+          setWarning((p) => (p ? `${p}\nTaxes additionnelles indisponibles.` : "Taxes additionnelles indisponibles."));
         }
       } catch (e: any) {
         console.error(e);
@@ -368,14 +368,14 @@ export default function TaxesOM() {
   }, [refreshNonce, hs4List]);
 
   return (
-    <MainLayout>
+    <AppLayout>
       <div className="space-y-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-sm text-muted-foreground">Dashboard</p>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Scale className="h-6 w-6" />
-              OM & Taxes — Récapitulatif par territoire �- HS
+              OM & Taxes — Récapitulatif par territoire - HS
             </h1>
             <p className="text-sm text-muted-foreground">
               Page dédiée uniquement au récapitulatif : <b>OM/OMR</b> + <b>TVA</b> + <b>Taxes extra</b>.
@@ -545,7 +545,7 @@ export default function TaxesOM() {
         <Card className="border-muted">
           <CardHeader>
             <CardTitle className="text-base">
-              Détails — {selected ? `${selected.territory} �- HS ${selected.hs} (HS4 ${hs4Of(selected.hs)})` : "clique une cellule"}
+              Détails — {selected ? `${selected.territory} - HS ${selected.hs} (HS4 ${hs4Of(selected.hs)})` : "clique une cellule"}
             </CardTitle>
             <CardDescription>Détails bruts (OM/VAT/Extra) pour validation.</CardDescription>
           </CardHeader>
@@ -628,7 +628,7 @@ export default function TaxesOM() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
+    </AppLayout>
   );
 }
 

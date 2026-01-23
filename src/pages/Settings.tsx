@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { MainLayout } from '@/components/layout/MainLayout';
+import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -52,7 +52,7 @@ export default function Settings() {
   };
 
   return (
-    <MainLayout>
+    <AppLayout>
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
@@ -113,6 +113,6 @@ export default function Settings() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
+    </AppLayout>
   );
 }

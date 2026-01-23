@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,12 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
+import { supabase, DEMO_MODE, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
-import { isMissingTableError } from "@/domain/calc";
+import { isMissingTableError } from "@/domain/calc/validators";
 import { getAlerts, postPdf } from "@/lib/leadMagnetApi";
 import { OnboardingPrefsModal } from "@/components/OnboardingPrefsModal";
 import { useToast } from "@/hooks/use-toast";
+import { EmptyState } from "@/components/EmptyState";
+import { formatDateTimeFr } from "@/lib/formatters";
+import { demoAlerts, getDemoTradeFlows } from "@/lib/demoData";
 import worldMap from "@/assets/world-map.svg";
 
 type CountryRow = {
@@ -164,7 +167,7 @@ export default function ControlTower() {
   const [hsCode, setHsCode] = React.useState("");
   const [market, setMarket] = React.useState(ALL);
   const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [missingTables, setMissingTables] = React.useState(false);
   const [hovered, setHovered] = React.useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = React.useState<{ x: number; y: number } | null>(null);
   const [alerts, setAlerts] = React.useState<Array<{ id: string; title: string; message: string; severity: string; detectedAt?: string | null }>>([]);
@@ -213,14 +216,14 @@ export default function ControlTower() {
   const downloadLastReport = async () => {
     const raw = localStorage.getItem("mpl_last_simulation");
     if (!raw) {
-      setError("Aucune simulation recente. Lance un calcul sur la page d'accueil.");
+      toast({ title: "Aucune simulation recente", description: "Lance un calcul sur la page d'accueil." });
       return;
     }
     try {
       setDownloading(true);
       const parsed = JSON.parse(raw) as { payload?: any; result?: any };
       const pdfBlob = await postPdf({
-        title: "Rapport de controle export",
+        title: "Rapport de contr?le export",
         destination: parsed.payload?.destination,
         incoterm: parsed.payload?.incoterm,
         value: parsed.payload?.value,
@@ -234,7 +237,7 @@ export default function ControlTower() {
       link.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      setError(err?.message || "Impossible de generer le rapport.");
+      toast({ title: "Erreur rapport", description: err?.message || "Impossible de generer le rapport." });
     } finally {
       setDownloading(false);
     }
@@ -369,9 +372,17 @@ export default function ControlTower() {
     let active = true;
     const loadFlows = async () => {
       setLoading(true);
-      setError(null);
+      setMissingTables(false);
       try {
-        if (!SUPABASE_ENV_OK) throw new Error("Supabase non configure");
+        if (DEMO_MODE) {
+          if (!active) return;
+          const demoFlows = getDemoTradeFlows();
+          setFlows(demoFlows);
+          setPrevFlows(demoFlows);
+          return;
+        }
+
+        if (!SUPABASE_ENV_OK) throw new Error("Connexion base indisponible");
 
         const q = supabase
           .from("trade_flows")
@@ -410,9 +421,7 @@ export default function ControlTower() {
         console.error(err);
         if (!active) return;
         if (isMissingTableError(err)) {
-          setError("Table trade_flows manquante. Cree les tables d'import (CSV gratuits) pour activer la tour.");
-        } else {
-          setError(err?.message || "Erreur chargement donnees.");
+          setMissingTables(true);
         }
         setFlows([]);
         setPrevFlows([]);
@@ -430,6 +439,20 @@ export default function ControlTower() {
     let active = true;
     const loadAlerts = async () => {
       try {
+        if (DEMO_MODE) {
+          if (!active) return;
+          setAlerts(
+            demoAlerts.slice(0, 4).map((a) => ({
+              id: a.id,
+              title: a.title,
+              message: a.message,
+              severity: a.severity,
+              detectedAt: a.detected_at,
+            }))
+          );
+          setAlertsUpdatedAt(new Date().toISOString());
+          return;
+        }
         const email = localStorage.getItem("mpl_lead_email") || undefined;
         const res = await getAlerts(email);
         if (!active) return;
@@ -538,7 +561,7 @@ export default function ControlTower() {
   const frNode = nodes.find((n) => n.code_iso2 === "FR");
 
   return (
-    <MainLayout wrapperClassName="control-tower-world" variant="bare">
+    <AppLayout wrapperClassName="control-tower-world" variant="bare">
       <OnboardingPrefsModal open={prefsOpen} onOpenChange={setPrefsOpen} email={leadEmail} />
       <div className="relative">
         <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-blue-600 via-white to-red-600" />
@@ -587,13 +610,15 @@ export default function ControlTower() {
           </div>
         </div>
 
-        {error ? (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error}
-          </div>
-        ) : null}
-
-        <div className="grid grid-cols-12 gap-4">
+        {missingTables ? (
+          <EmptyState
+            title="Connexion des flux requise"
+            description="Initialise la base pour charger les flux trade_flows et injecter la demo. Les indicateurs s'affichent ensuite automatiquement."
+            primaryAction={{ label: "Initialiser la base", to: "/resources" }}
+            secondaryAction={{ label: "Voir la documentation", to: "/resources" }}
+          />
+        ) : (
+          <div className="grid grid-cols-12 gap-4">
           <div className="col-span-12 lg:col-span-8">
             <div className="relative h-[620px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="absolute inset-0">
@@ -723,9 +748,9 @@ export default function ControlTower() {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-xs text-blue-700 uppercase tracking-[0.25em]">Alertes de la semaine</div>
-                  <div className="text-sm text-slate-500">Derniere mise a jour: {alertsUpdatedAt || "—"}</div>
+                  <div className="text-sm text-slate-500">Dernière mise à jour: {formatDateTimeFr(alertsUpdatedAt)}</div>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => navigate("/watch")}>
+                <Button size="sm" variant="outline" onClick={() => navigate("/app/centre-veille")}>
                   Voir la veille
                 </Button>
               </div>
@@ -754,13 +779,13 @@ export default function ControlTower() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Verifier une facture export</span>
-                  <Button size="sm" variant="outline" onClick={() => navigate("/invoice-check")}>
+                  <Button size="sm" variant="outline" onClick={() => navigate("/app/invoice-check")}>
                     Ouvrir
                   </Button>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Simuler un cout export</span>
-                  <Button size="sm" variant="outline" onClick={() => navigate("/simulator")}>
+                  <Button size="sm" variant="outline" onClick={() => navigate("/app/simulator")}>
                     Simuler
                   </Button>
                 </div>
@@ -824,6 +849,7 @@ export default function ControlTower() {
             </div>
           </div>
         </div>
+        )}
 
         <div className="grid grid-cols-12 gap-4">
           <div className="col-span-12 lg:col-span-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -870,12 +896,12 @@ export default function ControlTower() {
                 <span className="font-semibold text-slate-900">{flows.length}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span>Derniere mise a jour</span>
-                <span className="font-semibold text-slate-900">{alertsUpdatedAt || "—"}</span>
+                <span>Dernière mise à jour</span>
+                <span className="font-semibold text-slate-900">{formatDateTimeFr(alertsUpdatedAt)}</span>
               </div>
             </div>
             <div className="mt-4">
-              <Button className="w-full" onClick={() => navigate("/watch")}>
+              <Button className="w-full" onClick={() => navigate("/app/centre-veille")}>
                 Ouvrir centre veille
               </Button>
             </div>
@@ -946,7 +972,7 @@ export default function ControlTower() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="air">Air</SelectItem>
-                    <SelectItem value="sea">Sea</SelectItem>
+                    <SelectItem value="sea">Maritime</SelectItem>
                     <SelectItem value="road">Road</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1036,11 +1062,11 @@ export default function ControlTower() {
 
           <div className="sticky bottom-0 mt-6 border-t border-slate-200 bg-white pt-4">
             <div className="grid gap-2">
-              <Button onClick={() => navigate("/invoice-check")}>Validation express (15 min)</Button>
+              <Button onClick={() => navigate("/contact?offer=express")}>Validation express</Button>
               <Button variant="outline" onClick={() => setContactOpen(true)}>Demander un audit complet</Button>
               <Button variant="secondary" onClick={() => navigate("/newsletter")}>Recevoir PDF + veille</Button>
             </div>
-            <div className="mt-2 text-xs text-slate-500">Derniere maj: {drawerResult?.updatedAt || "—"}</div>
+            <div className="mt-2 text-xs text-slate-500">Dernière mise à jour: {formatDateTimeFr(drawerResult?.updatedAt)}</div>
           </div>
         </SheetContent>
       </Sheet>
@@ -1072,6 +1098,6 @@ export default function ControlTower() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </MainLayout>
+    </AppLayout>
   );
 }

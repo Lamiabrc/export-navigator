@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, CheckCircle, NotebookPen, AlertTriangle } from "lucide-react";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { fetchInvoiceByNumber } from "@/domain/export/queries";
 import { InvoiceDetail } from "@/domain/export/types";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,7 +46,7 @@ export default function InvoiceDetailPage() {
         if (error) {
           if (isMissingTableError(error)) {
             setNotesAvailable(false);
-            setNotesWarning("Table notes absente : validation/notes non persistées.");
+            setNotesWarning("Notes non disponibles (mode demo).");
           } else {
             setNotesAvailable(false);
             setNotesWarning(error.message || "Notes indisponibles.");
@@ -74,7 +74,7 @@ export default function InvoiceDetailPage() {
   const handleValidate = async () => {
     if (!invoice) return;
     if (notesAvailable === false) {
-      toast.info("Table notes absente : action non enregistrée côté base.");
+      toast.info("Notes non disponibles (mode demo).");
       return;
     }
     setSaving(true);
@@ -87,7 +87,7 @@ export default function InvoiceDetailPage() {
       });
       if (error) {
         if (isMissingTableError(error)) {
-          toast.info("Table notes absente : validation uniquement visuelle.");
+          toast.info("Notes non disponibles (mode demo).");
         } else {
           throw error;
         }
@@ -113,7 +113,7 @@ export default function InvoiceDetailPage() {
       });
       if (error) {
         if (isMissingTableError(error)) {
-          toast.info("Table notes absente : note non persistee.");
+          toast.info("Notes non disponibles (mode demo).");
         } else {
           throw error;
         }
@@ -129,7 +129,7 @@ export default function InvoiceDetailPage() {
   };
 
   return (
-    <MainLayout>
+    <AppLayout>
       <div className="space-y-5">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-2">
@@ -177,7 +177,7 @@ export default function InvoiceDetailPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Estimation couts export</CardTitle>
-                <CardDescription>OM + octroi + TVA selon om_rates / octroi_rates / vat_rates / tax_rules_extra</CardDescription>
+                <CardDescription>OM + octroi + TVA selon les regles fiscales disponibles</CardDescription>
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <SummaryCard label="OM" value={money(costComponents?.om)} />
@@ -309,7 +309,7 @@ export default function InvoiceDetailPage() {
           </>
         ) : null}
       </div>
-    </MainLayout>
+    </AppLayout>
   );
 }
 

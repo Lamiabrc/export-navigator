@@ -46,7 +46,7 @@ export default function SetPassword() {
       setLinkLoading(true);
 
       try {
-        if (!SUPABASE_ENV_OK) throw new Error("Supabase non configuré.");
+        if (!SUPABASE_ENV_OK) throw new Error("Connexion base indisponible.");
 
         if (urlInfo.errorDesc) {
           throw new Error(decodeURIComponent(urlInfo.errorDesc));

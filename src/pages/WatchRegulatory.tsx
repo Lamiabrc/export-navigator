@@ -1,115 +1,113 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ExternalLink, Globe, ListChecks, Rss, ShieldCheck, Target, Zap } from "lucide-react";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { ExternalLink, Globe, ListChecks, Rss, ShieldCheck, Target, Zap } from "lucide-react";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
-import { isMissingTableError } from "@/domain/calc";
+import { supabase, DEMO_MODE, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
+import { isMissingTableError } from "@/domain/calc/validators";
+import { EmptyState } from "@/components/EmptyState";
+import { formatDateTimeFr } from "@/lib/formatters";
+import { demoRegulatoryFeeds, demoRegulatoryItems } from "@/lib/demoData";
 
 type Feed = {
   id: string;
-  title: string | null;
-  url: string | null;
-  scope: string | null;
-  tags: string[] | null;
+  name: string | null;
+  source_url: string | null;
+  category: string | null;
+  zone: string | null;
+  enabled: boolean | null;
 };
 
 type Item = {
   id: string;
   title: string | null;
   summary: string | null;
-  source_url: string | null;
+  url: string | null;
   published_at: string | null;
   category: string | null;
-  tags: string[] | null;
+  zone: string | null;
+  severity: string | null;
   feed_id: string | null;
 };
 
 const CATEGORIES = [
-  { value: "audit", label: "Audit" },
-  { value: "reglementation", label: "Reglementation" },
-  { value: "douane", label: "Douane" },
   { value: "sanctions", label: "Sanctions" },
-  { value: "incoterms", label: "Incoterms" },
-  { value: "marche", label: "Marche" },
-  { value: "concurrence", label: "Concurrence" },
+  { value: "taxes", label: "Taxes" },
+  { value: "docs", label: "Documents" },
+  { value: "regulation", label: "Réglementation" },
+  { value: "douane", label: "Douane" },
+  { value: "maritime", label: "Maritime" },
 ];
 
-const TERRITORIES = ["FR", "EU", "US", "UK", "CHINA", "MEA", "AFRICA", "APAC", "LATAM", "GLOBAL"];
-
-function toDateLabel(d: string | null) {
-  if (!d) return "Date inconnue";
-  const date = new Date(d);
-  if (Number.isNaN(date.getTime())) return d;
-  return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
-}
+const ZONES = ["EU", "US", "UK", "CHINA", "MEA", "AFRICA", "APAC", "LATAM", "GLOBAL"];
 
 export default function WatchRegulatory() {
   const [search, setSearch] = React.useState("");
   const [category, setCategory] = React.useState<string>("all");
-  const [territory, setTerritory] = React.useState<string>("all");
+  const [zone, setZone] = React.useState<string>("all");
 
   const feedsQuery = useQuery({
     queryKey: ["reg-feeds"],
+    enabled: !DEMO_MODE && SUPABASE_ENV_OK,
     queryFn: async () => {
-      if (!SUPABASE_ENV_OK) return { data: [], warning: "Supabase non configure" };
-      const { data, error } = await supabase.from("regulatory_feeds").select("id,title,url,scope,tags").limit(200);
+      const { data, error } = await supabase
+        .from("regulatory_feeds")
+        .select("id,name,source_url,category,zone,enabled")
+        .order("created_at", { ascending: false })
+        .limit(200);
       if (error) {
-        if (isMissingTableError(error)) return { data: [], warning: "Table regulatory_feeds absente" };
+        if (isMissingTableError(error)) return { data: [], missingTables: true };
         throw error;
       }
-      return { data: (data as Feed[]) || [], warning: undefined };
+      return { data: (data as Feed[]) || [], missingTables: false };
     },
   });
 
   const itemsQuery = useQuery({
     queryKey: ["reg-items"],
+    enabled: !DEMO_MODE && SUPABASE_ENV_OK,
     queryFn: async () => {
-      if (!SUPABASE_ENV_OK) return { data: [], warning: "Supabase non configure" };
       const { data, error } = await supabase
         .from("regulatory_items")
-        .select("id,title,summary,source_url,published_at,category,tags,feed_id")
+        .select("id,title,summary,url,published_at,category,zone,severity,feed_id")
         .order("published_at", { ascending: false })
         .limit(200);
       if (error) {
-        if (isMissingTableError(error)) return { data: [], warning: "Table regulatory_items absente" };
+        if (isMissingTableError(error)) return { data: [], missingTables: true };
         throw error;
       }
-      return { data: (data as Item[]) || [], warning: undefined };
+      return { data: (data as Item[]) || [], missingTables: false };
     },
   });
 
-  const warning = feedsQuery.data?.warning || itemsQuery.data?.warning;
-  const feeds = feedsQuery.data?.data || [];
-  const items = itemsQuery.data?.data || [];
+  const missingTables = Boolean(feedsQuery.data?.missingTables || itemsQuery.data?.missingTables);
+  const feeds = DEMO_MODE ? demoRegulatoryFeeds : feedsQuery.data?.data || [];
+  const items = DEMO_MODE ? demoRegulatoryItems : itemsQuery.data?.data || [];
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((it) => {
-      if (category !== "all" && (it.category || "audit") !== category) return false;
-      if (territory !== "all") {
-        const tags = (it.tags || []).map((t) => t.toLowerCase());
-        if (!tags.some((t) => t.includes(territory.toLowerCase()))) return false;
-      }
+      if (category !== "all" && (it.category || "sanctions") !== category) return false;
+      if (zone !== "all" && (it.zone || "").toLowerCase() !== zone.toLowerCase()) return false;
       if (!q) return true;
-      const hay = [it.title, it.summary, it.source_url, (it.tags || []).join(" ")].join(" ").toLowerCase();
+      const hay = [it.title, it.summary, it.url, it.category, it.zone].join(" ").toLowerCase();
       return hay.includes(q);
     });
-  }, [items, category, territory, search]);
+  }, [items, category, zone, search]);
 
   return (
-    <MainLayout>
+    <AppLayout>
       <div className="space-y-6">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">Veille audit et reglementation</p>
-            <h1 className="text-2xl font-bold">Audit - Reglementation - Export mondial</h1>
+            <p className="text-sm text-muted-foreground">Centre veille réglementaire</p>
+            <h1 className="text-2xl font-bold">Audit - Réglementation - Export mondial</h1>
             <p className="text-sm text-muted-foreground">
-              Flux depuis regulatory_feeds / regulatory_items. Filtres : categorie, zone, recherche.
+              Flux et alertes issus de sources officielles. Filtres par categorie, zone et recherche.
             </p>
           </div>
           <div className="flex gap-2">
@@ -146,13 +144,13 @@ export default function WatchRegulatory() {
             </Select>
           </div>
           <div className="space-y-1">
-            <Select value={territory} onValueChange={setTerritory}>
+            <Select value={zone} onValueChange={setZone}>
               <SelectTrigger>
                 <SelectValue placeholder="Zone" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Toutes zones</SelectItem>
-                {TERRITORIES.map((t) => (
+                {ZONES.map((t) => (
                   <SelectItem key={t} value={t}>
                     {t}
                   </SelectItem>
@@ -162,120 +160,124 @@ export default function WatchRegulatory() {
           </div>
         </div>
 
-        {warning ? (
-          <Card className="border-amber-200 bg-amber-50">
-            <CardContent className="pt-4 text-sm text-amber-800 flex gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              <div>{warning}. Cree les tables regulatory_feeds / regulatory_items ou alimente-les.</div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <CardHeader className="flex items-center justify-between">
-              <div>
-                <CardTitle>Dernieres alertes</CardTitle>
-                <CardDescription>Triees par date de publication</CardDescription>
-              </div>
-              <Badge variant="outline">{filtered.length}</Badge>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {itemsQuery.isLoading ? (
-                <div className="text-sm text-muted-foreground">Chargement...</div>
-              ) : filtered.length === 0 ? (
-                <div className="text-sm text-muted-foreground">Aucune alerte correspondant aux filtres.</div>
-              ) : (
-                filtered.slice(0, 30).map((it) => (
-                  <div key={it.id} className="rounded-lg border p-3 bg-card/50 space-y-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="text-sm font-semibold">{it.title || "Alerte"}</div>
-                        <div className="text-xs text-muted-foreground">{toDateLabel(it.published_at)}</div>
-                      </div>
-                      <div className="flex flex-wrap gap-1 justify-end">
-                        <Badge variant="secondary">{it.category || "audit"}</Badge>
-                        {(it.tags || []).slice(0, 3).map((t) => (
-                          <Badge key={t} variant="outline" className="text-[11px]">
-                            {t}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    {it.summary ? <p className="text-sm text-muted-foreground">{it.summary}</p> : null}
-                    {it.source_url ? (
-                      <a href={it.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-                        Ouvrir la source
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    ) : null}
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          <div className="space-y-3">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Rss className="h-4 w-4" />
-                  Flux surveilles
-                </CardTitle>
-                <CardDescription>Tables regulatory_feeds / items</CardDescription>
+        {missingTables ? (
+          <EmptyState
+            title="Connexion des sources requise"
+            description="Initialise la base pour charger les flux réglementaires, puis lance un seed de demo pour alimenter les alertes."
+            primaryAction={{ label: "Initialiser la base", to: "/resources" }}
+            secondaryAction={{ label: "Voir la documentation", to: "/resources" }}
+          />
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card className="lg:col-span-2">
+              <CardHeader className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Derni?res alertes</CardTitle>
+                  <CardDescription>Triees par date de publication</CardDescription>
+                </div>
+                <Badge variant="outline">{filtered.length}</Badge>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {feedsQuery.isLoading ? (
-                  <p className="text-sm text-muted-foreground">Chargement...</p>
-                ) : feeds.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Aucun flux. Ajoute des sources (douanes, reglementation, concurrence).</p>
+              <CardContent className="space-y-3">
+                {itemsQuery.isLoading ? (
+                  <div className="text-sm text-muted-foreground">Chargement...</div>
+                ) : filtered.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">Aucune alerte correspondant aux filtres.</div>
                 ) : (
-                  feeds.slice(0, 20).map((f) => (
-                    <div key={f.id} className="rounded-lg border p-2">
-                      <div className="text-sm font-semibold">{f.title || "Flux"}</div>
-                      <div className="text-[11px] text-muted-foreground break-all">{f.url}</div>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {f.scope ? <Badge variant="secondary" className="text-[11px]">{f.scope}</Badge> : null}
-                        {(f.tags || []).slice(0, 3).map((t) => (
-                          <Badge key={t} variant="outline" className="text-[11px]">{t}</Badge>
-                        ))}
+                  filtered.slice(0, 30).map((it) => (
+                    <div key={it.id} className="rounded-lg border p-3 bg-card/50 space-y-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="text-sm font-semibold">{it.title || "Alerte"}</div>
+                          <div className="text-xs text-muted-foreground">{formatDateTimeFr(it.published_at)}</div>
+                        </div>
+                        <div className="flex flex-wrap gap-1 justify-end">
+                          <Badge variant="secondary">{it.category || "sanctions"}</Badge>
+                          {it.zone ? (
+                            <Badge variant="outline" className="text-[11px]">
+                              {it.zone}
+                            </Badge>
+                          ) : null}
+                          {it.severity ? (
+                            <Badge variant="outline" className="text-[11px]">
+                              {it.severity}
+                            </Badge>
+                          ) : null}
+                        </div>
                       </div>
+                      {it.summary ? <p className="text-sm text-muted-foreground">{it.summary}</p> : null}
+                      {it.url ? (
+                        <a href={it.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+                          Ouvrir la source
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : null}
                     </div>
                   ))
                 )}
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ListChecks className="h-4 w-4" />
-                  A faire
-                </CardTitle>
-                <CardDescription>Connexion aux flux externes</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm text-muted-foreground">
-                <div className="flex items-start gap-2">
-                  <ShieldCheck className="h-4 w-4 text-primary mt-0.5" />
-                  <span>Creer les tables <code>regulatory_feeds</code> et <code>regulatory_items</code> si absentes.</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Globe className="h-4 w-4 text-primary mt-0.5" />
-                  <span>Configurer un job pour injecter les flux (RSS, sites officiels, veille concurrence).</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Target className="h-4 w-4 text-primary mt-0.5" />
-                  <span>Tagger les items avec categorie et zone (EU, US, CHINA, MEA...).</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Zap className="h-4 w-4 text-primary mt-0.5" />
-                  <span>Activer les filtres pour prioriser les alertes critiques.</span>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="space-y-3">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Rss className="h-4 w-4" />
+                    Flux surveilles
+                  </CardTitle>
+                  <CardDescription>Sources connectees</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {feedsQuery.isLoading ? (
+                    <p className="text-sm text-muted-foreground">Chargement...</p>
+                  ) : feeds.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Aucun flux. Ajoute des sources officielles.</p>
+                  ) : (
+                    feeds.slice(0, 20).map((f) => (
+                      <div key={f.id} className="rounded-lg border p-2">
+                        <div className="text-sm font-semibold">{f.name || "Flux"}</div>
+                        <div className="text-[11px] text-muted-foreground break-all">{f.source_url}</div>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {f.category ? <Badge variant="secondary" className="text-[11px]">{f.category}</Badge> : null}
+                          {f.zone ? <Badge variant="outline" className="text-[11px]">{f.zone}</Badge> : null}
+                          {f.enabled ? <Badge variant="outline" className="text-[11px]">Actif</Badge> : null}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ListChecks className="h-4 w-4" />
+                    Connexion des sources
+                  </CardTitle>
+                  <CardDescription>Checklist d'activation</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm text-muted-foreground">
+                  <div className="flex items-start gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary mt-0.5" />
+                    <span>Creer les tables regulatory_feeds et regulatory_items.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Globe className="h-4 w-4 text-primary mt-0.5" />
+                    <span>Connecter les sources officielles (UE, OFAC, ONU).</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Target className="h-4 w-4 text-primary mt-0.5" />
+                    <span>Tagger par categorie et zone pour prioriser les alertes.</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Zap className="h-4 w-4 text-primary mt-0.5" />
+                    <span>Activer les severites pour remonter les urgences.</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-        </div>
+        )}
       </div>
-    </MainLayout>
+    </AppLayout>
   );
 }

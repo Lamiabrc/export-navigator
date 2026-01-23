@@ -1,5 +1,5 @@
 import * as React from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,7 +69,7 @@ export default function InvoiceCheck() {
     try {
       setReporting(true);
       const pdfBlob = await postPdf({
-        title: "Rapport controle facture",
+        title: "Rapport contr?le facture",
         destination,
         incoterm,
         currency,
@@ -122,10 +122,10 @@ export default function InvoiceCheck() {
   };
 
   return (
-    <MainLayout>
+    <AppLayout>
       <div className="space-y-8">
         <div>
-          <p className="text-sm text-muted-foreground">Controle facture</p>
+          <p className="text-sm text-muted-foreground">Contr?le facture</p>
           <h1 className="text-3xl font-semibold">Verifier une facture export</h1>
         </div>
 
@@ -245,6 +245,6 @@ export default function InvoiceCheck() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </MainLayout>
+    </AppLayout>
   );
 }

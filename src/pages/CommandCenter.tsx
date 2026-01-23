@@ -1,5 +1,5 @@
 import * as React from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -254,7 +254,7 @@ export default function TaxesOM() {
       setSelected(null);
 
       try {
-        if (!SUPABASE_ENV_OK) throw new Error("Supabase non configuré (VITE_SUPABASE_URL / KEY).");
+        if (!SUPABASE_ENV_OK) throw new Error("Connexion base indisponible.");
 
         // 1) OM / Octroi : on prend octroi_rates en priorité
         let omTable = "";
@@ -265,7 +265,7 @@ export default function TaxesOM() {
           omSample = picked.sample;
         } catch (e: any) {
           if (isMissingTableError(e)) {
-            setWarning((p) => (p ? `${p}\nAucune table OM accessible (octroi_rates / om_rates).` : "Aucune table OM accessible (octroi_rates / om_rates)."));
+            setWarning((p) => (p ? `${p}\nTaux OM indisponibles.` : "Taux OM indisponibles."));
           } else {
             throw e;
           }
@@ -282,8 +282,8 @@ export default function TaxesOM() {
           if (!territoryColOm || !hsColOm) {
             setWarning((p) =>
               p
-                ? `${p}\n${omTable}: colonnes détectées insuffisantes (territoire=${territoryColOm ?? "?"}, hs=${hsColOm ?? "?"}).`
-                : `${omTable}: colonnes détectées insuffisantes (territoire=${territoryColOm ?? "?"}, hs=${hsColOm ?? "?"}).`
+                ? `${p}\nStructure OM incomplete (champs requis manquants).`
+                : `Structure OM incomplete (champs requis manquants).`
             );
           } else {
             // Adapter les HS selon hs4/hs6/hs8/hs10 pour filtrer efficacement
@@ -340,11 +340,11 @@ export default function TaxesOM() {
           }
         } catch (e: any) {
           if (isMissingTableError(e)) {
-            setWarning((p) => (p ? `${p}\nTable vat_rates absente (fallback repère TVA).` : "Table vat_rates absente (fallback repère TVA)."));
+            setWarning((p) => (p ? `${p}\nTaux TVA indisponibles (mode demo).` : "Taux TVA indisponibles (mode demo)."));
             setVatMeta(null);
             setVatRows([]);
           } else {
-            setWarning((p) => (p ? `${p}\nVAT: ${e?.message || "erreur"}` : `VAT: ${e?.message || "erreur"}`));
+            setWarning((p) => (p ? `${p}\nTVA indisponible` : `TVA indisponible`));
             setVatMeta(null);
             setVatRows([]);
           }
@@ -374,9 +374,9 @@ export default function TaxesOM() {
           }
         } catch (e: any) {
           if (isMissingTableError(e)) {
-            setWarning((p) => (p ? `${p}\nTable tax_rules_extra absente.` : "Table tax_rules_extra absente."));
+            setWarning((p) => (p ? `${p}\nRegles taxes additionnelles indisponibles (mode demo).` : "Regles taxes additionnelles indisponibles (mode demo)."));
           } else {
-            setWarning((p) => (p ? `${p}\nTaxes extra: ${e?.message || "erreur"}` : `Taxes extra: ${e?.message || "erreur"}`));
+            setWarning((p) => (p ? `${p}\nTaxes additionnelles indisponibles` : `Taxes additionnelles indisponibles`));
           }
           setTaxMeta(null);
           setTaxRows([]);
@@ -397,7 +397,7 @@ export default function TaxesOM() {
   }, [refreshNonce]);
 
   return (
-    <MainLayout>
+    <AppLayout>
       <div className="space-y-5">
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -405,7 +405,7 @@ export default function TaxesOM() {
             <p className="text-sm text-muted-foreground">Dashboard</p>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Scale className="h-6 w-6" />
-              OM & Taxes — Récapitulatif par territoire �- HS code
+              OM & Taxes — Récapitulatif par territoire - HS code
             </h1>
             <p className="text-sm text-muted-foreground">
               Objectif : afficher un tableau récapitulatif des <b>OM</b> et <b>taxes</b> pour tes HS codes sur chaque territoire.
@@ -581,7 +581,7 @@ export default function TaxesOM() {
         <Card className="border-muted">
           <CardHeader>
             <CardTitle className="text-base">
-              Détails — {selected ? `${selected.territory} �- HS ${selected.hs}` : "clique une cellule"}
+              Détails — {selected ? `${selected.territory} - HS ${selected.hs}` : "clique une cellule"}
             </CardTitle>
             <CardDescription>
               Détails bruts des tables (utile pour valider les champs exacts).
@@ -678,7 +678,7 @@ export default function TaxesOM() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
+    </AppLayout>
   );
 }
 

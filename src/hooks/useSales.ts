@@ -27,7 +27,7 @@ export type SaleRowUI = {
 
 type Territory = { code: string; label: string | null };
 type Client = { id: string; name: string | null };
-type Product = { id: string; libelle_article: string | null };
+type Product = { id: string; label: string | null };
 type Destination = { id: string; name: string | null };
 
 export function useSales() {
@@ -45,7 +45,7 @@ export function useSales() {
       const [tRes, cRes, pRes, dRes, sRes] = await Promise.all([
         supabase.from("territories").select("code,label"),
         supabase.from("clients").select("id,name").limit(1000),
-        supabase.from("products").select("id,libelle_article").limit(1000),
+        supabase.from("products").select("id,label").limit(1000),
         supabase.from("export_destinations").select("id,name").order("name", { ascending: true }).limit(1000),
         supabase
           .from("sales")
@@ -70,7 +70,7 @@ export function useSales() {
 
       const territoryByCode = new Map(territories.map((t) => [t.code, t.label ?? t.code]));
       const clientById = new Map(clients.map((c) => [c.id, c.name ?? c.id]));
-      const productById = new Map(products.map((p) => [p.id, p.libelle_article ?? p.id]));
+      const productById = new Map(products.map((p) => [p.id, p.label ?? p.id]));
       const destinationById = new Map(destinations.map((d) => [d.id, d.name ?? d.id]));
 
       const mapped: SaleRowUI[] = (sRes.data ?? []).map((s: any) => ({

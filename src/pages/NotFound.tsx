@@ -8,7 +8,7 @@ const NotFound = () => {
 
   useEffect(() => {
     if (location.pathname === "/hub") {
-      navigate("/control-tower", { replace: true });
+      navigate("/app/control-tower", { replace: true });
       return;
     }
 

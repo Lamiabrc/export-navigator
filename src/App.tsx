@@ -10,9 +10,10 @@ import { GlobalFiltersProvider } from "@/contexts/GlobalFiltersContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ThemeProvider } from "@/components/theme-provider";
 
-import Welcome from "@/pages/Welcome";
 import LeadMagnet from "@/pages/LeadMagnet";
 import WatchCenter from "@/pages/WatchCenter";
+import WatchRegulatory from "@/pages/WatchRegulatory";
+import WatchCommercial from "@/pages/WatchCommercial";
 import InvoiceCheck from "@/pages/InvoiceCheck";
 import Newsletter from "@/pages/Newsletter";
 import Login from "@/pages/Login";
@@ -33,13 +34,15 @@ import Costs from "@/pages/Costs";
 import TaxesOM from "@/pages/TaxesOM";
 import InvoiceDetail from "@/pages/InvoiceDetail";
 
-import WatchCommercial from "@/pages/WatchCommercial";
-import WatchRegulatory from "@/pages/WatchRegulatory";
-
 import Admin from "@/pages/Admin";
 import Assistant from "@/pages/Assistant";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/NotFound";
+import Solutions from "@/pages/Solutions";
+import Veille from "@/pages/Veille";
+import Resources from "@/pages/Resources";
+import Tarifs from "@/pages/Tarifs";
+import Contact from "@/pages/Contact";
 
 const queryClient = new QueryClient();
 
@@ -57,52 +60,58 @@ export default function App() {
                 <Routes>
                   <Route path="/" element={<LeadMagnet />} />
 
-                  {/* Alias legacy / bookmarks */}
-                  <Route path="/hub" element={<Navigate to="/control-tower" replace />} />
-
                   {/* Public */}
-                  <Route path="/services" element={<Welcome />} />
-                  <Route path="/welcome" element={<Navigate to="/services" replace />} />
+                  <Route path="/solutions" element={<Solutions />} />
+                  <Route path="/veille" element={<Veille />} />
+                  <Route path="/resources" element={<Resources />} />
+                  <Route path="/tarifs" element={<Tarifs />} />
+                  <Route path="/contact" element={<Contact />} />
+                  <Route path="/newsletter" element={<Newsletter />} />
+                  <Route path="/services" element={<Navigate to="/solutions" replace />} />
+                  <Route path="/welcome" element={<Navigate to="/solutions" replace />} />
+
+                  {/* Auth */}
                   <Route path="/login" element={<Login />} />
                   <Route path="/register" element={<Register />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/set-password" element={<SetPassword />} />
-                  <Route path="/invoice-check" element={<InvoiceCheck />} />
-                  <Route path="/newsletter" element={<Newsletter />} />
-                  <Route path="/watch" element={<WatchCenter />} />
 
-                  {/* Pilotage */}
-                  <Route path="/control-tower" element={<ControlTower />} />
+                  {/* App */}
                   <Route
-                    path="/command-center"
+                    path="/app/control-tower"
+                    element={
+                      <ProtectedRoute>
+                        <ControlTower />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/app/command-center"
                     element={
                       <ProtectedRoute>
                         <CommandCenter />
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="/dashboard" element={<Navigate to="/control-tower" replace />} />
+                  <Route path="/app" element={<Navigate to="/app/control-tower" replace />} />
                   <Route
-                    path="/explore"
+                    path="/app/explore"
                     element={
                       <ProtectedRoute>
                         <Sales />
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="/sales" element={<Navigate to="/explore" replace />} />
                   <Route
-                    path="/invoices/:invoiceNumber"
+                    path="/app/invoices/:invoiceNumber"
                     element={
                       <ProtectedRoute>
                         <InvoiceDetail />
                       </ProtectedRoute>
                     }
                   />
-
-                  {/* Costs & pricing */}
                   <Route
-                    path="/costs"
+                    path="/app/costs"
                     element={
                       <ProtectedRoute>
                         <Costs />
@@ -110,7 +119,7 @@ export default function App() {
                     }
                   />
                   <Route
-                    path="/taxes-om"
+                    path="/app/taxes-om"
                     element={
                       <ProtectedRoute>
                         <TaxesOM />
@@ -118,30 +127,39 @@ export default function App() {
                     }
                   />
                   <Route
-                    path="/simulator"
+                    path="/app/simulator"
                     element={
                       <ProtectedRoute>
                         <Simulator />
                       </ProtectedRoute>
                     }
                   />
-
-                  {/* Concurrence */}
                   <Route
-                    path="/concurrence"
+                    path="/app/centre-veille"
+                    element={
+                      <ProtectedRoute>
+                        <WatchCenter />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/app/centre-veille/reglementation"
+                    element={
+                      <ProtectedRoute>
+                        <WatchRegulatory />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/app/centre-veille/concurrence"
                     element={
                       <ProtectedRoute>
                         <WatchCommercial />
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="/watch/commercial" element={<Navigate to="/concurrence" replace />} />
-                  <Route path="/watch/competitive" element={<Navigate to="/concurrence" replace />} />
-                  <Route path="/competition" element={<Navigate to="/concurrence" replace />} />
-
-                  {/* Reference & veille */}
                   <Route
-                    path="/products"
+                    path="/app/produits"
                     element={
                       <ProtectedRoute>
                         <Products />
@@ -149,7 +167,7 @@ export default function App() {
                     }
                   />
                   <Route
-                    path="/clients"
+                    path="/app/clients"
                     element={
                       <ProtectedRoute>
                         <Clients />
@@ -157,38 +175,31 @@ export default function App() {
                     }
                   />
                   <Route
-                    path="/watch/regulatory"
-                    element={
-                      <ProtectedRoute>
-                        <WatchRegulatory />
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  {/* IA */}
-                  <Route
-                    path="/assistant"
+                    path="/app/assistant"
                     element={
                       <ProtectedRoute>
                         <Assistant />
                       </ProtectedRoute>
                     }
                   />
-
-                  {/* Controle documents (secondaire) */}
                   <Route
-                    path="/verifier"
+                    path="/app/invoice-check"
+                    element={
+                      <ProtectedRoute>
+                        <InvoiceCheck />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/app/verifier"
                     element={
                       <ProtectedRoute>
                         <InvoiceVerification />
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="/invoice-verification" element={<Navigate to="/verifier" replace />} />
-
-                  {/* Admin */}
                   <Route
-                    path="/admin"
+                    path="/app/admin"
                     element={
                       <ProtectedRoute>
                         <Admin />
@@ -196,13 +207,37 @@ export default function App() {
                     }
                   />
                   <Route
-                    path="/settings"
+                    path="/app/settings"
                     element={
                       <ProtectedRoute>
                         <Settings />
                       </ProtectedRoute>
                     }
                   />
+
+                  {/* Legacy aliases */}
+                  <Route path="/control-tower" element={<Navigate to="/app/control-tower" replace />} />
+                  <Route path="/hub" element={<Navigate to="/app/control-tower" replace />} />
+                  <Route path="/command-center" element={<Navigate to="/app/command-center" replace />} />
+                  <Route path="/dashboard" element={<Navigate to="/app/control-tower" replace />} />
+                  <Route path="/explore" element={<Navigate to="/app/explore" replace />} />
+                  <Route path="/sales" element={<Navigate to="/app/explore" replace />} />
+                  <Route path="/costs" element={<Navigate to="/app/costs" replace />} />
+                  <Route path="/taxes-om" element={<Navigate to="/app/taxes-om" replace />} />
+                  <Route path="/simulator" element={<Navigate to="/app/simulator" replace />} />
+                  <Route path="/watch" element={<Navigate to="/app/centre-veille" replace />} />
+                  <Route path="/watch/regulatory" element={<Navigate to="/app/centre-veille/reglementation" replace />} />
+                  <Route path="/watch/commercial" element={<Navigate to="/app/centre-veille/concurrence" replace />} />
+                  <Route path="/watch/competitive" element={<Navigate to="/app/centre-veille/concurrence" replace />} />
+                  <Route path="/competition" element={<Navigate to="/app/centre-veille/concurrence" replace />} />
+                  <Route path="/concurrence" element={<Navigate to="/app/centre-veille/concurrence" replace />} />
+                  <Route path="/products" element={<Navigate to="/app/produits" replace />} />
+                  <Route path="/clients" element={<Navigate to="/app/clients" replace />} />
+                  <Route path="/invoice-check" element={<Navigate to="/app/invoice-check" replace />} />
+                  <Route path="/verifier" element={<Navigate to="/app/verifier" replace />} />
+                  <Route path="/assistant" element={<Navigate to="/app/assistant" replace />} />
+                  <Route path="/admin" element={<Navigate to="/app/admin" replace />} />
+                  <Route path="/settings" element={<Navigate to="/app/settings" replace />} />
 
                   <Route path="*" element={<NotFound />} />
                 </Routes>

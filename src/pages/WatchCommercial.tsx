@@ -1,5 +1,5 @@
 import * as React from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -84,7 +84,7 @@ export default function WatchCommercial() {
     let active = true;
     const load = async () => {
       if (!SUPABASE_ENV_OK) {
-        setError("Supabase non configure.");
+        setError("Donnees concurrence indisponibles.");
         return;
       }
 
@@ -106,7 +106,7 @@ export default function WatchCommercial() {
         if (!active) return;
         if (sbError) {
           if (isMissingTableError(sbError)) {
-            setWarning("Table competitor_snapshots absente.");
+            setWarning("Aucune donnee concurrence disponible.");
             setRows([]);
             return;
           }
@@ -198,7 +198,7 @@ export default function WatchCommercial() {
   }, [rows, search]);
 
   return (
-    <MainLayout contentClassName="md:p-6">
+    <AppLayout contentClassName="md:p-6">
       <div className="space-y-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
@@ -337,6 +337,6 @@ export default function WatchCommercial() {
           </CardContent>
         </Card>
       </div>
-    </MainLayout>
+    </AppLayout>
   );
 }

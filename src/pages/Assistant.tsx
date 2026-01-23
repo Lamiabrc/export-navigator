@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Send, User, Loader2, Trash2, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -120,7 +120,7 @@ export default function Assistant() {
       "Assistant indisponible. Donne HS code, valeur, incoterm, poids/colis, destination, et qui paie taxes/droits.";
 
     try {
-      if (!SUPABASE_ENV_OK) throw new Error("Supabase non configuré");
+      if (!SUPABASE_ENV_OK) throw new Error("Connexion base indisponible");
 
       const { data, error: fnError } = await supabase.functions.invoke<AssistantResponse>("export-assistant", { body });
 
@@ -164,7 +164,7 @@ export default function Assistant() {
   const hasSections = Object.keys(sections).length > 0;
 
   return (
-    <MainLayout>
+    <AppLayout>
       <div className="space-y-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -356,6 +356,6 @@ export default function Assistant() {
           </Card>
         ) : null}
       </div>
-    </MainLayout>
+    </AppLayout>
   );
 }
