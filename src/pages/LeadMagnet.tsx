@@ -1,4 +1,4 @@
-import * as React from "react";
+ï»¿import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
@@ -152,7 +152,7 @@ export default function LeadMagnet() {
         <section className="relative z-10 px-6 pb-16 md:px-12">
           <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] items-start">
             <div className="space-y-6">
-              <p className="uppercase tracking-[0.32em] text-xs text-slate-500">Audit • Reglementation • Veille</p>
+              <p className="uppercase tracking-[0.32em] text-xs text-slate-500">Audit â€¢ Reglementation â€¢ Veille</p>
               <h1 className="text-4xl md:text-5xl font-semibold leading-tight" style={{ fontFamily: "Newsreader, serif" }}>
                 Votre controle export en 30 secondes.
               </h1>
@@ -336,7 +336,7 @@ export default function LeadMagnet() {
               <div className="text-sm uppercase text-slate-400">Sources officielles</div>
               <ul className="mt-3 space-y-2 text-sm text-slate-600">
                 {SOURCES.map((src) => (
-                  <li key={src}>• {src}</li>
+                  <li key={src}>â€¢ {src}</li>
                 ))}
               </ul>
             </CardContent>
@@ -361,3 +361,7 @@ export default function LeadMagnet() {
     </div>
   );
 }
+
+
+
+

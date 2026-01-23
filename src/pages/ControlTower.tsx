@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { isMissingTableError } from "@/domain/calc";
-import { getAlerts } from "@/lib/leadMagnetApi";
+import { getAlerts, postPdf } from "@/lib/leadMagnetApi";
 import { OnboardingPrefsModal } from "@/components/OnboardingPrefsModal";
 import worldMap from "@/assets/world-map.svg";
 
@@ -152,6 +152,7 @@ export default function ControlTower() {
   const [alertsUpdatedAt, setAlertsUpdatedAt] = React.useState<string>("");
   const [prefsOpen, setPrefsOpen] = React.useState(false);
   const [leadEmail, setLeadEmail] = React.useState<string | null>(null);
+  const [downloading, setDownloading] = React.useState(false);
 
   React.useEffect(() => {
     let alive = true;
@@ -173,6 +174,36 @@ export default function ControlTower() {
       setPrefsOpen(true);
     }
   }, []);
+
+  const downloadLastReport = async () => {
+    const raw = localStorage.getItem("mpl_last_simulation");
+    if (!raw) {
+      setError("Aucune simulation recente. Lance un calcul sur la page d'accueil.");
+      return;
+    }
+    try {
+      setDownloading(true);
+      const parsed = JSON.parse(raw) as { payload?: any; result?: any };
+      const pdfBlob = await postPdf({
+        title: "Rapport de controle export",
+        destination: parsed.payload?.destination,
+        incoterm: parsed.payload?.incoterm,
+        value: parsed.payload?.value,
+        currency: parsed.payload?.currency,
+        result: parsed.result,
+      });
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `mpl-rapport-export-${Date.now()}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err?.message || "Impossible de generer le rapport.");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   React.useEffect(() => {
     let alive = true;
@@ -703,6 +734,11 @@ export default function ControlTower() {
             <div className="mt-4">
               <Button className="w-full" onClick={() => navigate("/watch")}>
                 Ouvrir centre veille
+              </Button>
+            </div>
+            <div className="mt-3">
+              <Button variant="outline" className="w-full" onClick={downloadLastReport} disabled={downloading}>
+                {downloading ? "Generation..." : "Telecharger dernier rapport"}
               </Button>
             </div>
           </div>

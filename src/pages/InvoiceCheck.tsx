@@ -82,9 +82,32 @@ export default function InvoiceCheck() {
 
   const openAudit = () => setContactOpen(true);
 
-  const sendAudit = () => {
-    const body = `Demande audit export\nEntreprise: ${company}\nEmail: ${contactEmail}\nDestination: ${destination}\nIncoterm: ${incoterm}\nValeur: ${totalValue} ${currency}\nLignes: ${lines.length}\nNotes: ${notes}`;
-    window.location.href = `mailto:lamia.brechet@outlook.fr?subject=${encodeURIComponent("Demande audit export")}&body=${encodeURIComponent(body)}`;
+  const sendAudit = async () => {
+    if (!contactEmail.trim()) {
+      toast({ title: "Email requis", description: "Ajoute un email pour la demande." });
+      return;
+    }
+    try {
+      await fetch("/api/audit-request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          company,
+          email: contactEmail,
+          destination,
+          incoterm,
+          value: totalValue,
+          currency,
+          lines_count: lines.length,
+          notes,
+          context: { lines },
+        }),
+      });
+      toast({ title: "Demande envoyee", description: "Nous revenons vers vous rapidement." });
+      setContactOpen(false);
+    } catch (err: any) {
+      toast({ title: "Erreur", description: err?.message || "Impossible d'envoyer la demande." });
+    }
   };
 
   return (
