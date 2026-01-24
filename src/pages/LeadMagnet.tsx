@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { formatDateTimeFr } from "@/lib/formatters";
 
+type CountryNoteBlock = { title: string; items: string[] };
+
 type BriefResponse = {
   estimate: { duty: number; taxes: number; total: number; currency: string };
   documents: string[];
@@ -22,18 +24,22 @@ type BriefResponse = {
   sources: string[];
   simulationId?: string | null;
 
-  /**
-   * Optionnel (future-proof) : si ton backend renvoie des notes pays/traités, on les affiche.
-   * Exemple attendu:
-   * countryNotes: [{ title: "Traités & préférences", items: ["..."] }]
-   */
-  countryNotes?: Array<{ title: string; items: string[] }>;
+  // ✅ NEW (pour afficher traités/spécificités)
+  countryNotes?: CountryNoteBlock[];
+
+  // ✅ NEW (bonus - pas obligatoire côté UI)
+  incotermSummary?: {
+    seller: string[];
+    buyer: string[];
+    insuranceHint?: string;
+    seaOnly?: boolean;
+  };
 };
 
 const HS_CHIPS = ["3004", "8708", "2204", "3304", "9403", "8504"];
 
-// Fallback minimal si Intl.supportedValuesOf("region") n'est pas dispo
-const COUNTRIES_FALLBACK = [
+// Pays “courants” + option “Autre ISO2”
+const COUNTRIES = [
   { label: "États-Unis", iso2: "US" },
   { label: "Allemagne", iso2: "DE" },
   { label: "Espagne", iso2: "ES" },
@@ -46,186 +52,36 @@ const COUNTRIES_FALLBACK = [
   { label: "Inde", iso2: "IN" },
 ];
 
-const TOP_COUNTRY_ISO2 = [
-  "DE", "ES", "IT", "NL", "BE", "CH", "GB",
-  "US", "CA",
-  "MA", "AE",
-  "CN", "JP", "IN",
-];
+// ✅ Incoterms 2020 (11)
+const INCOTERMS = [
+  { code: "EXW", label: "EXW", hint: "Départ usine : le vendeur met à dispo, l’acheteur gère quasi tout." },
+  { code: "FCA", label: "FCA", hint: "Franco transporteur : vendeur livre au transporteur (souvent recommandé vs EXW)." },
+  { code: "CPT", label: "CPT", hint: "Port payé jusqu’à : vendeur paie transport principal, risque transféré plus tôt." },
+  { code: "CIP", label: "CIP", hint: "Port payé + assurance : vendeur paie transport + assurance (couverture renforcée)." },
+  { code: "DAP", label: "DAP", hint: "Rendu au lieu : vendeur livre au lieu convenu, sans dédouanement import." },
+  { code: "DPU", label: "DPU", hint: "Rendu déchargé : vendeur livre ET décharge au lieu convenu." },
+  { code: "DDP", label: "DDP", hint: "Rendu droits acquittés : vendeur gère import (droits/taxes) → risqué/compliqué." },
+  { code: "FAS", label: "FAS", hint: "Le long du navire : maritime uniquement (bord à quai)." },
+  { code: "FOB", label: "FOB", hint: "Franco à bord : maritime uniquement (chargé à bord)." },
+  { code: "CFR", label: "CFR", hint: "Coût & fret : maritime uniquement (vendeur paie fret, pas assurance)." },
+  { code: "CIF", label: "CIF", hint: "Coût, assurance & fret : maritime uniquement (assurance minimale)." },
+] as const;
+
+const SEA_ONLY_INCOTERMS = new Set(["FAS", "FOB", "CFR", "CIF"]);
+
+const TRANSPORT_MODES = [
+  { value: "road", label: "Route" },
+  { value: "sea", label: "Maritime" },
+  { value: "air", label: "Aérien" },
+  { value: "rail", label: "Ferroviaire" },
+  { value: "courier", label: "Express / Colis" },
+  { value: "multimodal", label: "Multimodal" },
+] as const;
 
 const TRUST_ITEMS = ["Mise à jour des sanctions quotidienne", "Règles export vérifiées", "Estimation immédiate"];
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const EU_ISO2 = new Set([
-  "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT",
-  "LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE",
-]);
-
-function normalizeStr(s: string) {
-  return (s || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
-
-function confidenceLabel(c?: "low" | "medium" | "high") {
-  if (!c) return "—";
-  if (c === "high") return "Haute";
-  if (c === "medium") return "Moyenne";
-  return "Faible";
-}
-
-function riskLabel(lvl: "low" | "medium" | "high") {
-  if (lvl === "high") return "Élevé";
-  if (lvl === "medium") return "Moyen";
-  return "Faible";
-}
-
-function riskPillClass(lvl: "low" | "medium" | "high") {
-  if (lvl === "high") return "border-red-300 bg-red-500/15 text-red-50";
-  if (lvl === "medium") return "border-amber-300 bg-amber-500/15 text-amber-50";
-  return "border-emerald-300 bg-emerald-500/15 text-emerald-50";
-}
-
-function getTreatyNotesForCountry(iso2: string) {
-  const code = (iso2 || "").toUpperCase();
-  if (!code) return [];
-
-  // Notes “pratiques” (indicatives) pour export depuis France
-  if (EU_ISO2.has(code)) {
-    return [
-      {
-        title: "Spécificité UE (intra-UE)",
-        items: [
-          "Destination dans l’UE : pas de droits de douane (ce n’est pas une exportation au sens douanier).",
-          "Vérifier TVA intracom, exigences de facturation, et obligations statistiques (ex: Intrastat/DEB selon cas).",
-        ],
-      },
-    ];
-  }
-
-  if (code === "GB") {
-    return [
-      {
-        title: "UE ↔ Royaume-Uni",
-        items: [
-          "Accord UE–Royaume-Uni : préférences possibles (droits réduits/0) si règles d’origine respectées.",
-          "Déclaration douanière requise + attention TVA/UK VAT selon schéma.",
-          "Preuve d’origine à prévoir selon l’accord (vérification au cas réel).",
-        ],
-      },
-    ];
-  }
-
-  if (code === "CH") {
-    return [
-      {
-        title: "UE ↔ Suisse",
-        items: [
-          "Accords UE–Suisse : préférences possibles selon règles d’origine.",
-          "Procédures douanières et documents à sécuriser (origine, valeur, incoterms).",
-        ],
-      },
-    ];
-  }
-
-  if (code === "CA") {
-    return [
-      {
-        title: "UE ↔ Canada",
-        items: [
-          "Accord commercial : préférences possibles selon règles d’origine.",
-          "Vérifier la preuve d’origine et les conditions d’éligibilité.",
-        ],
-      },
-    ];
-  }
-
-  if (code === "JP") {
-    return [
-      {
-        title: "UE ↔ Japon",
-        items: [
-          "Accord de partenariat : préférences possibles selon règles d’origine.",
-          "Points sensibles : classification HS, origine et documents.",
-        ],
-      },
-    ];
-  }
-
-  if (code === "KR") {
-    return [
-      {
-        title: "UE ↔ Corée du Sud",
-        items: [
-          "Accord de libre-échange : préférences possibles selon règles d’origine.",
-          "Vérifier l’éligibilité à la préférence tarifaire au cas réel.",
-        ],
-      },
-    ];
-  }
-
-  if (code === "US") {
-    return [
-      {
-        title: "UE ↔ États-Unis",
-        items: [
-          "Pas d’accord préférentiel général : droits de douane applicables selon HS et réglementation US.",
-          "Vérifier exigences documentaires et conformité produit (étiquetage, normes, licences selon cas).",
-        ],
-      },
-    ];
-  }
-
-  // Par défaut : note générique (ça incite à la validation)
-  return [
-    {
-      title: "Traités & préférences",
-      items: [
-        "Selon le pays, des préférences tarifaires peuvent exister (accords, régimes préférentiels) : cela dépend du produit et de l’origine.",
-        "Pour une validation “zéro surprise”, demande une validation express (documents, origine, incoterms).",
-      ],
-    },
-  ];
-}
-
-function extractIso2FromDestinationText(
-  text: string,
-  countries: Array<{ label: string; iso2: string }>
-): { iso2: string; label: string } | null {
-  const raw = (text || "").trim();
-  if (!raw) return null;
-
-  // Si l'utilisateur choisit un format "Pays (XX)"
-  const m = raw.match(/\(([A-Za-z]{2})\)\s*$/);
-  if (m?.[1]) {
-    const iso2 = m[1].toUpperCase();
-    const found = countries.find((c) => c.iso2 === iso2);
-    return { iso2, label: found?.label || iso2 };
-  }
-
-  // Si l'utilisateur tape directement "US"
-  if (/^[A-Za-z]{2}$/.test(raw)) {
-    const iso2 = raw.toUpperCase();
-    const found = countries.find((c) => c.iso2 === iso2);
-    return { iso2, label: found?.label || iso2 };
-  }
-
-  // Match sur label (tolérant accents/casse)
-  const n = normalizeStr(raw);
-  const found = countries.find((c) => normalizeStr(c.label) === n);
-  if (found) return { iso2: found.iso2, label: found.label };
-
-  // Match “commence par”
-  const found2 = countries.find((c) => normalizeStr(c.label).startsWith(n));
-  if (found2) return { iso2: found2.iso2, label: found2.label };
-
-  return null;
+function isIso2(input: string) {
+  return /^[A-Z]{2}$/.test((input || "").trim().toUpperCase());
 }
 
 export default function LeadMagnet() {
@@ -235,12 +91,13 @@ export default function LeadMagnet() {
   const [productOrHs, setProductOrHs] = React.useState("");
   const [destinationIso2, setDestinationIso2] = React.useState("");
   const [destinationLabel, setDestinationLabel] = React.useState("");
-  const [destinationText, setDestinationText] = React.useState("");
-
+  const [destinationOther, setDestinationOther] = React.useState("");
   const [value, setValue] = React.useState("10000");
   const [currency, setCurrency] = React.useState("EUR");
-  const [incoterm, setIncoterm] = React.useState("DAP");
-  const [mode, setMode] = React.useState("sea");
+
+  const [incoterm, setIncoterm] = React.useState<(typeof INCOTERMS)[number]["code"]>("DAP");
+  const [mode, setMode] = React.useState<(typeof TRANSPORT_MODES)[number]["value"]>("sea");
+
   const [weightKg, setWeightKg] = React.useState("");
   const [insurance, setInsurance] = React.useState("");
   const [consent, setConsent] = React.useState(false);
@@ -252,44 +109,9 @@ export default function LeadMagnet() {
 
   const normalizedInput = productOrHs.trim();
   const hsNormalized = normalizedInput.replace(/[^0-9]/g, "");
-  const hsOnly =
-    hsNormalized.length >= 2 &&
-    hsNormalized.length <= 6 &&
-    hsNormalized.length === normalizedInput.length;
-
+  const hsOnly = hsNormalized.length >= 2 && hsNormalized.length <= 6 && hsNormalized.length === normalizedInput.length;
   const inferredHs = hsOnly ? hsNormalized : "";
   const inferredProduct = hsOnly ? "" : normalizedInput;
-
-  // ✅ Tous les pays (si support navigateur), sinon fallback
-  const allCountries = React.useMemo(() => {
-    try {
-      const supported = (Intl as any).supportedValuesOf?.("region") as string[] | undefined;
-      if (!supported?.length) return COUNTRIES_FALLBACK;
-
-      const dn = new Intl.DisplayNames(["fr"], { type: "region" });
-      const list = supported
-        .filter((code) => /^[A-Z]{2}$/.test(code))
-        .map((iso2) => {
-          const label = dn.of(iso2) || iso2;
-          return { iso2, label };
-        })
-        .filter((c) => c.label && c.label !== c.iso2);
-
-      // unique + sort
-      const map = new Map<string, string>();
-      for (const c of list) map.set(c.iso2, c.label);
-      const arr = Array.from(map.entries()).map(([iso2, label]) => ({ iso2, label }));
-      arr.sort((a, b) => a.label.localeCompare(b.label, "fr", { sensitivity: "base" }));
-      return arr.length ? arr : COUNTRIES_FALLBACK;
-    } catch {
-      return COUNTRIES_FALLBACK;
-    }
-  }, []);
-
-  const topCountries = React.useMemo(() => {
-    const m = new Map(allCountries.map((c) => [c.iso2, c]));
-    return TOP_COUNTRY_ISO2.map((iso2) => m.get(iso2)).filter(Boolean) as Array<{ iso2: string; label: string }>;
-  }, [allCountries]);
 
   const hsOptions = React.useMemo(() => {
     const fromHistory = history.map((h) => String(h.payload?.hsInput || "")).filter(Boolean);
@@ -305,39 +127,44 @@ export default function LeadMagnet() {
         setHistory([]);
       }
     }
-
-    const storedEmail = localStorage.getItem("mpl_lead_email");
-    if (storedEmail) setEmail(storedEmail);
   }, []);
 
-  const syncDestinationFromText = (text: string) => {
-    setDestinationText(text);
-    const parsed = extractIso2FromDestinationText(text, allCountries);
-    if (parsed) {
-      setDestinationIso2(parsed.iso2);
-      setDestinationLabel(parsed.label);
-    } else {
-      setDestinationIso2("");
-      setDestinationLabel("");
+  // ✅ Garde-fou : incoterms maritimes only => mode = sea
+  const lastAutoFixRef = React.useRef<string>("");
+  React.useEffect(() => {
+    if (SEA_ONLY_INCOTERMS.has(incoterm) && mode !== "sea") {
+      // éviter spam toast
+      const key = `${incoterm}-${mode}`;
+      if (lastAutoFixRef.current !== key) {
+        lastAutoFixRef.current = key;
+        toast({
+          title: "Mode ajusté",
+          description: `${incoterm} est un incoterm maritime : mode passé à Maritime.`,
+        });
+      }
+      setMode("sea");
     }
-  };
+  }, [incoterm, mode, toast]);
+
+  const finalDestinationIso2 = destinationIso2 === "__OTHER__" ? destinationOther.trim().toUpperCase() : destinationIso2;
 
   const handleEstimate = async () => {
     if (!normalizedInput && hsNormalized.length < 2) {
       toast({ title: "Saisie requise", description: "Saisis un produit ou un code HS (2-6 chiffres)." });
       return;
     }
-    if (!destinationIso2) {
-      toast({ title: "Pays requis", description: "Sélectionne un pays de destination (ou choisis un pays recommandé)." });
+    if (!finalDestinationIso2 || !isIso2(finalDestinationIso2)) {
+      toast({ title: "Pays requis", description: "Sélectionne un pays (ou saisis un ISO2 valide : ex BR)." });
       return;
     }
 
     try {
       setLoading(true);
+
       const payload = {
         hsInput: inferredHs || undefined,
         productText: inferredProduct || undefined,
-        destinationIso2,
+        destinationIso2: finalDestinationIso2,
         value: Number(value || 0),
         currency,
         incoterm,
@@ -355,14 +182,10 @@ export default function LeadMagnet() {
       if (res.error) throw new Error(res.error);
 
       setResult(res);
-
       const entry = { payload, result: res };
-      setHistory((prev) => {
-        const next = [entry, ...prev].slice(0, 6);
-        localStorage.setItem("mpl_last_simulation", JSON.stringify(entry));
-        localStorage.setItem("mpl_sim_history", JSON.stringify(next));
-        return next;
-      });
+      setHistory((prev) => [entry, ...prev].slice(0, 6));
+      localStorage.setItem("mpl_last_simulation", JSON.stringify(entry));
+      localStorage.setItem("mpl_sim_history", JSON.stringify([entry, ...history].slice(0, 6)));
     } catch (err: any) {
       toast({ title: "Erreur estimation", description: err?.message || "Impossible de calculer." });
     } finally {
@@ -380,10 +203,6 @@ export default function LeadMagnet() {
       toast({ title: "Email requis", description: "Ajoute un email pour recevoir le rapport." });
       return;
     }
-    if (!EMAIL_RE.test(trimmedEmail)) {
-      toast({ title: "Email invalide", description: "Vérifie le format de ton email." });
-      return;
-    }
     if (!consent) {
       toast({ title: "Consentement requis", description: "Coche la case RGPD pour continuer." });
       return;
@@ -399,7 +218,7 @@ export default function LeadMagnet() {
         metadata: {
           hsInput: inferredHs,
           productText: inferredProduct,
-          destinationIso2,
+          destinationIso2: finalDestinationIso2,
           incoterm,
           value,
           currency,
@@ -412,7 +231,7 @@ export default function LeadMagnet() {
       const pdfBlob = await postPdf({
         title: "Rapport de contrôle export",
         email: trimmedEmail,
-        destination: destinationLabel || destinationIso2,
+        destination: destinationLabel || finalDestinationIso2,
         incoterm,
         value,
         currency,
@@ -445,14 +264,9 @@ export default function LeadMagnet() {
   const reuseHistory = (entry: { payload: any; result: BriefResponse }) => {
     const p = entry.payload || {};
     setProductOrHs(p.hsInput || p.productText || "");
-
-    const iso2 = p.destinationIso2 || "";
-    const label = allCountries.find((c) => c.iso2 === iso2)?.label || iso2;
-
-    setDestinationIso2(iso2);
-    setDestinationLabel(label);
-    setDestinationText(label ? `${label} (${iso2})` : iso2);
-
+    setDestinationIso2(p.destinationIso2 || "");
+    setDestinationLabel(COUNTRIES.find((c) => c.iso2 === p.destinationIso2)?.label || "");
+    setDestinationOther("");
     setValue(String(p.value || ""));
     setCurrency(p.currency || "EUR");
     setIncoterm(p.incoterm || "DAP");
@@ -493,15 +307,7 @@ export default function LeadMagnet() {
     }
   };
 
-  const score = clamp(Number(result?.complianceScore ?? 0), 0, 100);
-
-  // ✅ Notes traités/spécificités : priorité au backend s’il renvoie countryNotes, sinon fallback UI
-  const treatyBlocks =
-    result?.countryNotes?.length
-      ? result.countryNotes
-      : destinationIso2
-        ? getTreatyNotesForCountry(destinationIso2)
-        : [];
+  const incotermHint = React.useMemo(() => INCOTERMS.find((i) => i.code === incoterm)?.hint || "", [incoterm]);
 
   return (
     <PublicLayout>
@@ -510,7 +316,7 @@ export default function LeadMagnet() {
           <p className="text-xs uppercase tracking-[0.4em] text-blue-200">Audit - Réglementation - Veille</p>
           <h1 className="text-4xl font-semibold leading-tight md:text-6xl">Votre contrôle export en 30 secondes.</h1>
           <p className="text-lg text-slate-200">
-            Estimation immédiate des droits/taxes, documents requis et risques sanctions. Rapport PDF MPL + veille personnalisée.
+            Estimation immédiate des droits/taxes, documents requis, risques sanctions et cohérence incoterm/transport.
           </p>
 
           <div className="flex flex-wrap gap-2">
@@ -543,72 +349,54 @@ export default function LeadMagnet() {
                 <Input
                   value={productOrHs}
                   onChange={(e) => setProductOrHs(e.target.value)}
-                  placeholder="Ex: cosmetique ou 3004"
+                  placeholder="Ex: cosmétique ou 3004"
                   list="hs-list"
                   className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
                 />
               </div>
-
               <datalist id="hs-list">
                 {hsOptions.map((code) => (
                   <option key={code} value={code} />
                 ))}
               </datalist>
 
-              {/* ✅ PAYS RECOMMANDÉS */}
-              <div className="space-y-2 md:col-span-2">
-                <div className="flex items-center justify-between">
-                  <Label>Destination</Label>
-                  <span className="text-xs text-white/70">
-                    Recommandés + recherche (tous les pays)
-                  </span>
-                </div>
+              <div className="space-y-2">
+                <Label>Destination</Label>
+                <Select
+                  value={destinationIso2}
+                  onValueChange={(val) => {
+                    setDestinationIso2(val);
+                    if (val === "__OTHER__") {
+                      setDestinationLabel("Autre pays");
+                      return;
+                    }
+                    setDestinationLabel(COUNTRIES.find((c) => c.iso2 === val)?.label || val);
+                  }}
+                >
+                  <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
+                    <SelectValue placeholder="Sélectionner un pays" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COUNTRIES.map((c) => (
+                      <SelectItem key={c.iso2} value={c.iso2}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__OTHER__">Autre pays (ISO2)</SelectItem>
+                  </SelectContent>
+                </Select>
 
-                <div className="flex flex-wrap gap-2">
-                  {topCountries.map((c) => (
-                    <button
-                      key={c.iso2}
-                      type="button"
-                      onClick={() => {
-                        setDestinationIso2(c.iso2);
-                        setDestinationLabel(c.label);
-                        setDestinationText(`${c.label} (${c.iso2})`);
-                      }}
-                      className={`rounded-full border px-3 py-1 text-xs ${
-                        destinationIso2 === c.iso2
-                          ? "border-white/40 bg-white/20 text-white"
-                          : "border-white/20 bg-white/10 text-white"
-                      }`}
-                    >
-                      {c.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* ✅ Recherche pays */}
-                <Input
-                  value={destinationText}
-                  onChange={(e) => syncDestinationFromText(e.target.value)}
-                  placeholder='Ex: "Suisse" ou "Suisse (CH)"'
-                  list="countries-list"
-                  className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
-                />
-
-                <datalist id="countries-list">
-                  {allCountries.map((c) => (
-                    <option key={c.iso2} value={`${c.label} (${c.iso2})`} />
-                  ))}
-                </datalist>
-
-                {!destinationIso2 && destinationText ? (
-                  <div className="text-xs text-white/70">
-                    Sélectionne une proposition (ex: “Suisse (CH)”) pour valider le pays.
+                {destinationIso2 === "__OTHER__" && (
+                  <div className="mt-2">
+                    <Input
+                      value={destinationOther}
+                      onChange={(e) => setDestinationOther(e.target.value.toUpperCase())}
+                      placeholder="Ex: BR, SA, AU…"
+                      className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+                    />
+                    <p className="mt-1 text-xs text-slate-200">Saisir le code ISO2 (2 lettres).</p>
                   </div>
-                ) : destinationIso2 ? (
-                  <div className="text-xs text-white/70">
-                    Pays sélectionné : <span className="font-semibold text-white">{destinationLabel}</span> ({destinationIso2})
-                  </div>
-                ) : null}
+                )}
               </div>
 
               <div className="space-y-2">
@@ -622,24 +410,35 @@ export default function LeadMagnet() {
               </div>
 
               <div className="space-y-2">
-                <Label>Incoterm</Label>
-                <Select value={incoterm} onValueChange={setIncoterm}>
+                <Label>Incoterm (2020)</Label>
+                <Select
+                  value={incoterm}
+                  onValueChange={(val) => {
+                    setIncoterm(val as any);
+                    if (SEA_ONLY_INCOTERMS.has(val) && mode !== "sea") {
+                      setMode("sea");
+                      toast({ title: "Mode ajusté", description: `${val} est maritime : mode passé à Maritime.` });
+                    }
+                  }}
+                >
                   <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="EXW">EXW</SelectItem>
-                    <SelectItem value="FCA">FCA</SelectItem>
-                    <SelectItem value="DAP">DAP</SelectItem>
-                    <SelectItem value="DDP">DDP</SelectItem>
+                    {INCOTERMS.map((i) => (
+                      <SelectItem key={i.code} value={i.code}>
+                        {i.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {!!incotermHint && <p className="text-xs text-slate-200">{incotermHint}</p>}
               </div>
             </div>
 
             <Accordion type="single" collapsible>
               <AccordionItem value="advanced">
-                <AccordionTrigger className="text-white">Options avancees</AccordionTrigger>
+                <AccordionTrigger className="text-white">Options avancées</AccordionTrigger>
                 <AccordionContent>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2">
@@ -655,19 +454,26 @@ export default function LeadMagnet() {
                         </SelectContent>
                       </Select>
                     </div>
+
                     <div className="space-y-2">
                       <Label>Mode transport</Label>
-                      <Select value={mode} onValueChange={setMode}>
+                      <Select value={mode} onValueChange={(v) => setMode(v as any)}>
                         <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="air">Air</SelectItem>
-                          <SelectItem value="sea">Maritime</SelectItem>
-                          <SelectItem value="road">Route</SelectItem>
+                          {TRANSPORT_MODES.map((m) => (
+                            <SelectItem key={m.value} value={m.value}>
+                              {m.label}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
+                      {SEA_ONLY_INCOTERMS.has(incoterm) && (
+                        <p className="text-xs text-slate-200">Cet incoterm impose un transport maritime.</p>
+                      )}
                     </div>
+
                     <div className="space-y-2">
                       <Label>Poids (kg)</Label>
                       <Input
@@ -677,6 +483,7 @@ export default function LeadMagnet() {
                         className="border-white/20 bg-white/90 text-slate-900"
                       />
                     </div>
+
                     <div className="space-y-2">
                       <Label>Assurance (EUR)</Label>
                       <Input
@@ -685,6 +492,9 @@ export default function LeadMagnet() {
                         type="number"
                         className="border-white/20 bg-white/90 text-slate-900"
                       />
+                      {(incoterm === "CIF" || incoterm === "CIP") && (
+                        <p className="text-xs text-slate-200">CIF/CIP : l’assurance est généralement attendue (niveau variable).</p>
+                      )}
                     </div>
                   </div>
                 </AccordionContent>
@@ -696,7 +506,7 @@ export default function LeadMagnet() {
             </Button>
 
             <p className="text-xs text-slate-200">
-              Résultat immédiat, sans email. L'email sert uniquement a recevoir le PDF et activer la veille.
+              Résultat immédiat, sans email. L'email sert uniquement à recevoir le PDF et activer la veille.
             </p>
           </CardContent>
         </Card>
@@ -710,31 +520,13 @@ export default function LeadMagnet() {
                 <div className="text-xs uppercase tracking-[0.25em] text-slate-200">Résumé</div>
                 <div className="text-2xl font-semibold md:text-3xl">Estimation & conformité</div>
               </div>
-              <div className="text-xs text-slate-200">
-                Dernière mise à jour: {result?.updatedAt ? formatDateTimeFr(result.updatedAt) : "—"}
-              </div>
+              <div className="text-xs text-slate-200">Dernière mise à jour: {formatDateTimeFr(result?.updatedAt)}</div>
             </div>
 
             {!result ? (
               <p className="mt-4 text-sm text-slate-200">Saisis un HS ou produit pour obtenir un résumé.</p>
             ) : (
-              <div className="mt-5 space-y-4">
-                {/* Score conformité */}
-                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-xs uppercase text-slate-200">Score conformité</div>
-                      <div className="text-lg font-semibold text-white">{score}/100</div>
-                    </div>
-                    <div className="text-xs text-slate-200">
-                      Confiance: <span className="font-semibold text-white">{confidenceLabel(result.confidence)}</span>
-                    </div>
-                  </div>
-                  <div className="mt-3 h-2 w-full rounded-full bg-white/15">
-                    <div className="h-2 rounded-full bg-white/70" style={{ width: `${score}%` }} />
-                  </div>
-                </div>
-
+              <div className="mt-5 space-y-6">
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-xl border border-white/15 bg-white/5 p-3">
                     <div className="text-xs text-slate-200">Droits estimés</div>
@@ -765,58 +557,41 @@ export default function LeadMagnet() {
                       ))}
                     </ul>
                   </div>
+
                   <div>
                     <div className="text-xs uppercase text-slate-200">Risques</div>
                     <ul className="mt-2 space-y-2 text-sm text-slate-100">
                       {result.risks.map((risk) => (
-                        <li key={risk.title} className="rounded-lg border border-white/15 bg-white/5 p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="font-semibold text-white">{risk.title}</div>
-                            <span className={`rounded-full border px-2 py-1 text-[11px] ${riskPillClass(risk.level)}`}>
-                              {riskLabel(risk.level)}
-                            </span>
-                          </div>
-                          <div className="mt-1 text-slate-200">{risk.message}</div>
+                        <li key={risk.title} className="rounded-lg border border-white/15 bg-white/5 p-2">
+                          <div className="font-semibold text-white">{risk.title}</div>
+                          <div className="text-slate-200">{risk.message}</div>
                         </li>
                       ))}
                     </ul>
                   </div>
                 </div>
 
-                {/* ✅ TRAITÉS / SPÉCIFICITÉS PAYS */}
-                {treatyBlocks.length > 0 && (
-                  <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                    <div className="text-xs uppercase text-slate-200">
-                      Traités & spécificités pays (indication)
-                    </div>
-                    <div className="mt-3 space-y-3">
-                      {treatyBlocks.map((b) => (
-                        <div key={b.title}>
-                          <div className="font-semibold text-white">{b.title}</div>
-                          <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-slate-200">
-                            {b.items.map((it) => (
+                {/* ✅ Traités / spécificités */}
+                {Array.isArray(result.countryNotes) && result.countryNotes.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="text-xs uppercase text-slate-200">Traités & spécificités pays</div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {result.countryNotes.map((block) => (
+                        <div key={block.title} className="rounded-xl border border-white/15 bg-white/5 p-3">
+                          <div className="font-semibold text-white">{block.title}</div>
+                          <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-slate-200">
+                            {block.items.map((it) => (
                               <li key={it}>{it}</li>
                             ))}
                           </ul>
                         </div>
                       ))}
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-3">
-                      <Button variant="secondary" onClick={() => navigate(`/contact?offer=express&country=${destinationIso2}`)}>
-                        Valider avec un expert (express)
-                      </Button>
-                      <Button variant="outline" className="border-white text-white hover:bg-white/10" onClick={() => navigate(`/contact?offer=audit&country=${destinationIso2}`)}>
-                        Audit complet
-                      </Button>
-                    </div>
-                    <div className="mt-2 text-xs text-white/70">
-                      Ces indications seront “vérifiées” automatiquement quand l’API renverra les traités/règles applicables au couple (produit + pays).
-                    </div>
                   </div>
                 )}
 
                 <div className="rounded-xl border border-white/15 bg-white/5 p-3 text-xs text-slate-200">
-                  Confiance: {result.confidence} - Sources: {result.sources?.join(", ") || "Règles internes"}
+                  Confiance: {result.confidence} — Sources: {result.sources?.join(", ") || "Règles internes"}
                 </div>
               </div>
             )}
@@ -843,18 +618,25 @@ export default function LeadMagnet() {
             <div className="pt-2">
               <div className="text-xs uppercase text-slate-200">Historique</div>
               {history.length === 0 ? (
-                <div className="text-sm text-slate-200">Aucune simulation recente.</div>
+                <div className="text-sm text-slate-200">Aucune simulation récente.</div>
               ) : (
                 <div className="space-y-2">
                   {history.map((entry, idx) => (
                     <div key={idx} className="rounded-lg border border-white/15 bg-white/5 p-2 text-xs">
                       <div className="font-semibold text-white">
-                        {entry.payload?.destinationIso2 || "Pays"} - HS {entry.payload?.hsInput || "n/a"}
+                        {entry.payload?.destinationIso2 || "Pays"} — HS {entry.payload?.hsInput || "n/a"}
                       </div>
-                      <div className="text-slate-200">{entry.payload?.value || 0} {entry.payload?.currency || "EUR"}</div>
+                      <div className="text-slate-200">
+                        {entry.payload?.value || 0} {entry.payload?.currency || "EUR"} — {entry.payload?.incoterm || "DAP"} /{" "}
+                        {entry.payload?.mode || "sea"}
+                      </div>
                       <div className="mt-2 flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => reuseHistory(entry)}>Réutiliser</Button>
-                        <Button size="sm" onClick={() => downloadHistoryReport(entry)}>PDF</Button>
+                        <Button size="sm" variant="outline" onClick={() => reuseHistory(entry)}>
+                          Réutiliser
+                        </Button>
+                        <Button size="sm" onClick={() => downloadHistoryReport(entry)}>
+                          PDF
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -869,12 +651,13 @@ export default function LeadMagnet() {
         <div className="rounded-2xl border border-white/15 bg-white/10 p-6 text-white backdrop-blur-xl">
           <div className="text-xs uppercase tracking-[0.24em] text-blue-200">Ce que vous obtenez</div>
           <ul className="mt-4 list-disc space-y-2 pl-4 text-sm text-slate-200">
-            <li>Estimation droits & taxes</li>
-            <li>Documents requis par pays</li>
-            <li>Risques sanctions & conformité</li>
+            <li>Estimation droits & taxes (indicatif)</li>
+            <li>Documents requis par pays & mode</li>
+            <li>Risques sanctions & cohérence incoterm/transport</li>
             <li>Rapport PDF brand MPL</li>
           </ul>
         </div>
+
         <div className="rounded-2xl border border-white/15 bg-white/10 p-6 text-white backdrop-blur-xl">
           <div className="text-xs uppercase tracking-[0.24em] text-blue-200">Comment ça marche</div>
           <ol className="mt-4 space-y-2 text-sm text-slate-200">
@@ -883,6 +666,7 @@ export default function LeadMagnet() {
             <li>3. Reçois le rapport PDF</li>
           </ol>
         </div>
+
         <div className="rounded-2xl border border-white/15 bg-white/10 p-6 text-white backdrop-blur-xl">
           <div className="text-xs uppercase tracking-[0.24em] text-blue-200">Centre veille</div>
           <p className="mt-4 text-sm text-slate-200">
@@ -900,7 +684,9 @@ export default function LeadMagnet() {
           <div className="text-2xl font-semibold">Demandez un audit complet ou une validation express.</div>
         </div>
         <div className="flex gap-3">
-          <Button variant="secondary" onClick={() => navigate("/contact?offer=express")}>Validation express</Button>
+          <Button variant="secondary" onClick={() => navigate("/contact?offer=express")}>
+            Validation express
+          </Button>
           <Button variant="outline" className="border-white text-white hover:bg-white/10" onClick={() => navigate("/newsletter")}>
             Recevoir la veille
           </Button>
