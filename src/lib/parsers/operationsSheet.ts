@@ -1,4 +1,4 @@
-import type { OperationEntry, OperationZone } from "./types/operations";
+import type { OperationEntry, OperationZone } from "./types/operations.js";
 
 const MONTH_MAP: Record<string, string> = {
   janv: "01",

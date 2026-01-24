@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { normalizeSheet, type RawOperationRow } from "../src/lib/parsers/operationsSheet";
+import { normalizeSheet, type RawOperationRow } from "../src/lib/parsers/operationsSheet.js";
 
 // ─────────────────────────────────────────────────────────────
 // Types
