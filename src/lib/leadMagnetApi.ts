@@ -38,6 +38,12 @@ export type AlertsResponse = {
   }>;
 };
 
+export type PrefsPayload = {
+  email: string;
+  countries: string[];
+  hsCodes: string[];
+};
+
 export async function postLead(payload: LeadPayload): Promise<LeadResponse> {
   const res = await fetch("/api/lead", {
     method: "POST",
@@ -68,4 +74,15 @@ export async function getAlerts(email?: string): Promise<AlertsResponse> {
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error || "alerts failed");
   return data as AlertsResponse;
+}
+
+export async function postPrefs(payload: PrefsPayload): Promise<{ ok: boolean }> {
+  const res = await fetch("/api/prefs", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || "prefs failed");
+  return data as { ok: boolean };
 }

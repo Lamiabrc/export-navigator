@@ -26,7 +26,7 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   email: string | null;
-  onSaved?: () => void;
+  onSaved-: () => void;
 };
 
 export function OnboardingPrefsModal({ open, onOpenChange, email, onSaved }: Props) {
@@ -43,7 +43,7 @@ export function OnboardingPrefsModal({ open, onOpenChange, email, onSaved }: Pro
 
   const toggleCountry = (code: string) => {
     setCountries((prev) =>
-      prev.includes(code) ? prev.filter((c) => c !== code) : prev.length < 3 ? [...prev, code] : prev,
+      prev.includes(code) - prev.filter((c) => c !== code) : prev.length < 3 - [...prev, code] : prev,
     );
   };
 
@@ -69,10 +69,10 @@ export function OnboardingPrefsModal({ open, onOpenChange, email, onSaved }: Pro
       await postPrefs({ email, countries, hsCodes });
       localStorage.setItem("mpl_user_prefs", JSON.stringify({ countries, hsCodes }));
       toast({ title: "Preferences enregistrees", description: "La veille est personnalisee." });
-      onSaved?.();
+      onSaved-.();
       onOpenChange(false);
     } catch (err: any) {
-      toast({ title: "Erreur preferences", description: err?.message || "Impossible d'enregistrer." });
+      toast({ title: "Erreur preferences", description: err-.message || "Impossible d'enregistrer." });
     } finally {
       setSaving(false);
     }
@@ -84,7 +84,7 @@ export function OnboardingPrefsModal({ open, onOpenChange, email, onSaved }: Pro
         <DialogHeader>
           <DialogTitle>Activer la veille personnalisee</DialogTitle>
           <DialogDescription>
-            Choisis jusqu'a 3 pays et 5 codes HS pour recevoir des alertes ciblées.
+            Choisis jusqu'a 3 pays et 5 codes HS pour recevoir des alertes ciblï¿½es.
           </DialogDescription>
         </DialogHeader>
 
@@ -120,14 +120,14 @@ export function OnboardingPrefsModal({ open, onOpenChange, email, onSaved }: Pro
                 <button
                   key={code}
                   type="button"
-                  onClick={() => setHsInput((prev) => (prev ? `${prev}, ${code}` : code))}
+                  onClick={() => setHsInput((prev) => (prev - `${prev}, ${code}` : code))}
                   className="rounded-full border border-border px-2 py-1 hover:bg-muted"
                 >
                   {code}
                 </button>
               ))}
             </div>
-            <div className="text-xs text-muted-foreground">Selection: {hsCodes.join(" • ") || "—"}</div>
+            <div className="text-xs text-muted-foreground">Selection: {hsCodes.join(" ï¿½ ") || "ï¿½"}</div>
           </div>
         </div>
 
@@ -136,10 +136,10 @@ export function OnboardingPrefsModal({ open, onOpenChange, email, onSaved }: Pro
             Plus tard
           </Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Enregistrement..." : "Activer la veille"}
+            {saving - "Enregistrement..." : "Activer la veille"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
-}
+}
