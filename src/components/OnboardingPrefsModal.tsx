@@ -140,7 +140,7 @@ export function OnboardingPrefsModal({ open, onOpenChange, email, onSaved }: Pro
 
       toast({ title: "Preferences enregistrees", description: "La veille est personnalisee." });
 
-      onSaved-.();
+      onSaved?.();
 
       onOpenChange(false);
 
