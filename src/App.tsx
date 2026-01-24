@@ -43,6 +43,7 @@ import Veille from "@/pages/Veille";
 import Resources from "@/pages/Resources";
 import Tarifs from "@/pages/Tarifs";
 import Contact from "@/pages/Contact";
+import InternalResources from "@/pages/InternalResources";
 
 const queryClient = new QueryClient();
 
@@ -211,6 +212,14 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <Settings />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/app/internal/resources"
+                    element={
+                      <ProtectedRoute>
+                        <InternalResources />
                       </ProtectedRoute>
                     }
                   />

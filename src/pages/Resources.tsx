@@ -1,123 +1,233 @@
 import * as React from "react";
+import { useNavigate } from "react-router-dom";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { postLead, postPdf } from "@/lib/leadMagnetApi";
 import { useToast } from "@/hooks/use-toast";
-import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
-import { isMissingTableError } from "@/domain/calc/validators";
 
-const steps = [
-  "Verifier VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY",
-  "Executer la migration SQL 000_init_mpl.sql",
-  "Lancer le seed demo pour alimenter les ecrans",
-  "Verifier Control Tower + Centre veille + Produits",
+const GUIDES = [
+  {
+    title: "Guide export 2025",
+    description: "Les etapes pour exporter sans blocage: HS, incoterms, documents et TVA.",
+    tag: "Basics",
+    action: "Lire",
+  },
+  {
+    title: "Incoterms en pratique",
+    description: "Choisir le bon incoterm selon le pays, le risque et la responsabilite.",
+    tag: "Incoterms",
+    action: "Lire",
+  },
+  {
+    title: "Controle des sanctions",
+    description: "Verifier les restrictions et signaux sensibles avant expédition.",
+    tag: "Sanctions",
+    action: "Lire",
+  },
+  {
+    title: "TVA & droits",
+    description: "Comprendre les droits de douane, TVA a l'import et regles locales.",
+    tag: "Taxes",
+    action: "Lire",
+  },
 ];
 
-const REQUIRED_TABLES = ["products", "regulatory_feeds", "regulatory_items", "alerts", "leads", "simulations"];
+const TEMPLATES = [
+  {
+    title: "Checklist export",
+    description: "Checklist operationnelle pour ne rien oublier avant l'expedition.",
+    tag: "Documents",
+    action: "Telecharger",
+  },
+  {
+    title: "Facture commerciale",
+    description: "Modele de facture commerciale conforme (avec mentions critiques).",
+    tag: "Facturation",
+    action: "Telecharger",
+  },
+  {
+    title: "Packing list",
+    description: "Modele de packing list pour faciliter le dedouanement.",
+    tag: "Logistique",
+    action: "Telecharger",
+  },
+];
 
-type Status = "unknown" | "ok" | "missing" | "unavailable";
+const OFFICIAL_LINKS = [
+  {
+    title: "EU TARIC",
+    description: "Base officielle des droits de douane et restrictions UE.",
+    tag: "Douanes",
+    action: "Lire",
+  },
+  {
+    title: "OFAC Sanctions",
+    description: "Sanctions US a jour et listes de personnes/entites.",
+    tag: "Sanctions",
+    action: "Lire",
+  },
+  {
+    title: "ICC Incoterms",
+    description: "Reference officielle ICC sur les incoterms.",
+    tag: "Incoterms",
+    action: "Lire",
+  },
+  {
+    title: "UN Comtrade",
+    description: "Statistiques douanieres mondiales par HS.",
+    tag: "Data",
+    action: "Lire",
+  },
+];
 
 export default function Resources() {
+  const navigate = useNavigate();
   const { toast } = useToast();
-  const [status, setStatus] = React.useState<Status>("unknown");
-  const [missing, setMissing] = React.useState<string[]>([]);
-  const [checking, setChecking] = React.useState(false);
+  const [email, setEmail] = React.useState("");
+  const [consent, setConsent] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
 
-  React.useEffect(() => {
-    const flag = localStorage.getItem("mpl_db_initialized");
-    if (flag === "true") setStatus("ok");
-  }, []);
-
-  const checkDatabase = async () => {
-    if (!SUPABASE_ENV_OK) {
-      setStatus("unavailable");
-      setMissing([]);
-      toast({ title: "Mode demo", description: "Connexion base indisponible. Configure Supabase pour activer la base." });
+  const requestKit = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) {
+      toast({ title: "Email requis", description: "Ajoute un email pour recevoir le kit." });
+      return;
+    }
+    if (!consent) {
+      toast({ title: "Consentement requis", description: "Coche la case RGPD pour continuer." });
       return;
     }
 
-    setChecking(true);
-    setMissing([]);
     try {
-      const missingTables: string[] = [];
-      for (const table of REQUIRED_TABLES) {
-        const { error } = await supabase.from(table).select("id", { head: true, count: "exact" }).limit(1);
-        if (error) {
-          if (isMissingTableError(error)) {
-            missingTables.push(table);
-            continue;
-          }
-          throw error;
-        }
-      }
+      setLoading(true);
+      await postLead({
+        email: trimmedEmail,
+        consent: true,
+        metadata: { source: "resources_kit" },
+      });
 
-      if (missingTables.length) {
-        setStatus("missing");
-        setMissing(missingTables);
-        localStorage.setItem("mpl_db_initialized", "false");
-        toast({
-          title: "Tables manquantes",
-          description: `Il manque: ${missingTables.join(", ")}`,
-        });
-        return;
-      }
+      const pdfBlob = await postPdf({
+        title: "Kit Export - Checklist & Modeles",
+        email: trimmedEmail,
+      });
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `mpl-kit-export-${Date.now()}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
 
-      setStatus("ok");
-      setMissing([]);
-      localStorage.setItem("mpl_db_initialized", "true");
-      toast({ title: "Base initialisee", description: "Toutes les tables minimales sont presentes." });
+      toast({ title: "Kit envoye", description: "Le kit export est telecharge." });
     } catch (err: any) {
-      setStatus("missing");
-      localStorage.setItem("mpl_db_initialized", "false");
-      toast({ title: "Verification impossible", description: "Impossible de verifier la base pour le moment." });
+      toast({ title: "Erreur", description: err?.message || "Impossible de generer le kit." });
     } finally {
-      setChecking(false);
+      setLoading(false);
     }
   };
 
   return (
     <PublicLayout>
-      <div className="space-y-8">
-        <div>
-          <p className="text-xs uppercase tracking-[0.35em] text-blue-700">Ressources</p>
-          <h1 className="text-4xl font-semibold text-slate-900">Guides et documentation</h1>
-          <p className="text-lg text-slate-600">
-            Les ressources pour initialiser Supabase, activer le mode demo et garder une base propre.
+      <div className="mx-auto max-w-6xl space-y-10">
+        <div className="space-y-3 text-white">
+          <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Centre de ressources</p>
+          <h1 className="text-4xl font-semibold">Ressources Export Premium</h1>
+          <p className="text-lg text-slate-200">
+            Guides, modeles et liens officiels pour securiser chaque expédition.
           </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
           <div>
-            <div className="text-sm font-semibold">Migration Supabase</div>
-            <p className="mt-2 text-sm text-slate-600">
-              Le fichier SQL est fourni dans <code className="rounded bg-slate-100 px-2 py-0.5">supabase/migrations/000_init_mpl.sql</code>.
-              Il cree les tables minimales et insere des donnees demo.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={checkDatabase} disabled={checking}>
-              {checking ? "Verification..." : "Verifier la base"}
-            </Button>
-            {status === "ok" ? (
-              <span className="text-sm text-emerald-600 font-semibold">Base initialisee</span>
-            ) : null}
-            {status === "missing" && missing.length ? (
-              <span className="text-sm text-amber-700">Tables manquantes: {missing.join(", ")}</span>
-            ) : null}
-            {status === "unavailable" ? (
-              <span className="text-sm text-slate-500">Connexion base indisponible</span>
-            ) : null}
+            <Button onClick={() => navigate("/contact?offer=express")}>Validation express</Button>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-          <div className="text-sm font-semibold">Checklist d'initialisation</div>
-          <ul className="mt-3 space-y-2 text-sm text-slate-600">
-            {steps.map((item) => (
-              <li key={item}>- {item}</li>
-            ))}
-          </ul>
-        </div>
+        <Card className="border border-white/15 bg-white/10 text-white shadow-2xl backdrop-blur-xl">
+          <CardContent className="space-y-5 p-7 md:p-8">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-xs uppercase tracking-[0.25em] text-blue-200">Kit export</div>
+                <div className="text-2xl font-semibold">Telecharger le Kit Export (PDF)</div>
+                <p className="text-sm text-slate-200">
+                  Checklist complete + modeles indispensables (facture commerciale, packing list, incoterms).
+                </p>
+              </div>
+              <div className="text-xs text-white/70">Gratuit, reserve aux exportateurs.</div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-[1.2fr_1fr]">
+              <Input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email professionnel"
+                className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+              />
+              <Button onClick={requestKit} disabled={loading}>
+                {loading ? "Generation..." : "Recevoir le kit"}
+              </Button>
+            </div>
+            <label className="flex items-start gap-2 text-xs text-slate-200">
+              <Checkbox checked={consent} onCheckedChange={(v) => setConsent(Boolean(v))} />
+              <span>J'accepte de recevoir la veille MPL (RGPD).</span>
+            </label>
+          </CardContent>
+        </Card>
+
+        <section className="grid gap-6 md:grid-cols-2">
+          <Card className="border border-white/15 bg-white/10 text-white backdrop-blur-xl">
+            <CardContent className="space-y-4 p-6">
+              <div className="text-lg font-semibold">Guides</div>
+              <div className="space-y-3">
+                {GUIDES.map((item) => (
+                  <div key={item.title} className="rounded-xl border border-white/15 bg-white/5 p-4">
+                    <div className="text-xs uppercase text-blue-200">{item.tag}</div>
+                    <div className="text-base font-semibold">{item.title}</div>
+                    <div className="text-sm text-slate-200">{item.description}</div>
+                    <Button size="sm" variant="outline" className="mt-3 border-white text-white hover:bg-white/10">
+                      {item.action}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-white/15 bg-white/10 text-white backdrop-blur-xl">
+            <CardContent className="space-y-4 p-6">
+              <div className="text-lg font-semibold">Modeles</div>
+              <div className="space-y-3">
+                {TEMPLATES.map((item) => (
+                  <div key={item.title} className="rounded-xl border border-white/15 bg-white/5 p-4">
+                    <div className="text-xs uppercase text-blue-200">{item.tag}</div>
+                    <div className="text-base font-semibold">{item.title}</div>
+                    <div className="text-sm text-slate-200">{item.description}</div>
+                    <Button size="sm" variant="outline" className="mt-3 border-white text-white hover:bg-white/10">
+                      {item.action}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <Card className="border border-white/15 bg-white/10 text-white backdrop-blur-xl">
+          <CardContent className="space-y-4 p-6">
+            <div className="text-lg font-semibold">Liens officiels</div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {OFFICIAL_LINKS.map((item) => (
+                <div key={item.title} className="rounded-xl border border-white/15 bg-white/5 p-4">
+                  <div className="text-xs uppercase text-blue-200">{item.tag}</div>
+                  <div className="text-base font-semibold">{item.title}</div>
+                  <div className="text-sm text-slate-200">{item.description}</div>
+                  <Button size="sm" variant="outline" className="mt-3 border-white text-white hover:bg-white/10">
+                    {item.action}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </PublicLayout>
   );
