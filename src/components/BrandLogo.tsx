@@ -20,9 +20,9 @@ type BrandLogoProps = {
 };
 
 const sizeConfig: Record<BrandSize, { img: string; title: string; subtitle: string; location: string; gap: string }> = {
-  sm: { img: "h-8", title: "text-sm", subtitle: "text-xs", location: "text-[11px]", gap: "gap-2" },
-  md: { img: "h-10", title: "text-sm", subtitle: "text-xs", location: "text-[11px]", gap: "gap-3" },
-  lg: { img: "h-12", title: "text-base", subtitle: "text-sm", location: "text-xs", gap: "gap-3" },
+  sm: { img: "h-9", title: "text-sm", subtitle: "text-xs", location: "text-[11px]", gap: "gap-2" },
+  md: { img: "h-12", title: "text-base", subtitle: "text-sm", location: "text-xs", gap: "gap-3" },
+  lg: { img: "h-14", title: "text-lg", subtitle: "text-sm", location: "text-xs", gap: "gap-4" },
 };
 
 export function BrandLogo({
@@ -47,7 +47,7 @@ export function BrandLogo({
       <img
         src={logoSrc}
         alt="Logo MPL Conseil Export"
-        className={cn(styles.img, "w-auto drop-shadow-sm shrink-0", imageClassName)}
+        className={cn(styles.img, "w-auto drop-shadow-md shrink-0", imageClassName)}
         loading="lazy"
       />
       {showText && (
