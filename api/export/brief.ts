@@ -1,82 +1,70 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "crypto";
 
 const HIGH_RISK = new Set(["RU", "IR", "KP", "SY", "BY"]);
 
-// UE (pour détecter intra-UE)
 const EU_MEMBERS = new Set([
   "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT",
   "LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE",
 ]);
 
-// Accords / cadres utiles (indications — la préférence tarifaire dépend des règles d’origine)
 type Agreement = {
   name: string;
-  inForceSince?: string;
-  note?: string;
+  note: string;
   proofHint?: string;
-  link?: string; // ok dans le code
+  link?: string;
 };
 
+// ⚠️ On reste sur des accords “très stables / connus” pour éviter les erreurs.
+// Pour une couverture parfaite “par pays”, on mettra ça en table Supabase (trade_agreements).
 const AGREEMENTS: Record<string, Agreement> = {
   GB: {
     name: "Accord UE–Royaume-Uni (TCA)",
-    inForceSince: "2021",
-    note: "Préférences possibles (droits réduits/0) si règles d’origine respectées.",
-    proofHint: "Souvent via 'statement on origin' / déclaration d’origine (à valider selon cas).",
+    note: "Préférences possibles si règles d’origine respectées (selon produit).",
+    proofHint: "Prévoir une preuve/déclaration d’origine selon le cadre.",
     link: "https://trade.ec.europa.eu/access-to-markets/en/content/eu-uk-trade-and-cooperation-agreement",
   },
   CH: {
-    name: "Accords UE–Suisse (Pan-Euro-Med / origine préférentielle)",
-    note: "Préférences possibles selon règles d’origine (convention Pan-Euro-Med).",
-    proofHint: "Preuve d’origine selon régime applicable (déclaration / certificat selon cas).",
+    name: "Accords UE–Suisse",
+    note: "Préférences possibles selon règles d’origine (selon produit).",
+    proofHint: "Preuve d’origine selon le régime applicable (à valider).",
     link: "https://trade.ec.europa.eu/access-to-markets/en/content/switzerland",
   },
   CA: {
     name: "Accord UE–Canada (CETA)",
-    note: "Préférences possibles selon règles d’origine.",
-    proofHint: "Preuve d’origine / déclaration selon le cadre (à valider).",
+    note: "Préférences possibles selon règles d’origine (selon produit).",
+    proofHint: "Preuve d’origine selon le cadre (à valider).",
     link: "https://policy.trade.ec.europa.eu/eu-trade-relationships-country-and-region/countries-and-regions/canada_en",
   },
   JP: {
     name: "Accord UE–Japon (EPA)",
-    note: "Préférences possibles selon règles d’origine.",
+    note: "Préférences possibles selon règles d’origine (selon produit).",
     proofHint: "Preuve d’origine selon le cadre (à valider).",
     link: "https://policy.trade.ec.europa.eu/eu-trade-relationships-country-and-region/countries-and-regions/japan_en",
   },
   KR: {
     name: "Accord UE–Corée du Sud",
-    note: "Préférences possibles selon règles d’origine.",
+    note: "Préférences possibles selon règles d’origine (selon produit).",
     proofHint: "Preuve d’origine selon le cadre (à valider).",
     link: "https://policy.trade.ec.europa.eu/eu-trade-relationships-country-and-region/countries-and-regions/south-korea_en",
   },
   SG: {
     name: "Accord UE–Singapour",
-    inForceSince: "2019",
-    note: "Préférences possibles selon règles d’origine.",
+    note: "Préférences possibles selon règles d’origine (selon produit).",
     proofHint: "Preuve d’origine selon le cadre (à valider).",
     link: "https://trade.ec.europa.eu/access-to-markets/en/content/eu-singapore-free-trade-agreement",
   },
   VN: {
     name: "Accord UE–Vietnam",
-    inForceSince: "2020",
-    note: "Préférences possibles selon règles d’origine.",
+    note: "Préférences possibles selon règles d’origine (selon produit).",
     proofHint: "Preuve d’origine selon le cadre (à valider).",
     link: "https://trade.ec.europa.eu/access-to-markets/en/content/eu-vietnam-free-trade-agreement",
   },
-  NZ: {
-    name: "Accord UE–Nouvelle-Zélande",
-    inForceSince: "2024",
-    note: "Préférences possibles selon règles d’origine.",
-    proofHint: "Preuve d’origine selon le cadre (à valider).",
-    link: "https://trade.ec.europa.eu/access-to-markets/en/content/eu-new-zealand-free-trade-agreement",
-  },
-  CL: {
-    name: "Accord UE–Chili (Interim Trade Agreement – ITA)",
-    inForceSince: "2025",
-    note: "Préférences possibles selon règles d’origine.",
-    proofHint: "Preuve d’origine selon le cadre (à valider).",
-    link: "https://trade.ec.europa.eu/access-to-markets/en/content/eu-chile-interim-trade-agreement",
+  US: {
+    name: "États-Unis (pas d’accord préférentiel général)",
+    note: "Droits de douane applicables selon HS + règles US (selon produit).",
+    proofHint: "Vérifier exigences (étiquetage, normes, licences) selon produit.",
   },
 };
 
@@ -103,7 +91,6 @@ async function fetchWitsDuty(destIso2: string, hsInput: string) {
   if (hs.length < 4) return null;
   const hs6 = hs.slice(0, 6);
 
-  // NOTE: WITS fonctionne surtout pour des estimations; l’API peut évoluer.
   const url = `https://wits.worldbank.org/API/V1/SDMX/V21/datasource/TRN/reporter/${destIso2}/partner/ALL/product/${hs6}/year/2022/datatype/reported?format=JSON`;
   const res = await fetch(url, { method: "GET" });
   if (!res.ok) return null;
@@ -116,14 +103,20 @@ async function fetchWitsDuty(destIso2: string, hsInput: string) {
   const obs = series[firstKey]?.observations;
   const obsKey = obs && Object.keys(obs)[0];
   const value = obs && obs[obsKey]?.[0];
-
   const rate = Number(value);
+
   if (!Number.isFinite(rate)) return null;
   return rate;
 }
 
 function buildDocsFallback() {
-  return ["Commercial invoice", "Packing list", "Transport document", "Export declaration", "Certificate of origin"];
+  return [
+    "Commercial invoice",
+    "Packing list",
+    "Transport document",
+    "Export declaration",
+    "Certificate of origin",
+  ];
 }
 
 function buildDocsIntraEU() {
@@ -141,14 +134,13 @@ function buildCountryNotes(params: {
   productText: string;
   incoterm: string;
   mode: string;
-  sources: string[];
 }) {
   const { destinationIso2, hsInput, productText, incoterm, mode } = params;
   const notes: Array<{ title: string; items: string[] }> = [];
 
   const isIntraEU = EU_MEMBERS.has(destinationIso2);
 
-  // 1) Contexte pays / traité
+  // Traité / cadre pays
   if (isIntraEU) {
     notes.push({
       title: "Spécificité UE (intra-UE)",
@@ -161,10 +153,10 @@ function buildCountryNotes(params: {
     const ag = AGREEMENTS[destinationIso2];
     if (ag) {
       notes.push({
-        title: "Traité / accord applicable (indication)",
+        title: "Traité / cadre applicable (indication)",
         items: [
-          `${ag.name}${ag.inForceSince ? ` — en vigueur depuis ${ag.inForceSince}` : ""}.`,
-          ag.note || "Préférences possibles selon règles d’origine.",
+          ag.name,
+          ag.note,
           ag.proofHint || "Prévoir la preuve d’origine selon les règles applicables.",
           ag.link ? `Référence : ${ag.link}` : "",
         ].filter(Boolean),
@@ -173,45 +165,42 @@ function buildCountryNotes(params: {
       notes.push({
         title: "Traités & préférences (à vérifier)",
         items: [
-          "Selon le pays, des accords peuvent exister : la préférence tarifaire dépend du produit et de l’origine.",
-          "Pour vérifier rapidement (pays + HS + documents), demander une validation express.",
-          "Référence : https://policy.trade.ec.europa.eu/eu-trade-relationships-country-and-region/negotiations-and-agreements_en",
+          "Selon le pays, des accords peuvent exister : la préférence dépend du produit et de l’origine.",
+          "Référence officielle UE : https://policy.trade.ec.europa.eu/eu-trade-relationships-country-and-region/negotiations-and-agreements_en",
+          "Pour une validation rapide (pays + HS + docs), demander une validation express.",
         ],
       });
     }
   }
 
-  // 2) Points de vigilance “scénario”
-  const hv = HIGH_RISK.has(destinationIso2);
-  const items: string[] = [];
-
-  if (hv) {
-    items.push("Pays à vigilance élevée (sanctions / restrictions possibles) : vérifier licences, listes et interdictions.");
+  // Vigilance “scénario”
+  const v: string[] = [];
+  if (HIGH_RISK.has(destinationIso2)) {
+    v.push("Pays à vigilance élevée (sanctions / restrictions possibles) : vérifier licences, listes et interdictions.");
   } else {
-    items.push("Vérifier listes de sanctions (UE/ONU/OFAC) selon produit, client et destination finale.");
+    v.push("Vérifier listes de sanctions (UE/ONU/OFAC) selon produit, client et destination finale.");
   }
 
-  if (!hsInput || hsInput.length < 4) {
-    items.push("HS incomplet : risque de droits/contrôles incorrects → compléter idéalement à 6 chiffres.");
-  } else {
-    items.push("HS suffisant pour une estimation (idéalement 6 chiffres pour plus de précision).");
-  }
+  if (!hsInput || hsInput.length < 4) v.push("HS incomplet : risque de droits incorrects → compléter idéalement à 6 chiffres.");
+  else v.push("HS suffisant pour estimation (6 chiffres recommandé).");
 
-  if (incoterm === "DDP") {
-    items.push("Incoterm DDP : confirmer qui paie droits & taxes à l’import et comment tu refactures/justifies.");
-  } else if (incoterm === "EXW") {
-    items.push("Incoterm EXW : responsabilités export/transitaire à clarifier (risque documentaire).");
-  } else {
-    items.push("Incoterm : confirmer la répartition responsabilités (droits, taxes, assurance, transport).");
-  }
+  if (incoterm === "DDP") v.push("Incoterm DDP : confirmer qui paie droits & taxes à l’import + justification/refacturation.");
+  else if (incoterm === "EXW") v.push("Incoterm EXW : responsabilités export/transitaire à clarifier (risque documentaire).");
+  else v.push("Incoterm : confirmer répartition responsabilités (droits, taxes, assurance, transport).");
 
-  if (mode) items.push(`Mode transport : ${mode} — vérifier contraintes et documents transport.`);
+  if (mode) v.push(`Mode transport : ${mode} — vérifier contraintes et documents transport.`);
+  if (productText) v.push("Produit saisi en texte : la classification HS peut nécessiter confirmation.");
 
-  if (productText) {
-    items.push("Produit saisi en texte : la classification HS peut nécessiter confirmation (risque de mauvaise taxe).");
-  }
+  notes.push({ title: "Spécificités & vigilance", items: v });
 
-  notes.push({ title: "Spécificités & vigilance", items });
+  // Limite actuelle (transparent & pro)
+  notes.push({
+    title: "Limite de l’estimation",
+    items: [
+      "Les taxes à l’import (TVA locale/équivalent) dépendent du régime du pays et du scénario (incoterm, dédouanement, statut importateur).",
+      "Pour un chiffrage robuste (droits + taxes + frais) : audit / validation express recommandée.",
+    ],
+  });
 
   return notes;
 }
@@ -220,6 +209,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const body = safeJson(req) || {};
+
   const hsInput = normalizeHs(body.hsInput);
   const productText = String(body.productText || "").trim();
   const destinationIso2 = String(body.destinationIso2 || "").trim().toUpperCase();
@@ -230,61 +220,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!destinationIso2) return res.status(400).json({ error: "destinationIso2 required" });
 
+  const isIntraEU = EU_MEMBERS.has(destinationIso2);
+
+  // Supabase optionnel (uniquement si tu veux stocker simulations)
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const sb = url && key ? createClient(url, key, { auth: { persistSession: false } }) : null;
 
-  const isIntraEU = EU_MEMBERS.has(destinationIso2);
-
   let dutyRate: number | null = null;
-  let vatRate: number | null = null;
+  let vatRate: number | null = null; // volontairement null tant qu'on n'a pas de vraie source fiable
   let docs: string[] = isIntraEU ? buildDocsIntraEU() : buildDocsFallback();
   const sources: string[] = [];
 
   if (isIntraEU) {
-    // Intra-UE : on neutralise les droits/taxes “import” (ce n’est pas de l’import)
     dutyRate = 0;
     vatRate = 0;
     sources.push("Règle intra-UE (pas de droits de douane)");
-  }
-
-  if (sb) {
-    const [dutyRes, vatRes, docsRes] = await Promise.all([
-      sb.from("duty_rate_mock").select("country,hs_prefix,rate"),
-      sb.from("vat_rate_mock").select("country,rate"),
-      sb.from("docs_mock").select("country,docs"),
-    ]);
-
-    const dutyRows = (dutyRes.data || []) as Array<{ country: string; hs_prefix: string; rate: number }>;
-    const vatRows = (vatRes.data || []) as Array<{ country: string; rate: number }>;
-    const docsRows = (docsRes.data || []) as Array<{ country: string; docs: string[] }>;
-
-    const prefix = hsInput.slice(0, 4);
-
-    // seulement si pas intra-UE
-    if (!isIntraEU) {
-      const dutyRow = dutyRows.find((r) => r.country === destinationIso2 && r.hs_prefix === prefix);
-      dutyRate = dutyRow?.rate ?? dutyRate;
-      vatRate = vatRows.find((r) => r.country === destinationIso2)?.rate ?? vatRate;
-
-      const docRow = docsRows.find((r) => r.country === destinationIso2);
-      if (docRow?.docs?.length) docs = docRow.docs;
-    }
-  }
-
-  // WITS uniquement si hors UE (sinon ce serait trompeur)
-  if (!isIntraEU) {
+  } else {
     const witsRate = await fetchWitsDuty(destinationIso2, hsInput).catch(() => null);
     if (witsRate !== null) {
       dutyRate = witsRate;
       sources.push("WITS / UNCTAD TRAINS (estimation)");
-    } else if (dutyRate !== null) {
-      sources.push("Mock duty rates");
+    } else {
+      dutyRate = null;
+      sources.push("Estimation interne (fallback)");
     }
   }
-
-  if (vatRate !== null && !isIntraEU) sources.push("Mock VAT rates");
-  if (docs.length) sources.push("Rules engine docs");
 
   const duty = dutyRate !== null ? value * (dutyRate / 100) : 0;
   const taxes = vatRate !== null ? value * (vatRate / 100) : 0;
@@ -304,7 +265,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : "Verifier les listes de sanctions UE/ONU/OFAC.",
     },
     {
-      title: "Cohérence incoterm",
+      title: "Coherence incoterm",
       level: incoterm === "DDP" && mode === "air" ? "medium" : "low",
       message: "Confirmer qui supporte droits/TVA selon incoterm.",
     },
@@ -317,33 +278,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
         ]
       : []),
+    ...(vatRate === null && !isIntraEU
+      ? [
+          {
+            title: "Taxes import non estimées",
+            level: "medium",
+            message: "Taxes à l’import dépendantes du régime local et du scénario (incoterm/importateur).",
+          },
+        ]
+      : []),
   ];
 
   const complianceScore = Math.max(
     40,
-    100
-      - (hsInput.length < 4 ? 25 : 0)
-      - (HIGH_RISK.has(destinationIso2) ? 20 : 5)
-      - (isIntraEU ? 0 : 0)
+    100 - (hsInput.length < 4 ? 25 : 0) - (HIGH_RISK.has(destinationIso2) ? 20 : 5)
   );
 
   const confidence =
-    isIntraEU
-      ? "high"
-      : sources.includes("WITS / UNCTAD TRAINS (estimation)")
-        ? "high"
-        : dutyRate !== null
-          ? "medium"
-          : "low";
+    isIntraEU ? "high" : sources.includes("WITS / UNCTAD TRAINS (estimation)") ? "high" : dutyRate !== null ? "medium" : "low";
 
-  // ✅ NEW : countryNotes (traités / spécificités)
   const countryNotes = buildCountryNotes({
     destinationIso2,
     hsInput,
     productText,
     incoterm,
     mode,
-    sources,
   });
 
   const result = {
@@ -357,20 +316,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     countryNotes,
   };
 
-  let simulationId: string | null = null;
+  // SimulationId : on renvoie toujours un ID (utile pour relier le lead)
+  let simulationId: string | null = randomUUID();
+
+  // Sauvegarde si table "simulations" existe (sinon on ignore proprement)
   if (sb) {
-    const { data } = await sb
-      .from("simulations")
-      .insert({
-        email: null,
-        hs_input: hsInput || null,
-        destination: destinationIso2,
-        payload: { hsInput, productText, destinationIso2, value, currency, incoterm, mode },
-        result,
-      })
-      .select("id")
-      .single();
-    simulationId = data?.id || null;
+    try {
+      const { data, error } = await sb
+        .from("simulations")
+        .insert({
+          id: simulationId,
+          email: null,
+          hs_input: hsInput || null,
+          destination: destinationIso2,
+          payload: { hsInput, productText, destinationIso2, value, currency, incoterm, mode },
+          result,
+        })
+        .select("id")
+        .single();
+
+      if (!error && data?.id) simulationId = data.id;
+    } catch {
+      // table absente ou autre souci : on garde le simulationId généré
+    }
   }
 
   return res.status(200).json({ ...result, simulationId });
