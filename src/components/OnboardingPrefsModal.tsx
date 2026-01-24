@@ -274,7 +274,7 @@ export function OnboardingPrefsModal({ open, onOpenChange, email, onSaved }: Pro
 
           <Button onClick={save} disabled={saving}>
 
-            {saving - "Enregistrement..." : "Activer la veille"}
+            {saving ? "Enregistrement..." : "Activer la veille"}
 
           </Button>
 
