@@ -146,7 +146,7 @@ export function OnboardingPrefsModal({ open, onOpenChange, email, onSaved }: Pro
 
     } catch (err: any) {
 
-      toast({ title: "Erreur preferences", description: err-.message || "Impossible d'enregistrer." });
+      toast({ title: "Erreur preferences", description: err?.message || "Impossible d'enregistrer." });
 
     } finally {
 
