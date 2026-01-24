@@ -21,10 +21,19 @@ type BriefResponse = {
   confidence: "low" | "medium" | "high";
   sources: string[];
   simulationId?: string | null;
+
+  /**
+   * Optionnel (future-proof) : si ton backend renvoie des notes pays/traités, on les affiche.
+   * Exemple attendu:
+   * countryNotes: [{ title: "Traités & préférences", items: ["..."] }]
+   */
+  countryNotes?: Array<{ title: string; items: string[] }>;
 };
 
 const HS_CHIPS = ["3004", "8708", "2204", "3304", "9403", "8504"];
-const COUNTRIES = [
+
+// Fallback minimal si Intl.supportedValuesOf("region") n'est pas dispo
+const COUNTRIES_FALLBACK = [
   { label: "États-Unis", iso2: "US" },
   { label: "Allemagne", iso2: "DE" },
   { label: "Espagne", iso2: "ES" },
@@ -37,11 +46,187 @@ const COUNTRIES = [
   { label: "Inde", iso2: "IN" },
 ];
 
-const TRUST_ITEMS = [
-  "Mise à jour des sanctions quotidienne",
-  "Règles export vérifiées",
-  "Estimation immédiate",
+const TOP_COUNTRY_ISO2 = [
+  "DE", "ES", "IT", "NL", "BE", "CH", "GB",
+  "US", "CA",
+  "MA", "AE",
+  "CN", "JP", "IN",
 ];
+
+const TRUST_ITEMS = ["Mise à jour des sanctions quotidienne", "Règles export vérifiées", "Estimation immédiate"];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const EU_ISO2 = new Set([
+  "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT",
+  "LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE",
+]);
+
+function normalizeStr(s: string) {
+  return (s || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function confidenceLabel(c?: "low" | "medium" | "high") {
+  if (!c) return "—";
+  if (c === "high") return "Haute";
+  if (c === "medium") return "Moyenne";
+  return "Faible";
+}
+
+function riskLabel(lvl: "low" | "medium" | "high") {
+  if (lvl === "high") return "Élevé";
+  if (lvl === "medium") return "Moyen";
+  return "Faible";
+}
+
+function riskPillClass(lvl: "low" | "medium" | "high") {
+  if (lvl === "high") return "border-red-300 bg-red-500/15 text-red-50";
+  if (lvl === "medium") return "border-amber-300 bg-amber-500/15 text-amber-50";
+  return "border-emerald-300 bg-emerald-500/15 text-emerald-50";
+}
+
+function getTreatyNotesForCountry(iso2: string) {
+  const code = (iso2 || "").toUpperCase();
+  if (!code) return [];
+
+  // Notes “pratiques” (indicatives) pour export depuis France
+  if (EU_ISO2.has(code)) {
+    return [
+      {
+        title: "Spécificité UE (intra-UE)",
+        items: [
+          "Destination dans l’UE : pas de droits de douane (ce n’est pas une exportation au sens douanier).",
+          "Vérifier TVA intracom, exigences de facturation, et obligations statistiques (ex: Intrastat/DEB selon cas).",
+        ],
+      },
+    ];
+  }
+
+  if (code === "GB") {
+    return [
+      {
+        title: "UE ↔ Royaume-Uni",
+        items: [
+          "Accord UE–Royaume-Uni : préférences possibles (droits réduits/0) si règles d’origine respectées.",
+          "Déclaration douanière requise + attention TVA/UK VAT selon schéma.",
+          "Preuve d’origine à prévoir selon l’accord (vérification au cas réel).",
+        ],
+      },
+    ];
+  }
+
+  if (code === "CH") {
+    return [
+      {
+        title: "UE ↔ Suisse",
+        items: [
+          "Accords UE–Suisse : préférences possibles selon règles d’origine.",
+          "Procédures douanières et documents à sécuriser (origine, valeur, incoterms).",
+        ],
+      },
+    ];
+  }
+
+  if (code === "CA") {
+    return [
+      {
+        title: "UE ↔ Canada",
+        items: [
+          "Accord commercial : préférences possibles selon règles d’origine.",
+          "Vérifier la preuve d’origine et les conditions d’éligibilité.",
+        ],
+      },
+    ];
+  }
+
+  if (code === "JP") {
+    return [
+      {
+        title: "UE ↔ Japon",
+        items: [
+          "Accord de partenariat : préférences possibles selon règles d’origine.",
+          "Points sensibles : classification HS, origine et documents.",
+        ],
+      },
+    ];
+  }
+
+  if (code === "KR") {
+    return [
+      {
+        title: "UE ↔ Corée du Sud",
+        items: [
+          "Accord de libre-échange : préférences possibles selon règles d’origine.",
+          "Vérifier l’éligibilité à la préférence tarifaire au cas réel.",
+        ],
+      },
+    ];
+  }
+
+  if (code === "US") {
+    return [
+      {
+        title: "UE ↔ États-Unis",
+        items: [
+          "Pas d’accord préférentiel général : droits de douane applicables selon HS et réglementation US.",
+          "Vérifier exigences documentaires et conformité produit (étiquetage, normes, licences selon cas).",
+        ],
+      },
+    ];
+  }
+
+  // Par défaut : note générique (ça incite à la validation)
+  return [
+    {
+      title: "Traités & préférences",
+      items: [
+        "Selon le pays, des préférences tarifaires peuvent exister (accords, régimes préférentiels) : cela dépend du produit et de l’origine.",
+        "Pour une validation “zéro surprise”, demande une validation express (documents, origine, incoterms).",
+      ],
+    },
+  ];
+}
+
+function extractIso2FromDestinationText(
+  text: string,
+  countries: Array<{ label: string; iso2: string }>
+): { iso2: string; label: string } | null {
+  const raw = (text || "").trim();
+  if (!raw) return null;
+
+  // Si l'utilisateur choisit un format "Pays (XX)"
+  const m = raw.match(/\(([A-Za-z]{2})\)\s*$/);
+  if (m?.[1]) {
+    const iso2 = m[1].toUpperCase();
+    const found = countries.find((c) => c.iso2 === iso2);
+    return { iso2, label: found?.label || iso2 };
+  }
+
+  // Si l'utilisateur tape directement "US"
+  if (/^[A-Za-z]{2}$/.test(raw)) {
+    const iso2 = raw.toUpperCase();
+    const found = countries.find((c) => c.iso2 === iso2);
+    return { iso2, label: found?.label || iso2 };
+  }
+
+  // Match sur label (tolérant accents/casse)
+  const n = normalizeStr(raw);
+  const found = countries.find((c) => normalizeStr(c.label) === n);
+  if (found) return { iso2: found.iso2, label: found.label };
+
+  // Match “commence par”
+  const found2 = countries.find((c) => normalizeStr(c.label).startsWith(n));
+  if (found2) return { iso2: found2.iso2, label: found2.label };
+
+  return null;
+}
 
 export default function LeadMagnet() {
   const navigate = useNavigate();
@@ -50,6 +235,8 @@ export default function LeadMagnet() {
   const [productOrHs, setProductOrHs] = React.useState("");
   const [destinationIso2, setDestinationIso2] = React.useState("");
   const [destinationLabel, setDestinationLabel] = React.useState("");
+  const [destinationText, setDestinationText] = React.useState("");
+
   const [value, setValue] = React.useState("10000");
   const [currency, setCurrency] = React.useState("EUR");
   const [incoterm, setIncoterm] = React.useState("DAP");
@@ -65,9 +252,45 @@ export default function LeadMagnet() {
 
   const normalizedInput = productOrHs.trim();
   const hsNormalized = normalizedInput.replace(/[^0-9]/g, "");
-  const hsOnly = hsNormalized.length >= 2 && hsNormalized.length <= 6 && hsNormalized.length === normalizedInput.length;
+  const hsOnly =
+    hsNormalized.length >= 2 &&
+    hsNormalized.length <= 6 &&
+    hsNormalized.length === normalizedInput.length;
+
   const inferredHs = hsOnly ? hsNormalized : "";
   const inferredProduct = hsOnly ? "" : normalizedInput;
+
+  // ✅ Tous les pays (si support navigateur), sinon fallback
+  const allCountries = React.useMemo(() => {
+    try {
+      const supported = (Intl as any).supportedValuesOf?.("region") as string[] | undefined;
+      if (!supported?.length) return COUNTRIES_FALLBACK;
+
+      const dn = new Intl.DisplayNames(["fr"], { type: "region" });
+      const list = supported
+        .filter((code) => /^[A-Z]{2}$/.test(code))
+        .map((iso2) => {
+          const label = dn.of(iso2) || iso2;
+          return { iso2, label };
+        })
+        .filter((c) => c.label && c.label !== c.iso2);
+
+      // unique + sort
+      const map = new Map<string, string>();
+      for (const c of list) map.set(c.iso2, c.label);
+      const arr = Array.from(map.entries()).map(([iso2, label]) => ({ iso2, label }));
+      arr.sort((a, b) => a.label.localeCompare(b.label, "fr", { sensitivity: "base" }));
+      return arr.length ? arr : COUNTRIES_FALLBACK;
+    } catch {
+      return COUNTRIES_FALLBACK;
+    }
+  }, []);
+
+  const topCountries = React.useMemo(() => {
+    const m = new Map(allCountries.map((c) => [c.iso2, c]));
+    return TOP_COUNTRY_ISO2.map((iso2) => m.get(iso2)).filter(Boolean) as Array<{ iso2: string; label: string }>;
+  }, [allCountries]);
+
   const hsOptions = React.useMemo(() => {
     const fromHistory = history.map((h) => String(h.payload?.hsInput || "")).filter(Boolean);
     return Array.from(new Set([...HS_CHIPS, ...fromHistory]));
@@ -82,7 +305,22 @@ export default function LeadMagnet() {
         setHistory([]);
       }
     }
+
+    const storedEmail = localStorage.getItem("mpl_lead_email");
+    if (storedEmail) setEmail(storedEmail);
   }, []);
+
+  const syncDestinationFromText = (text: string) => {
+    setDestinationText(text);
+    const parsed = extractIso2FromDestinationText(text, allCountries);
+    if (parsed) {
+      setDestinationIso2(parsed.iso2);
+      setDestinationLabel(parsed.label);
+    } else {
+      setDestinationIso2("");
+      setDestinationLabel("");
+    }
+  };
 
   const handleEstimate = async () => {
     if (!normalizedInput && hsNormalized.length < 2) {
@@ -90,7 +328,7 @@ export default function LeadMagnet() {
       return;
     }
     if (!destinationIso2) {
-      toast({ title: "Pays requis", description: "Sélectionne un pays de destination." });
+      toast({ title: "Pays requis", description: "Sélectionne un pays de destination (ou choisis un pays recommandé)." });
       return;
     }
 
@@ -115,11 +353,16 @@ export default function LeadMagnet() {
       }).then((r) => r.json());
 
       if (res.error) throw new Error(res.error);
+
       setResult(res);
+
       const entry = { payload, result: res };
-      setHistory((prev) => [entry, ...prev].slice(0, 6));
-      localStorage.setItem("mpl_last_simulation", JSON.stringify(entry));
-      localStorage.setItem("mpl_sim_history", JSON.stringify([entry, ...history].slice(0, 6)));
+      setHistory((prev) => {
+        const next = [entry, ...prev].slice(0, 6);
+        localStorage.setItem("mpl_last_simulation", JSON.stringify(entry));
+        localStorage.setItem("mpl_sim_history", JSON.stringify(next));
+        return next;
+      });
     } catch (err: any) {
       toast({ title: "Erreur estimation", description: err?.message || "Impossible de calculer." });
     } finally {
@@ -137,6 +380,10 @@ export default function LeadMagnet() {
       toast({ title: "Email requis", description: "Ajoute un email pour recevoir le rapport." });
       return;
     }
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      toast({ title: "Email invalide", description: "Vérifie le format de ton email." });
+      return;
+    }
     if (!consent) {
       toast({ title: "Consentement requis", description: "Coche la case RGPD pour continuer." });
       return;
@@ -144,6 +391,7 @@ export default function LeadMagnet() {
 
     try {
       setLoading(true);
+
       await postLead({
         email: trimmedEmail,
         consent,
@@ -177,6 +425,7 @@ export default function LeadMagnet() {
           },
         },
       });
+
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
       link.href = url;
@@ -196,8 +445,14 @@ export default function LeadMagnet() {
   const reuseHistory = (entry: { payload: any; result: BriefResponse }) => {
     const p = entry.payload || {};
     setProductOrHs(p.hsInput || p.productText || "");
-    setDestinationIso2(p.destinationIso2 || "");
-    setDestinationLabel(COUNTRIES.find((c) => c.iso2 === p.destinationIso2)?.label || "");
+
+    const iso2 = p.destinationIso2 || "";
+    const label = allCountries.find((c) => c.iso2 === iso2)?.label || iso2;
+
+    setDestinationIso2(iso2);
+    setDestinationLabel(label);
+    setDestinationText(label ? `${label} (${iso2})` : iso2);
+
     setValue(String(p.value || ""));
     setCurrency(p.currency || "EUR");
     setIncoterm(p.incoterm || "DAP");
@@ -238,17 +493,26 @@ export default function LeadMagnet() {
     }
   };
 
+  const score = clamp(Number(result?.complianceScore ?? 0), 0, 100);
+
+  // ✅ Notes traités/spécificités : priorité au backend s’il renvoie countryNotes, sinon fallback UI
+  const treatyBlocks =
+    result?.countryNotes?.length
+      ? result.countryNotes
+      : destinationIso2
+        ? getTreatyNotesForCountry(destinationIso2)
+        : [];
+
   return (
     <PublicLayout>
       <section className="grid gap-12 lg:grid-cols-[1.15fr_0.95fr] lg:items-start">
         <div className="space-y-6 text-white">
           <p className="text-xs uppercase tracking-[0.4em] text-blue-200">Audit - Réglementation - Veille</p>
-          <h1 className="text-4xl font-semibold leading-tight md:text-6xl">
-            Votre contrôle export en 30 secondes.
-          </h1>
+          <h1 className="text-4xl font-semibold leading-tight md:text-6xl">Votre contrôle export en 30 secondes.</h1>
           <p className="text-lg text-slate-200">
             Estimation immédiate des droits/taxes, documents requis et risques sanctions. Rapport PDF MPL + veille personnalisée.
           </p>
+
           <div className="flex flex-wrap gap-2">
             {HS_CHIPS.map((chip) => (
               <button
@@ -261,6 +525,7 @@ export default function LeadMagnet() {
               </button>
             ))}
           </div>
+
           <div className="flex flex-wrap gap-3 text-xs text-slate-200">
             {TRUST_ITEMS.map((item) => (
               <span key={item} className="rounded-full border border-white/20 bg-white/10 px-3 py-1">
@@ -282,33 +547,70 @@ export default function LeadMagnet() {
                   list="hs-list"
                   className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
                 />
+              </div>
+
+              <datalist id="hs-list">
+                {hsOptions.map((code) => (
+                  <option key={code} value={code} />
+                ))}
+              </datalist>
+
+              {/* ✅ PAYS RECOMMANDÉS */}
+              <div className="space-y-2 md:col-span-2">
+                <div className="flex items-center justify-between">
+                  <Label>Destination</Label>
+                  <span className="text-xs text-white/70">
+                    Recommandés + recherche (tous les pays)
+                  </span>
                 </div>
-                <datalist id="hs-list">
-                  {hsOptions.map((code) => (
-                    <option key={code} value={code} />
+
+                <div className="flex flex-wrap gap-2">
+                  {topCountries.map((c) => (
+                    <button
+                      key={c.iso2}
+                      type="button"
+                      onClick={() => {
+                        setDestinationIso2(c.iso2);
+                        setDestinationLabel(c.label);
+                        setDestinationText(`${c.label} (${c.iso2})`);
+                      }}
+                      className={`rounded-full border px-3 py-1 text-xs ${
+                        destinationIso2 === c.iso2
+                          ? "border-white/40 bg-white/20 text-white"
+                          : "border-white/20 bg-white/10 text-white"
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ✅ Recherche pays */}
+                <Input
+                  value={destinationText}
+                  onChange={(e) => syncDestinationFromText(e.target.value)}
+                  placeholder='Ex: "Suisse" ou "Suisse (CH)"'
+                  list="countries-list"
+                  className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+                />
+
+                <datalist id="countries-list">
+                  {allCountries.map((c) => (
+                    <option key={c.iso2} value={`${c.label} (${c.iso2})`} />
                   ))}
                 </datalist>
-              <div className="space-y-2">
-                <Label>Destination</Label>
-                <Select
-                  value={destinationIso2}
-                  onValueChange={(val) => {
-                    setDestinationIso2(val);
-                    setDestinationLabel(COUNTRIES.find((c) => c.iso2 === val)?.label || val);
-                  }}
-                >
-                  <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
-                    <SelectValue placeholder="Sélectionner un pays" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COUNTRIES.map((c) => (
-                      <SelectItem key={c.iso2} value={c.iso2}>
-                        {c.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+                {!destinationIso2 && destinationText ? (
+                  <div className="text-xs text-white/70">
+                    Sélectionne une proposition (ex: “Suisse (CH)”) pour valider le pays.
+                  </div>
+                ) : destinationIso2 ? (
+                  <div className="text-xs text-white/70">
+                    Pays sélectionné : <span className="font-semibold text-white">{destinationLabel}</span> ({destinationIso2})
+                  </div>
+                ) : null}
               </div>
+
               <div className="space-y-2">
                 <Label>Valeur marchandise</Label>
                 <Input
@@ -318,6 +620,7 @@ export default function LeadMagnet() {
                   className="border-white/20 bg-white/90 text-slate-900"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label>Incoterm</Label>
                 <Select value={incoterm} onValueChange={setIncoterm}>
@@ -391,6 +694,7 @@ export default function LeadMagnet() {
             <Button onClick={handleEstimate} disabled={loading} className="w-full">
               {loading ? "Calcul en cours..." : "Calculer mon contrôle export"}
             </Button>
+
             <p className="text-xs text-slate-200">
               Résultat immédiat, sans email. L'email sert uniquement a recevoir le PDF et activer la veille.
             </p>
@@ -406,24 +710,49 @@ export default function LeadMagnet() {
                 <div className="text-xs uppercase tracking-[0.25em] text-slate-200">Résumé</div>
                 <div className="text-2xl font-semibold md:text-3xl">Estimation & conformité</div>
               </div>
-              <div className="text-xs text-slate-200">Dernière mise à jour: {formatDateTimeFr(result?.updatedAt)}</div>
+              <div className="text-xs text-slate-200">
+                Dernière mise à jour: {result?.updatedAt ? formatDateTimeFr(result.updatedAt) : "—"}
+              </div>
             </div>
+
             {!result ? (
               <p className="mt-4 text-sm text-slate-200">Saisis un HS ou produit pour obtenir un résumé.</p>
             ) : (
               <div className="mt-5 space-y-4">
+                {/* Score conformité */}
+                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs uppercase text-slate-200">Score conformité</div>
+                      <div className="text-lg font-semibold text-white">{score}/100</div>
+                    </div>
+                    <div className="text-xs text-slate-200">
+                      Confiance: <span className="font-semibold text-white">{confidenceLabel(result.confidence)}</span>
+                    </div>
+                  </div>
+                  <div className="mt-3 h-2 w-full rounded-full bg-white/15">
+                    <div className="h-2 rounded-full bg-white/70" style={{ width: `${score}%` }} />
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-xl border border-white/15 bg-white/5 p-3">
                     <div className="text-xs text-slate-200">Droits estimés</div>
-                    <div className="text-lg font-semibold text-white">{result.estimate.duty.toFixed(0)} {result.estimate.currency}</div>
+                    <div className="text-lg font-semibold text-white">
+                      {result.estimate.duty.toFixed(0)} {result.estimate.currency}
+                    </div>
                   </div>
                   <div className="rounded-xl border border-white/15 bg-white/5 p-3">
                     <div className="text-xs text-slate-200">Taxes estimées</div>
-                    <div className="text-lg font-semibold text-white">{result.estimate.taxes.toFixed(0)} {result.estimate.currency}</div>
+                    <div className="text-lg font-semibold text-white">
+                      {result.estimate.taxes.toFixed(0)} {result.estimate.currency}
+                    </div>
                   </div>
                   <div className="rounded-xl bg-white/20 p-3 text-white">
                     <div className="text-xs text-slate-100">Total estimé</div>
-                    <div className="text-lg font-semibold">{result.estimate.total.toFixed(0)} {result.estimate.currency}</div>
+                    <div className="text-lg font-semibold">
+                      {result.estimate.total.toFixed(0)} {result.estimate.currency}
+                    </div>
                   </div>
                 </div>
 
@@ -440,14 +769,52 @@ export default function LeadMagnet() {
                     <div className="text-xs uppercase text-slate-200">Risques</div>
                     <ul className="mt-2 space-y-2 text-sm text-slate-100">
                       {result.risks.map((risk) => (
-                        <li key={risk.title} className="rounded-lg border border-white/15 bg-white/5 p-2">
-                          <div className="font-semibold text-white">{risk.title}</div>
-                          <div className="text-slate-200">{risk.message}</div>
+                        <li key={risk.title} className="rounded-lg border border-white/15 bg-white/5 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="font-semibold text-white">{risk.title}</div>
+                            <span className={`rounded-full border px-2 py-1 text-[11px] ${riskPillClass(risk.level)}`}>
+                              {riskLabel(risk.level)}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-slate-200">{risk.message}</div>
                         </li>
                       ))}
                     </ul>
                   </div>
                 </div>
+
+                {/* ✅ TRAITÉS / SPÉCIFICITÉS PAYS */}
+                {treatyBlocks.length > 0 && (
+                  <div className="rounded-xl border border-white/15 bg-white/5 p-4">
+                    <div className="text-xs uppercase text-slate-200">
+                      Traités & spécificités pays (indication)
+                    </div>
+                    <div className="mt-3 space-y-3">
+                      {treatyBlocks.map((b) => (
+                        <div key={b.title}>
+                          <div className="font-semibold text-white">{b.title}</div>
+                          <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-slate-200">
+                            {b.items.map((it) => (
+                              <li key={it}>{it}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      <Button variant="secondary" onClick={() => navigate(`/contact?offer=express&country=${destinationIso2}`)}>
+                        Valider avec un expert (express)
+                      </Button>
+                      <Button variant="outline" className="border-white text-white hover:bg-white/10" onClick={() => navigate(`/contact?offer=audit&country=${destinationIso2}`)}>
+                        Audit complet
+                      </Button>
+                    </div>
+                    <div className="mt-2 text-xs text-white/70">
+                      Ces indications seront “vérifiées” automatiquement quand l’API renverra les traités/règles applicables au couple (produit + pays).
+                    </div>
+                  </div>
+                )}
+
                 <div className="rounded-xl border border-white/15 bg-white/5 p-3 text-xs text-slate-200">
                   Confiance: {result.confidence} - Sources: {result.sources?.join(", ") || "Règles internes"}
                 </div>
@@ -481,7 +848,9 @@ export default function LeadMagnet() {
                 <div className="space-y-2">
                   {history.map((entry, idx) => (
                     <div key={idx} className="rounded-lg border border-white/15 bg-white/5 p-2 text-xs">
-                      <div className="font-semibold text-white">{entry.payload?.destinationIso2 || "Pays"} - HS {entry.payload?.hsInput || "n/a"}</div>
+                      <div className="font-semibold text-white">
+                        {entry.payload?.destinationIso2 || "Pays"} - HS {entry.payload?.hsInput || "n/a"}
+                      </div>
                       <div className="text-slate-200">{entry.payload?.value || 0} {entry.payload?.currency || "EUR"}</div>
                       <div className="mt-2 flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => reuseHistory(entry)}>Réutiliser</Button>
