@@ -119,7 +119,7 @@ export default function WatchCenter() {
               <Input value={hsFilter} onChange={(e) => setHsFilter(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Ex: 3004" />
             </div>
             <div className="space-y-2">
-              <label className="text-xs text-slate-500">SÃ©vÃ©ritÃ©</label>
+              <label className="text-xs text-slate-500">Sévérité</label>
               <Select value={severityFilter} onValueChange={setSeverityFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="Toutes" />

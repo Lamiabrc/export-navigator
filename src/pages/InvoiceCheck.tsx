@@ -69,7 +69,7 @@ export default function InvoiceCheck() {
     try {
       setReporting(true);
       const pdfBlob = await postPdf({
-        title: "Rapport contrÃ´le facture",
+        title: "Rapport contrôle facture",
         destination,
         incoterm,
         currency,
@@ -125,7 +125,7 @@ export default function InvoiceCheck() {
     <AppLayout>
       <div className="space-y-8">
         <div>
-          <p className="text-sm text-muted-foreground">ContrÃ´le facture</p>
+          <p className="text-sm text-muted-foreground">Contrôle facture</p>
           <h1 className="text-3xl font-semibold">Verifier une facture export</h1>
         </div>
 

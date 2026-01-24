@@ -223,7 +223,7 @@ export default function ControlTower() {
       setDownloading(true);
       const parsed = JSON.parse(raw) as { payload?: any; result?: any };
       const pdfBlob = await postPdf({
-        title: "Rapport de contrÃ´le export",
+        title: "Rapport de contrôle export",
         destination: parsed.payload?.destination,
         incoterm: parsed.payload?.incoterm,
         value: parsed.payload?.value,

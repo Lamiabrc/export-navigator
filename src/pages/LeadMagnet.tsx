@@ -25,22 +25,22 @@ type BriefResponse = {
 
 const HS_CHIPS = ["3004", "8708", "2204", "3304", "9403", "8504"];
 const COUNTRIES = [
-  { label: "Etats-Unis", iso2: "US" },
+  { label: "États-Unis", iso2: "US" },
   { label: "Allemagne", iso2: "DE" },
   { label: "Espagne", iso2: "ES" },
   { label: "Royaume-Uni", iso2: "GB" },
   { label: "Chine", iso2: "CN" },
   { label: "Canada", iso2: "CA" },
   { label: "Maroc", iso2: "MA" },
-  { label: "Emirats arabes unis", iso2: "AE" },
+  { label: "Émirats arabes unis", iso2: "AE" },
   { label: "Japon", iso2: "JP" },
   { label: "Inde", iso2: "IN" },
 ];
 
 const TRUST_ITEMS = [
-  "Mise a jour sanctions quotidienne",
-  "Regles export verifiees",
-  "Estimation immediate",
+  "Mise à jour des sanctions quotidienne",
+  "Règles export vérifiées",
+  "Estimation immédiate",
 ];
 
 export default function LeadMagnet() {
@@ -90,7 +90,7 @@ export default function LeadMagnet() {
       return;
     }
     if (!destinationIso2) {
-      toast({ title: "Pays requis", description: "Selectionne un pays de destination." });
+      toast({ title: "Pays requis", description: "Sélectionne un pays de destination." });
       return;
     }
 
@@ -162,7 +162,7 @@ export default function LeadMagnet() {
       localStorage.setItem("mpl_lead_email", trimmedEmail);
 
       const pdfBlob = await postPdf({
-        title: "Rapport de contrÃ´le export",
+        title: "Rapport de contrôle export",
         email: trimmedEmail,
         destination: destinationLabel || destinationIso2,
         incoterm,
@@ -184,7 +184,7 @@ export default function LeadMagnet() {
       link.click();
       URL.revokeObjectURL(url);
 
-      toast({ title: "Rapport genere", description: "Le PDF est telecharge." });
+      toast({ title: "Rapport généré", description: "Le PDF est téléchargé." });
       navigate("/app/control-tower");
     } catch (err: any) {
       toast({ title: "Erreur lead", description: err?.message || "Impossible de finaliser." });
@@ -211,7 +211,7 @@ export default function LeadMagnet() {
     try {
       setLoading(true);
       const pdfBlob = await postPdf({
-        title: "Rapport de contrÃ´le export",
+        title: "Rapport de contrôle export",
         destination: entry.payload?.destinationIso2,
         incoterm: entry.payload?.incoterm,
         value: entry.payload?.value,
@@ -232,7 +232,7 @@ export default function LeadMagnet() {
       link.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      toast({ title: "Erreur PDF", description: err?.message || "Impossible de generer le rapport." });
+      toast({ title: "Erreur PDF", description: err?.message || "Impossible de générer le rapport." });
     } finally {
       setLoading(false);
     }
@@ -241,13 +241,13 @@ export default function LeadMagnet() {
   return (
     <PublicLayout>
       <section className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="space-y-6">
-          <p className="text-xs uppercase tracking-[0.35em] text-blue-700">Audit • RÃ©glementation • Veille</p>
-          <h1 className="text-4xl md:text-5xl font-semibold leading-tight text-slate-900">
-            Votre contrÃ´le export en 30 secondes.
+        <div className="space-y-6 text-white">
+          <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Audit - Réglementation - Veille</p>
+          <h1 className="text-4xl font-semibold leading-tight md:text-5xl">
+            Votre contrôle export en 30 secondes.
           </h1>
-          <p className="text-lg text-slate-600">
-            Estimation immediate des droits/taxes, documents requis et risques sanctions. Rapport PDF MPL + veille personnalisee.
+          <p className="text-lg text-slate-200">
+            Estimation immédiate des droits/taxes, documents requis et risques sanctions. Rapport PDF MPL + veille personnalisée.
           </p>
           <div className="flex flex-wrap gap-2">
             {HS_CHIPS.map((chip) => (
@@ -255,27 +255,33 @@ export default function LeadMagnet() {
                 key={chip}
                 type="button"
                 onClick={() => setProductOrHs(chip)}
-                className="rounded-full border border-blue-200 bg-white px-3 py-1 text-sm text-blue-700"
+                className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-sm text-white"
               >
                 HS {chip}
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+          <div className="flex flex-wrap gap-3 text-xs text-slate-200">
             {TRUST_ITEMS.map((item) => (
-              <span key={item} className="rounded-full border border-slate-200 bg-white px-3 py-1">
+              <span key={item} className="rounded-full border border-white/20 bg-white/10 px-3 py-1">
                 {item}
               </span>
             ))}
           </div>
         </div>
 
-        <Card className="border border-slate-200 bg-white shadow-xl">
+        <Card className="border border-white/15 bg-white/10 text-white shadow-2xl backdrop-blur-xl">
           <CardContent className="space-y-4 p-6">
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
                 <Label>Produit ou code HS</Label>
-                <Input value={productOrHs} onChange={(e) => setProductOrHs(e.target.value)} placeholder="Ex: cosmetique ou 3004" list="hs-list" />
+                <Input
+                  value={productOrHs}
+                  onChange={(e) => setProductOrHs(e.target.value)}
+                  placeholder="Ex: cosmetique ou 3004"
+                  list="hs-list"
+                  className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+                />
                 </div>
                 <datalist id="hs-list">
                   {hsOptions.map((code) => (
@@ -291,8 +297,8 @@ export default function LeadMagnet() {
                     setDestinationLabel(COUNTRIES.find((c) => c.iso2 === val)?.label || val);
                   }}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selectionner un pays" />
+                  <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
+                    <SelectValue placeholder="Sélectionner un pays" />
                   </SelectTrigger>
                   <SelectContent>
                     {COUNTRIES.map((c) => (
@@ -305,12 +311,17 @@ export default function LeadMagnet() {
               </div>
               <div className="space-y-2">
                 <Label>Valeur marchandise</Label>
-                <Input value={value} onChange={(e) => setValue(e.target.value)} type="number" />
+                <Input
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  type="number"
+                  className="border-white/20 bg-white/90 text-slate-900"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Incoterm</Label>
                 <Select value={incoterm} onValueChange={setIncoterm}>
-                  <SelectTrigger>
+                  <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -325,13 +336,13 @@ export default function LeadMagnet() {
 
             <Accordion type="single" collapsible>
               <AccordionItem value="advanced">
-                <AccordionTrigger>Options avancees</AccordionTrigger>
+                <AccordionTrigger className="text-white">Options avancees</AccordionTrigger>
                 <AccordionContent>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Devise</Label>
                       <Select value={currency} onValueChange={setCurrency}>
-                        <SelectTrigger>
+                        <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -344,7 +355,7 @@ export default function LeadMagnet() {
                     <div className="space-y-2">
                       <Label>Mode transport</Label>
                       <Select value={mode} onValueChange={setMode}>
-                        <SelectTrigger>
+                        <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -356,11 +367,21 @@ export default function LeadMagnet() {
                     </div>
                     <div className="space-y-2">
                       <Label>Poids (kg)</Label>
-                      <Input value={weightKg} onChange={(e) => setWeightKg(e.target.value)} type="number" />
+                      <Input
+                        value={weightKg}
+                        onChange={(e) => setWeightKg(e.target.value)}
+                        type="number"
+                        className="border-white/20 bg-white/90 text-slate-900"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Assurance (EUR)</Label>
-                      <Input value={insurance} onChange={(e) => setInsurance(e.target.value)} type="number" />
+                      <Input
+                        value={insurance}
+                        onChange={(e) => setInsurance(e.target.value)}
+                        type="number"
+                        className="border-white/20 bg-white/90 text-slate-900"
+                      />
                     </div>
                   </div>
                 </AccordionContent>
@@ -368,97 +389,102 @@ export default function LeadMagnet() {
             </Accordion>
 
             <Button onClick={handleEstimate} disabled={loading} className="w-full">
-              {loading ? "Calcul en cours..." : "Calculer mon contrÃ´le export"}
+              {loading ? "Calcul en cours..." : "Calculer mon contrôle export"}
             </Button>
-            <p className="text-xs text-slate-500">
-              Resultat immediat, sans email. L'email sert uniquement a recevoir le PDF et activer la veille.
+            <p className="text-xs text-slate-200">
+              Résultat immédiat, sans email. L'email sert uniquement a recevoir le PDF et activer la veille.
             </p>
           </CardContent>
         </Card>
       </section>
 
       <section className="mt-10 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-        <Card className="border border-slate-200 bg-white">
+        <Card className="border border-white/15 bg-white/10 text-white backdrop-blur-xl">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs uppercase tracking-[0.25em] text-slate-400">Resume</div>
-                <div className="text-2xl font-semibold">Estimation & conformite</div>
+                <div className="text-xs uppercase tracking-[0.25em] text-slate-200">Résumé</div>
+                <div className="text-2xl font-semibold">Estimation & conformité</div>
               </div>
-              <div className="text-xs text-slate-500">DerniÃ¨re mise Ã  jour: {formatDateTimeFr(result?.updatedAt)}</div>
+              <div className="text-xs text-slate-200">Dernière mise à jour: {formatDateTimeFr(result?.updatedAt)}</div>
             </div>
             {!result ? (
-              <p className="mt-4 text-sm text-slate-500">Saisis un HS ou produit pour obtenir un resume.</p>
+              <p className="mt-4 text-sm text-slate-200">Saisis un HS ou produit pour obtenir un résumé.</p>
             ) : (
               <div className="mt-5 space-y-4">
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-xl border border-slate-200 p-3">
-                    <div className="text-xs text-slate-500">Droits estimes</div>
-                    <div className="text-lg font-semibold">{result.estimate.duty.toFixed(0)} {result.estimate.currency}</div>
+                  <div className="rounded-xl border border-white/15 bg-white/5 p-3">
+                    <div className="text-xs text-slate-200">Droits estimés</div>
+                    <div className="text-lg font-semibold text-white">{result.estimate.duty.toFixed(0)} {result.estimate.currency}</div>
                   </div>
-                  <div className="rounded-xl border border-slate-200 p-3">
-                    <div className="text-xs text-slate-500">Taxes estimees</div>
-                    <div className="text-lg font-semibold">{result.estimate.taxes.toFixed(0)} {result.estimate.currency}</div>
+                  <div className="rounded-xl border border-white/15 bg-white/5 p-3">
+                    <div className="text-xs text-slate-200">Taxes estimées</div>
+                    <div className="text-lg font-semibold text-white">{result.estimate.taxes.toFixed(0)} {result.estimate.currency}</div>
                   </div>
-                  <div className="rounded-xl bg-slate-900 text-white p-3">
-                    <div className="text-xs text-slate-200">Total estime</div>
+                  <div className="rounded-xl bg-white/20 p-3 text-white">
+                    <div className="text-xs text-slate-100">Total estimé</div>
                     <div className="text-lg font-semibold">{result.estimate.total.toFixed(0)} {result.estimate.currency}</div>
                   </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <div className="text-xs uppercase text-slate-400">Documents requis</div>
-                    <ul className="mt-2 space-y-1 text-sm">
+                    <div className="text-xs uppercase text-slate-200">Documents requis</div>
+                    <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-slate-200">
                       {result.documents.map((doc) => (
-                        <li key={doc}>• {doc}</li>
+                        <li key={doc}>{doc}</li>
                       ))}
                     </ul>
                   </div>
                   <div>
-                    <div className="text-xs uppercase text-slate-400">Risques</div>
-                    <ul className="mt-2 space-y-2 text-sm">
+                    <div className="text-xs uppercase text-slate-200">Risques</div>
+                    <ul className="mt-2 space-y-2 text-sm text-slate-100">
                       {result.risks.map((risk) => (
-                        <li key={risk.title} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                          <div className="font-semibold">{risk.title}</div>
-                          <div className="text-slate-600">{risk.message}</div>
+                        <li key={risk.title} className="rounded-lg border border-white/15 bg-white/5 p-2">
+                          <div className="font-semibold text-white">{risk.title}</div>
+                          <div className="text-slate-200">{risk.message}</div>
                         </li>
                       ))}
                     </ul>
                   </div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                  Confiance: {result.confidence} • Sources: {result.sources?.join(", ") || "Regles internes"}
+                <div className="rounded-xl border border-white/15 bg-white/5 p-3 text-xs text-slate-200">
+                  Confiance: {result.confidence} - Sources: {result.sources?.join(", ") || "Règles internes"}
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="border border-slate-200 bg-white">
+        <Card className="border border-white/15 bg-white/10 text-white backdrop-blur-xl">
           <CardContent className="p-6 space-y-4">
             <div className="text-sm font-semibold">Recevoir le rapport PDF + veille</div>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email professionnel" />
-            <label className="flex items-start gap-2 text-xs text-slate-600">
+            <Input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email professionnel"
+              className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+            />
+            <label className="flex items-start gap-2 text-xs text-slate-200">
               <Checkbox checked={consent} onCheckedChange={(v) => setConsent(Boolean(v))} />
               <span>J'accepte de recevoir la veille MPL (RGPD).</span>
             </label>
             <Button onClick={handleLead} disabled={loading} className="w-full">
-              {loading ? "Generation..." : "Recevoir le rapport PDF"}
+              {loading ? "Génération..." : "Recevoir le rapport PDF"}
             </Button>
 
             <div className="pt-2">
-              <div className="text-xs uppercase text-slate-400">Historique</div>
+              <div className="text-xs uppercase text-slate-200">Historique</div>
               {history.length === 0 ? (
-                <div className="text-sm text-slate-500">Aucune simulation recente.</div>
+                <div className="text-sm text-slate-200">Aucune simulation recente.</div>
               ) : (
                 <div className="space-y-2">
                   {history.map((entry, idx) => (
-                    <div key={idx} className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs">
-                      <div className="font-semibold">{entry.payload?.destinationIso2 || "Pays"} • HS {entry.payload?.hsInput || "n/a"}</div>
-                      <div className="text-slate-600">{entry.payload?.value || 0} {entry.payload?.currency || "EUR"}</div>
+                    <div key={idx} className="rounded-lg border border-white/15 bg-white/5 p-2 text-xs">
+                      <div className="font-semibold text-white">{entry.payload?.destinationIso2 || "Pays"} - HS {entry.payload?.hsInput || "n/a"}</div>
+                      <div className="text-slate-200">{entry.payload?.value || 0} {entry.payload?.currency || "EUR"}</div>
                       <div className="mt-2 flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => reuseHistory(entry)}>Reutiliser</Button>
+                        <Button size="sm" variant="outline" onClick={() => reuseHistory(entry)}>Réutiliser</Button>
                         <Button size="sm" onClick={() => downloadHistoryReport(entry)}>PDF</Button>
                       </div>
                     </div>
@@ -471,26 +497,26 @@ export default function LeadMagnet() {
       </section>
 
       <section className="mt-10 grid gap-6 md:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-          <div className="text-xs uppercase tracking-[0.24em] text-blue-700">Ce que vous obtenez</div>
-          <ul className="mt-4 space-y-2 text-sm text-slate-600">
-            <li>• Estimation droits & taxes</li>
-            <li>• Documents requis par pays</li>
-            <li>• Risques sanctions & conformite</li>
-            <li>• Rapport PDF brand MPL</li>
+        <div className="rounded-2xl border border-white/15 bg-white/10 p-6 text-white backdrop-blur-xl">
+          <div className="text-xs uppercase tracking-[0.24em] text-blue-200">Ce que vous obtenez</div>
+          <ul className="mt-4 list-disc space-y-2 pl-4 text-sm text-slate-200">
+            <li>Estimation droits & taxes</li>
+            <li>Documents requis par pays</li>
+            <li>Risques sanctions & conformité</li>
+            <li>Rapport PDF brand MPL</li>
           </ul>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6">
-          <div className="text-xs uppercase tracking-[0.24em] text-blue-700">Comment ca marche</div>
-          <ol className="mt-4 space-y-2 text-sm text-slate-600">
+        <div className="rounded-2xl border border-white/15 bg-white/10 p-6 text-white backdrop-blur-xl">
+          <div className="text-xs uppercase tracking-[0.24em] text-blue-200">Comment ça marche</div>
+          <ol className="mt-4 space-y-2 text-sm text-slate-200">
             <li>1. Saisis HS ou produit + pays</li>
             <li>2. Obtiens estimation & alertes</li>
-            <li>3. Recois le rapport PDF</li>
+            <li>3. Reçois le rapport PDF</li>
           </ol>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-          <div className="text-xs uppercase tracking-[0.24em] text-blue-700">Centre veille</div>
-          <p className="mt-4 text-sm text-slate-600">
+        <div className="rounded-2xl border border-white/15 bg-white/10 p-6 text-white backdrop-blur-xl">
+          <div className="text-xs uppercase tracking-[0.24em] text-blue-200">Centre veille</div>
+          <p className="mt-4 text-sm text-slate-200">
             Signaux sanctions, documents & taxes. Personnalise les pays et HS suivis pour recevoir la veille.
           </p>
           <Button className="mt-4" variant="outline" onClick={() => navigate("/app/centre-veille")}>
