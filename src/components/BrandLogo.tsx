@@ -1,9 +1,11 @@
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 type BrandSize = "sm" | "md" | "lg";
 
 type BrandLogoProps = {
   className?: string;
+  href?: string;
   imageClassName?: string;
   textClassName?: string;
   titleClassName?: string;
@@ -25,6 +27,7 @@ const sizeConfig: Record<BrandSize, { img: string; title: string; subtitle: stri
 
 export function BrandLogo({
   className,
+  href = "/",
   imageClassName,
   textClassName,
   titleClassName,
@@ -40,7 +43,7 @@ export function BrandLogo({
   const styles = sizeConfig[size];
 
   return (
-    <div className={cn("flex items-center", styles.gap, className)}>
+    <Link to={href} className={cn("inline-flex items-center no-underline", styles.gap, className)} aria-label="Accueil MPL Conseil Export">
       <img
         src={logoSrc}
         alt="Logo MPL Conseil Export"
@@ -54,6 +57,6 @@ export function BrandLogo({
           <p className={cn(styles.location, "text-muted-foreground truncate", locationClassName)}>{location}</p>
         </div>
       )}
-    </div>
+    </Link>
   );
 }
