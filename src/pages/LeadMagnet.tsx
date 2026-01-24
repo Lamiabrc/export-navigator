@@ -30,7 +30,7 @@ type BriefResponse = {
   countryNotes?: Array<{ title: string; items: string[] }>;
 };
 
-const HS_CHIPS = ["3004", "8708", "2204", "3304", "9403", "8504"];
+type HsSuggestion = { code: string; label: string };
 
 // Fallback minimal si Intl.supportedValuesOf("region") n'est pas dispo
 const COUNTRIES_FALLBACK = [
@@ -245,6 +245,7 @@ export default function LeadMagnet() {
   const [insurance, setInsurance] = React.useState("");
   const [consent, setConsent] = React.useState(false);
   const [email, setEmail] = React.useState("");
+  const [hsSuggestions, setHsSuggestions] = React.useState<HsSuggestion[]>([]);
 
   const [loading, setLoading] = React.useState(false);
   const [result, setResult] = React.useState<BriefResponse | null>(null);
@@ -291,11 +292,6 @@ export default function LeadMagnet() {
     return TOP_COUNTRY_ISO2.map((iso2) => m.get(iso2)).filter(Boolean) as Array<{ iso2: string; label: string }>;
   }, [allCountries]);
 
-  const hsOptions = React.useMemo(() => {
-    const fromHistory = history.map((h) => String(h.payload?.hsInput || "")).filter(Boolean);
-    return Array.from(new Set([...HS_CHIPS, ...fromHistory]));
-  }, [history]);
-
   React.useEffect(() => {
     const rawHistory = localStorage.getItem("mpl_sim_history");
     if (rawHistory) {
@@ -309,6 +305,43 @@ export default function LeadMagnet() {
     const storedEmail = localStorage.getItem("mpl_lead_email");
     if (storedEmail) setEmail(storedEmail);
   }, []);
+
+  React.useEffect(() => {
+    const query = productOrHs.trim();
+    if (query.length < 2) {
+      setHsSuggestions([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/hs/search?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setHsSuggestions(
+          items
+            .map((item: any) => ({
+              code: String(item?.code || "").trim(),
+              label: String(item?.label || "").trim(),
+            }))
+            .filter((item: HsSuggestion) => item.code),
+        );
+      } catch (err) {
+        if ((err as any)?.name !== "AbortError") {
+          setHsSuggestions([]);
+        }
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [productOrHs]);
 
   const syncDestinationFromText = (text: string) => {
     setDestinationText(text);
@@ -513,19 +546,6 @@ export default function LeadMagnet() {
             Estimation immédiate des droits/taxes, documents requis et risques sanctions. Rapport PDF MPL + veille personnalisée.
           </p>
 
-          <div className="flex flex-wrap gap-2">
-            {HS_CHIPS.map((chip) => (
-              <button
-                key={chip}
-                type="button"
-                onClick={() => setProductOrHs(chip)}
-                className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-sm text-white"
-              >
-                HS {chip}
-              </button>
-            ))}
-          </div>
-
           <div className="flex flex-wrap gap-3 text-xs text-slate-200">
             {TRUST_ITEMS.map((item) => (
               <span key={item} className="rounded-full border border-white/20 bg-white/10 px-3 py-1">
@@ -550,8 +570,8 @@ export default function LeadMagnet() {
               </div>
 
               <datalist id="hs-list">
-                {hsOptions.map((code) => (
-                  <option key={code} value={code} />
+                {hsSuggestions.map((item) => (
+                  <option key={item.code} value={item.code} label={item.label || item.code} />
                 ))}
               </datalist>
 
