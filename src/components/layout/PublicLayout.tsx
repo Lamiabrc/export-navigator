@@ -51,7 +51,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         <div className="h-1 bg-gradient-to-r from-blue-700 via-white to-red-600" />
       </header>
 
-      <main className="relative z-10 mx-auto w-full max-w-6xl px-6 py-10 text-slate-900">
+      <main className="relative z-10 mx-auto w-full max-w-7xl px-6 py-12 text-slate-900 md:px-10">
         {children ?? <Outlet />}
       </main>
 

@@ -240,10 +240,10 @@ export default function LeadMagnet() {
 
   return (
     <PublicLayout>
-      <section className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+      <section className="grid gap-12 lg:grid-cols-[1.15fr_0.95fr] lg:items-start">
         <div className="space-y-6 text-white">
-          <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Audit - Réglementation - Veille</p>
-          <h1 className="text-4xl font-semibold leading-tight md:text-5xl">
+          <p className="text-xs uppercase tracking-[0.4em] text-blue-200">Audit - Réglementation - Veille</p>
+          <h1 className="text-4xl font-semibold leading-tight md:text-6xl">
             Votre contrôle export en 30 secondes.
           </h1>
           <p className="text-lg text-slate-200">
@@ -271,7 +271,7 @@ export default function LeadMagnet() {
         </div>
 
         <Card className="border border-white/15 bg-white/10 text-white shadow-2xl backdrop-blur-xl">
-          <CardContent className="space-y-4 p-6">
+          <CardContent className="space-y-4 p-7 md:p-8">
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
                 <Label>Produit ou code HS</Label>
@@ -398,13 +398,13 @@ export default function LeadMagnet() {
         </Card>
       </section>
 
-      <section className="mt-10 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+      <section className="mt-12 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
         <Card className="border border-white/15 bg-white/10 text-white backdrop-blur-xl">
-          <CardContent className="p-6">
+          <CardContent className="p-7 md:p-8">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs uppercase tracking-[0.25em] text-slate-200">Résumé</div>
-                <div className="text-2xl font-semibold">Estimation & conformité</div>
+                <div className="text-2xl font-semibold md:text-3xl">Estimation & conformité</div>
               </div>
               <div className="text-xs text-slate-200">Dernière mise à jour: {formatDateTimeFr(result?.updatedAt)}</div>
             </div>
@@ -457,7 +457,7 @@ export default function LeadMagnet() {
         </Card>
 
         <Card className="border border-white/15 bg-white/10 text-white backdrop-blur-xl">
-          <CardContent className="p-6 space-y-4">
+          <CardContent className="space-y-4 p-7 md:p-8">
             <div className="text-sm font-semibold">Recevoir le rapport PDF + veille</div>
             <Input
               value={email}
