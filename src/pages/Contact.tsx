@@ -56,25 +56,40 @@ export default function Contact() {
     <PublicLayout>
       <div className="space-y-8">
         <div>
-          <p className="text-xs uppercase tracking-[0.35em] text-blue-700">Contact</p>
-          <h1 className="text-4xl font-semibold text-slate-900">Parlons de votre projet export.</h1>
-          <p className="text-lg text-slate-600">
-            Offre selectionnee: <span className="font-semibold">{offerLabels[offerType]}</span>.
+          <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Contact</p>
+          <h1 className="text-4xl font-semibold text-white">Parlons de votre projet export.</h1>
+          <p className="text-lg text-slate-200">
+            Offre selectionnee: <span className="font-semibold text-white">{offerLabels[offerType]}</span>.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4 max-w-2xl">
+        <div className="rounded-2xl border border-white/15 bg-white/10 p-6 shadow-lg backdrop-blur space-y-4 max-w-2xl">
           <div className="space-y-2">
-            <Label>Entreprise</Label>
-            <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Nom de l'entreprise" />
+            <Label className="text-slate-200">Entreprise</Label>
+            <Input
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              placeholder="Nom de l'entreprise"
+              className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+            />
           </div>
           <div className="space-y-2">
-            <Label>Email</Label>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vous@exemple.com" />
+            <Label className="text-slate-200">Email</Label>
+            <Input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="vous@exemple.com"
+              className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+            />
           </div>
           <div className="space-y-2">
-            <Label>Message</Label>
-            <Textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Besoin, pays, HS, urgence..." />
+            <Label className="text-slate-200">Message</Label>
+            <Textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Besoin, pays, HS, urgence..."
+              className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+            />
           </div>
           <Button onClick={submit} disabled={sending}>
             {sending ? "Envoi..." : "Envoyer la demande"}

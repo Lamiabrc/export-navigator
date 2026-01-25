@@ -873,7 +873,7 @@ export default function LeadMagnet() {
                       </div>
                       <div className="text-slate-200">{entry.payload?.value || 0} {entry.payload?.currency || "EUR"}</div>
                       <div className="mt-2 flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => reuseHistory(entry)}>Réutiliser</Button>
+                        <Button size="sm" variant="outline" className="border-white text-white hover:bg-white/10" onClick={() => reuseHistory(entry)}>Réutiliser</Button>
                         <Button size="sm" onClick={() => downloadHistoryReport(entry)}>PDF</Button>
                       </div>
                     </div>
@@ -908,7 +908,7 @@ export default function LeadMagnet() {
           <p className="mt-4 text-sm text-slate-200">
             Signaux sanctions, documents & taxes. Personnalise les pays et HS suivis pour recevoir la veille.
           </p>
-          <Button className="mt-4" variant="outline" onClick={() => navigate("/app/centre-veille")}>
+          <Button className="mt-4 border-white text-white hover:bg-white/10" variant="outline" onClick={() => navigate("/app/centre-veille")}>
             Voir la veille
           </Button>
         </div>
