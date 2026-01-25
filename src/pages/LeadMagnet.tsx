@@ -495,6 +495,14 @@ export default function LeadMagnet() {
     setResult(entry.result);
   };
 
+  const clearHistory = () => {
+    const confirmed = window.confirm("Supprimer l'historique des simulations ?");
+    if (!confirmed) return;
+    localStorage.removeItem("mpl_sim_history");
+    localStorage.removeItem("mpl_last_simulation");
+    setHistory([]);
+  };
+
   const downloadHistoryReport = async (entry: { payload: any; result: BriefResponse }) => {
     try {
       setLoading(true);
@@ -861,7 +869,19 @@ export default function LeadMagnet() {
             </Button>
 
             <div className="pt-2">
-              <div className="text-xs uppercase text-slate-200">Historique</div>
+              <div className="flex items-center justify-between">
+                <div className="text-xs uppercase text-slate-200">Historique</div>
+                {history.length > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-white text-white hover:bg-white/10"
+                    onClick={clearHistory}
+                  >
+                    Effacer
+                  </Button>
+                ) : null}
+              </div>
               {history.length === 0 ? (
                 <div className="text-sm text-slate-200">Aucune simulation recente.</div>
               ) : (

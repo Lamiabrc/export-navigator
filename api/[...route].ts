@@ -655,45 +655,42 @@ async function handleContact(req: VercelRequest, res: VercelResponse) {
   if (!EMAIL_RE.test(email)) return res.status(400).json({ error: "invalid email" });
 
   const sb = getSupabase();
-  if (!sb) {
-    return res.status(500).json({
-      error: "Missing SUPABASE env",
-      details: "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing",
-    });
-  }
-
   let dbWarning: string | null = null;
-  try {
-    const { error } = await sb.from("leads").insert({
-      email,
-      consent,
-      consent_newsletter: consent,
-      simulation_id: simulationId,
-      metadata,
-      offer_type: offerType,
-      message,
-      context_json: context,
-      source: body.source || "lead_magnet",
-    });
-
-    if (error) throw error;
-  } catch (e: any) {
+  if (sb) {
     try {
       const { error } = await sb.from("leads").insert({
         email,
+        consent,
         consent_newsletter: consent,
+        simulation_id: simulationId,
+        metadata,
         offer_type: offerType,
         message,
-        context_json: { ...context, simulationId, metadata },
+        context_json: context,
+        source: body.source || "lead_magnet",
       });
+
       if (error) throw error;
-      dbWarning = "Leads table schema is partial (fallback insert used).";
-    } catch (e2: any) {
-      return res.status(500).json({
-        error: "db insert failed",
-        details: e2?.message || "Unable to insert lead",
-      });
+    } catch (e: any) {
+      try {
+        const { error } = await sb.from("leads").insert({
+          email,
+          consent_newsletter: consent,
+          offer_type: offerType,
+          message,
+          context_json: { ...context, simulationId, metadata },
+        });
+        if (error) throw error;
+        dbWarning = "Leads table schema is partial (fallback insert used).";
+      } catch (e2: any) {
+        return res.status(500).json({
+          error: "db insert failed",
+          details: e2?.message || "Unable to insert lead",
+        });
+      }
     }
+  } else {
+    dbWarning = "Supabase not configured. Lead not stored.";
   }
 
   const contactTo = process.env.CONTACT_TO || "lamia.brechet@outlook.fr";
@@ -701,6 +698,7 @@ async function handleContact(req: VercelRequest, res: VercelResponse) {
   const fromEmail = process.env.CONTACT_FROM || "MPL Export <onboarding@resend.dev>";
 
   let mailWarning: string | null = null;
+  let mailSent = false;
 
   if (resendKey) {
     const subject = `Lead MPL - ${offerType.toUpperCase()}${simulationId ? ` - ${simulationId}` : ""}`;
@@ -740,6 +738,8 @@ async function handleContact(req: VercelRequest, res: VercelResponse) {
       if (!response.ok) {
         const text = await response.text();
         mailWarning = text || response.statusText;
+      } else {
+        mailSent = true;
       }
     } catch (err: any) {
       mailWarning = err?.message || "email send failed";
@@ -749,7 +749,7 @@ async function handleContact(req: VercelRequest, res: VercelResponse) {
   }
 
   return res.status(200).json({
-    ok: true,
+    ok: mailSent,
     mailWarning,
     dbWarning,
   });

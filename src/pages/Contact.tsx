@@ -33,7 +33,7 @@ export default function Contact() {
     }
     try {
       setSending(true);
-      await fetch("/api/contact", {
+      const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -43,7 +43,18 @@ export default function Contact() {
           context: { company },
         }),
       });
-      toast({ title: "Demande envoyee", description: "Nous revenons vers vous rapidement." });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || data?.mailWarning || "Impossible d'envoyer la demande.");
+      }
+      if (data?.mailWarning) {
+        toast({
+          title: "Envoi partiel",
+          description: "Demande enregistree, mais l'envoi email n'est pas configure.",
+        });
+      } else {
+        toast({ title: "Demande envoyee", description: "Nous revenons vers vous rapidement." });
+      }
       setMessage("");
     } catch (err: any) {
       toast({ title: "Erreur", description: err?.message || "Impossible d'envoyer la demande." });
