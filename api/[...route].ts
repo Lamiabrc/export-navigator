@@ -636,6 +636,10 @@ async function handleLeads(req: VercelRequest, res: VercelResponse) {
 }
 
 async function handleContact(req: VercelRequest, res: VercelResponse) {
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (req.method === "GET") {
+    return res.status(200).json({ ok: false, message: "Use POST to send a contact request." });
+  }
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const body = safeJson(req) || {};

@@ -29,6 +29,13 @@ type Territory = { code: string; label: string | null };
 type Client = { id: string; name: string | null };
 type Product = { id: string; label: string | null };
 type Destination = { id: string; name: string | null };
+const ENABLE_TERRITORIES = import.meta.env.VITE_ENABLE_TERRITORIES === "true";
+
+function isMissingTableError(err: unknown) {
+  const message = String((err as any)?.message || "");
+  const code = (err as any)?.code;
+  return code === "42P01" || /not found|does not exist/i.test(message);
+}
 
 export function useSales() {
   const [rows, setRows] = React.useState<SaleRowUI[]>([]);
@@ -43,7 +50,7 @@ export function useSales() {
 
     try {
       const [tRes, cRes, pRes, dRes, sRes] = await Promise.all([
-        supabase.from("territories").select("code,label"),
+        ENABLE_TERRITORIES ? supabase.from("territories").select("code,label") : Promise.resolve({ data: [], error: null }),
         supabase.from("clients").select("id,name").limit(1000),
         supabase.from("products").select("id,label").limit(1000),
         supabase.from("export_destinations").select("id,name").order("name", { ascending: true }).limit(1000),
@@ -57,7 +64,7 @@ export function useSales() {
           .limit(200),
       ]);
 
-      if (tRes.error) throw tRes.error;
+      if (tRes.error && !isMissingTableError(tRes.error)) throw tRes.error;
       if (cRes.error) throw cRes.error;
       if (pRes.error) throw pRes.error;
       if (dRes.error) throw dRes.error;

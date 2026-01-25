@@ -90,6 +90,7 @@ const FALLBACK_TERRITORIES: Lookups["territories"] = [
   { code: "BL", label: "Saint-Barthelemy" },
   { code: "MF", label: "Saint-Martin" },
 ];
+const ENABLE_TERRITORIES = import.meta.env.VITE_ENABLE_TERRITORIES === "true";
 
 const defaultTimeRange: TimeRangeValue = { preset: "last_30d" };
 const defaultAutoRefresh: AutoRefreshState = { enabled: false, intervalMs: 60_000 };
@@ -243,7 +244,7 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
   // Territories (1 fois)
   React.useEffect(() => {
     let isMounted = true;
-    if (!SUPABASE_ENV_OK) {
+    if (!SUPABASE_ENV_OK || !ENABLE_TERRITORIES) {
       setLookups((prev) => ({ ...prev, territories: FALLBACK_TERRITORIES }));
       return () => {
         isMounted = false;
@@ -254,7 +255,15 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
       setLookupsLoading(true);
       try {
         const { data, error } = await supabase.from("territories").select("code,label").order("label", { ascending: true });
-        if (error) throw error;
+        if (error) {
+          const message = String((error as any)?.message || "");
+          const isMissingTable =
+            (error as any)?.code === "42P01" || /not found|does not exist/i.test(message);
+          if (!isMissingTable) throw error;
+          if (!isMounted) return;
+          setLookups((prev) => ({ ...prev, territories: FALLBACK_TERRITORIES }));
+          return;
+        }
         if (!isMounted) return;
         setLookups((prev) => ({
           ...prev,
