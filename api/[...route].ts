@@ -381,6 +381,10 @@ function getSupabase() {
 }
 
 async function handleExportBrief(req: VercelRequest, res: VercelResponse) {
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (req.method === "GET") {
+    return res.status(200).json({ ok: false, message: "Use POST to request an export brief." });
+  }
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const body = safeJson(req) || {};
@@ -531,7 +535,7 @@ async function handleHsSearch(req: VercelRequest, res: VercelResponse, url: URL)
   if (!q || q.length < 2) return res.status(200).json({ items: [] });
 
   const sb = getSupabase();
-  if (!sb) return res.status(500).json({ error: "Supabase env missing" });
+  if (!sb) return res.status(200).json({ items: [] });
 
   const isNumericQuery = /[0-9]/.test(q);
   const limit = 12;

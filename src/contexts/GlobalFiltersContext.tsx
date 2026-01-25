@@ -92,6 +92,26 @@ const FALLBACK_TERRITORIES: Lookups["territories"] = [
 ];
 const ENABLE_TERRITORIES = import.meta.env.VITE_ENABLE_TERRITORIES === "true";
 
+function buildGlobalTerritories(): Lookups["territories"] {
+  try {
+    const supported = (Intl as any).supportedValuesOf?.("region") as string[] | undefined;
+    if (!supported?.length) return FALLBACK_TERRITORIES;
+
+    const dn = new Intl.DisplayNames(["fr"], { type: "region" });
+    const entries = supported
+      .filter((code) => /^[A-Z]{2}$/.test(code))
+      .map((code) => ({ code, label: dn.of(code) || code }))
+      .filter((c) => c.label && c.label !== c.code);
+
+    entries.sort((a, b) => a.label!.localeCompare(b.label!, "fr", { sensitivity: "base" }));
+    return entries.length ? entries : FALLBACK_TERRITORIES;
+  } catch {
+    return FALLBACK_TERRITORIES;
+  }
+}
+
+const GLOBAL_TERRITORIES = buildGlobalTerritories();
+
 const defaultTimeRange: TimeRangeValue = { preset: "last_30d" };
 const defaultAutoRefresh: AutoRefreshState = { enabled: false, intervalMs: 60_000 };
 
@@ -193,7 +213,7 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
   const [lastRefreshAt, setLastRefreshAt] = React.useState<number | null>(null);
 
   const [lookups, setLookups] = React.useState<Lookups>({
-    territories: FALLBACK_TERRITORIES,
+    territories: GLOBAL_TERRITORIES,
     clients: [],
     products: [],
   });
@@ -245,7 +265,7 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
   React.useEffect(() => {
     let isMounted = true;
     if (!SUPABASE_ENV_OK || !ENABLE_TERRITORIES) {
-      setLookups((prev) => ({ ...prev, territories: FALLBACK_TERRITORIES }));
+      setLookups((prev) => ({ ...prev, territories: GLOBAL_TERRITORIES }));
       return () => {
         isMounted = false;
       };
@@ -261,17 +281,17 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
             (error as any)?.code === "42P01" || /not found|does not exist/i.test(message);
           if (!isMissingTable) throw error;
           if (!isMounted) return;
-          setLookups((prev) => ({ ...prev, territories: FALLBACK_TERRITORIES }));
+          setLookups((prev) => ({ ...prev, territories: GLOBAL_TERRITORIES }));
           return;
         }
         if (!isMounted) return;
         setLookups((prev) => ({
           ...prev,
-          territories: (data as any[])?.length ? (data as any[]) : FALLBACK_TERRITORIES,
+          territories: (data as any[])?.length ? (data as any[]) : GLOBAL_TERRITORIES,
         }));
       } catch (err) {
         console.error("[global-filters] territories error", err);
-        if (isMounted) setLookups((prev) => ({ ...prev, territories: FALLBACK_TERRITORIES }));
+        if (isMounted) setLookups((prev) => ({ ...prev, territories: GLOBAL_TERRITORIES }));
       } finally {
         if (isMounted) setLookupsLoading(false);
       }
