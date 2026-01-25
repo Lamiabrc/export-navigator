@@ -693,7 +693,7 @@ async function handleContact(req: VercelRequest, res: VercelResponse) {
     dbWarning = "Supabase not configured. Lead not stored.";
   }
 
-  const contactTo = process.env.CONTACT_TO || "lamia.brechet@outlook.fr";
+  const contactTo = "lamia.brechet@outlook.fr";
   const resendKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.CONTACT_FROM || "MPL Export <onboarding@resend.dev>";
 
