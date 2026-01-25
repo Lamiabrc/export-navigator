@@ -383,11 +383,13 @@ export default function LeadMagnet() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
-      }).then((r) => r.json());
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.ok === false) {
+        throw new Error(data?.error || "Impossible de calculer.");
+      }
 
-      if (res.error) throw new Error(res.error);
-
-      setResult(res);
+      setResult(data);
 
       const entry = { payload, result: res };
       setHistory((prev) => {

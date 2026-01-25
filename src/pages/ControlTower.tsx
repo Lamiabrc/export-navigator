@@ -285,9 +285,10 @@ export default function ControlTower() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
-      }).then((r) => r.json());
-      if (res.error) throw new Error(res.error);
-      setDrawerResult(res as BriefResponse);
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.ok === false) throw new Error(data?.error || "Impossible de calculer.");
+      setDrawerResult(data as BriefResponse);
     } catch (err: any) {
       setDrawerError(err?.message || "Impossible de charger la fiche export.");
     } finally {

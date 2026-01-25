@@ -383,7 +383,7 @@ function getSupabase() {
 async function handleExportBrief(req: VercelRequest, res: VercelResponse) {
   if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method === "GET") {
-    return res.status(200).json({ ok: false, message: "Use POST to request an export brief." });
+    return res.status(200).json({ ok: false, error: "Use POST to request an export brief." });
   }
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -398,7 +398,7 @@ async function handleExportBrief(req: VercelRequest, res: VercelResponse) {
   const mode = normalizeMode(body.mode);
 
   if (!destinationIso2 || destinationIso2.length !== 2) {
-    return res.status(400).json({ error: "destinationIso2 required (ISO2)" });
+    return res.status(400).json({ ok: false, error: "destinationIso2 required (ISO2)" });
   }
 
   const isIntraEU = EU_MEMBERS.has(destinationIso2);
@@ -525,25 +525,83 @@ async function handleExportBrief(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  return res.status(200).json({ ...result, simulationId });
+  return res.status(200).json({ ok: true, ...result, simulationId });
 }
 
 async function handleHsSearch(req: VercelRequest, res: VercelResponse, url: URL) {
-  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (req.method !== "GET") return res.status(405).json({ ok: false, error: "Method not allowed" });
 
   const q = (url.searchParams.get("q") || "").trim();
-  if (!q || q.length < 2) return res.status(200).json({ items: [] });
+  if (!q || q.length < 2) return res.status(400).json({ ok: false, error: "Missing q" });
 
+  const hubspotToken = process.env.HUBSPOT_PRIVATE_APP_TOKEN || process.env.HUBSPOT_ACCESS_TOKEN;
+  const hubspotObject = process.env.HUBSPOT_HS_OBJECT || "hs_codes";
   const sb = getSupabase();
-  if (!sb) return res.status(200).json({ items: [] });
+  if (!hubspotToken && !sb) {
+    return res.status(500).json({ ok: false, error: "Server misconfigured" });
+  }
 
   const isNumericQuery = /[0-9]/.test(q);
   const limit = 12;
 
+  if (hubspotToken) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 9000);
+      const searchPayload = {
+        filterGroups: [
+          {
+            filters: [
+              isNumericQuery
+                ? { propertyName: "code", operator: "STARTS_WITH", value: q.replace(/[^0-9]/g, "") }
+                : { propertyName: "keywords", operator: "CONTAINS_TOKEN", value: q },
+            ],
+          },
+        ],
+        properties: ["code", "description_fr", "description_en"],
+        limit,
+      };
+
+      const response = await fetch(`https://api.hubapi.com/crm/v3/objects/${hubspotObject}/search`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${hubspotToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(searchPayload),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error("[hs-search] hubspot error", { status: response.status, body: text });
+        const status = response.status === 401 ? 401 : response.status === 429 ? 429 : 502;
+        return res.status(status).json({ ok: false, error: "HubSpot error" });
+      }
+
+      const payload = await response.json();
+      const items = (payload?.results || [])
+        .map((row: any) => {
+          const props = row?.properties || {};
+          const code = String(props.code || "").trim();
+          const label = `${code} - ${props.description_fr || props.description_en || ""}`.trim().replace(/\s+-\s+$/, "");
+          return code ? { code, label } : null;
+        })
+        .filter(Boolean);
+
+      return res.status(200).json({ ok: true, items, data: payload });
+    } catch (err: any) {
+      console.error("[hs-search] hubspot fetch failed", err?.message || err);
+      return res.status(502).json({ ok: false, error: "HubSpot fetch failed" });
+    }
+  }
+
   try {
     if (isNumericQuery) {
       const prefix = q.replace(/[^0-9]/g, "");
-      if (prefix.length < 2) return res.status(200).json({ items: [] });
+      if (prefix.length < 2) return res.status(400).json({ ok: false, error: "Missing q" });
 
       const { data, error } = await sb
         .from("hs_codes")
@@ -552,14 +610,14 @@ async function handleHsSearch(req: VercelRequest, res: VercelResponse, url: URL)
         .order("code", { ascending: true })
         .limit(limit);
 
-      if (error) return res.status(500).json({ error: error.message });
+      if (error) return res.status(500).json({ ok: false, error: error.message });
 
       const items = (data || []).map((row: any) => ({
         code: String(row.code || ""),
         label: `${row.code} - ${row.description_fr || row.description_en || ""}`.trim().replace(/\s+-\s+$/, ""),
       }));
 
-      return res.status(200).json({ items });
+      return res.status(200).json({ ok: true, items });
     }
 
     const { data, error } = await sb
@@ -569,16 +627,17 @@ async function handleHsSearch(req: VercelRequest, res: VercelResponse, url: URL)
       .order("updated_at", { ascending: false })
       .limit(limit);
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ ok: false, error: error.message });
 
     const items = (data || []).map((row: any) => ({
       code: String(row.code || ""),
       label: `${row.code} - ${row.description_fr || row.description_en || ""}`.trim().replace(/\s+-\s+$/, ""),
     }));
 
-    return res.status(200).json({ items });
+    return res.status(200).json({ ok: true, items });
   } catch (err: any) {
-    return res.status(500).json({ error: err?.message || "Search failed" });
+    console.error("[hs-search] supabase failed", err?.message || err);
+    return res.status(500).json({ ok: false, error: err?.message || "Search failed" });
   }
 }
 
