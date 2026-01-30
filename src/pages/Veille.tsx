@@ -25,6 +25,7 @@ const IMPACT_STYLES: Record<ImpactLevel, string> = {
 };
 
 const THEME_PRESETS = ["Douanes", "TVA", "Sanctions", "Transport", "Accords"];
+const SECTOR_PRESETS = ["Agroalimentaire", "Industrie", "Cosmetique", "Pharma", "Tech", "Services"];
 
 const INPUT_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
 
@@ -68,6 +69,10 @@ export default function Veille() {
   const { value: savedIds, setValue: setSavedIds } = useLocalStorage<string[]>("mpl_saved_watch", []);
   const [useMyWatch, setUseMyWatch] = React.useState(false);
   const [countryInput, setCountryInput] = React.useState("");
+
+  const [sector, setSector] = React.useState("");
+  const [product, setProduct] = React.useState("");
+  const [destination, setDestination] = React.useState("");
 
   const limit = 40;
 
@@ -158,6 +163,12 @@ export default function Veille() {
     [setSavedIds]
   );
 
+  const applyOperationToFilters = () => {
+    const parts = [sector, product, destination].filter(Boolean).join(" ");
+    if (parts) setSearch(parts);
+    if (destination) setPrefs((prev) => ({ ...prev, countries: Array.from(new Set([...prev.countries, destination])) }));
+  };
+
   const SkeletonCard = () => (
     <div className="rounded-xl border border-white/10 bg-slate-950/70 p-5 shadow-lg backdrop-blur-md">
       <div className="h-4 w-32 rounded bg-white/10" />
@@ -193,6 +204,104 @@ export default function Veille() {
               >
                 Demander un audit export
               </Button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-lg backdrop-blur-md">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold">Votre operation export</h2>
+                <p className="text-sm text-slate-200">
+                  Choisissez un secteur, un produit et un pays pour obtenir des rappels utiles.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => (window.location.href = "/analyse")}>Estimer les couts</Button>
+                <Button
+                  variant="outline"
+                  className="border-white/20 text-slate-100 hover:bg-white/10"
+                  onClick={() => (window.location.href = "/contact")}
+                >
+                  Etre accompagne par MPL
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-3">
+              <div className="space-y-2">
+                <Label className="text-slate-200">Secteur</Label>
+                <div className="flex flex-wrap gap-2">
+                  {SECTOR_PRESETS.map((item) => (
+                    <Button
+                      key={item}
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "border-white/15 bg-white/5 text-slate-100 hover:bg-white/10",
+                        sector === item && "bg-white/15 text-white"
+                      )}
+                      onClick={() => setSector(item)}
+                    >
+                      {item}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-slate-200">Produit</Label>
+                <Input
+                  value={product}
+                  onChange={(event) => setProduct(event.target.value)}
+                  placeholder="Ex: pieces mecaniques"
+                  className={INPUT_CLASSES}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-slate-200">Pays de destination</Label>
+                <Input
+                  value={destination}
+                  onChange={(event) => setDestination(event.target.value)}
+                  placeholder="Ex: Allemagne"
+                  className={INPUT_CLASSES}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Button variant="outline" className="border-white/20 text-slate-100 hover:bg-white/10" onClick={applyOperationToFilters}>
+                Appliquer aux filtres
+              </Button>
+              <Button variant="outline" className="border-white/20 text-slate-100 hover:bg-white/10" onClick={() => setSearch("")}
+              >
+                Reinitialiser la recherche
+              </Button>
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
+                <div className="text-sm font-semibold text-white">Infos de base</div>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
+                  <li>Verifier la classification douaniere du produit.</li>
+                  <li>Confirmer les documents requis (facture, origine, transport).</li>
+                  <li>Rappeler les taux manuels: droits et TVA restent a saisir.</li>
+                </ul>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
+                <div className="text-sm font-semibold text-white">Risques a surveiller</div>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
+                  <li>Incoterm et repartition des risques.</li>
+                  <li>Sanctions, controles export ou restrictions sectorielles.</li>
+                  <li>Delais et congestion transport.</li>
+                </ul>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
+                <div className="text-sm font-semibold text-white">Prochaine etape</div>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
+                  <li>Estimer le cout complet pour {destination || "votre destination"}.</li>
+                  <li>Comparer 2-3 scenarios (incoterms, modes).</li>
+                  <li>Demander un audit pour valider la strategie.</li>
+                </ul>
+              </div>
             </div>
           </section>
 
