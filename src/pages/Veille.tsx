@@ -35,6 +35,22 @@ type WatchPrefs = {
   sources: string[];
 };
 
+type BriefSource = {
+  id: string;
+  title: string;
+  link: string;
+  sourceName: string;
+  pubDate: string;
+  impact: string;
+};
+
+type BriefData = {
+  summary: string;
+  sources: BriefSource[];
+  createdAt: string;
+  model: string;
+};
+
 const EMPTY_PREFS: WatchPrefs = {
   countries: [],
   themes: [],
@@ -73,6 +89,10 @@ export default function Veille() {
   const [sector, setSector] = React.useState("");
   const [product, setProduct] = React.useState("");
   const [destination, setDestination] = React.useState("");
+
+  const [briefData, setBriefData] = React.useState<BriefData | null>(null);
+  const [briefLoading, setBriefLoading] = React.useState(false);
+  const [briefError, setBriefError] = React.useState<string | null>(null);
 
   const limit = 40;
 
@@ -169,6 +189,30 @@ export default function Veille() {
     if (destination) setPrefs((prev) => ({ ...prev, countries: Array.from(new Set([...prev.countries, destination])) }));
   };
 
+  const generateBrief = async () => {
+    setBriefLoading(true);
+    setBriefError(null);
+    try {
+      const params = new URLSearchParams();
+      if (sector) params.set("sector", sector);
+      if (product) params.set("product", product);
+      if (destination) params.set("destination", destination);
+
+      const res = await fetch(`/api/brief?${params.toString()}`);
+      const payload = await res.json();
+
+      if (!res.ok || payload?.ok === false) {
+        throw new Error(payload?.error || "Impossible de generer le brief");
+      }
+
+      setBriefData(payload.data as BriefData);
+    } catch (err: any) {
+      setBriefError(err?.message || "Erreur de generation");
+    } finally {
+      setBriefLoading(false);
+    }
+  };
+
   const SkeletonCard = () => (
     <div className="rounded-xl border border-white/10 bg-slate-950/70 p-5 shadow-lg backdrop-blur-md">
       <div className="h-4 w-32 rounded bg-white/10" />
@@ -206,28 +250,23 @@ export default function Veille() {
               </Button>
             </div>
           </section>
-
-          <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-lg backdrop-blur-md">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <section className="sticky top-20 z-10 rounded-2xl border border-white/10 bg-slate-950/80 p-6 text-white shadow-lg backdrop-blur-md">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-2xl font-semibold">Votre operation export</h2>
+                <h2 className="text-xl font-semibold">Votre operation export</h2>
                 <p className="text-sm text-slate-200">
-                  Choisissez un secteur, un produit et un pays pour obtenir des rappels utiles.
+                  Choisissez un secteur, un produit et un pays pour cibler la veille.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-3">
-                <Button onClick={() => (window.location.href = "/analyse")}>Estimer les couts</Button>
-                <Button
-                  variant="outline"
-                  className="border-white/20 text-slate-100 hover:bg-white/10"
-                  onClick={() => (window.location.href = "/contact")}
-                >
-                  Etre accompagne par MPL
-                </Button>
+              <div className="flex items-center gap-3">
+                <Label htmlFor="my-watch" className="text-slate-200">
+                  Mode Ma veille
+                </Label>
+                <Switch id="my-watch" checked={useMyWatch} onCheckedChange={setUseMyWatch} />
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 lg:grid-cols-3">
+            <div className="mt-4 grid gap-4 lg:grid-cols-3">
               <div className="space-y-2">
                 <Label className="text-slate-200">Secteur</Label>
                 <div className="flex flex-wrap gap-2">
@@ -271,40 +310,181 @@ export default function Veille() {
               <Button variant="outline" className="border-white/20 text-slate-100 hover:bg-white/10" onClick={applyOperationToFilters}>
                 Appliquer aux filtres
               </Button>
-              <Button variant="outline" className="border-white/20 text-slate-100 hover:bg-white/10" onClick={() => setSearch("")}
-              >
+              <Button variant="outline" className="border-white/20 text-slate-100 hover:bg-white/10" onClick={() => setSearch("")}>
                 Reinitialiser la recherche
+              </Button>
+              <Button onClick={generateBrief} disabled={briefLoading}>
+                {briefLoading ? "Generation..." : "Generer un brief actionnable"}
               </Button>
             </div>
 
-            <div className="mt-6 grid gap-4 lg:grid-cols-3">
-              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
-                <div className="text-sm font-semibold text-white">Infos de base</div>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
-                  <li>Verifier la classification douaniere du produit.</li>
-                  <li>Confirmer les documents requis (facture, origine, transport).</li>
-                  <li>Rappeler les taux manuels: droits et TVA restent a saisir.</li>
-                </ul>
+            <Separator className="my-6 bg-white/10" />
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="space-y-2">
+                <Label className="text-slate-200">Recherche</Label>
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Mot-cle, pays, mesure..."
+                  className={INPUT_CLASSES}
+                />
               </div>
-              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
-                <div className="text-sm font-semibold text-white">Risques a surveiller</div>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
-                  <li>Incoterm et repartition des risques.</li>
-                  <li>Sanctions, controles export ou restrictions sectorielles.</li>
-                  <li>Delais et congestion transport.</li>
-                </ul>
+
+              <div className="space-y-2">
+                <Label className="text-slate-200">Impact</Label>
+                <div className="flex flex-wrap gap-2">
+                  {(["ALL", "LOW", "MED", "HIGH"] as const).map((level) => (
+                    <Button
+                      key={level}
+                      type="button"
+                      variant={impactFilter === level ? "default" : "outline"}
+                      className={cn(
+                        "text-slate-100",
+                        impactFilter !== level && "border-white/20 hover:bg-white/10"
+                      )}
+                      onClick={() => setImpactFilter(level)}
+                    >
+                      {level === "ALL" ? "Tous" : IMPACT_LABELS[level]}
+                    </Button>
+                  ))}
+                </div>
               </div>
-              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
-                <div className="text-sm font-semibold text-white">Prochaine etape</div>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
-                  <li>Estimer le cout complet pour {destination || "votre destination"}.</li>
-                  <li>Comparer 2-3 scenarios (incoterms, modes).</li>
-                  <li>Demander un audit pour valider la strategie.</li>
-                </ul>
+
+              <div className="space-y-2">
+                <Label className="text-slate-200">Sources</Label>
+                <div className="flex flex-wrap gap-2">
+                  {sources.map((source) => (
+                    <Button
+                      key={source.id}
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "border-white/15 bg-white/5 text-slate-100 hover:bg-white/10",
+                        activeSources.includes(source.name) && "bg-white/15 text-white"
+                      )}
+                      onClick={() => setSourceFilters((prev) => toggleValue(prev, source.name))}
+                    >
+                      {source.name}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <Separator className="my-6 bg-white/10" />
+
+            <div className="space-y-3">
+              <Label className="text-slate-200">Themes</Label>
+              <div className="flex flex-wrap gap-2">
+                {availableTags.length === 0 && (
+                  <p className="text-sm text-slate-300">Les themes s'affichent des la premiere collecte.</p>
+                )}
+                {availableTags.map((tag) => (
+                  <Badge
+                    key={tag}
+                    onClick={() => setThemeFilters((prev) => toggleValue(prev, tag))}
+                    className={cn(
+                      "cursor-pointer border bg-white/5 text-slate-100 border-white/15 hover:bg-white/10",
+                      activeThemes.includes(tag) && "bg-white/15 text-white"
+                    )}
+                  >
+                    {tag}
+                  </Badge>
+                ))}
               </div>
             </div>
           </section>
 
+          <section className="grid gap-4 lg:grid-cols-3">
+            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
+              <div className="text-sm font-semibold text-white">Infos de base</div>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
+                <li>Verifier la classification douaniere du produit.</li>
+                <li>Confirmer les documents requis (facture, origine, transport).</li>
+                <li>Rappeler les taux manuels: droits et TVA restent a saisir.</li>
+              </ul>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
+              <div className="text-sm font-semibold text-white">Risques a surveiller</div>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
+                <li>Incoterm et repartition des risques.</li>
+                <li>Sanctions, controles export ou restrictions sectorielles.</li>
+                <li>Delais et congestion transport.</li>
+              </ul>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
+              <div className="text-sm font-semibold text-white">Prochaine etape</div>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
+                <li>Estimer le cout complet pour {destination || "votre destination"}.</li>
+                <li>Comparer 2-3 scenarios (incoterms, modes).</li>
+                <li>Demander un audit pour valider la strategie.</li>
+              </ul>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-lg backdrop-blur-md">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">Brief actionnable</h2>
+                <p className="text-sm text-slate-200">
+                  Resume LLM base sur les sources recentes. Ajoutez vos criteres avant de generer.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => (window.location.href = "/analyse")}>Estimer les couts</Button>
+                <Button
+                  variant="outline"
+                  className="border-white/20 text-slate-100 hover:bg-white/10"
+                  onClick={() => (window.location.href = "/contact")}
+                >
+                  Etre accompagne par MPL
+                </Button>
+              </div>
+            </div>
+
+            {briefError && (
+              <div className="mt-4 rounded-lg border border-rose-200/20 bg-rose-950/40 p-4 text-rose-100">
+                {briefError}
+              </div>
+            )}
+
+            {!briefError && !briefData && (
+              <div className="mt-4 rounded-lg border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-300">
+                Cliquez sur "Generer un brief actionnable" pour obtenir une synthese actualisee.
+              </div>
+            )}
+
+            {briefData && (
+              <div className="mt-4 space-y-4">
+                <div className="rounded-lg border border-white/10 bg-slate-950/80 p-4 text-sm text-slate-200 whitespace-pre-line">
+                  {briefData.summary}
+                </div>
+                <div className="text-xs text-slate-400">
+                  Genere le {new Date(briefData.createdAt).toLocaleString("fr-FR")} via {briefData.model}.
+                </div>
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold text-white">Sources utilisees</div>
+                  <div className="grid gap-2">
+                    {briefData.sources.map((source) => (
+                      <a
+                        key={source.id}
+                        href={source.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-lg border border-white/10 bg-slate-950/70 p-3 text-sm text-slate-200 hover:bg-white/5"
+                      >
+                        <div className="font-semibold text-white">{source.title}</div>
+                        <div className="text-xs text-slate-400">
+                          {source.sourceName} · {new Date(source.pubDate).toLocaleDateString("fr-FR")} · {source.impact}
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-semibold text-white">Top impacts (High)</h2>
@@ -389,96 +569,6 @@ export default function Veille() {
                 ))}
               </div>
             )}
-          </section>
-
-          <section className="sticky top-20 z-10 rounded-2xl border border-white/10 bg-slate-950/80 p-6 text-white shadow-lg backdrop-blur-md">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Filtres rapides</h2>
-                <p className="text-sm text-slate-200">Sources, themes, impact et recherche texte.</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Label htmlFor="my-watch" className="text-slate-200">
-                  Mode Ma veille
-                </Label>
-                <Switch id="my-watch" checked={useMyWatch} onCheckedChange={setUseMyWatch} />
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-4 lg:grid-cols-3">
-              <div className="space-y-2">
-                <Label className="text-slate-200">Recherche</Label>
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Mot-cle, pays, mesure..."
-                  className={INPUT_CLASSES}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-slate-200">Impact</Label>
-                <div className="flex flex-wrap gap-2">
-                  {(["ALL", "LOW", "MED", "HIGH"] as const).map((level) => (
-                    <Button
-                      key={level}
-                      type="button"
-                      variant={impactFilter === level ? "default" : "outline"}
-                      className={cn(
-                        "text-slate-100",
-                        impactFilter !== level && "border-white/20 hover:bg-white/10"
-                      )}
-                      onClick={() => setImpactFilter(level)}
-                    >
-                      {level === "ALL" ? "Tous" : IMPACT_LABELS[level]}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-slate-200">Sources</Label>
-                <div className="flex flex-wrap gap-2">
-                  {sources.map((source) => (
-                    <Button
-                      key={source.id}
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        "border-white/15 bg-white/5 text-slate-100 hover:bg-white/10",
-                        activeSources.includes(source.name) && "bg-white/15 text-white"
-                      )}
-                      onClick={() => setSourceFilters((prev) => toggleValue(prev, source.name))}
-                    >
-                      {source.name}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <Separator className="my-6 bg-white/10" />
-
-            <div className="space-y-3">
-              <Label className="text-slate-200">Themes</Label>
-              <div className="flex flex-wrap gap-2">
-                {availableTags.length === 0 && (
-                  <p className="text-sm text-slate-300">Les themes s'affichent des la premiere collecte.</p>
-                )}
-                {availableTags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    onClick={() => setThemeFilters((prev) => toggleValue(prev, tag))}
-                    className={cn(
-                      "cursor-pointer border bg-white/5 text-slate-100 border-white/15 hover:bg-white/10",
-                      activeThemes.includes(tag) && "bg-white/15 text-white"
-                    )}
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            </div>
           </section>
 
           <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-lg backdrop-blur-md">
