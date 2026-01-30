@@ -1,4 +1,4 @@
-import * as React from "react";
+﻿import * as React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
@@ -6,10 +6,10 @@ import { cn } from "@/lib/utils";
 import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
 
 const NAV_ITEMS = [
-  { label: "Solutions", to: "/solutions" },
+  { label: "Analyse", to: "/analyse" },
   { label: "Veille", to: "/veille" },
-  { label: "Ressources", to: "/resources" },
-  { label: "Tarifs", to: "/tarifs" },
+  { label: "Methodologie", to: "/methodologie" },
+  { label: "Guides", to: "/guides/incoterms-ddp" },
   { label: "Contact", to: "/contact" },
 ];
 
@@ -38,10 +38,10 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
           </nav>
           <div className="flex items-center gap-3">
             <Button asChild variant="outline">
-              <Link to="/app/centre-veille">Centre veille</Link>
+              <Link to="/veille">Veille export</Link>
             </Button>
             <Button asChild>
-              <Link to="/contact?offer=express">Validation express</Link>
+              <Link to="/contact?offer=audit">Demander un audit</Link>
             </Button>
             <Button asChild variant="ghost" className="hidden md:inline-flex">
               <Link to="/login">Connexion</Link>
@@ -58,11 +58,11 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
       <footer className="border-t border-slate-200/80 bg-white">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-8 md:flex-row md:items-center md:justify-between">
           <div className="text-sm text-slate-500">
-            MPL Export Navigator — Audit, veille et pilotage export premium.
+            MPL Export Conseil - outil gratuit d'aide a la decision export.
           </div>
           <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
-            <Link to="/resources" className="hover:text-slate-900">Documentation</Link>
-            <Link to="/newsletter" className="hover:text-slate-900">Newsletter</Link>
+            <Link to="/methodologie" className="hover:text-slate-900">Methodologie</Link>
+            <Link to="/guides/incoterms-ddp" className="hover:text-slate-900">Guides</Link>
             <Link to="/contact" className="hover:text-slate-900">Contact</Link>
           </div>
         </div>

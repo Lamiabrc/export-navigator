@@ -247,6 +247,14 @@ export default function Analyse() {
   const [pdfLoading, setPdfLoading] = React.useState(false);
   const [shareStatus, setShareStatus] = React.useState<string | null>(null);
 
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const incoterm = params.get("incoterm");
+    if (incoterm && INCOTERMS.includes(incoterm as Incoterm)) {
+      setForm((prev) => ({ ...prev, incoterm: incoterm as Incoterm }));
+    }
+  }, []);
+
   const baseInput = React.useMemo(() => toInput(form), [form]);
   const baseResult = React.useMemo(() => computeLandedCost(baseInput), [baseInput]);
 
