@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { computeLandedCost } from "@/lib/landedCost";
 import type { Incoterm, TransportMode, LandedCostInput } from "@/lib/landedCost";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 const INCOTERMS: Incoterm[] = ["EXW", "FCA", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"];
 const MODES: TransportMode[] = ["road", "air", "sea", "rail"];
@@ -42,6 +43,15 @@ type ScenarioState = {
   enabled: boolean;
   form: FormState;
 };
+
+type SharePayload = {
+  id: string;
+  createdAt: string;
+  input: LandedCostInput;
+  result: ReturnType<typeof computeLandedCost>;
+};
+
+const SHARE_KEY = "mpl_share_payloads";
 
 function toNumber(value: string) {
   const num = Number(value);
@@ -99,6 +109,119 @@ function breakdownData(result: ReturnType<typeof computeLandedCost>) {
   ];
 }
 
+function buildShareId() {
+  return `share_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function readShareStore(): Record<string, SharePayload> {
+  try {
+    const raw = localStorage.getItem(SHARE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed as Record<string, SharePayload>;
+  } catch {
+    return {};
+  }
+}
+
+function writeShareStore(store: Record<string, SharePayload>) {
+  localStorage.setItem(SHARE_KEY, JSON.stringify(store));
+}
+
+async function generatePdf(payload: SharePayload) {
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage([595, 842]);
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const { width, height } = page.getSize();
+
+  let cursor = height - 60;
+  const left = 50;
+  const line = 16;
+
+  page.drawText("MPL Export Conseil - Fiche Decision", { x: left, y: cursor, size: 16, font: bold, color: rgb(0.1, 0.2, 0.4) });
+  cursor -= 26;
+
+  page.drawText(`Date: ${new Date(payload.createdAt).toLocaleDateString("fr-FR")}`, {
+    x: left,
+    y: cursor,
+    size: 10,
+    font,
+    color: rgb(0.3, 0.3, 0.3),
+  });
+  cursor -= 24;
+
+  const rows = [
+    `Destination: ${payload.input.destination}`,
+    `Incoterm: ${payload.input.incoterm}`,
+    `Mode: ${payload.input.mode}`,
+    `Goods value: ${formatMoney(payload.input.goodsValue, payload.input.currency)}`,
+  ];
+  rows.forEach((text) => {
+    page.drawText(text, { x: left, y: cursor, size: 11, font });
+    cursor -= line;
+  });
+
+  cursor -= 10;
+  page.drawText("Breakdown", { x: left, y: cursor, size: 12, font: bold });
+  cursor -= 18;
+
+  const breakdown = payload.result.breakdown;
+  const breakdownLines = [
+    `Pre-carriage: ${formatMoney(breakdown.preCarriage, payload.input.currency)}`,
+    `Main freight: ${formatMoney(breakdown.mainFreight, payload.input.currency)}`,
+    `Insurance: ${formatMoney(breakdown.insurance, payload.input.currency)}`,
+    `Packaging: ${formatMoney(breakdown.packaging, payload.input.currency)}`,
+    `Brokerage: ${formatMoney(breakdown.brokerage, payload.input.currency)}`,
+    `Misc: ${formatMoney(breakdown.misc, payload.input.currency)}`,
+    `Duties: ${formatMoney(breakdown.duties, payload.input.currency)}`,
+    `VAT: ${formatMoney(breakdown.vat, payload.input.currency)}`,
+  ];
+  breakdownLines.forEach((text) => {
+    page.drawText(text, { x: left, y: cursor, size: 10, font });
+    cursor -= line;
+  });
+
+  cursor -= 8;
+  page.drawText(`Total landed cost: ${formatMoney(payload.result.total, payload.input.currency)}`, {
+    x: left,
+    y: cursor,
+    size: 12,
+    font: bold,
+  });
+  cursor -= 18;
+
+  if (payload.result.unitCost) {
+    page.drawText(`Unit cost: ${formatMoney(payload.result.unitCost, payload.input.currency)}`, {
+      x: left,
+      y: cursor,
+      size: 10,
+      font,
+    });
+    cursor -= 16;
+  }
+
+  cursor -= 6;
+  page.drawText("Warnings", { x: left, y: cursor, size: 12, font: bold });
+  cursor -= 16;
+  payload.result.warnings.slice(0, 6).forEach((warning) => {
+    page.drawText(`- ${warning}`, { x: left, y: cursor, size: 9, font });
+    cursor -= 12;
+  });
+
+  page.drawText("Estimation indicative - validation humaine recommandee.", {
+    x: left,
+    y: 60,
+    size: 9,
+    font,
+    color: rgb(0.4, 0.4, 0.4),
+  });
+
+  const bytes = await pdf.save();
+  return new Blob([bytes], { type: "application/pdf" });
+}
+
 export default function Analyse() {
   const [form, setForm] = React.useState<FormState>(DEFAULT_FORM);
   const [scenarios, setScenarios] = React.useState<ScenarioState[]>([
@@ -121,6 +244,8 @@ export default function Analyse() {
       form: { ...DEFAULT_FORM, incoterm: "DDP", mode: "air" },
     },
   ]);
+  const [pdfLoading, setPdfLoading] = React.useState(false);
+  const [shareStatus, setShareStatus] = React.useState<string | null>(null);
 
   const baseInput = React.useMemo(() => toInput(form), [form]);
   const baseResult = React.useMemo(() => computeLandedCost(baseInput), [baseInput]);
@@ -140,6 +265,47 @@ export default function Analyse() {
     { name: "Base", total: baseResult.total },
     ...scenarioResults.map((scenario) => ({ name: scenario.label, total: scenario.result.total })),
   ];
+
+  const handlePdf = async () => {
+    setPdfLoading(true);
+    try {
+      const payload: SharePayload = {
+        id: buildShareId(),
+        createdAt: new Date().toISOString(),
+        input: baseInput,
+        result: baseResult,
+      };
+      const blob = await generatePdf(payload);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `mpl-decision-${Date.now()}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    const payload: SharePayload = {
+      id: buildShareId(),
+      createdAt: new Date().toISOString(),
+      input: baseInput,
+      result: baseResult,
+    };
+    const store = readShareStore();
+    store[payload.id] = payload;
+    writeShareStore(store);
+
+    const shareUrl = `${window.location.origin}/share/${payload.id}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareStatus("Lien copie dans le presse-papiers.");
+    } catch {
+      setShareStatus("Lien genere. Copiez-le manuellement.");
+    }
+  };
 
   return (
     <PublicLayout>
@@ -520,13 +686,23 @@ export default function Analyse() {
                 </ul>
               </div>
               <div className="flex flex-wrap gap-3">
-                <Button variant="outline" className="border-white text-white hover:bg-white/10" disabled>
-                  Generate decision PDF
+                <Button
+                  variant="outline"
+                  className="border-white text-white hover:bg-white/10"
+                  onClick={handlePdf}
+                  disabled={pdfLoading}
+                >
+                  {pdfLoading ? "Generating..." : "Generate decision PDF"}
                 </Button>
-                <Button variant="outline" className="border-white text-white hover:bg-white/10" disabled>
+                <Button
+                  variant="outline"
+                  className="border-white text-white hover:bg-white/10"
+                  onClick={handleShare}
+                >
                   Share link
                 </Button>
               </div>
+              {shareStatus && <p className="text-xs text-slate-200">{shareStatus}</p>}
             </CardContent>
           </Card>
         </section>

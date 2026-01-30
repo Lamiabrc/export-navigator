@@ -12,6 +12,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 
 import LeadMagnet from "@/pages/LeadMagnet";
 import Analyse from "@/pages/Analyse";
+import ShareDecision from "@/pages/ShareDecision";
 import WatchCenter from "@/pages/WatchCenter";
 import WatchRegulatory from "@/pages/WatchRegulatory";
 import WatchCommercial from "@/pages/WatchCommercial";
@@ -58,6 +59,7 @@ export default function App() {
                 <Routes>
                   <Route path="/" element={<LeadMagnet />} />
                   <Route path="/analyse" element={<Analyse />} />
+                  <Route path="/share/:id" element={<ShareDecision />} />
 
                   {/* Public */}
                   <Route path="/solutions" element={<Solutions />} />
