@@ -1,9 +1,9 @@
 ﻿# Architecture & Plan - Export Navigator
 
 ## Pages / Routes (etat & cible)
-- Controle unifie : `CommandCenter` sur `/control-tower` (Dashboard + Strategy + Conformite). Routes legacy `/dashboard`, `/strategy`, `/control-tower-legacy`, `/dashboard-legacy`, `/strategy-hub` redirigees/masquees.
-- Referentiels : `Flows` (`/flows/:id?`), `Clients`, `Products`, `ReferenceLibrary`, `Guide` (export), `Settings`/`Admin`.
-- Facturation : `Invoices`, `InvoiceVerification` (a renommer/faire evoluer en "Invoice Control"), `Simulator`, `MarginAnalysis`.
+- Controle unifie : `CommandCenter` sur `/command-center` (dashboard + conformite). Routes legacy `/dashboard` et `/hub` redirigees/masquees.
+- Referentiels : `Flows` (`/flows/:id?`), `Products`, `ReferenceLibrary`, `Guide` (export), `Settings`/`Admin`.
+- Facturation : `Invoices` et `Simulator`.
 - Autres/legacy a isoler : `PricingPositioning`, `CompetitiveIntel`, `ScenarioLab`, dossier `pages/_unused`.
 
 ## Modules metier (a centraliser dans `/lib`)
@@ -11,7 +11,7 @@
 - References : chargement `reference_rates` (VAT, transport, services) + merge `export_hs_catalog` pour OM/OMR par destination + hs_code.
 - Incoterms & payeurs : regles payeur par incoterm/transport (source `export_incoterms` ou fallback local).
 - OM/OMR & TVA : mapping zone, recherche HS (8/6/4 digits), autoliquidation TVA selon destination.
-- Conformite : checklists docs/incoterms (Control Center), controle facture (Invoice Control) et ecarts.
+- Conformite : checklists docs/incoterms (Control Center) et ecarts.
 
 ## Modele de donnees (Supabase - source de verite)
 - `products` : id, code_article, libelle_article, hs_code, tva_percent, prix/catalogue, poids/dimensions...
@@ -24,17 +24,17 @@
 - `export_destinations` / `eu_country` / vues `v_clients_*` : aides de mapping (zones, pays UE).
 
 ## Navigation cible (Sidebar)
-- Pilotage : **Control Center** (unique), Flows.
-- Facturation & conformite : Invoices, Invoice Control, Simulator, Margin Analysis.
-- Referentiels : Clients, Products, Reference Library, Guide (export).
+- Pilotage : **Command Center** (unique), Flows.
+- Facturation & conformite : Invoices, Simulator.
+- Referentiels : Products, Reference Library, Guide (export).
 - Administration : Settings/Admin (guard UI role admin).
-- Legacy caches : Dashboard/ControlTower/StrategyHub/Competitive/PricingPositioning/ScenarioLab (accessibles seulement via route directe si besoin).
+- Legacy caches : Dashboard/StrategyHub/Competitive/PricingPositioning/ScenarioLab (accessibles seulement via route directe si besoin).
 
 ## Pages a conserver / fusionner
-- Conserver : CommandCenter (Control Center), Flows/CircuitDetail, Finance, Guide (export), Invoices, InvoiceVerification->Invoice Control, Simulator, MarginAnalysis, ReferenceLibrary, Products, Clients, Settings/Admin.
-- Fusion/suppression : remplacer Dashboard + ControlTower + StrategyHub par Control Center ; ne plus afficher les pages legacy dans la nav.
+- Conserver : CommandCenter, Flows/CircuitDetail, Finance, Guide (export), Invoices, Simulator, ReferenceLibrary, Products, Settings/Admin.
+- Fusion/suppression : remplacer Dashboard + StrategyHub par CommandCenter ; ne plus afficher les pages legacy dans la nav.
 
 ## Data layer (priorites)
-- Supprimer localStorage pour donnees metier : `useReferenceRates`, `useProducts`, `useClients`, `useFlows` doivent lire Supabase avec typage strict + fallback message si env absentes.
+- Supprimer localStorage pour donnees metier : `useReferenceRates`, `useProducts`, `useFlows` doivent lire Supabase avec typage strict + fallback message si env absentes.
 - Helpers : produits (`getProductByCodeArticle`, `searchProducts`, `topProductsByZone`), clients (`filterByZone`, `computeClientType`), flows (validation schema data jsonb).
 - Mode degrade : si `VITE_SUPABASE_URL/ANON_KEY` manquants, afficher message et utiliser defaults non persistants.
