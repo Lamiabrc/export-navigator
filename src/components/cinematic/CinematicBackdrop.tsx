@@ -103,22 +103,25 @@ export function CinematicBackdrop({ variant = "public", showMap = true, classNam
     };
   }, [variant]);
 
+  const isPublic = variant === "public";
+
   return (
     <div className={cn("pointer-events-none absolute inset-0 overflow-hidden", className)}>
-      <div className="absolute inset-0 cinematic-gradient" />
-      <div className="absolute inset-0 cinematic-sweep" />
-      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full opacity-70" />
+      {!isPublic && <div className="absolute inset-0 cinematic-gradient" />}
+      {!isPublic && <div className="absolute inset-0 cinematic-sweep" />}
+      <canvas ref={canvasRef} className={cn("absolute inset-0 h-full w-full", isPublic ? "opacity-50" : "opacity-70")} />
       {showMap ? (
         <img
           src={worldMap}
           alt=""
           className={cn(
-            "absolute right-[-8%] top-[-6%] w-[820px] opacity-20 blur-[0.5px]",
+            "absolute right-[-8%] top-[-6%] w-[820px] blur-[0.5px]",
+            isPublic ? "opacity-45" : "opacity-20",
             variant === "app" && "opacity-15"
           )}
         />
       ) : null}
-      <div className="absolute inset-0 cinematic-grid opacity-30" />
+      {!isPublic && <div className="absolute inset-0 cinematic-grid opacity-30" />}
     </div>
   );
 }
