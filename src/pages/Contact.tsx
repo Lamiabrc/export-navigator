@@ -1,4 +1,4 @@
-import * as React from "react";
+﻿import * as React from "react";
 import { useLocation } from "react-router-dom";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,26 @@ const offerLabels: Record<string, string> = {
   audit: "Audit complet",
 };
 
+function readScenarioSummary() {
+  try {
+    const raw = localStorage.getItem("mpl_last_simulation");
+    if (!raw) return "";
+    const parsed = JSON.parse(raw) as any;
+    if (!parsed?.payload) return "";
+
+    const payload = parsed.payload as Record<string, any>;
+    const lines = [
+      `Destination: ${payload.destination || payload.destinationIso2 || "n/a"}`,
+      `Incoterm: ${payload.incoterm || "n/a"}`,
+      `Mode: ${payload.mode || "n/a"}`,
+      `Valeur marchandise: ${payload.goodsValue || payload.value || "n/a"}`,
+    ];
+    return lines.join(" | ");
+  } catch {
+    return "";
+  }
+}
+
 export default function Contact() {
   const location = useLocation();
   const { toast } = useToast();
@@ -21,14 +41,36 @@ export default function Contact() {
   const offerParam = params.get("offer") || "audit";
   const offerType = offerLabels[offerParam] ? offerParam : "audit";
 
+  const [firstName, setFirstName] = React.useState("");
   const [company, setCompany] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const [subject, setSubject] = React.useState(offerLabels[offerType]);
   const [message, setMessage] = React.useState("");
+  const [includeScenario, setIncludeScenario] = React.useState(false);
+  const [scenarioSummary, setScenarioSummary] = React.useState("");
   const [sending, setSending] = React.useState(false);
 
+  React.useEffect(() => {
+    setSubject(offerLabels[offerType]);
+  }, [offerType]);
+
+  React.useEffect(() => {
+    if (includeScenario) {
+      setScenarioSummary(readScenarioSummary());
+    }
+  }, [includeScenario]);
+
   const submit = async () => {
+    if (!firstName.trim()) {
+      toast({ title: "Prenom requis", description: "Merci d'indiquer votre prenom." });
+      return;
+    }
     if (!email.trim()) {
       toast({ title: "Email requis", description: "Merci de renseigner un email de contact." });
+      return;
+    }
+    if (!message.trim()) {
+      toast({ title: "Message requis", description: "Merci d'indiquer votre besoin." });
       return;
     }
     try {
@@ -37,24 +79,20 @@ export default function Contact() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          firstName: firstName.trim(),
           email: email.trim().toLowerCase(),
-          offer_type: offerType,
-          message,
-          context: { company },
+          company: company.trim(),
+          subject: subject.trim(),
+          message: message.trim(),
+          offerType,
+          scenarioSummary: includeScenario ? scenarioSummary : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || data?.mailWarning || "Impossible d'envoyer la demande.");
+        throw new Error(data?.error || "Impossible d'envoyer la demande.");
       }
-      if (data?.mailWarning) {
-        toast({
-          title: "Envoi partiel",
-          description: "Demande enregistree, mais l'envoi email n'est pas configure.",
-        });
-      } else {
-        toast({ title: "Demande envoyee", description: "Nous revenons vers vous rapidement." });
-      }
+      toast({ title: "Demande envoyee", description: "Nous revenons vers vous rapidement." });
       setMessage("");
     } catch (err: any) {
       toast({ title: "Erreur", description: err?.message || "Impossible d'envoyer la demande." });
@@ -76,11 +114,11 @@ export default function Contact() {
 
         <div className="rounded-2xl border border-white/15 bg-white/10 p-6 shadow-lg backdrop-blur space-y-4 max-w-2xl">
           <div className="space-y-2">
-            <Label className="text-slate-200">Entreprise</Label>
+            <Label className="text-slate-200">Prenom</Label>
             <Input
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              placeholder="Nom de l'entreprise"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="Prenom"
               className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
             />
           </div>
@@ -94,6 +132,24 @@ export default function Contact() {
             />
           </div>
           <div className="space-y-2">
+            <Label className="text-slate-200">Societe</Label>
+            <Input
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              placeholder="Nom de l'entreprise"
+              className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-slate-200">Sujet</Label>
+            <Input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Sujet"
+              className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+            />
+          </div>
+          <div className="space-y-2">
             <Label className="text-slate-200">Message</Label>
             <Textarea
               value={message}
@@ -102,6 +158,22 @@ export default function Contact() {
               className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
             />
           </div>
+          <div className="flex items-center gap-2 text-sm text-slate-200">
+            <input
+              id="scenario"
+              type="checkbox"
+              checked={includeScenario}
+              onChange={(e) => setIncludeScenario(e.target.checked)}
+            />
+            <Label htmlFor="scenario" className="text-slate-200">
+              Joindre mon scenario d'analyse
+            </Label>
+          </div>
+          {includeScenario && scenarioSummary && (
+            <div className="rounded-lg border border-white/15 bg-white/5 p-3 text-xs text-slate-200">
+              {scenarioSummary}
+            </div>
+          )}
           <Button onClick={submit} disabled={sending}>
             {sending ? "Envoi..." : "Envoyer la demande"}
           </Button>
