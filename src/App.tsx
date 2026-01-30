@@ -11,6 +11,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ThemeProvider } from "@/components/theme-provider";
 
 import LeadMagnet from "@/pages/LeadMagnet";
+import Analyse from "@/pages/Analyse";
 import WatchCenter from "@/pages/WatchCenter";
 import WatchRegulatory from "@/pages/WatchRegulatory";
 import WatchCommercial from "@/pages/WatchCommercial";
@@ -56,6 +57,7 @@ export default function App() {
               <GlobalFiltersProvider>
                 <Routes>
                   <Route path="/" element={<LeadMagnet />} />
+                  <Route path="/analyse" element={<Analyse />} />
 
                   {/* Public */}
                   <Route path="/solutions" element={<Solutions />} />
