@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -182,7 +182,6 @@ function getTreatyNotesForCountry(iso2: string) {
     ];
   }
 
-  // Par défaut : note générique (ça incite à la validation)
   return [
     {
       title: "Traités & préférences",
@@ -384,14 +383,19 @@ export default function LeadMagnet() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || "Impossible de calculer.");
+
+      const raw = await res.json().catch(() => ({}));
+      if (!res.ok || raw?.ok === false) {
+        throw new Error(raw?.error || "Impossible de calculer.");
       }
 
-      setResult(data);
+      // ✅ Supporte plusieurs formats de réponse backend
+      const brief: BriefResponse = (raw?.result ?? raw?.data ?? raw) as BriefResponse;
 
-      const entry = { payload, result: res };
+      setResult(brief);
+
+      // ✅ Historique : on stocke un objet sérialisable (payload + brief)
+      const entry = { payload, result: brief };
       setHistory((prev) => {
         const next = [entry, ...prev].slice(0, 6);
         localStorage.setItem("mpl_last_simulation", JSON.stringify(entry));
@@ -469,7 +473,9 @@ export default function LeadMagnet() {
       URL.revokeObjectURL(url);
 
       toast({ title: "Rapport généré", description: "Le PDF est téléchargé." });
-      navigate("/app/control-tower");
+
+      // ✅ Route existante (si pas connecté => ProtectedRoute redirige login)
+      navigate("/app/command-center");
     } catch (err: any) {
       toast({ title: "Erreur lead", description: err?.message || "Impossible de finaliser." });
     } finally {
@@ -508,9 +514,12 @@ export default function LeadMagnet() {
   const downloadHistoryReport = async (entry: { payload: any; result: BriefResponse }) => {
     try {
       setLoading(true);
+      const iso2 = entry.payload?.destinationIso2;
+      const label = allCountries.find((c) => c.iso2 === iso2)?.label || iso2 || "Destination";
+
       const pdfBlob = await postPdf({
         title: "Rapport de contrôle export",
-        destination: entry.payload?.destinationIso2,
+        destination: label,
         incoterm: entry.payload?.incoterm,
         value: entry.payload?.value,
         currency: entry.payload?.currency,
@@ -548,200 +557,216 @@ export default function LeadMagnet() {
 
   return (
     <PublicLayout>
-      <section className="grid gap-12 lg:grid-cols-[1.15fr_0.95fr] lg:items-start">
-        <div className="space-y-6 text-white">
-          <p className="text-xs uppercase tracking-[0.4em] text-blue-200">Audit - Réglementation - Veille</p>
-          <h1 className="text-4xl font-semibold leading-tight md:text-6xl">Votre contrôle export en 30 secondes.</h1>
-          <p className="text-lg text-slate-200">
-            Estimation immédiate des droits/taxes, documents requis et risques sanctions. Rapport PDF MPL + veille personnalisée.
-          </p>
+      {/* ✅ Hero lisible (fond explicite => contraste OK même si layout change) */}
+      <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 md:p-10">
+        <div className="grid gap-12 lg:grid-cols-[1.15fr_0.95fr] lg:items-start">
+          <div className="space-y-6 text-white">
+            <p className="text-xs uppercase tracking-[0.4em] text-blue-200">Audit • Réglementation • Veille</p>
+            <h1 className="text-4xl font-semibold leading-tight md:text-6xl">Votre contrôle export en 30 secondes.</h1>
+            <p className="text-lg text-slate-200">
+              Estimation immédiate des droits/taxes, documents requis et risques sanctions. Rapport PDF MPL + veille personnalisée.
+            </p>
 
-          <div className="flex flex-wrap gap-3 text-xs text-slate-200">
-            {TRUST_ITEMS.map((item) => (
-              <span key={item} className="rounded-full border border-white/20 bg-white/10 px-3 py-1">
-                {item}
-              </span>
-            ))}
+            <div className="flex flex-wrap gap-3 text-xs text-slate-200">
+              {TRUST_ITEMS.map((item) => (
+                <span key={item} className="rounded-full border border-white/20 bg-white/10 px-3 py-1">
+                  {item}
+                </span>
+              ))}
+            </div>
+
+            <div className="text-xs text-white/70">
+              Besoin d’un accompagnement ?{" "}
+              <button
+                type="button"
+                className="underline hover:opacity-90"
+                onClick={() => navigate("/contact?offer=express")}
+              >
+                Demander une validation express
+              </button>
+              .
+            </div>
           </div>
-        </div>
 
-        <Card className="border border-white/15 bg-white/10 text-white shadow-2xl backdrop-blur-xl">
-          <CardContent className="space-y-4 p-7 md:p-8">
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
-                <Label>Produit ou code HS</Label>
-                <Input
-                  value={productOrHs}
-                  onChange={(e) => setProductOrHs(e.target.value)}
-                  placeholder="Ex: cosmetique ou 3004"
-                  list="hs-list"
-                  className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
-                />
-              </div>
-
-              <datalist id="hs-list">
-                {hsSuggestions.map((item) => (
-                  <option key={item.code} value={item.code} label={item.label || item.code} />
-                ))}
-              </datalist>
-
-              {/* ✅ PAYS RECOMMANDÉS */}
-              <div className="space-y-2 md:col-span-2">
-                <div className="flex items-center justify-between">
-                  <Label>Destination</Label>
-                  <span className="text-xs text-white/70">
-                    Recommandés + recherche (tous les pays)
-                  </span>
+          <Card className="border border-white/15 bg-white/10 text-white shadow-2xl backdrop-blur-xl">
+            <CardContent className="space-y-4 p-7 md:p-8">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="productOrHs">Produit ou code HS</Label>
+                  <Input
+                    id="productOrHs"
+                    value={productOrHs}
+                    onChange={(e) => setProductOrHs(e.target.value)}
+                    placeholder="Ex : cosmétique ou 3004"
+                    list="hs-list"
+                    className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+                  />
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {topCountries.map((c) => (
-                    <button
-                      key={c.iso2}
-                      type="button"
-                      onClick={() => {
-                        setDestinationIso2(c.iso2);
-                        setDestinationLabel(c.label);
-                        setDestinationText(`${c.label} (${c.iso2})`);
-                      }}
-                      className={`rounded-full border px-3 py-1 text-xs ${
-                        destinationIso2 === c.iso2
-                          ? "border-white/40 bg-white/20 text-white"
-                          : "border-white/20 bg-white/10 text-white"
-                      }`}
-                    >
-                      {c.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* ✅ Recherche pays */}
-                <Input
-                  value={destinationText}
-                  onChange={(e) => syncDestinationFromText(e.target.value)}
-                  placeholder='Ex: "Suisse" ou "Suisse (CH)"'
-                  list="countries-list"
-                  className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
-                />
-
-                <datalist id="countries-list">
-                  {allCountries.map((c) => (
-                    <option key={c.iso2} value={`${c.label} (${c.iso2})`} />
+                <datalist id="hs-list">
+                  {hsSuggestions.map((item) => (
+                    <option key={item.code} value={item.code} label={item.label || item.code} />
                   ))}
                 </datalist>
 
-                {!destinationIso2 && destinationText ? (
-                  <div className="text-xs text-white/70">
-                    Sélectionne une proposition (ex: “Suisse (CH)”) pour valider le pays.
+                {/* ✅ PAYS RECOMMANDÉS */}
+                <div className="space-y-2 md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="destination">Destination</Label>
+                    <span className="text-xs text-white/70">Recommandés + recherche (tous les pays)</span>
                   </div>
-                ) : destinationIso2 ? (
-                  <div className="text-xs text-white/70">
-                    Pays sélectionné : <span className="font-semibold text-white">{destinationLabel}</span> ({destinationIso2})
+
+                  <div className="flex flex-wrap gap-2">
+                    {topCountries.map((c) => (
+                      <button
+                        key={c.iso2}
+                        type="button"
+                        onClick={() => {
+                          setDestinationIso2(c.iso2);
+                          setDestinationLabel(c.label);
+                          setDestinationText(`${c.label} (${c.iso2})`);
+                        }}
+                        className={`rounded-full border px-3 py-1 text-xs ${
+                          destinationIso2 === c.iso2
+                            ? "border-white/40 bg-white/20 text-white"
+                            : "border-white/20 bg-white/10 text-white"
+                        }`}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
                   </div>
-                ) : null}
+
+                  {/* ✅ Recherche pays */}
+                  <Input
+                    id="destination"
+                    value={destinationText}
+                    onChange={(e) => syncDestinationFromText(e.target.value)}
+                    placeholder='Ex : "Suisse" ou "Suisse (CH)"'
+                    list="countries-list"
+                    className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+                  />
+
+                  <datalist id="countries-list">
+                    {allCountries.map((c) => (
+                      <option key={c.iso2} value={`${c.label} (${c.iso2})`} />
+                    ))}
+                  </datalist>
+
+                  {!destinationIso2 && destinationText ? (
+                    <div className="text-xs text-white/70">
+                      Sélectionne une proposition (ex : “Suisse (CH)”) pour valider le pays.
+                    </div>
+                  ) : destinationIso2 ? (
+                    <div className="text-xs text-white/70">
+                      Pays sélectionné : <span className="font-semibold text-white">{destinationLabel}</span> ({destinationIso2})
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="value">Valeur marchandise</Label>
+                  <Input
+                    id="value"
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    type="number"
+                    className="border-white/20 bg-white/90 text-slate-900"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Incoterm</Label>
+                  <Select value={incoterm} onValueChange={setIncoterm}>
+                    <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EXW">EXW</SelectItem>
+                      <SelectItem value="FCA">FCA</SelectItem>
+                      <SelectItem value="DAP">DAP</SelectItem>
+                      <SelectItem value="DDP">DDP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Valeur marchandise</Label>
-                <Input
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  type="number"
-                  className="border-white/20 bg-white/90 text-slate-900"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Incoterm</Label>
-                <Select value={incoterm} onValueChange={setIncoterm}>
-                  <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="EXW">EXW</SelectItem>
-                    <SelectItem value="FCA">FCA</SelectItem>
-                    <SelectItem value="DAP">DAP</SelectItem>
-                    <SelectItem value="DDP">DDP</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <Accordion type="single" collapsible>
-              <AccordionItem value="advanced">
-                <AccordionTrigger className="text-white">Options avancees</AccordionTrigger>
-                <AccordionContent>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Devise</Label>
-                      <Select value={currency} onValueChange={setCurrency}>
-                        <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="EUR">EUR</SelectItem>
-                          <SelectItem value="USD">USD</SelectItem>
-                          <SelectItem value="GBP">GBP</SelectItem>
-                        </SelectContent>
-                      </Select>
+              <Accordion type="single" collapsible>
+                <AccordionItem value="advanced">
+                  <AccordionTrigger className="text-white">Options avancées</AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Devise</Label>
+                        <Select value={currency} onValueChange={setCurrency}>
+                          <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="EUR">EUR</SelectItem>
+                            <SelectItem value="USD">USD</SelectItem>
+                            <SelectItem value="GBP">GBP</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Mode transport</Label>
+                        <Select value={mode} onValueChange={setMode}>
+                          <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="air">Air</SelectItem>
+                            <SelectItem value="sea">Maritime</SelectItem>
+                            <SelectItem value="road">Route</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Poids (kg)</Label>
+                        <Input
+                          value={weightKg}
+                          onChange={(e) => setWeightKg(e.target.value)}
+                          type="number"
+                          className="border-white/20 bg-white/90 text-slate-900"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Assurance (EUR)</Label>
+                        <Input
+                          value={insurance}
+                          onChange={(e) => setInsurance(e.target.value)}
+                          type="number"
+                          className="border-white/20 bg-white/90 text-slate-900"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Mode transport</Label>
-                      <Select value={mode} onValueChange={setMode}>
-                        <SelectTrigger className="border-white/20 bg-white/90 text-slate-900">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="air">Air</SelectItem>
-                          <SelectItem value="sea">Maritime</SelectItem>
-                          <SelectItem value="road">Route</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Poids (kg)</Label>
-                      <Input
-                        value={weightKg}
-                        onChange={(e) => setWeightKg(e.target.value)}
-                        type="number"
-                        className="border-white/20 bg-white/90 text-slate-900"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Assurance (EUR)</Label>
-                      <Input
-                        value={insurance}
-                        onChange={(e) => setInsurance(e.target.value)}
-                        type="number"
-                        className="border-white/20 bg-white/90 text-slate-900"
-                      />
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
 
-            <Button onClick={handleEstimate} disabled={loading} className="w-full">
-              {loading ? "Calcul en cours..." : "Calculer mon contrôle export"}
-            </Button>
+              <Button onClick={handleEstimate} disabled={loading} className="w-full">
+                {loading ? "Calcul en cours..." : "Calculer mon contrôle export"}
+              </Button>
 
-            <p className="text-xs text-slate-200">
-              Résultat immédiat, sans email. L'email sert uniquement a recevoir le PDF et activer la veille.
-            </p>
-          </CardContent>
-        </Card>
+              <p className="text-xs text-slate-200">
+                Résultat immédiat, sans email. L'email sert uniquement à recevoir le PDF et activer la veille.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       </section>
 
       <section className="mt-12 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
         <Card className="border border-white/15 bg-white/10 text-white backdrop-blur-xl">
           <CardContent className="p-7 md:p-8">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div>
                 <div className="text-xs uppercase tracking-[0.25em] text-slate-200">Résumé</div>
                 <div className="text-2xl font-semibold md:text-3xl">Estimation & conformité</div>
               </div>
               <div className="text-xs text-slate-200">
-                Dernière mise à jour: {result?.updatedAt ? formatDateTimeFr(result.updatedAt) : "—"}
+                Dernière mise à jour : {result?.updatedAt ? formatDateTimeFr(result.updatedAt) : "—"}
               </div>
             </div>
 
@@ -757,7 +782,7 @@ export default function LeadMagnet() {
                       <div className="text-lg font-semibold text-white">{score}/100</div>
                     </div>
                     <div className="text-xs text-slate-200">
-                      Confiance: <span className="font-semibold text-white">{confidenceLabel(result.confidence)}</span>
+                      Confiance : <span className="font-semibold text-white">{confidenceLabel(result.confidence)}</span>
                     </div>
                   </div>
                   <div className="mt-3 h-2 w-full rounded-full bg-white/15">
@@ -832,10 +857,17 @@ export default function LeadMagnet() {
                       ))}
                     </div>
                     <div className="mt-3 flex flex-wrap gap-3">
-                      <Button variant="secondary" onClick={() => navigate(`/contact?offer=express&country=${destinationIso2}`)}>
+                      <Button
+                        variant="secondary"
+                        onClick={() => navigate(`/contact?offer=express&country=${destinationIso2}`)}
+                      >
                         Valider avec un expert (express)
                       </Button>
-                      <Button variant="outline" className="border-white text-white hover:bg-white/10" onClick={() => navigate(`/contact?offer=audit&country=${destinationIso2}`)}>
+                      <Button
+                        variant="outline"
+                        className="border-white text-white hover:bg-white/10"
+                        onClick={() => navigate(`/contact?offer=audit&country=${destinationIso2}`)}
+                      >
                         Audit complet
                       </Button>
                     </div>
@@ -846,7 +878,7 @@ export default function LeadMagnet() {
                 )}
 
                 <div className="rounded-xl border border-white/15 bg-white/5 p-3 text-xs text-slate-200">
-                  Confiance: {result.confidence} - Sources: {result.sources?.join(", ") || "Règles internes"}
+                  Confiance : {result.confidence} — Sources : {result.sources?.join(", ") || "Règles internes"}
                 </div>
               </div>
             )}
@@ -856,16 +888,25 @@ export default function LeadMagnet() {
         <Card className="border border-white/15 bg-white/10 text-white backdrop-blur-xl">
           <CardContent className="space-y-4 p-7 md:p-8">
             <div className="text-sm font-semibold">Recevoir le rapport PDF + veille</div>
+
             <Input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email professionnel"
               className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
             />
+
             <label className="flex items-start gap-2 text-xs text-slate-200">
               <Checkbox checked={consent} onCheckedChange={(v) => setConsent(Boolean(v))} />
-              <span>J'accepte de recevoir la veille MPL (RGPD).</span>
+              <span>
+                J'accepte de recevoir la veille MPL (RGPD).{" "}
+                <Link className="underline hover:opacity-90" to="/confidentialite">
+                  Politique de confidentialité
+                </Link>
+                .
+              </span>
             </label>
+
             <Button onClick={handleLead} disabled={loading} className="w-full">
               {loading ? "Génération..." : "Recevoir le rapport PDF"}
             </Button>
@@ -884,19 +925,36 @@ export default function LeadMagnet() {
                   </Button>
                 ) : null}
               </div>
+
               {history.length === 0 ? (
-                <div className="text-sm text-slate-200">Aucune simulation recente.</div>
+                <div className="text-sm text-slate-200">Aucune simulation récente.</div>
               ) : (
                 <div className="space-y-2">
                   {history.map((entry, idx) => (
                     <div key={idx} className="rounded-lg border border-white/15 bg-white/5 p-2 text-xs">
                       <div className="font-semibold text-white">
-                        {entry.payload?.destinationIso2 || "Pays"} - HS {entry.payload?.hsInput || "n/a"}
+                        {entry.payload?.destinationIso2 || "Pays"} —{" "}
+                        {entry.payload?.hsInput
+                          ? `HS ${entry.payload?.hsInput}`
+                          : entry.payload?.productText
+                            ? `Produit: ${entry.payload?.productText}`
+                            : "Saisie: n/a"}
                       </div>
-                      <div className="text-slate-200">{entry.payload?.value || 0} {entry.payload?.currency || "EUR"}</div>
+                      <div className="text-slate-200">
+                        {entry.payload?.value || 0} {entry.payload?.currency || "EUR"}
+                      </div>
                       <div className="mt-2 flex gap-2">
-                        <Button size="sm" variant="outline" className="border-white text-white hover:bg-white/10" onClick={() => reuseHistory(entry)}>Réutiliser</Button>
-                        <Button size="sm" onClick={() => downloadHistoryReport(entry)}>PDF</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-white text-white hover:bg-white/10"
+                          onClick={() => reuseHistory(entry)}
+                        >
+                          Réutiliser
+                        </Button>
+                        <Button size="sm" onClick={() => downloadHistoryReport(entry)}>
+                          PDF
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -917,6 +975,7 @@ export default function LeadMagnet() {
             <li>Rapport PDF brand MPL</li>
           </ul>
         </div>
+
         <div className="rounded-2xl border border-white/15 bg-white/10 p-6 text-white backdrop-blur-xl">
           <div className="text-xs uppercase tracking-[0.24em] text-blue-200">Comment ça marche</div>
           <ol className="mt-4 space-y-2 text-sm text-slate-200">
@@ -925,12 +984,17 @@ export default function LeadMagnet() {
             <li>3. Reçois le rapport PDF</li>
           </ol>
         </div>
+
         <div className="rounded-2xl border border-white/15 bg-white/10 p-6 text-white backdrop-blur-xl">
           <div className="text-xs uppercase tracking-[0.24em] text-blue-200">Centre veille</div>
           <p className="mt-4 text-sm text-slate-200">
             Signaux sanctions, documents & taxes. Personnalise les pays et HS suivis pour recevoir la veille.
           </p>
-          <Button className="mt-4 border-white text-white hover:bg-white/10" variant="outline" onClick={() => navigate("/app/centre-veille")}>
+          <Button
+            className="mt-4 border-white text-white hover:bg-white/10"
+            variant="outline"
+            onClick={() => navigate("/veille")}
+          >
             Voir la veille
           </Button>
         </div>
@@ -942,8 +1006,14 @@ export default function LeadMagnet() {
           <div className="text-2xl font-semibold">Demandez un audit complet ou une validation express.</div>
         </div>
         <div className="flex gap-3">
-          <Button variant="secondary" onClick={() => navigate("/contact?offer=express")}>Validation express</Button>
-          <Button variant="outline" className="border-white text-white hover:bg-white/10" onClick={() => navigate("/newsletter")}>
+          <Button variant="secondary" onClick={() => navigate("/contact?offer=express")}>
+            Validation express
+          </Button>
+          <Button
+            variant="outline"
+            className="border-white text-white hover:bg-white/10"
+            onClick={() => navigate("/newsletter")}
+          >
             Recevoir la veille
           </Button>
         </div>
