@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,9 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 const INCOTERMS: Incoterm[] = ["EXW", "FCA", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"];
 const MODES: TransportMode[] = ["road", "air", "sea", "rail"];
+
+const INPUT_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
+const SELECT_TRIGGER_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100";
 
 const DEFAULT_FORM = {
   goodsValue: "12000",
@@ -348,12 +351,16 @@ export default function Analyse() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Valeur marchandise</Label>
-                  <Input value={form.goodsValue} onChange={(e) => updateForm(setForm, "goodsValue", e.target.value)} />
+                  <Input
+                    value={form.goodsValue}
+                    onChange={(e) => updateForm(setForm, "goodsValue", e.target.value)}
+                    className={INPUT_CLASSES}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Devise</Label>
                   <Select value={form.currency} onValueChange={(value) => updateForm(setForm, "currency", value)}>
-                    <SelectTrigger className="bg-white/90 text-slate-900">
+                    <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -365,16 +372,24 @@ export default function Analyse() {
                 </div>
                 <div className="space-y-2">
                   <Label>Quantite (optionnel)</Label>
-                  <Input value={form.quantity} onChange={(e) => updateForm(setForm, "quantity", e.target.value)} />
+                  <Input
+                    value={form.quantity}
+                    onChange={(e) => updateForm(setForm, "quantity", e.target.value)}
+                    className={INPUT_CLASSES}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Destination (pays)</Label>
-                  <Input value={form.destination} onChange={(e) => updateForm(setForm, "destination", e.target.value)} />
+                  <Input
+                    value={form.destination}
+                    onChange={(e) => updateForm(setForm, "destination", e.target.value)}
+                    className={INPUT_CLASSES}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Incoterm</Label>
                   <Select value={form.incoterm} onValueChange={(value) => updateForm(setForm, "incoterm", value)}>
-                    <SelectTrigger className="bg-white/90 text-slate-900">
+                    <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -389,7 +404,7 @@ export default function Analyse() {
                 <div className="space-y-2">
                   <Label>Mode transport</Label>
                   <Select value={form.mode} onValueChange={(value) => updateForm(setForm, "mode", value)}>
-                    <SelectTrigger className="bg-white/90 text-slate-900">
+                    <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -408,11 +423,19 @@ export default function Analyse() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Pre-carriage</Label>
-                  <Input value={form.preCarriage} onChange={(e) => updateForm(setForm, "preCarriage", e.target.value)} />
+                  <Input
+                    value={form.preCarriage}
+                    onChange={(e) => updateForm(setForm, "preCarriage", e.target.value)}
+                    className={INPUT_CLASSES}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Main freight</Label>
-                  <Input value={form.mainFreight} onChange={(e) => updateForm(setForm, "mainFreight", e.target.value)} />
+                  <Input
+                    value={form.mainFreight}
+                    onChange={(e) => updateForm(setForm, "mainFreight", e.target.value)}
+                    className={INPUT_CLASSES}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Insurance</Label>
@@ -421,7 +444,7 @@ export default function Analyse() {
                       value={form.insuranceType}
                       onValueChange={(value) => updateForm(setForm, "insuranceType", value)}
                     >
-                      <SelectTrigger className="bg-white/90 text-slate-900">
+                      <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -432,29 +455,50 @@ export default function Analyse() {
                     <Input
                       value={form.insuranceValue}
                       onChange={(e) => updateForm(setForm, "insuranceValue", e.target.value)}
+                      className={INPUT_CLASSES}
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Packaging</Label>
-                  <Input value={form.packaging} onChange={(e) => updateForm(setForm, "packaging", e.target.value)} />
+                  <Input
+                    value={form.packaging}
+                    onChange={(e) => updateForm(setForm, "packaging", e.target.value)}
+                    className={INPUT_CLASSES}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Brokerage / customs</Label>
-                  <Input value={form.brokerage} onChange={(e) => updateForm(setForm, "brokerage", e.target.value)} />
+                  <Input
+                    value={form.brokerage}
+                    onChange={(e) => updateForm(setForm, "brokerage", e.target.value)}
+                    className={INPUT_CLASSES}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Misc</Label>
-                  <Input value={form.misc} onChange={(e) => updateForm(setForm, "misc", e.target.value)} />
+                  <Input
+                    value={form.misc}
+                    onChange={(e) => updateForm(setForm, "misc", e.target.value)}
+                    className={INPUT_CLASSES}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Duties rate (manual %)</Label>
-                  <Input value={form.dutyRate} onChange={(e) => updateForm(setForm, "dutyRate", e.target.value)} />
+                  <Input
+                    value={form.dutyRate}
+                    onChange={(e) => updateForm(setForm, "dutyRate", e.target.value)}
+                    className={INPUT_CLASSES}
+                  />
                   <p className="text-xs text-slate-300">Enter the % you have validated manually.</p>
                 </div>
                 <div className="space-y-2">
                   <Label>Import VAT rate (manual %)</Label>
-                  <Input value={form.vatRate} onChange={(e) => updateForm(setForm, "vatRate", e.target.value)} />
+                  <Input
+                    value={form.vatRate}
+                    onChange={(e) => updateForm(setForm, "vatRate", e.target.value)}
+                    className={INPUT_CLASSES}
+                  />
                   <p className="text-xs text-slate-300">Manual field. No auto lookup.</p>
                 </div>
                 <div className="space-y-2">
@@ -462,6 +506,7 @@ export default function Analyse() {
                   <Input
                     value={form.marginTarget}
                     onChange={(e) => updateForm(setForm, "marginTarget", e.target.value)}
+                    className={INPUT_CLASSES}
                   />
                 </div>
               </div>
@@ -549,7 +594,7 @@ export default function Analyse() {
                         {scenario.enabled ? "Active" : "Inactive"}
                       </Button>
                     </div>
-                    <div className={cn("mt-4 space-y-3", !scenario.enabled && "opacity-60")}> 
+                    <div className={cn("mt-4 space-y-3", !scenario.enabled && "opacity-60")}>
                       <div className="space-y-2">
                         <Label>Incoterm</Label>
                         <Select
@@ -562,7 +607,7 @@ export default function Analyse() {
                             )
                           }
                         >
-                          <SelectTrigger className="bg-white/90 text-slate-900">
+                          <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -586,7 +631,7 @@ export default function Analyse() {
                             )
                           }
                         >
-                          <SelectTrigger className="bg-white/90 text-slate-900">
+                          <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -611,6 +656,7 @@ export default function Analyse() {
                               )
                             )
                           }
+                          className={INPUT_CLASSES}
                         />
                       </div>
                       <Button

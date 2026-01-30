@@ -1,4 +1,4 @@
-﻿import * as React from "react";
+import * as React from "react";
 import { useLocation } from "react-router-dom";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+
+const INPUT_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
+const TEXTAREA_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
 
 const offerLabels: Record<string, string> = {
   express: "Validation express",
@@ -119,7 +122,7 @@ export default function Contact() {
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
               placeholder="Prenom"
-              className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+              className={INPUT_CLASSES}
             />
           </div>
           <div className="space-y-2">
@@ -128,7 +131,7 @@ export default function Contact() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="vous@exemple.com"
-              className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+              className={INPUT_CLASSES}
             />
           </div>
           <div className="space-y-2">
@@ -137,7 +140,7 @@ export default function Contact() {
               value={company}
               onChange={(e) => setCompany(e.target.value)}
               placeholder="Nom de l'entreprise"
-              className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+              className={INPUT_CLASSES}
             />
           </div>
           <div className="space-y-2">
@@ -146,7 +149,7 @@ export default function Contact() {
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="Sujet"
-              className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+              className={INPUT_CLASSES}
             />
           </div>
           <div className="space-y-2">
@@ -155,7 +158,7 @@ export default function Contact() {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Besoin, pays, HS, urgence..."
-              className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+              className={TEXTAREA_CLASSES}
             />
           </div>
           <div className="flex items-center gap-2 text-sm text-slate-200">
