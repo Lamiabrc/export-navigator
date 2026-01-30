@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import type { RssItem } from "@/lib/rss/types";
 
 const INPUT_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
 const TEXTAREA_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
@@ -36,6 +38,15 @@ function readScenarioSummary() {
   }
 }
 
+function pickFranceNews(items: RssItem[]) {
+  const normalized = items.map((item) => ({
+    item,
+    haystack: `${item.title} ${item.summary}`.toLowerCase(),
+  }));
+  const match = normalized.find((row) => row.haystack.includes("france"));
+  return match?.item || items[0] || null;
+}
+
 export default function Contact() {
   const location = useLocation();
   const { toast } = useToast();
@@ -53,6 +64,9 @@ export default function Contact() {
   const [scenarioSummary, setScenarioSummary] = React.useState("");
   const [sending, setSending] = React.useState(false);
 
+  const [newsItem, setNewsItem] = React.useState<RssItem | null>(null);
+  const [newsError, setNewsError] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     setSubject(offerLabels[offerType]);
   }, [offerType]);
@@ -62,6 +76,27 @@ export default function Contact() {
       setScenarioSummary(readScenarioSummary());
     }
   }, [includeScenario]);
+
+  React.useEffect(() => {
+    let mounted = true;
+    const loadNews = async () => {
+      try {
+        const res = await fetch("/api/rss?limit=6&offset=0");
+        const data = await res.json();
+        if (!res.ok || data?.ok === false) throw new Error(data?.error || "Erreur RSS");
+        const items = (data?.data?.items || []) as RssItem[];
+        if (!mounted) return;
+        setNewsItem(pickFranceNews(items));
+      } catch (err: any) {
+        if (!mounted) return;
+        setNewsError(err?.message || "Actualite indisponible");
+      }
+    };
+    void loadNews();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const submit = async () => {
     if (!firstName.trim()) {
@@ -107,6 +142,34 @@ export default function Contact() {
   return (
     <PublicLayout>
       <div className="space-y-8">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-slate-100 shadow-lg backdrop-blur-md">
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge className="bg-white/5 text-slate-100 border-white/15">Actualite export France</Badge>
+            {newsError && <span className="text-sm text-rose-200">{newsError}</span>}
+            {!newsError && !newsItem && <span className="text-sm text-slate-300">Chargement...</span>}
+            {newsItem && (
+              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-200">
+                <span className="font-semibold text-white">{newsItem.title}</span>
+                <span className="text-xs text-slate-400">
+                  {new Date(newsItem.pubDate).toLocaleDateString("fr-FR", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </span>
+                <a
+                  href={newsItem.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-200 hover:text-blue-100"
+                >
+                  Lire la source
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+
         <div>
           <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Contact</p>
           <h1 className="text-4xl font-semibold text-white">Parlons de votre projet export.</h1>

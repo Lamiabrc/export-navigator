@@ -1,4 +1,5 @@
-﻿import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import nodemailer from "nodemailer";
 
 type ContactPayload = {
   firstName: string;
@@ -22,6 +23,42 @@ function safeString(value: unknown) {
 
 function isEmailValid(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function buildTransporter() {
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const secure = String(process.env.SMTP_SECURE || "false").toLowerCase() === "true";
+
+  if (!host || !user || !pass) return null;
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass },
+  });
+}
+
+function buildEmailBody(payload: ContactPayload) {
+  const lines = [
+    `Prenom: ${payload.firstName}`,
+    `Email: ${payload.email}`,
+    `Societe: ${payload.company || "n/a"}`,
+    `Sujet: ${payload.subject || "n/a"}`,
+    `Offre: ${payload.offerType || "n/a"}`,
+    "",
+    "Message:",
+    payload.message,
+  ];
+
+  if (payload.scenarioSummary) {
+    lines.push("", "Scenario:", payload.scenarioSummary);
+  }
+
+  return lines.join("\n");
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -58,9 +95,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ ok: false, error: "Invalid email" });
     }
 
+    const transporter = buildTransporter();
+    if (!transporter) {
+      console.error("[api/contact] missing SMTP configuration");
+      return res.status(500).json({ ok: false, error: "Email service not configured" });
+    }
+
+    const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || "no-reply@mpl-export-conseil.fr";
+
+    await transporter.sendMail({
+      from: fromAddress,
+      to: "lamia.brechet@outlook.fr",
+      replyTo: payload.email,
+      subject: `MPL Export Conseil - ${payload.subject || "Demande"}`,
+      text: buildEmailBody(payload),
+    });
+
     memoryStore.push({ ...payload });
 
-    return res.status(200).json({ ok: true, data: { stored: true } });
+    return res.status(200).json({ ok: true, data: { delivered: true } });
   } catch (error: any) {
     console.error("[api/contact] error", error?.message || error);
     return res.status(500).json({ ok: false, error: "Contact request failed" });
