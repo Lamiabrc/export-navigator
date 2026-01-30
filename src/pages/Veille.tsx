@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,8 @@ const IMPACT_STYLES: Record<ImpactLevel, string> = {
   MED: "bg-amber-50 text-amber-700 border-amber-200",
   HIGH: "bg-rose-50 text-rose-700 border-rose-200",
 };
+
+const THEME_PRESETS = ["Douanes", "TVA", "Sanctions", "Transport", "Accords"];
 
 type WatchPrefs = {
   countries: string[];
@@ -61,6 +63,7 @@ export default function Veille() {
     "mpl_watch_prefs",
     EMPTY_PREFS
   );
+  const { value: savedIds, setValue: setSavedIds } = useLocalStorage<string[]>("mpl_saved_watch", []);
   const [useMyWatch, setUseMyWatch] = React.useState(false);
   const [countryInput, setCountryInput] = React.useState("");
 
@@ -102,6 +105,14 @@ export default function Veille() {
     void load();
   }, [load]);
 
+  const refresh = React.useCallback(() => {
+    if (offset !== 0) {
+      setOffset(0);
+    } else {
+      void load();
+    }
+  }, [offset, load]);
+
   const availableTags = React.useMemo(() => {
     const tagSet = new Set<string>();
     items.forEach((item) => item.tags.forEach((tag) => tagSet.add(tag)));
@@ -119,7 +130,7 @@ export default function Veille() {
       const inImpact = impactFilter === "ALL" || item.impact === impactFilter;
       const inTheme = activeThemes.length === 0 || activeThemes.some((theme) => item.tags.includes(theme));
 
-      const haystack = normalizeText(`${item.title} ${item.summary}`);
+      const haystack = normalizeText(`${item.title} ${item.summary} ${item.tags.join(" ")}`);
       const inSearch = !query || haystack.includes(query);
 
       const inCountry =
@@ -130,179 +141,226 @@ export default function Veille() {
     });
   }, [items, activeSources, activeThemes, impactFilter, search, activeCountries]);
 
+  const topImpactItems = React.useMemo(
+    () => filteredItems.filter((item) => item.impact === "HIGH").slice(0, 10),
+    [filteredItems]
+  );
+
   const hasMore = items.length < total;
+  const showEmptyState = !loading && filteredItems.length === 0 && !error;
+
+  const toggleSaved = React.useCallback(
+    (id: string) => {
+      setSavedIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+    },
+    [setSavedIds]
+  );
+
+  const SkeletonCard = () => (
+    <div className="rounded-xl border border-white/10 bg-slate-950/70 p-5 shadow-lg backdrop-blur-md">
+      <div className="h-4 w-32 rounded bg-white/10" />
+      <div className="mt-3 h-6 w-3/4 rounded bg-white/10" />
+      <div className="mt-3 space-y-2">
+        <div className="h-3 w-full rounded bg-white/10" />
+        <div className="h-3 w-5/6 rounded bg-white/10" />
+      </div>
+      <div className="mt-4 flex gap-2">
+        <div className="h-8 w-28 rounded bg-white/10" />
+        <div className="h-8 w-32 rounded bg-white/10" />
+      </div>
+    </div>
+  );
 
   return (
     <PublicLayout>
-      <div className="space-y-10">
-        <section className="space-y-4">
-          <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Veille export</p>
-          <h1 className="text-4xl font-semibold text-white">Decisions plus rapides avec une veille priorisee.</h1>
-          <p className="text-lg text-slate-200">
-            Tous les flux sont agreges cote serveur, filtres et scores pour mettre en avant l'impact metier.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Button onClick={() => (window.location.href = "/analyse")}>Analyser un export</Button>
-            <Button
-              variant="outline"
-              className="border-white text-white hover:bg-white/10"
-              onClick={() => (window.location.href = "/contact")}
-            >
-              Demander un audit export
-            </Button>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-white/10 bg-white/5 p-6 text-white shadow-lg backdrop-blur">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-xl font-semibold">Filtres rapides</h2>
-              <p className="text-sm text-slate-200">Sources, themes, impact et recherche texte.</p>
+      <div className="relative">
+        <div className="pointer-events-none absolute inset-0 rounded-[32px] bg-slate-950/60" />
+        <div className="relative space-y-10">
+          <section className="space-y-4">
+            <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Veille export</p>
+            <h1 className="text-4xl font-semibold text-white">Decisions plus rapides avec une veille priorisee.</h1>
+            <p className="text-lg text-slate-200">
+              Tous les flux sont agreges cote serveur, filtres et scores pour mettre en avant l'impact metier.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={() => (window.location.href = "/analyse")}>Analyser un export</Button>
+              <Button
+                variant="outline"
+                className="border-white/20 text-slate-100 hover:bg-white/10"
+                onClick={() => (window.location.href = "/contact")}
+              >
+                Demander un audit export
+              </Button>
             </div>
-            <div className="flex items-center gap-3">
-              <Label htmlFor="my-watch">Mode Ma veille</Label>
-              <Switch id="my-watch" checked={useMyWatch} onCheckedChange={setUseMyWatch} />
-            </div>
-          </div>
+          </section>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Recherche</Label>
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Mot-cle, pays, mesure..."
-              />
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-semibold text-white">Top impacts (High)</h2>
+              <Badge className="bg-white/5 text-slate-100 border-white/15">{topImpactItems.length} items</Badge>
             </div>
 
-            <div className="space-y-2">
-              <Label>Impact</Label>
-              <div className="flex flex-wrap gap-2">
-                {(["ALL", "LOW", "MED", "HIGH"] as const).map((level) => (
-                  <Button
-                    key={level}
-                    type="button"
-                    variant={impactFilter === level ? "default" : "outline"}
-                    className={cn(level !== "ALL" && "bg-white/5 text-white")}
-                    onClick={() => setImpactFilter(level)}
-                  >
-                    {level === "ALL" ? "Tous" : IMPACT_LABELS[level]}
-                  </Button>
+            {loading && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <SkeletonCard key={`top-skeleton-${index}`} />
                 ))}
+              </div>
+            )}
+
+            {!loading && topImpactItems.length === 0 && (
+              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-6 text-slate-200 backdrop-blur-md">
+                Aucun item impact HIGH pour le moment.
+              </div>
+            )}
+
+            {!loading && topImpactItems.length > 0 && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {topImpactItems.map((item) => (
+                  <Card key={item.id} className="bg-slate-950/70 border-white/10 text-white backdrop-blur-md">
+                    <CardHeader className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={cn("border", IMPACT_STYLES[item.impact])}>
+                          {IMPACT_LABELS[item.impact]}
+                        </Badge>
+                        <Badge className="bg-white/5 text-slate-100 border-white/15">{item.sourceName}</Badge>
+                        <span className="text-xs text-slate-300">
+                          {new Date(item.pubDate).toLocaleDateString("fr-FR", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </span>
+                        <button
+                          type="button"
+                          className="ml-auto text-slate-100 hover:text-white"
+                          onClick={() => toggleSaved(item.id)}
+                          aria-label="Sauvegarder"
+                        >
+                          {savedIds.includes(item.id) ? "?" : "?"}
+                        </button>
+                      </div>
+                      <CardTitle className="text-lg">{item.title}</CardTitle>
+                      <CardDescription className="text-slate-200 line-clamp-3">{item.summary}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-slate-200">Pourquoi</p>
+                        <ul className="text-sm text-slate-300 list-disc pl-5">
+                          {item.reasons.map((reason) => (
+                            <li key={reason}>{reason}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {item.tags.map((tag) => (
+                          <Badge key={tag} className="bg-white/5 text-slate-100 border-white/15">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        <Button asChild>
+                          <a href={item.link} target="_blank" rel="noreferrer">
+                            Lire la source
+                          </a>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="border-white/20 text-slate-100 hover:bg-white/10"
+                          asChild
+                        >
+                          <a href="/contact">Demander un audit</a>
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="sticky top-20 z-10 rounded-2xl border border-white/10 bg-slate-950/80 p-6 text-white shadow-lg backdrop-blur-md">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">Filtres rapides</h2>
+                <p className="text-sm text-slate-200">Sources, themes, impact et recherche texte.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Label htmlFor="my-watch" className="text-slate-200">
+                  Mode Ma veille
+                </Label>
+                <Switch id="my-watch" checked={useMyWatch} onCheckedChange={setUseMyWatch} />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Sources</Label>
-              <div className="flex flex-wrap gap-2">
-                {sources.map((source) => (
-                  <Button
-                    key={source.id}
-                    type="button"
-                    variant={activeSources.includes(source.name) ? "default" : "outline"}
-                    onClick={() => setSourceFilters((prev) => toggleValue(prev, source.name))}
-                  >
-                    {source.name}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <Separator className="my-6 bg-white/10" />
-
-          <div className="space-y-3">
-            <Label>Themes</Label>
-            <div className="flex flex-wrap gap-2">
-              {availableTags.length === 0 && (
-                <p className="text-sm text-slate-200">Les themes s'affichent des la premiere collecte.</p>
-              )}
-              {availableTags.map((tag) => (
-                <Badge
-                  key={tag}
-                  onClick={() => setThemeFilters((prev) => toggleValue(prev, tag))}
-                  className={cn(
-                    "cursor-pointer border",
-                    activeThemes.includes(tag)
-                      ? "bg-white text-blue-900"
-                      : "bg-white/10 text-white border-white/20 hover:bg-white/20"
-                  )}
-                >
-                  {tag}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-white/10 bg-white/5 p-6 text-white shadow-lg backdrop-blur">
-          <h2 className="text-xl font-semibold">Ma veille</h2>
-          <p className="text-sm text-slate-200">
-            Ajoutez vos pays et themes preferes. Ils sont stockes localement dans votre navigateur.
-          </p>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Pays suivis (separes par une virgule)</Label>
-              <div className="flex gap-2">
+            <div className="mt-4 grid gap-4 lg:grid-cols-3">
+              <div className="space-y-2">
+                <Label className="text-slate-200">Recherche</Label>
                 <Input
-                  value={countryInput}
-                  onChange={(event) => setCountryInput(event.target.value)}
-                  placeholder="France, Allemagne, Maroc"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Mot-cle, pays, mesure..."
+                  className="text-white placeholder:text-slate-400"
                 />
-                <Button
-                  type="button"
-                  onClick={() => {
-                    const countries = countryInput
-                      .split(",")
-                      .map((value) => value.trim())
-                      .filter(Boolean);
-                    if (!countries.length) return;
-                    setPrefs((prev) => ({
-                      ...prev,
-                      countries: Array.from(new Set([...prev.countries, ...countries])),
-                    }));
-                    setCountryInput("");
-                  }}
-                >
-                  Ajouter
-                </Button>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {prefs.countries.map((country) => (
-                  <Badge
-                    key={country}
-                    onClick={() =>
-                      setPrefs((prev) => ({
-                        ...prev,
-                        countries: prev.countries.filter((item) => item !== country),
-                      }))
-                    }
-                    className="cursor-pointer bg-white/10 text-white border-white/20 hover:bg-white/20"
-                  >
-                    {country}
-                  </Badge>
-                ))}
+
+              <div className="space-y-2">
+                <Label className="text-slate-200">Impact</Label>
+                <div className="flex flex-wrap gap-2">
+                  {(["ALL", "LOW", "MED", "HIGH"] as const).map((level) => (
+                    <Button
+                      key={level}
+                      type="button"
+                      variant={impactFilter === level ? "default" : "outline"}
+                      className={cn(
+                        "text-slate-100",
+                        impactFilter !== level && "border-white/20 hover:bg-white/10"
+                      )}
+                      onClick={() => setImpactFilter(level)}
+                    >
+                      {level === "ALL" ? "Tous" : IMPACT_LABELS[level]}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-slate-200">Sources</Label>
+                <div className="flex flex-wrap gap-2">
+                  {sources.map((source) => (
+                    <Button
+                      key={source.id}
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "border-white/15 bg-white/5 text-slate-100 hover:bg-white/10",
+                        activeSources.includes(source.name) && "bg-white/15 text-white"
+                      )}
+                      onClick={() => setSourceFilters((prev) => toggleValue(prev, source.name))}
+                    >
+                      {source.name}
+                    </Button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Themes preferes</Label>
+            <Separator className="my-6 bg-white/10" />
+
+            <div className="space-y-3">
+              <Label className="text-slate-200">Themes</Label>
               <div className="flex flex-wrap gap-2">
+                {availableTags.length === 0 && (
+                  <p className="text-sm text-slate-300">Les themes s'affichent des la premiere collecte.</p>
+                )}
                 {availableTags.map((tag) => (
                   <Badge
                     key={tag}
-                    onClick={() =>
-                      setPrefs((prev) => ({
-                        ...prev,
-                        themes: toggleValue(prev.themes, tag),
-                      }))
-                    }
+                    onClick={() => setThemeFilters((prev) => toggleValue(prev, tag))}
                     className={cn(
-                      "cursor-pointer border",
-                      prefs.themes.includes(tag)
-                        ? "bg-white text-blue-900"
-                        : "bg-white/10 text-white border-white/20 hover:bg-white/20"
+                      "cursor-pointer border bg-white/5 text-slate-100 border-white/15 hover:bg-white/10",
+                      activeThemes.includes(tag) && "bg-white/15 text-white"
                     )}
                   >
                     {tag}
@@ -310,88 +368,204 @@ export default function Veille() {
                 ))}
               </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-semibold text-white">Flux recents</h2>
-            <Badge className="bg-white/10 text-white border-white/20">{filteredItems.length} articles</Badge>
-          </div>
+          <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-lg backdrop-blur-md">
+            <h2 className="text-xl font-semibold">Ma veille</h2>
+            <p className="text-sm text-slate-200">
+              Ajoutez vos pays et themes preferes. Ils sont stockes localement dans votre navigateur.
+            </p>
 
-          {error && <p className="text-sm text-rose-200">{error}</p>}
-
-          <div className="grid gap-4">
-            {filteredItems.map((item) => (
-              <Card key={item.id} className="bg-white/10 border-white/10 text-white">
-                <CardHeader className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge className={cn("border", IMPACT_STYLES[item.impact])}>{IMPACT_LABELS[item.impact]}</Badge>
-                    <Badge className="bg-white/10 text-white border-white/20">{item.sourceName}</Badge>
-                    <span className="text-xs text-slate-200">
-                      {new Date(item.pubDate).toLocaleDateString("fr-FR", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </span>
-                  </div>
-                  <CardTitle className="text-lg">{item.title}</CardTitle>
-                  <CardDescription className="text-slate-200">{item.summary}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold">Pourquoi</p>
-                    <ul className="text-sm text-slate-200 list-disc pl-5">
-                      {item.reasons.map((reason) => (
-                        <li key={reason}>{reason}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {item.tags.map((tag) => (
-                      <Badge key={tag} className="bg-white/10 text-white border-white/20">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    <Button asChild>
-                      <a href={item.link} target="_blank" rel="noreferrer">
-                        Lire la source
-                      </a>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="border-white text-white hover:bg-white/10"
-                      asChild
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-slate-200">Pays suivis (separes par une virgule)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={countryInput}
+                    onChange={(event) => setCountryInput(event.target.value)}
+                    placeholder="France, Allemagne, Maroc"
+                    className="text-white placeholder:text-slate-400"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const countries = countryInput
+                        .split(",")
+                        .map((value) => value.trim())
+                        .filter(Boolean);
+                      if (!countries.length) return;
+                      setPrefs((prev) => ({
+                        ...prev,
+                        countries: Array.from(new Set([...prev.countries, ...countries])),
+                      }));
+                      setCountryInput("");
+                    }}
+                  >
+                    Ajouter
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {prefs.countries.map((country) => (
+                    <Badge
+                      key={country}
+                      onClick={() =>
+                        setPrefs((prev) => ({
+                          ...prev,
+                          countries: prev.countries.filter((item) => item !== country),
+                        }))
+                      }
+                      className="cursor-pointer bg-white/5 text-slate-100 border-white/15 hover:bg-white/10"
                     >
-                      <a href="/contact">Demander un audit</a>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                      {country}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
 
-            {loading && <p className="text-sm text-slate-200">Chargement des flux...</p>}
-            {!loading && filteredItems.length === 0 && (
-              <p className="text-sm text-slate-200">Aucun resultat avec les filtres actuels.</p>
-            )}
-          </div>
+              <div className="space-y-2">
+                <Label className="text-slate-200">Themes preferes</Label>
+                <div className="flex flex-wrap gap-2">
+                  {THEME_PRESETS.map((tag) => (
+                    <Badge
+                      key={tag}
+                      onClick={() =>
+                        setPrefs((prev) => ({
+                          ...prev,
+                          themes: toggleValue(prev.themes, tag),
+                        }))
+                      }
+                      className={cn(
+                        "cursor-pointer border bg-white/5 text-slate-100 border-white/15 hover:bg-white/10",
+                        prefs.themes.includes(tag) && "bg-white/15 text-white"
+                      )}
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
 
-          <div className="flex justify-center">
-            {hasMore && (
-              <Button
-                variant="outline"
-                className="border-white text-white hover:bg-white/10"
-                onClick={() => setOffset((prev) => prev + limit)}
-                disabled={loading}
-              >
-                Charger plus
-              </Button>
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-semibold text-white">Flux recents</h2>
+              <Badge className="bg-white/5 text-slate-100 border-white/15">{filteredItems.length} articles</Badge>
+            </div>
+
+            {error && (
+              <div className="rounded-xl border border-rose-200/20 bg-rose-950/40 p-4 text-rose-100">
+                <p className="text-sm">{error}</p>
+                <Button
+                  variant="outline"
+                  className="mt-3 border-rose-200/40 text-rose-100 hover:bg-white/10"
+                  onClick={refresh}
+                >
+                  Reessayer
+                </Button>
+              </div>
             )}
-          </div>
-        </section>
+
+            {showEmptyState && (
+              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-6 text-slate-200 backdrop-blur-md">
+                <p className="text-sm">Aucun resultat avec les filtres actuels.</p>
+                <Button
+                  variant="outline"
+                  className="mt-3 border-white/20 text-slate-100 hover:bg-white/10"
+                  onClick={refresh}
+                >
+                  Rafraichir
+                </Button>
+              </div>
+            )}
+
+            {loading && (
+              <div className="grid gap-4">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <SkeletonCard key={`list-skeleton-${index}`} />
+                ))}
+              </div>
+            )}
+
+            {!loading && filteredItems.length > 0 && (
+              <div className="grid gap-4">
+                {filteredItems.map((item) => (
+                  <Card key={item.id} className="bg-slate-950/70 border-white/10 text-white backdrop-blur-md">
+                    <CardHeader className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={cn("border", IMPACT_STYLES[item.impact])}>
+                          {IMPACT_LABELS[item.impact]}
+                        </Badge>
+                        <Badge className="bg-white/5 text-slate-100 border-white/15">{item.sourceName}</Badge>
+                        <span className="text-xs text-slate-300">
+                          {new Date(item.pubDate).toLocaleDateString("fr-FR", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </span>
+                        <button
+                          type="button"
+                          className="ml-auto text-slate-100 hover:text-white"
+                          onClick={() => toggleSaved(item.id)}
+                          aria-label="Sauvegarder"
+                        >
+                          {savedIds.includes(item.id) ? "?" : "?"}
+                        </button>
+                      </div>
+                      <CardTitle className="text-lg">{item.title}</CardTitle>
+                      <CardDescription className="text-slate-200 line-clamp-3">{item.summary}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-slate-200">Pourquoi</p>
+                        <ul className="text-sm text-slate-300 list-disc pl-5">
+                          {item.reasons.map((reason) => (
+                            <li key={reason}>{reason}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {item.tags.map((tag) => (
+                          <Badge key={tag} className="bg-white/5 text-slate-100 border-white/15">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        <Button asChild>
+                          <a href={item.link} target="_blank" rel="noreferrer">
+                            Lire la source
+                          </a>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="border-white/20 text-slate-100 hover:bg-white/10"
+                          asChild
+                        >
+                          <a href="/contact">Demander un audit</a>
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-center">
+              {hasMore && !loading && (
+                <Button
+                  variant="outline"
+                  className="border-white/20 text-slate-100 hover:bg-white/10"
+                  onClick={() => setOffset((prev) => prev + limit)}
+                  disabled={loading}
+                >
+                  Charger plus
+                </Button>
+              )}
+            </div>
+          </section>
+        </div>
       </div>
     </PublicLayout>
   );
