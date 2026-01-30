@@ -26,6 +26,8 @@ const IMPACT_STYLES: Record<ImpactLevel, string> = {
 
 const THEME_PRESETS = ["Douanes", "TVA", "Sanctions", "Transport", "Accords"];
 
+const INPUT_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
+
 type WatchPrefs = {
   countries: string[];
   themes: string[];
@@ -301,7 +303,7 @@ export default function Veille() {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Mot-cle, pays, mesure..."
-                  className="text-white placeholder:text-slate-400"
+                  className={INPUT_CLASSES}
                 />
               </div>
 
@@ -384,7 +386,7 @@ export default function Veille() {
                     value={countryInput}
                     onChange={(event) => setCountryInput(event.target.value)}
                     placeholder="France, Allemagne, Maroc"
-                    className="text-white placeholder:text-slate-400"
+                    className={INPUT_CLASSES}
                   />
                   <Button
                     type="button"
