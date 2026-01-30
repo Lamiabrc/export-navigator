@@ -1,9 +1,22 @@
-import type { ElementType } from "react";
+﻿import type { ElementType } from "react";
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { Activity, BookOpen, Bot, Calculator, Home, LogOut, Package, Receipt, Scale, Settings, Target, TrendingUp, Users } from "lucide-react";
+import {
+  Activity,
+  BookOpen,
+  Bot,
+  Calculator,
+  Home,
+  LogOut,
+  Package,
+  Receipt,
+  Scale,
+  Settings,
+  Target,
+  TrendingUp,
+} from "lucide-react";
 
 type NavItem = {
   name: string;
@@ -35,12 +48,12 @@ const navigation: NavSection[] = [
     title: "Pilotage & Ventes",
     items: [
       {
-        name: "Control Tower",
-        href: "/app/control-tower",
+        name: "Command Center",
+        href: "/app/command-center",
         icon: Activity,
         badge: "Live",
         featured: true,
-        aliases: ["/dashboard", "/command-center", "/hub", "/control-tower", "/app"],
+        aliases: ["/dashboard", "/command-center", "/hub", "/app"],
       },
       {
         name: "Analyse des ventes",
@@ -62,20 +75,15 @@ const navigation: NavSection[] = [
     ],
   },
   {
-    title: "Coûts & Pricing",
+    title: "Couts & Pricing",
     items: [
       {
-        name: "Coûts (charges)",
-        href: "/app/costs",
-        icon: Receipt,
-      },
-      {
-        name: "Simulateur Expédition",
+        name: "Simulateur Expedition",
         href: "/app/simulator",
         icon: Calculator,
       },
       {
-        name: "Contrôle facture",
+        name: "Controle facture",
         href: "/app/invoice-check",
         icon: Receipt,
       },
@@ -87,7 +95,7 @@ const navigation: NavSection[] = [
     ],
   },
   {
-    title: "Référentiels & Veille",
+    title: "Referentiels & Veille",
     items: [
       {
         name: "Produits",
@@ -95,12 +103,7 @@ const navigation: NavSection[] = [
         icon: Package,
       },
       {
-        name: "Clients",
-        href: "/app/clients",
-        icon: Users,
-      },
-      {
-        name: "Veille réglementaire",
+        name: "Veille reglementaire",
         href: "/app/centre-veille/reglementation",
         icon: BookOpen,
       },

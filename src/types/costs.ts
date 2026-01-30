@@ -1,4 +1,4 @@
-export type CostType = 'transport' | 'douane' | 'transit' | 'frais_dossier' | 'assurance' | 'autre';
+﻿export type CostType = "transport" | "douane" | "transit" | "frais_dossier" | "assurance" | "autre";
 
 export interface CostLine {
   lineNumber: number;
@@ -20,5 +20,4 @@ export interface CostDoc {
   awb?: string;
   bl?: string;
   lines: CostLine[];
-  source?: 'csv' | 'manual';
 }

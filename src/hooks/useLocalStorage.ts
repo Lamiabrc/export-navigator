@@ -1,40 +1,40 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Serializer<T> = (value: T) => string;
 type Deserializer<T> = (raw: string) => T;
 
 type UseLocalStorageOptions<T> = {
   /**
-   * Version du contenu stocké.
-   * Si la version stockée diffère, on applique migrate() (si fournie) ou on réinitialise.
+   * Stored content version.
+   * If the stored version differs, migrate() runs (if provided) or data resets.
    */
   version?: number;
 
   /**
-   * Migration quand la version change.
-   * oldValue = ce qui est en storage (déjà deserializé via deserialize).
+   * Migration when the version changes.
+   * oldValue = value from storage (already deserialized via deserialize).
    */
   migrate?: (oldValue: unknown, fromVersion: number, toVersion: number) => T;
 
   /**
-   * Forcer l’import si la valeur locale est “vide”.
-   * Ex: pour des arrays => (v) => v.length === 0
+   * Force import if local value is considered empty.
+   * Example for arrays: (v) => v.length === 0
    */
   requireImportWhen?: (value: T) => boolean;
 
   /**
-   * Sérialisation / désérialisation custom (par défaut JSON)
+   * Custom serialization / deserialization (defaults to JSON).
    */
   serialize?: Serializer<T>;
   deserialize?: Deserializer<T>;
 
   /**
-   * Écouter les changements depuis d'autres onglets
+   * Listen to changes across tabs.
    */
   syncAcrossTabs?: boolean;
 
   /**
-   * Log d’erreur
+   * Error logging.
    */
   onError?: (err: unknown) => void;
 };
@@ -58,7 +58,7 @@ function defaultDeserialize<T>(raw: string): { version: number; data: T | unknow
     const env = parsed as StoredEnvelope;
     return { version: env.__v ?? DEFAULT_VERSION, data: env.data };
   }
-  // rétro-compat : ancien format sans enveloppe
+  // retro-compat: old format without envelope
   return { version: 0, data: parsed as unknown };
 }
 
@@ -72,7 +72,7 @@ function safeParse<T>(
     const deserialize = options.deserialize ?? ((r: string) => defaultDeserialize<T>(r));
     const result = deserialize(raw) as any;
 
-    // Si le deserialize custom renvoie directement T
+    // If custom deserialize returns { data, version }
     if (result && typeof result === "object" && "data" in result && "version" in result) {
       return { value: result.data as T, version: Number(result.version) || 0 };
     }
@@ -81,7 +81,7 @@ function safeParse<T>(
     const { version, data } = defaultDeserialize<T>(raw);
     return { value: data as T, version: version || 0 };
   } catch (err) {
-    (options.onError ?? console.error)(`useLocalStorage: JSON invalide pour "${key}"`, err);
+    (options.onError ?? console.error)(`useLocalStorage: invalid JSON for "${key}"`, err);
     return { value: initialValue, version: 0 };
   }
 }
@@ -122,7 +122,7 @@ export function useLocalStorage<T>(
         return migrated;
       }
 
-      // pas de migrate : reset
+      // no migrate: reset
       return initialValue;
     } catch (err) {
       (onError ?? console.error)(err);
@@ -132,7 +132,7 @@ export function useLocalStorage<T>(
 
   const [storedValue, setStoredValue] = useState<T>(() => readValue());
 
-  // Sync onglets
+  // Sync across tabs
   useEffect(() => {
     if (!syncAcrossTabs) return;
 
@@ -164,7 +164,7 @@ export function useLocalStorage<T>(
         lastWrittenRef.current = s;
       } catch (err: any) {
         // QuotaExceededError / etc
-        (onError ?? console.error)("useLocalStorage: erreur d’écriture", err);
+        (onError ?? console.error)("useLocalStorage: write error", err);
       }
     },
     [key, storedValue, serialize, version, onError]
@@ -176,7 +176,7 @@ export function useLocalStorage<T>(
       setStoredValue(initialValue);
       lastWrittenRef.current = null;
     } catch (err) {
-      (onError ?? console.error)("useLocalStorage: erreur de suppression", err);
+      (onError ?? console.error)("useLocalStorage: remove error", err);
     }
   }, [key, initialValue, onError]);
 
@@ -190,16 +190,16 @@ export function useLocalStorage<T>(
   }, [requireImportWhen, storedValue]);
 
   /**
-   * Helper: ouvre un sélecteur fichier et renvoie le contenu.
-   * Usage typique : requestImport({ accept: ".csv,.json", parse: "text" })
+   * Helper: opens a file picker and returns its content.
+   * Example: requestImport({ accept: ".json", parse: "text" })
    */
   const requestImport = useCallback(
     async (opts?: {
-      accept?: string; // ".csv,.json"
+      accept?: string; // ".json"
       parse?: "text" | "json" | "arrayBuffer";
       multiple?: boolean;
     }) => {
-      const { accept = ".json,.csv,text/csv,application/json", parse = "text", multiple = false } = opts ?? {};
+      const { accept = ".json,application/json", parse = "text", multiple = false } = opts ?? {};
 
       return new Promise<
         | { file: File; text: string }
@@ -214,7 +214,7 @@ export function useLocalStorage<T>(
 
           input.onchange = async () => {
             const file = input.files?.[0];
-            if (!file) return reject(new Error("Aucun fichier sélectionné"));
+            if (!file) return reject(new Error("No file selected"));
 
             try {
               if (parse === "arrayBuffer") {

@@ -22,15 +22,11 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import SetPassword from "@/pages/SetPassword";
 
 import CommandCenter from "@/pages/CommandCenter";
-import ControlTower from "@/pages/ControlTower";
 import Simulator from "@/pages/Simulator";
-import InvoiceVerification from "@/pages/InvoiceVerification";
 
-import Clients from "@/pages/Clients";
 import Products from "@/pages/Products";
 
 import Sales from "@/pages/Sales";
-import Costs from "@/pages/Costs";
 import TaxesOM from "@/pages/TaxesOM";
 import InvoiceDetail from "@/pages/InvoiceDetail";
 
@@ -79,14 +75,6 @@ export default function App() {
 
                   {/* App */}
                   <Route
-                    path="/app/control-tower"
-                    element={
-                      <ProtectedRoute>
-                        <ControlTower />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
                     path="/app/command-center"
                     element={
                       <ProtectedRoute>
@@ -94,7 +82,7 @@ export default function App() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="/app" element={<Navigate to="/app/control-tower" replace />} />
+                  <Route path="/app" element={<Navigate to="/app/command-center" replace />} />
                   <Route
                     path="/app/explore"
                     element={
@@ -108,14 +96,6 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <InvoiceDetail />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/app/costs"
-                    element={
-                      <ProtectedRoute>
-                        <Costs />
                       </ProtectedRoute>
                     }
                   />
@@ -168,14 +148,6 @@ export default function App() {
                     }
                   />
                   <Route
-                    path="/app/clients"
-                    element={
-                      <ProtectedRoute>
-                        <Clients />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
                     path="/app/assistant"
                     element={
                       <ProtectedRoute>
@@ -188,14 +160,6 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <InvoiceCheck />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/app/verifier"
-                    element={
-                      <ProtectedRoute>
-                        <InvoiceVerification />
                       </ProtectedRoute>
                     }
                   />
@@ -225,13 +189,11 @@ export default function App() {
                   />
 
                   {/* Legacy aliases */}
-                  <Route path="/control-tower" element={<Navigate to="/app/control-tower" replace />} />
-                  <Route path="/hub" element={<Navigate to="/app/control-tower" replace />} />
+                  <Route path="/hub" element={<Navigate to="/app/command-center" replace />} />
                   <Route path="/command-center" element={<Navigate to="/app/command-center" replace />} />
-                  <Route path="/dashboard" element={<Navigate to="/app/control-tower" replace />} />
+                  <Route path="/dashboard" element={<Navigate to="/app/command-center" replace />} />
                   <Route path="/explore" element={<Navigate to="/app/explore" replace />} />
                   <Route path="/sales" element={<Navigate to="/app/explore" replace />} />
-                  <Route path="/costs" element={<Navigate to="/app/costs" replace />} />
                   <Route path="/taxes-om" element={<Navigate to="/app/taxes-om" replace />} />
                   <Route path="/simulator" element={<Navigate to="/app/simulator" replace />} />
                   <Route path="/watch" element={<Navigate to="/app/centre-veille" replace />} />
@@ -241,9 +203,7 @@ export default function App() {
                   <Route path="/competition" element={<Navigate to="/app/centre-veille/concurrence" replace />} />
                   <Route path="/concurrence" element={<Navigate to="/app/centre-veille/concurrence" replace />} />
                   <Route path="/products" element={<Navigate to="/app/produits" replace />} />
-                  <Route path="/clients" element={<Navigate to="/app/clients" replace />} />
                   <Route path="/invoice-check" element={<Navigate to="/app/invoice-check" replace />} />
-                  <Route path="/verifier" element={<Navigate to="/app/verifier" replace />} />
                   <Route path="/assistant" element={<Navigate to="/app/assistant" replace />} />
                   <Route path="/admin" element={<Navigate to="/app/admin" replace />} />
                   <Route path="/settings" element={<Navigate to="/app/settings" replace />} />
