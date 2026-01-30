@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,11 +12,12 @@ import { cn } from "@/lib/utils";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import type { ImpactLevel, RssFeedSource, RssItem } from "@/lib/rss/types";
 import { DEFAULT_FEEDS } from "@/lib/rss/feeds";
+import { Bookmark, BookmarkCheck } from "lucide-react";
 
 const IMPACT_LABELS: Record<ImpactLevel, string> = {
-  LOW: "Low",
-  MED: "Med",
-  HIGH: "High",
+  LOW: "Faible",
+  MED: "Moyen",
+  HIGH: "Élevé",
 };
 
 const IMPACT_STYLES: Record<ImpactLevel, string> = {
@@ -25,7 +27,7 @@ const IMPACT_STYLES: Record<ImpactLevel, string> = {
 };
 
 const THEME_PRESETS = ["Douanes", "TVA", "Sanctions", "Transport", "Accords"];
-const SECTOR_PRESETS = ["Agroalimentaire", "Industrie", "Cosmetique", "Pharma", "Tech", "Services"];
+const SECTOR_PRESETS = ["Agroalimentaire", "Industrie", "Cosmétique", "Pharma", "Tech", "Services"];
 
 const INPUT_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
 
@@ -62,10 +64,15 @@ function toggleValue(values: string[], value: string) {
 }
 
 function normalizeText(value: string) {
-  return value.toLowerCase();
+  return (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 export default function Veille() {
+  const navigate = useNavigate();
+
   const [items, setItems] = React.useState<RssItem[]>([]);
   const [sources, setSources] = React.useState<RssFeedSource[]>(DEFAULT_FEEDS);
   const [loading, setLoading] = React.useState(true);
@@ -78,11 +85,9 @@ export default function Veille() {
   const [sourceFilters, setSourceFilters] = React.useState<string[]>([]);
   const [themeFilters, setThemeFilters] = React.useState<string[]>([]);
 
-  const { value: prefs, setValue: setPrefs } = useLocalStorage<WatchPrefs>(
-    "mpl_watch_prefs",
-    EMPTY_PREFS
-  );
+  const { value: prefs, setValue: setPrefs } = useLocalStorage<WatchPrefs>("mpl_watch_prefs", EMPTY_PREFS);
   const { value: savedIds, setValue: setSavedIds } = useLocalStorage<string[]>("mpl_saved_watch", []);
+
   const [useMyWatch, setUseMyWatch] = React.useState(false);
   const [countryInput, setCountryInput] = React.useState("");
 
@@ -101,10 +106,10 @@ export default function Veille() {
     setError(null);
     try {
       const response = await fetch(`/api/rss?limit=${limit}&offset=${offset}`);
-      const payload = await response.json();
+      const payload = await response.json().catch(() => ({}));
 
-      if (!payload.ok) {
-        throw new Error(payload.error || "Impossible de charger la veille");
+      if (!payload?.ok) {
+        throw new Error(payload?.error || "Impossible de charger la veille");
       }
 
       const data = payload.data as { items: RssItem[]; total: number; sources: RssFeedSource[] };
@@ -133,17 +138,14 @@ export default function Veille() {
   }, [load]);
 
   const refresh = React.useCallback(() => {
-    if (offset !== 0) {
-      setOffset(0);
-    } else {
-      void load();
-    }
+    if (offset !== 0) setOffset(0);
+    else void load();
   }, [offset, load]);
 
   const availableTags = React.useMemo(() => {
     const tagSet = new Set<string>();
     items.forEach((item) => item.tags.forEach((tag) => tagSet.add(tag)));
-    return Array.from(tagSet).sort();
+    return Array.from(tagSet).sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
   }, [items]);
 
   const activeSources = useMyWatch && prefs.sources.length ? prefs.sources : sourceFilters;
@@ -157,7 +159,7 @@ export default function Veille() {
       const inImpact = impactFilter === "ALL" || item.impact === impactFilter;
       const inTheme = activeThemes.length === 0 || activeThemes.some((theme) => item.tags.includes(theme));
 
-      const haystack = normalizeText(`${item.title} ${item.summary} ${item.tags.join(" ")}`);
+      const haystack = normalizeText(`${item.title} ${item.summary} ${item.tags.join(" ")} ${item.sourceName}`);
       const inSearch = !query || haystack.includes(query);
 
       const inCountry =
@@ -186,7 +188,13 @@ export default function Veille() {
   const applyOperationToFilters = () => {
     const parts = [sector, product, destination].filter(Boolean).join(" ");
     if (parts) setSearch(parts);
-    if (destination) setPrefs((prev) => ({ ...prev, countries: Array.from(new Set([...prev.countries, destination])) }));
+
+    if (destination) {
+      setPrefs((prev) => ({
+        ...prev,
+        countries: Array.from(new Set([...prev.countries, destination])),
+      }));
+    }
   };
 
   const generateBrief = async () => {
@@ -199,15 +207,15 @@ export default function Veille() {
       if (destination) params.set("destination", destination);
 
       const res = await fetch(`/api/brief?${params.toString()}`);
-      const payload = await res.json();
+      const payload = await res.json().catch(() => ({}));
 
       if (!res.ok || payload?.ok === false) {
-        throw new Error(payload?.error || "Impossible de generer le brief");
+        throw new Error(payload?.error || "Impossible de générer le brief");
       }
 
       setBriefData(payload.data as BriefData);
     } catch (err: any) {
-      setBriefError(err?.message || "Erreur de generation");
+      setBriefError(err?.message || "Erreur de génération");
     } finally {
       setBriefLoading(false);
     }
@@ -231,31 +239,32 @@ export default function Veille() {
   return (
     <PublicLayout>
       <div className="space-y-10">
-        <section className="space-y-4">
-          <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Veille export</p>
-          <h1 className="text-4xl font-semibold text-white">Decisions plus rapides avec une veille priorisee.</h1>
-          <p className="text-lg text-slate-200">
-            Tous les flux sont agreges cote serveur, filtres et scores pour mettre en avant l'impact metier.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Button onClick={() => (window.location.href = "/analyse")}>Analyser un export</Button>
-            <Button
-              variant="outline"
-              className="border-white/20 text-slate-100 hover:bg-white/10"
-              onClick={() => (window.location.href = "/contact")}
-            >
-              Demander un audit export
-            </Button>
+        {/* Hero lisible */}
+        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 text-white md:p-10">
+          <div className="space-y-4">
+            <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Veille export</p>
+            <h1 className="text-4xl font-semibold">Décisions plus rapides avec une veille priorisée.</h1>
+            <p className="text-lg text-slate-200">
+              Les flux sont agrégés côté serveur, filtrés et scorés pour faire ressortir l’impact opérationnel.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={() => navigate("/analyse")}>Analyser un export</Button>
+              <Button
+                variant="outline"
+                className="border-white/20 text-slate-100 hover:bg-white/10"
+                onClick={() => navigate("/contact?offer=audit")}
+              >
+                Demander un audit export
+              </Button>
+            </div>
           </div>
         </section>
 
         <section className="rounded-2xl border border-white/10 bg-slate-950/80 p-6 text-white shadow-lg backdrop-blur-md">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-xl font-semibold">Votre operation export</h2>
-              <p className="text-sm text-slate-200">
-                Choisissez un secteur, un produit et un pays pour cibler la veille.
-              </p>
+              <h2 className="text-xl font-semibold">Votre opération export</h2>
+              <p className="text-sm text-slate-200">Choisissez un secteur, un produit et un pays pour cibler la veille.</p>
             </div>
             <div className="flex items-center gap-3">
               <Label htmlFor="my-watch" className="text-slate-200">
@@ -285,35 +294,45 @@ export default function Veille() {
                 ))}
               </div>
             </div>
+
             <div className="space-y-2">
               <Label className="text-slate-200">Produit</Label>
               <Input
                 value={product}
                 onChange={(event) => setProduct(event.target.value)}
-                placeholder="Ex: pieces mecaniques"
+                placeholder="Ex : pièces mécaniques"
                 className={INPUT_CLASSES}
               />
             </div>
+
             <div className="space-y-2">
               <Label className="text-slate-200">Pays de destination</Label>
               <Input
                 value={destination}
                 onChange={(event) => setDestination(event.target.value)}
-                placeholder="Ex: Allemagne"
+                placeholder="Ex : Allemagne"
                 className={INPUT_CLASSES}
               />
             </div>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
-            <Button variant="outline" className="border-white/20 text-slate-100 hover:bg-white/10" onClick={applyOperationToFilters}>
+            <Button
+              variant="outline"
+              className="border-white/20 text-slate-100 hover:bg-white/10"
+              onClick={applyOperationToFilters}
+            >
               Appliquer aux filtres
             </Button>
-            <Button variant="outline" className="border-white/20 text-slate-100 hover:bg-white/10" onClick={() => setSearch("")}>
-              Reinitialiser la recherche
+            <Button
+              variant="outline"
+              className="border-white/20 text-slate-100 hover:bg-white/10"
+              onClick={() => setSearch("")}
+            >
+              Réinitialiser la recherche
             </Button>
             <Button onClick={generateBrief} disabled={briefLoading}>
-              {briefLoading ? "Generation..." : "Generer un brief actionnable"}
+              {briefLoading ? "Génération..." : "Générer un brief actionnable"}
             </Button>
           </div>
 
@@ -325,7 +344,7 @@ export default function Veille() {
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Mot-cle, pays, mesure..."
+                placeholder="Mot-clé, pays, mesure..."
                 className={INPUT_CLASSES}
               />
             </div>
@@ -338,10 +357,7 @@ export default function Veille() {
                     key={level}
                     type="button"
                     variant={impactFilter === level ? "default" : "outline"}
-                    className={cn(
-                      "text-slate-100",
-                      impactFilter !== level && "border-white/20 hover:bg-white/10"
-                    )}
+                    className={cn("text-slate-100", impactFilter !== level && "border-white/20 hover:bg-white/10")}
                     onClick={() => setImpactFilter(level)}
                   >
                     {level === "ALL" ? "Tous" : IMPACT_LABELS[level]}
@@ -353,36 +369,56 @@ export default function Veille() {
             <div className="space-y-2">
               <Label className="text-slate-200">Sources</Label>
               <div className="flex flex-wrap gap-2">
-                {sources.map((source) => (
-                  <Button
-                    key={source.id}
-                    type="button"
-                    variant="outline"
-                    className={cn(
-                      "border-white/15 bg-white/5 text-slate-100 hover:bg-white/10",
-                      activeSources.includes(source.name) && "bg-white/15 text-white"
-                    )}
-                    onClick={() => setSourceFilters((prev) => toggleValue(prev, source.name))}
-                  >
-                    {source.name}
-                  </Button>
-                ))}
+                {sources.map((source) => {
+                  const selected = activeSources.includes(source.name);
+                  return (
+                    <Button
+                      key={source.id}
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "border-white/15 bg-white/5 text-slate-100 hover:bg-white/10",
+                        selected && "bg-white/15 text-white"
+                      )}
+                      onClick={() => {
+                        if (useMyWatch) {
+                          setPrefs((prev) => ({ ...prev, sources: toggleValue(prev.sources, source.name) }));
+                        } else {
+                          setSourceFilters((prev) => toggleValue(prev, source.name));
+                        }
+                      }}
+                    >
+                      {source.name}
+                    </Button>
+                  );
+                })}
               </div>
+              {useMyWatch && (
+                <div className="text-xs text-white/70">
+                  En mode “Ma veille”, tes sources sélectionnées sont sauvegardées dans ton navigateur.
+                </div>
+              )}
             </div>
           </div>
 
           <Separator className="my-6 bg-white/10" />
 
           <div className="space-y-3">
-            <Label className="text-slate-200">Themes</Label>
+            <Label className="text-slate-200">Thèmes</Label>
             <div className="flex flex-wrap gap-2">
               {availableTags.length === 0 && (
-                <p className="text-sm text-slate-300">Les themes s'affichent des la premiere collecte.</p>
+                <p className="text-sm text-slate-300">Les thèmes s’affichent dès la première collecte.</p>
               )}
               {availableTags.map((tag) => (
                 <Badge
                   key={tag}
-                  onClick={() => setThemeFilters((prev) => toggleValue(prev, tag))}
+                  onClick={() => {
+                    if (useMyWatch) {
+                      setPrefs((prev) => ({ ...prev, themes: toggleValue(prev.themes, tag) }));
+                    } else {
+                      setThemeFilters((prev) => toggleValue(prev, tag));
+                    }
+                  }}
                   className={cn(
                     "cursor-pointer border bg-white/5 text-slate-100 border-white/15 hover:bg-white/10",
                     activeThemes.includes(tag) && "bg-white/15 text-white"
@@ -399,25 +435,25 @@ export default function Veille() {
           <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
             <div className="text-sm font-semibold text-white">Infos de base</div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
-              <li>Verifier la classification douaniere du produit.</li>
+              <li>Vérifier la classification douanière du produit.</li>
               <li>Confirmer les documents requis (facture, origine, transport).</li>
-              <li>Rappeler les taux manuels: droits et TVA restent a saisir.</li>
+              <li>Rappeler : droits & TVA peuvent varier selon l’origine, l’accord, et la base taxable.</li>
             </ul>
           </div>
           <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
-            <div className="text-sm font-semibold text-white">Risques a surveiller</div>
+            <div className="text-sm font-semibold text-white">Risques à surveiller</div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
-              <li>Incoterm et repartition des risques.</li>
-              <li>Sanctions, controles export ou restrictions sectorielles.</li>
-              <li>Delais et congestion transport.</li>
+              <li>Incoterm et répartition des risques/coûts.</li>
+              <li>Sanctions, contrôles export, restrictions sectorielles.</li>
+              <li>Délais et congestion transport.</li>
             </ul>
           </div>
           <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
-            <div className="text-sm font-semibold text-white">Prochaine etape</div>
+            <div className="text-sm font-semibold text-white">Prochaine étape</div>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
-              <li>Estimer le cout complet pour {destination || "votre destination"}.</li>
-              <li>Comparer 2-3 scenarios (incoterms, modes).</li>
-              <li>Demander un audit pour valider la strategie.</li>
+              <li>Estimer le coût complet pour {destination || "votre destination"}.</li>
+              <li>Comparer 2–3 scénarios (incoterms, modes).</li>
+              <li>Demander un audit pour valider la stratégie.</li>
             </ul>
           </div>
         </section>
@@ -427,17 +463,17 @@ export default function Veille() {
             <div>
               <h2 className="text-xl font-semibold">Brief actionnable</h2>
               <p className="text-sm text-slate-200">
-                Resume LLM base sur les sources recentes. Ajoutez vos criteres avant de generer.
+                Synthèse basée sur des sources récentes. Ajoute tes critères avant de générer.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Button onClick={() => (window.location.href = "/analyse")}>Estimer les couts</Button>
+              <Button onClick={() => navigate("/analyse")}>Estimer les coûts</Button>
               <Button
                 variant="outline"
                 className="border-white/20 text-slate-100 hover:bg-white/10"
-                onClick={() => (window.location.href = "/contact")}
+                onClick={() => navigate("/contact?offer=audit")}
               >
-                Etre accompagne par MPL
+                Être accompagné par MPL
               </Button>
             </div>
           </div>
@@ -450,7 +486,7 @@ export default function Veille() {
 
           {!briefError && !briefData && (
             <div className="mt-4 rounded-lg border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-300">
-              Cliquez sur "Generer un brief actionnable" pour obtenir une synthese actualisee.
+              Clique sur “Générer un brief actionnable” pour obtenir une synthèse actualisée.
             </div>
           )}
 
@@ -460,10 +496,10 @@ export default function Veille() {
                 {briefData.summary}
               </div>
               <div className="text-xs text-slate-400">
-                Genere le {new Date(briefData.createdAt).toLocaleString("fr-FR")} via {briefData.model}.
+                Généré le {new Date(briefData.createdAt).toLocaleString("fr-FR")} via {briefData.model}.
               </div>
               <div className="space-y-2">
-                <div className="text-sm font-semibold text-white">Sources utilisees</div>
+                <div className="text-sm font-semibold text-white">Sources utilisées</div>
                 <div className="grid gap-2">
                   {briefData.sources.map((source) => (
                     <a
@@ -475,7 +511,7 @@ export default function Veille() {
                     >
                       <div className="font-semibold text-white">{source.title}</div>
                       <div className="text-xs text-slate-400">
-                        {source.sourceName} � {new Date(source.pubDate).toLocaleDateString("fr-FR")} � {source.impact}
+                        {source.sourceName} • {new Date(source.pubDate).toLocaleDateString("fr-FR")} • {source.impact}
                       </div>
                     </a>
                   ))}
@@ -487,7 +523,7 @@ export default function Veille() {
 
         <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-semibold text-white">Top impacts (High)</h2>
+            <h2 className="text-2xl font-semibold text-white">Top impacts (Élevé)</h2>
             <Badge className="bg-white/5 text-slate-100 border-white/15">{topImpactItems.length} items</Badge>
           </div>
 
@@ -501,7 +537,7 @@ export default function Veille() {
 
           {!loading && topImpactItems.length === 0 && (
             <div className="rounded-xl border border-white/10 bg-slate-950/70 p-6 text-slate-200 backdrop-blur-md">
-              Aucun item impact HIGH pour le moment.
+              Aucun item “impact élevé” pour le moment.
             </div>
           )}
 
@@ -522,18 +558,21 @@ export default function Veille() {
                           year: "numeric",
                         })}
                       </span>
+
                       <button
                         type="button"
-                        className="ml-auto text-slate-100 hover:text-white"
+                        className="ml-auto inline-flex items-center justify-center rounded-md p-2 text-slate-100 hover:bg-white/10 hover:text-white"
                         onClick={() => toggleSaved(item.id)}
-                        aria-label="Sauvegarder"
+                        aria-label={savedIds.includes(item.id) ? "Retirer des sauvegardes" : "Sauvegarder"}
                       >
-                        {savedIds.includes(item.id) ? "?" : "?"}
+                        {savedIds.includes(item.id) ? <BookmarkCheck className="h-5 w-5" /> : <Bookmark className="h-5 w-5" />}
                       </button>
                     </div>
+
                     <CardTitle className="text-lg">{item.title}</CardTitle>
                     <CardDescription className="text-slate-200 line-clamp-3">{item.summary}</CardDescription>
                   </CardHeader>
+
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <p className="text-sm font-semibold text-slate-200">Pourquoi</p>
@@ -543,6 +582,7 @@ export default function Veille() {
                         ))}
                       </ul>
                     </div>
+
                     <div className="flex flex-wrap gap-2">
                       {item.tags.map((tag) => (
                         <Badge key={tag} className="bg-white/5 text-slate-100 border-white/15">
@@ -550,6 +590,7 @@ export default function Veille() {
                         </Badge>
                       ))}
                     </div>
+
                     <div className="flex flex-wrap gap-3">
                       <Button asChild>
                         <a href={item.link} target="_blank" rel="noreferrer">
@@ -559,9 +600,9 @@ export default function Veille() {
                       <Button
                         variant="outline"
                         className="border-white/20 text-slate-100 hover:bg-white/10"
-                        asChild
+                        onClick={() => navigate("/contact?offer=audit")}
                       >
-                        <a href="/contact">Demander un audit</a>
+                        Demander un audit
                       </Button>
                     </div>
                   </CardContent>
@@ -574,12 +615,12 @@ export default function Veille() {
         <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-lg backdrop-blur-md">
           <h2 className="text-xl font-semibold">Ma veille</h2>
           <p className="text-sm text-slate-200">
-            Ajoutez vos pays et themes preferes. Ils sont stockes localement dans votre navigateur.
+            Ajoute tes pays, thèmes et sources préférés. Tout est stocké localement dans ton navigateur.
           </p>
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label className="text-slate-200">Pays suivis (separes par une virgule)</Label>
+              <Label className="text-slate-200">Pays suivis (séparés par une virgule)</Label>
               <div className="flex gap-2">
                 <Input
                   value={countryInput}
@@ -605,6 +646,7 @@ export default function Veille() {
                   Ajouter
                 </Button>
               </div>
+
               <div className="flex flex-wrap gap-2">
                 {prefs.countries.map((country) => (
                   <Badge
@@ -624,7 +666,7 @@ export default function Veille() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-slate-200">Themes preferes</Label>
+              <Label className="text-slate-200">Thèmes préférés</Label>
               <div className="flex flex-wrap gap-2">
                 {THEME_PRESETS.map((tag) => (
                   <Badge
@@ -644,13 +686,46 @@ export default function Veille() {
                   </Badge>
                 ))}
               </div>
+
+              <Separator className="my-4 bg-white/10" />
+
+              <Label className="text-slate-200">Sources préférées</Label>
+              <div className="flex flex-wrap gap-2">
+                {sources.map((s) => (
+                  <Badge
+                    key={s.id}
+                    onClick={() =>
+                      setPrefs((prev) => ({
+                        ...prev,
+                        sources: toggleValue(prev.sources, s.name),
+                      }))
+                    }
+                    className={cn(
+                      "cursor-pointer border bg-white/5 text-slate-100 border-white/15 hover:bg-white/10",
+                      prefs.sources.includes(s.name) && "bg-white/15 text-white"
+                    )}
+                  >
+                    {s.name}
+                  </Badge>
+                ))}
+              </div>
+
+              <div className="mt-3">
+                <Button
+                  variant="outline"
+                  className="border-white/20 text-slate-100 hover:bg-white/10"
+                  onClick={() => setPrefs(EMPTY_PREFS)}
+                >
+                  Réinitialiser “Ma veille”
+                </Button>
+              </div>
             </div>
           </div>
         </section>
 
         <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-semibold text-white">Flux recents</h2>
+            <h2 className="text-2xl font-semibold text-white">Flux récents</h2>
             <Badge className="bg-white/5 text-slate-100 border-white/15">{filteredItems.length} articles</Badge>
           </div>
 
@@ -662,20 +737,20 @@ export default function Veille() {
                 className="mt-3 border-rose-200/40 text-rose-100 hover:bg-white/10"
                 onClick={refresh}
               >
-                Reessayer
+                Réessayer
               </Button>
             </div>
           )}
 
           {showEmptyState && (
             <div className="rounded-xl border border-white/10 bg-slate-950/70 p-6 text-slate-200 backdrop-blur-md">
-              <p className="text-sm">Aucun resultat avec les filtres actuels.</p>
+              <p className="text-sm">Aucun résultat avec les filtres actuels.</p>
               <Button
                 variant="outline"
                 className="mt-3 border-white/20 text-slate-100 hover:bg-white/10"
                 onClick={refresh}
               >
-                Rafraichir
+                Rafraîchir
               </Button>
             </div>
           )}
@@ -705,18 +780,21 @@ export default function Veille() {
                           year: "numeric",
                         })}
                       </span>
+
                       <button
                         type="button"
-                        className="ml-auto text-slate-100 hover:text-white"
+                        className="ml-auto inline-flex items-center justify-center rounded-md p-2 text-slate-100 hover:bg-white/10 hover:text-white"
                         onClick={() => toggleSaved(item.id)}
-                        aria-label="Sauvegarder"
+                        aria-label={savedIds.includes(item.id) ? "Retirer des sauvegardes" : "Sauvegarder"}
                       >
-                        {savedIds.includes(item.id) ? "?" : "?"}
+                        {savedIds.includes(item.id) ? <BookmarkCheck className="h-5 w-5" /> : <Bookmark className="h-5 w-5" />}
                       </button>
                     </div>
+
                     <CardTitle className="text-lg">{item.title}</CardTitle>
                     <CardDescription className="text-slate-200 line-clamp-3">{item.summary}</CardDescription>
                   </CardHeader>
+
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <p className="text-sm font-semibold text-slate-200">Pourquoi</p>
@@ -726,6 +804,7 @@ export default function Veille() {
                         ))}
                       </ul>
                     </div>
+
                     <div className="flex flex-wrap gap-2">
                       {item.tags.map((tag) => (
                         <Badge key={tag} className="bg-white/5 text-slate-100 border-white/15">
@@ -733,6 +812,7 @@ export default function Veille() {
                         </Badge>
                       ))}
                     </div>
+
                     <div className="flex flex-wrap gap-3">
                       <Button asChild>
                         <a href={item.link} target="_blank" rel="noreferrer">
@@ -742,9 +822,9 @@ export default function Veille() {
                       <Button
                         variant="outline"
                         className="border-white/20 text-slate-100 hover:bg-white/10"
-                        asChild
+                        onClick={() => navigate("/contact?offer=audit")}
                       >
-                        <a href="/contact">Demander un audit</a>
+                        Demander un audit
                       </Button>
                     </div>
                   </CardContent>
