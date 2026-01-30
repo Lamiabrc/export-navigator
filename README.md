@@ -1,102 +1,92 @@
-# Export Navigator
+﻿# Export Navigator
 
-**Propriété exclusive de Lamia Brechet**  
-*Tous droits réservés*
-
----
-
-## 📋 Description
-
-**Export Navigator** est un outil professionnel de contrôle et de cohérence pour les opérations d'export a l'international. Il permet de gérer, suivre et analyser l'ensemble des flux d'exportation avec une vision complète sur les coûts, marges et conformité réglementaire.
+**Propriete exclusive de Lamia Brechet**
+*Tous droits reserves*
 
 ---
 
-## 🎯 Mission
+## Description
 
-Assurer la maîtrise et la cohérence des opérations d'export en centralisant :
+**Export Navigator** est un outil professionnel de controle et de coherence pour les operations d'export a l'international. Il permet de gerer, suivre et analyser l'ensemble des flux d'exportation avec une vision complete sur les couts, marges et conformite reglementaire.
+
+---
+
+## Mission
+
+Assurer la maitrise et la coherence des operations d'export en centralisant :
 - La gestion des **Incoterms** (EXW, FCA, CIF, DAP, DDP, etc.)
-- Le contrôle **TVA import/DDP** et taxes d'droits de douane
-- Le suivi des **coûts** (transport, douane, transit, assurance)
-- L'analyse des **marges** et de la rentabilité
-- La vérification de la **conformité documentaire**
+- Le controle **TVA import/DDP** et taxes de douane
+- Le suivi des **couts** (transport, douane, transit, assurance)
+- L'analyse des **marges** et de la rentabilite
+- La verification de la **conformite documentaire**
 
 ---
 
-## ✨ Fonctionnalités Principales
+## Fonctionnalites principales
 
-### 📊 Dashboard Directionnelle
-- KPIs en temps réel (flux actifs, valeur marchandise, coûts totaux, flux à risque)
-- Graphiques de répartition par Incoterm et destination
-- Tableau des flux récents avec statuts
+### Dashboard directionnelle
+- KPIs en temps reel (flux actifs, valeur marchandise, couts totaux, flux a risque)
+- Graphiques de repartition par Incoterm et destination
+- Tableau des flux recents avec statuts
 
-### 🗺️ Catalogue des Circuits d'Export
-- Visualisation en mind-map des circuits par zone géographique
-- Détail des étapes et jalons par circuit
+### Catalogue des circuits d'export
+- Visualisation en mind-map des circuits par zone geographique
+- Detail des etapes et jalons par circuit
 - Export de la cartographie
 
-### 📦 Suivi Logistique
+### Suivi logistique
 - Checklists documentaires par flux
-- Suivi des étapes (commande, douane, transport, livraison)
+- Suivi des etapes (commande, douane, transport, livraison)
 - Gestion des transitaires et prestataires
 
-### 💰 Analyse Financière
+### Analyse financiere
 - Calcul automatique du prix de revient
-- Analyse de marge estimée vs réalisée
-- Suivi de la déductibilité TVA
-- Rapprochement factures Sage / coûts réels
+- Analyse de marge estimee vs realisee
+- Suivi de la deductibilite TVA
+- Rapprochement factures et couts reels
 
-### 📄 Vérification Factures PDF
+### Verification factures PDF
 - Upload et analyse de factures PDF
-- Extraction des données (montant, référence, fournisseur)
-- Contrôle de cohérence avec les documents de coût
-- Alertes sur écarts de marge
+- Extraction des donnees (montant, reference, fournisseur)
+- Controle de coherence avec les documents de cout
+- Alertes sur ecarts de marge
 
-### 🧮 Simulateur de Coûts
-- Simulation complète par destination et Incoterm
+### Simulateur de couts
+- Simulation complete par destination et Incoterm
 - Calcul des frais de transport, douane, droits de douane
-- Estimation du prix de vente et marge prévisionnelle
+- Estimation du prix de vente et marge previsionnelle
 
-### 📚 Bibliothèque de Référence
-- Taux de change, taux d'droits de douane par zone
-- Documents réglementaires (CDU, guides douane, DEB)
-- Données de référence (destinations, Incoterms)
-
-### 📥 Import de Données
-- Import CSV des factures Sage
-- Import des coûts réels (transport, douane)
-- Mapping automatique des colonnes
-
-### 👥 Gestion des Clients
-- Fiches clients avec historique des flux
-- Suivi des commandes par client
-- Analyse de rentabilité par client
+### Bibliotheque de reference
+- Taux de change, taux de droits de douane par zone
+- Documents reglementaires (CDU, guides douane, DEB)
+- Donnees de reference (destinations, Incoterms)
 
 ---
 
-## 🛠️ Technologies
+## Technologies
 
 | Technologie | Usage |
 |-------------|-------|
 | **React 18** | Framework UI |
 | **TypeScript** | Typage statique |
-| **Vite** | Build et développement |
+| **Vite** | Build et developpement |
 | **Tailwind CSS** | Styles et design system |
 | **shadcn/ui** | Composants UI |
 | **Recharts** | Graphiques et visualisations |
 | **Electron** | Application desktop |
-| **localStorage** | Persistance locale des données |
+| **localStorage** | Persistance locale des donnees |
 
 ---
 
-## 🚀 Installation et Lancement
+## Installation et lancement
 
-### Mode Web (Développement)
+### Mode Web (Developpement)
 
 ```bash
-# Installer les dépendances (registre npm public forcé via .npmrc pour éviter les 403)
+# Installer les dependances (registre npm public force via .npmrc pour eviter les 403)
 npm install
 
-# Lancer le serveur de développement
+# Lancer le serveur de developpement
 npm run dev
 ```
 
@@ -112,55 +102,50 @@ npm run electron:build
 
 ---
 
-## 📁 Structure du Projet
+## Structure du projet
 
 ```
 src/
-├── components/        # Composants React réutilisables
-│   ├── dashboard/     # Composants du tableau de bord
-│   ├── flows/         # Gestion des flux
-│   ├── layout/        # Layout et navigation
-│   └── ui/            # Composants UI (shadcn)
-├── data/              # Données de référence et mock
-├── hooks/             # Hooks personnalisés
-├── lib/               # Logique métier pure
-│   ├── imports/       # Parsing et mapping CSV
-│   ├── kpi/           # Calculs KPI
-│   ├── reco/          # Rapprochement
-│   └── rules/         # Moteur de règles
-├── pages/             # Pages de l'application
-├── types/             # Types TypeScript
-└── utils/             # Utilitaires
+|-- components/        # Composants React reutilisables
+|   |-- dashboard/     # Composants du tableau de bord
+|   |-- flows/         # Gestion des flux
+|   |-- layout/        # Layout et navigation
+|   `-- ui/            # Composants UI (shadcn)
+|-- data/              # Donnees de reference et mock
+|-- hooks/             # Hooks personnalises
+|-- lib/               # Logique metier pure
+|-- pages/             # Pages de l'application
+|-- types/             # Types TypeScript
+`-- utils/             # Utilitaires
 ```
 
 ---
 
-## ⚠️ Avertissement Légal
+## Avertissement legal
 
-**Export Navigator** est un outil d'aide à la décision et de contrôle de cohérence. Il ne remplace en aucun cas :
+**Export Navigator** est un outil d'aide a la decision et de controle de coherence. Il ne remplace en aucun cas :
 - Un conseil fiscal ou juridique professionnel
-- Une validation par un commissionnaire en douane agréé
-- Les obligations déclaratives officielles
+- Une validation par un commissionnaire en douane agree
+- Les obligations declaratives officielles
 
-Les calculs et contrôles effectués sont indicatifs et doivent être vérifiés auprès des autorités compétentes.
-
----
-
-## 📜 Licence
-
-**Propriété exclusive et confidentielle**
-
-© 2024 Lamia Brechet - Tous droits réservés
-
-Ce logiciel et sa documentation sont la propriété exclusive de Lamia Brechet. Toute reproduction, distribution, modification ou utilisation non autorisée est strictement interdite.
+Les calculs et controles effectues sont indicatifs et doivent etre verifies aupres des autorites competentes.
 
 ---
 
-## 📞 Contact
+## Licence
 
-Pour toute question relative à cet outil, veuillez contacter directement la propriétaire.
+**Propriete exclusive et confidentielle**
+
+(c) 2024 Lamia Brechet - Tous droits reserves
+
+Ce logiciel et sa documentation sont la propriete exclusive de Lamia Brechet. Toute reproduction, distribution, modification ou utilisation non autorisee est strictement interdite.
 
 ---
 
-*Export Navigator - Maîtrisez vos exports en toute confiance*
+## Contact
 
+Pour toute question relative a cet outil, veuillez contacter directement la proprietaire.
+
+---
+
+*Export Navigator - Maitrisez vos exports en toute confiance*
