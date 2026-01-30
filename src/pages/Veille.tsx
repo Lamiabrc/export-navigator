@@ -57,7 +57,10 @@ export default function Veille() {
   const [sourceFilters, setSourceFilters] = React.useState<string[]>([]);
   const [themeFilters, setThemeFilters] = React.useState<string[]>([]);
 
-  const [prefs, setPrefs] = useLocalStorage<WatchPrefs>("mpl_watch_prefs", EMPTY_PREFS);
+  const { value: prefs, setValue: setPrefs } = useLocalStorage<WatchPrefs>(
+    "mpl_watch_prefs",
+    EMPTY_PREFS
+  );
   const [useMyWatch, setUseMyWatch] = React.useState(false);
   const [countryInput, setCountryInput] = React.useState("");
 
