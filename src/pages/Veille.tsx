@@ -230,163 +230,414 @@ export default function Veille() {
 
   return (
     <PublicLayout>
-      <div className="relative">
-        <div className="pointer-events-none absolute inset-0 rounded-[32px] bg-slate-950/60" />
-        <div className="relative space-y-10">
-          <section className="space-y-4">
-            <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Veille export</p>
-            <h1 className="text-4xl font-semibold text-white">Decisions plus rapides avec une veille priorisee.</h1>
-            <p className="text-lg text-slate-200">
-              Tous les flux sont agreges cote serveur, filtres et scores pour mettre en avant l'impact metier.
-            </p>
+      <div className="space-y-10">
+        <section className="space-y-4">
+          <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Veille export</p>
+          <h1 className="text-4xl font-semibold text-white">Decisions plus rapides avec une veille priorisee.</h1>
+          <p className="text-lg text-slate-200">
+            Tous les flux sont agreges cote serveur, filtres et scores pour mettre en avant l'impact metier.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={() => (window.location.href = "/analyse")}>Analyser un export</Button>
+            <Button
+              variant="outline"
+              className="border-white/20 text-slate-100 hover:bg-white/10"
+              onClick={() => (window.location.href = "/contact")}
+            >
+              Demander un audit export
+            </Button>
+          </div>
+        </section>
+
+        <section className="sticky top-20 z-10 rounded-2xl border border-white/10 bg-slate-950/80 p-6 text-white shadow-lg backdrop-blur-md">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Votre operation export</h2>
+              <p className="text-sm text-slate-200">
+                Choisissez un secteur, un produit et un pays pour cibler la veille.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Label htmlFor="my-watch" className="text-slate-200">
+                Mode Ma veille
+              </Label>
+              <Switch id="my-watch" checked={useMyWatch} onCheckedChange={setUseMyWatch} />
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            <div className="space-y-2">
+              <Label className="text-slate-200">Secteur</Label>
+              <div className="flex flex-wrap gap-2">
+                {SECTOR_PRESETS.map((item) => (
+                  <Button
+                    key={item}
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      "border-white/15 bg-white/5 text-slate-100 hover:bg-white/10",
+                      sector === item && "bg-white/15 text-white"
+                    )}
+                    onClick={() => setSector(item)}
+                  >
+                    {item}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-200">Produit</Label>
+              <Input
+                value={product}
+                onChange={(event) => setProduct(event.target.value)}
+                placeholder="Ex: pieces mecaniques"
+                className={INPUT_CLASSES}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-200">Pays de destination</Label>
+              <Input
+                value={destination}
+                onChange={(event) => setDestination(event.target.value)}
+                placeholder="Ex: Allemagne"
+                className={INPUT_CLASSES}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button variant="outline" className="border-white/20 text-slate-100 hover:bg-white/10" onClick={applyOperationToFilters}>
+              Appliquer aux filtres
+            </Button>
+            <Button variant="outline" className="border-white/20 text-slate-100 hover:bg-white/10" onClick={() => setSearch("")}>
+              Reinitialiser la recherche
+            </Button>
+            <Button onClick={generateBrief} disabled={briefLoading}>
+              {briefLoading ? "Generation..." : "Generer un brief actionnable"}
+            </Button>
+          </div>
+
+          <Separator className="my-6 bg-white/10" />
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="space-y-2">
+              <Label className="text-slate-200">Recherche</Label>
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Mot-cle, pays, mesure..."
+                className={INPUT_CLASSES}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-slate-200">Impact</Label>
+              <div className="flex flex-wrap gap-2">
+                {(["ALL", "LOW", "MED", "HIGH"] as const).map((level) => (
+                  <Button
+                    key={level}
+                    type="button"
+                    variant={impactFilter === level ? "default" : "outline"}
+                    className={cn(
+                      "text-slate-100",
+                      impactFilter !== level && "border-white/20 hover:bg-white/10"
+                    )}
+                    onClick={() => setImpactFilter(level)}
+                  >
+                    {level === "ALL" ? "Tous" : IMPACT_LABELS[level]}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-slate-200">Sources</Label>
+              <div className="flex flex-wrap gap-2">
+                {sources.map((source) => (
+                  <Button
+                    key={source.id}
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      "border-white/15 bg-white/5 text-slate-100 hover:bg-white/10",
+                      activeSources.includes(source.name) && "bg-white/15 text-white"
+                    )}
+                    onClick={() => setSourceFilters((prev) => toggleValue(prev, source.name))}
+                  >
+                    {source.name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <Separator className="my-6 bg-white/10" />
+
+          <div className="space-y-3">
+            <Label className="text-slate-200">Themes</Label>
+            <div className="flex flex-wrap gap-2">
+              {availableTags.length === 0 && (
+                <p className="text-sm text-slate-300">Les themes s'affichent des la premiere collecte.</p>
+              )}
+              {availableTags.map((tag) => (
+                <Badge
+                  key={tag}
+                  onClick={() => setThemeFilters((prev) => toggleValue(prev, tag))}
+                  className={cn(
+                    "cursor-pointer border bg-white/5 text-slate-100 border-white/15 hover:bg-white/10",
+                    activeThemes.includes(tag) && "bg-white/15 text-white"
+                  )}
+                >
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
+            <div className="text-sm font-semibold text-white">Infos de base</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
+              <li>Verifier la classification douaniere du produit.</li>
+              <li>Confirmer les documents requis (facture, origine, transport).</li>
+              <li>Rappeler les taux manuels: droits et TVA restent a saisir.</li>
+            </ul>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
+            <div className="text-sm font-semibold text-white">Risques a surveiller</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
+              <li>Incoterm et repartition des risques.</li>
+              <li>Sanctions, controles export ou restrictions sectorielles.</li>
+              <li>Delais et congestion transport.</li>
+            </ul>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
+            <div className="text-sm font-semibold text-white">Prochaine etape</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
+              <li>Estimer le cout complet pour {destination || "votre destination"}.</li>
+              <li>Comparer 2-3 scenarios (incoterms, modes).</li>
+              <li>Demander un audit pour valider la strategie.</li>
+            </ul>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-lg backdrop-blur-md">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">Brief actionnable</h2>
+              <p className="text-sm text-slate-200">
+                Resume LLM base sur les sources recentes. Ajoutez vos criteres avant de generer.
+              </p>
+            </div>
             <div className="flex flex-wrap gap-3">
-              <Button onClick={() => (window.location.href = "/analyse")}>Analyser un export</Button>
+              <Button onClick={() => (window.location.href = "/analyse")}>Estimer les couts</Button>
               <Button
                 variant="outline"
                 className="border-white/20 text-slate-100 hover:bg-white/10"
                 onClick={() => (window.location.href = "/contact")}
               >
-                Demander un audit export
+                Etre accompagne par MPL
               </Button>
             </div>
-          </section>
-          <section className="sticky top-20 z-10 rounded-2xl border border-white/10 bg-slate-950/80 p-6 text-white shadow-lg backdrop-blur-md">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Votre operation export</h2>
-                <p className="text-sm text-slate-200">
-                  Choisissez un secteur, un produit et un pays pour cibler la veille.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Label htmlFor="my-watch" className="text-slate-200">
-                  Mode Ma veille
-                </Label>
-                <Switch id="my-watch" checked={useMyWatch} onCheckedChange={setUseMyWatch} />
-              </div>
+          </div>
+
+          {briefError && (
+            <div className="mt-4 rounded-lg border border-rose-200/20 bg-rose-950/40 p-4 text-rose-100">
+              {briefError}
             </div>
+          )}
 
-            <div className="mt-4 grid gap-4 lg:grid-cols-3">
-              <div className="space-y-2">
-                <Label className="text-slate-200">Secteur</Label>
-                <div className="flex flex-wrap gap-2">
-                  {SECTOR_PRESETS.map((item) => (
-                    <Button
-                      key={item}
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        "border-white/15 bg-white/5 text-slate-100 hover:bg-white/10",
-                        sector === item && "bg-white/15 text-white"
-                      )}
-                      onClick={() => setSector(item)}
-                    >
-                      {item}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-slate-200">Produit</Label>
-                <Input
-                  value={product}
-                  onChange={(event) => setProduct(event.target.value)}
-                  placeholder="Ex: pieces mecaniques"
-                  className={INPUT_CLASSES}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-slate-200">Pays de destination</Label>
-                <Input
-                  value={destination}
-                  onChange={(event) => setDestination(event.target.value)}
-                  placeholder="Ex: Allemagne"
-                  className={INPUT_CLASSES}
-                />
-              </div>
+          {!briefError && !briefData && (
+            <div className="mt-4 rounded-lg border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-300">
+              Cliquez sur "Generer un brief actionnable" pour obtenir une synthese actualisee.
             </div>
+          )}
 
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Button variant="outline" className="border-white/20 text-slate-100 hover:bg-white/10" onClick={applyOperationToFilters}>
-                Appliquer aux filtres
-              </Button>
-              <Button variant="outline" className="border-white/20 text-slate-100 hover:bg-white/10" onClick={() => setSearch("")}>
-                Reinitialiser la recherche
-              </Button>
-              <Button onClick={generateBrief} disabled={briefLoading}>
-                {briefLoading ? "Generation..." : "Generer un brief actionnable"}
-              </Button>
-            </div>
-
-            <Separator className="my-6 bg-white/10" />
-
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="space-y-2">
-                <Label className="text-slate-200">Recherche</Label>
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Mot-cle, pays, mesure..."
-                  className={INPUT_CLASSES}
-                />
+          {briefData && (
+            <div className="mt-4 space-y-4">
+              <div className="rounded-lg border border-white/10 bg-slate-950/80 p-4 text-sm text-slate-200 whitespace-pre-line">
+                {briefData.summary}
               </div>
-
-              <div className="space-y-2">
-                <Label className="text-slate-200">Impact</Label>
-                <div className="flex flex-wrap gap-2">
-                  {(["ALL", "LOW", "MED", "HIGH"] as const).map((level) => (
-                    <Button
-                      key={level}
-                      type="button"
-                      variant={impactFilter === level ? "default" : "outline"}
-                      className={cn(
-                        "text-slate-100",
-                        impactFilter !== level && "border-white/20 hover:bg-white/10"
-                      )}
-                      onClick={() => setImpactFilter(level)}
-                    >
-                      {level === "ALL" ? "Tous" : IMPACT_LABELS[level]}
-                    </Button>
-                  ))}
-                </div>
+              <div className="text-xs text-slate-400">
+                Genere le {new Date(briefData.createdAt).toLocaleString("fr-FR")} via {briefData.model}.
               </div>
-
               <div className="space-y-2">
-                <Label className="text-slate-200">Sources</Label>
-                <div className="flex flex-wrap gap-2">
-                  {sources.map((source) => (
-                    <Button
+                <div className="text-sm font-semibold text-white">Sources utilisees</div>
+                <div className="grid gap-2">
+                  {briefData.sources.map((source) => (
+                    <a
                       key={source.id}
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        "border-white/15 bg-white/5 text-slate-100 hover:bg-white/10",
-                        activeSources.includes(source.name) && "bg-white/15 text-white"
-                      )}
-                      onClick={() => setSourceFilters((prev) => toggleValue(prev, source.name))}
+                      href={source.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-lg border border-white/10 bg-slate-950/70 p-3 text-sm text-slate-200 hover:bg-white/5"
                     >
-                      {source.name}
-                    </Button>
+                      <div className="font-semibold text-white">{source.title}</div>
+                      <div className="text-xs text-slate-400">
+                        {source.sourceName} � {new Date(source.pubDate).toLocaleDateString("fr-FR")} � {source.impact}
+                      </div>
+                    </a>
                   ))}
                 </div>
               </div>
             </div>
+          )}
+        </section>
 
-            <Separator className="my-6 bg-white/10" />
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-semibold text-white">Top impacts (High)</h2>
+            <Badge className="bg-white/5 text-slate-100 border-white/15">{topImpactItems.length} items</Badge>
+          </div>
 
-            <div className="space-y-3">
-              <Label className="text-slate-200">Themes</Label>
+          {loading && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <SkeletonCard key={`top-skeleton-${index}`} />
+              ))}
+            </div>
+          )}
+
+          {!loading && topImpactItems.length === 0 && (
+            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-6 text-slate-200 backdrop-blur-md">
+              Aucun item impact HIGH pour le moment.
+            </div>
+          )}
+
+          {!loading && topImpactItems.length > 0 && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {topImpactItems.map((item) => (
+                <Card key={item.id} className="bg-slate-950/70 border-white/10 text-white backdrop-blur-md">
+                  <CardHeader className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className={cn("border", IMPACT_STYLES[item.impact])}>
+                        {IMPACT_LABELS[item.impact]}
+                      </Badge>
+                      <Badge className="bg-white/5 text-slate-100 border-white/15">{item.sourceName}</Badge>
+                      <span className="text-xs text-slate-300">
+                        {new Date(item.pubDate).toLocaleDateString("fr-FR", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                      <button
+                        type="button"
+                        className="ml-auto text-slate-100 hover:text-white"
+                        onClick={() => toggleSaved(item.id)}
+                        aria-label="Sauvegarder"
+                      >
+                        {savedIds.includes(item.id) ? "?" : "?"}
+                      </button>
+                    </div>
+                    <CardTitle className="text-lg">{item.title}</CardTitle>
+                    <CardDescription className="text-slate-200 line-clamp-3">{item.summary}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold text-slate-200">Pourquoi</p>
+                      <ul className="text-sm text-slate-300 list-disc pl-5">
+                        {item.reasons.map((reason) => (
+                          <li key={reason}>{reason}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {item.tags.map((tag) => (
+                        <Badge key={tag} className="bg-white/5 text-slate-100 border-white/15">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <Button asChild>
+                        <a href={item.link} target="_blank" rel="noreferrer">
+                          Lire la source
+                        </a>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="border-white/20 text-slate-100 hover:bg-white/10"
+                        asChild
+                      >
+                        <a href="/contact">Demander un audit</a>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-lg backdrop-blur-md">
+          <h2 className="text-xl font-semibold">Ma veille</h2>
+          <p className="text-sm text-slate-200">
+            Ajoutez vos pays et themes preferes. Ils sont stockes localement dans votre navigateur.
+          </p>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-slate-200">Pays suivis (separes par une virgule)</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={countryInput}
+                  onChange={(event) => setCountryInput(event.target.value)}
+                  placeholder="France, Allemagne, Maroc"
+                  className={INPUT_CLASSES}
+                />
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const countries = countryInput
+                      .split(",")
+                      .map((value) => value.trim())
+                      .filter(Boolean);
+                    if (!countries.length) return;
+                    setPrefs((prev) => ({
+                      ...prev,
+                      countries: Array.from(new Set([...prev.countries, ...countries])),
+                    }));
+                    setCountryInput("");
+                  }}
+                >
+                  Ajouter
+                </Button>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {availableTags.length === 0 && (
-                  <p className="text-sm text-slate-300">Les themes s'affichent des la premiere collecte.</p>
-                )}
-                {availableTags.map((tag) => (
+                {prefs.countries.map((country) => (
+                  <Badge
+                    key={country}
+                    onClick={() =>
+                      setPrefs((prev) => ({
+                        ...prev,
+                        countries: prev.countries.filter((item) => item !== country),
+                      }))
+                    }
+                    className="cursor-pointer bg-white/5 text-slate-100 border-white/15 hover:bg-white/10"
+                  >
+                    {country}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-slate-200">Themes preferes</Label>
+              <div className="flex flex-wrap gap-2">
+                {THEME_PRESETS.map((tag) => (
                   <Badge
                     key={tag}
-                    onClick={() => setThemeFilters((prev) => toggleValue(prev, tag))}
+                    onClick={() =>
+                      setPrefs((prev) => ({
+                        ...prev,
+                        themes: toggleValue(prev.themes, tag),
+                      }))
+                    }
                     className={cn(
                       "cursor-pointer border bg-white/5 text-slate-100 border-white/15 hover:bg-white/10",
-                      activeThemes.includes(tag) && "bg-white/15 text-white"
+                      prefs.themes.includes(tag) && "bg-white/15 text-white"
                     )}
                   >
                     {tag}
@@ -394,379 +645,127 @@ export default function Veille() {
                 ))}
               </div>
             </div>
-          </section>
+          </div>
+        </section>
 
-          <section className="grid gap-4 lg:grid-cols-3">
-            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
-              <div className="text-sm font-semibold text-white">Infos de base</div>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
-                <li>Verifier la classification douaniere du produit.</li>
-                <li>Confirmer les documents requis (facture, origine, transport).</li>
-                <li>Rappeler les taux manuels: droits et TVA restent a saisir.</li>
-              </ul>
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-semibold text-white">Flux recents</h2>
+            <Badge className="bg-white/5 text-slate-100 border-white/15">{filteredItems.length} articles</Badge>
+          </div>
+
+          {error && (
+            <div className="rounded-xl border border-rose-200/20 bg-rose-950/40 p-4 text-rose-100">
+              <p className="text-sm">{error}</p>
+              <Button
+                variant="outline"
+                className="mt-3 border-rose-200/40 text-rose-100 hover:bg-white/10"
+                onClick={refresh}
+              >
+                Reessayer
+              </Button>
             </div>
-            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
-              <div className="text-sm font-semibold text-white">Risques a surveiller</div>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
-                <li>Incoterm et repartition des risques.</li>
-                <li>Sanctions, controles export ou restrictions sectorielles.</li>
-                <li>Delais et congestion transport.</li>
-              </ul>
+          )}
+
+          {showEmptyState && (
+            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-6 text-slate-200 backdrop-blur-md">
+              <p className="text-sm">Aucun resultat avec les filtres actuels.</p>
+              <Button
+                variant="outline"
+                className="mt-3 border-white/20 text-slate-100 hover:bg-white/10"
+                onClick={refresh}
+              >
+                Rafraichir
+              </Button>
             </div>
-            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
-              <div className="text-sm font-semibold text-white">Prochaine etape</div>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
-                <li>Estimer le cout complet pour {destination || "votre destination"}.</li>
-                <li>Comparer 2-3 scenarios (incoterms, modes).</li>
-                <li>Demander un audit pour valider la strategie.</li>
-              </ul>
+          )}
+
+          {loading && (
+            <div className="grid gap-4">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <SkeletonCard key={`list-skeleton-${index}`} />
+              ))}
             </div>
-          </section>
+          )}
 
-          <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-lg backdrop-blur-md">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-semibold">Brief actionnable</h2>
-                <p className="text-sm text-slate-200">
-                  Resume LLM base sur les sources recentes. Ajoutez vos criteres avant de generer.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Button onClick={() => (window.location.href = "/analyse")}>Estimer les couts</Button>
-                <Button
-                  variant="outline"
-                  className="border-white/20 text-slate-100 hover:bg-white/10"
-                  onClick={() => (window.location.href = "/contact")}
-                >
-                  Etre accompagne par MPL
-                </Button>
-              </div>
-            </div>
-
-            {briefError && (
-              <div className="mt-4 rounded-lg border border-rose-200/20 bg-rose-950/40 p-4 text-rose-100">
-                {briefError}
-              </div>
-            )}
-
-            {!briefError && !briefData && (
-              <div className="mt-4 rounded-lg border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-300">
-                Cliquez sur "Generer un brief actionnable" pour obtenir une synthese actualisee.
-              </div>
-            )}
-
-            {briefData && (
-              <div className="mt-4 space-y-4">
-                <div className="rounded-lg border border-white/10 bg-slate-950/80 p-4 text-sm text-slate-200 whitespace-pre-line">
-                  {briefData.summary}
-                </div>
-                <div className="text-xs text-slate-400">
-                  Genere le {new Date(briefData.createdAt).toLocaleString("fr-FR")} via {briefData.model}.
-                </div>
-                <div className="space-y-2">
-                  <div className="text-sm font-semibold text-white">Sources utilisees</div>
-                  <div className="grid gap-2">
-                    {briefData.sources.map((source) => (
-                      <a
-                        key={source.id}
-                        href={source.link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-lg border border-white/10 bg-slate-950/70 p-3 text-sm text-slate-200 hover:bg-white/5"
+          {!loading && filteredItems.length > 0 && (
+            <div className="grid gap-4">
+              {filteredItems.map((item) => (
+                <Card key={item.id} className="bg-slate-950/70 border-white/10 text-white backdrop-blur-md">
+                  <CardHeader className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className={cn("border", IMPACT_STYLES[item.impact])}>
+                        {IMPACT_LABELS[item.impact]}
+                      </Badge>
+                      <Badge className="bg-white/5 text-slate-100 border-white/15">{item.sourceName}</Badge>
+                      <span className="text-xs text-slate-300">
+                        {new Date(item.pubDate).toLocaleDateString("fr-FR", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                      <button
+                        type="button"
+                        className="ml-auto text-slate-100 hover:text-white"
+                        onClick={() => toggleSaved(item.id)}
+                        aria-label="Sauvegarder"
                       >
-                        <div className="font-semibold text-white">{source.title}</div>
-                        <div className="text-xs text-slate-400">
-                          {source.sourceName} � {new Date(source.pubDate).toLocaleDateString("fr-FR")} � {source.impact}
-                        </div>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </section>
-          <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-semibold text-white">Top impacts (High)</h2>
-              <Badge className="bg-white/5 text-slate-100 border-white/15">{topImpactItems.length} items</Badge>
-            </div>
-
-            {loading && (
-              <div className="grid gap-4 md:grid-cols-2">
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <SkeletonCard key={`top-skeleton-${index}`} />
-                ))}
-              </div>
-            )}
-
-            {!loading && topImpactItems.length === 0 && (
-              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-6 text-slate-200 backdrop-blur-md">
-                Aucun item impact HIGH pour le moment.
-              </div>
-            )}
-
-            {!loading && topImpactItems.length > 0 && (
-              <div className="grid gap-4 md:grid-cols-2">
-                {topImpactItems.map((item) => (
-                  <Card key={item.id} className="bg-slate-950/70 border-white/10 text-white backdrop-blur-md">
-                    <CardHeader className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge className={cn("border", IMPACT_STYLES[item.impact])}>
-                          {IMPACT_LABELS[item.impact]}
-                        </Badge>
-                        <Badge className="bg-white/5 text-slate-100 border-white/15">{item.sourceName}</Badge>
-                        <span className="text-xs text-slate-300">
-                          {new Date(item.pubDate).toLocaleDateString("fr-FR", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </span>
-                        <button
-                          type="button"
-                          className="ml-auto text-slate-100 hover:text-white"
-                          onClick={() => toggleSaved(item.id)}
-                          aria-label="Sauvegarder"
-                        >
-                          {savedIds.includes(item.id) ? "?" : "?"}
-                        </button>
-                      </div>
-                      <CardTitle className="text-lg">{item.title}</CardTitle>
-                      <CardDescription className="text-slate-200 line-clamp-3">{item.summary}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <p className="text-sm font-semibold text-slate-200">Pourquoi</p>
-                        <ul className="text-sm text-slate-300 list-disc pl-5">
-                          {item.reasons.map((reason) => (
-                            <li key={reason}>{reason}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {item.tags.map((tag) => (
-                          <Badge key={tag} className="bg-white/5 text-slate-100 border-white/15">
-                            {tag}
-                          </Badge>
+                        {savedIds.includes(item.id) ? "?" : "?"}
+                      </button>
+                    </div>
+                    <CardTitle className="text-lg">{item.title}</CardTitle>
+                    <CardDescription className="text-slate-200 line-clamp-3">{item.summary}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <p className="text-sm font-semibold text-slate-200">Pourquoi</p>
+                      <ul className="text-sm text-slate-300 list-disc pl-5">
+                        {item.reasons.map((reason) => (
+                          <li key={reason}>{reason}</li>
                         ))}
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                        <Button asChild>
-                          <a href={item.link} target="_blank" rel="noreferrer">
-                            Lire la source
-                          </a>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="border-white/20 text-slate-100 hover:bg-white/10"
-                          asChild
-                        >
-                          <a href="/contact">Demander un audit</a>
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-lg backdrop-blur-md">
-            <h2 className="text-xl font-semibold">Ma veille</h2>
-            <p className="text-sm text-slate-200">
-              Ajoutez vos pays et themes preferes. Ils sont stockes localement dans votre navigateur.
-            </p>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-slate-200">Pays suivis (separes par une virgule)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={countryInput}
-                    onChange={(event) => setCountryInput(event.target.value)}
-                    placeholder="France, Allemagne, Maroc"
-                    className={INPUT_CLASSES}
-                  />
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      const countries = countryInput
-                        .split(",")
-                        .map((value) => value.trim())
-                        .filter(Boolean);
-                      if (!countries.length) return;
-                      setPrefs((prev) => ({
-                        ...prev,
-                        countries: Array.from(new Set([...prev.countries, ...countries])),
-                      }));
-                      setCountryInput("");
-                    }}
-                  >
-                    Ajouter
-                  </Button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {prefs.countries.map((country) => (
-                    <Badge
-                      key={country}
-                      onClick={() =>
-                        setPrefs((prev) => ({
-                          ...prev,
-                          countries: prev.countries.filter((item) => item !== country),
-                        }))
-                      }
-                      className="cursor-pointer bg-white/5 text-slate-100 border-white/15 hover:bg-white/10"
-                    >
-                      {country}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-slate-200">Themes preferes</Label>
-                <div className="flex flex-wrap gap-2">
-                  {THEME_PRESETS.map((tag) => (
-                    <Badge
-                      key={tag}
-                      onClick={() =>
-                        setPrefs((prev) => ({
-                          ...prev,
-                          themes: toggleValue(prev.themes, tag),
-                        }))
-                      }
-                      className={cn(
-                        "cursor-pointer border bg-white/5 text-slate-100 border-white/15 hover:bg-white/10",
-                        prefs.themes.includes(tag) && "bg-white/15 text-white"
-                      )}
-                    >
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-semibold text-white">Flux recents</h2>
-              <Badge className="bg-white/5 text-slate-100 border-white/15">{filteredItems.length} articles</Badge>
-            </div>
-
-            {error && (
-              <div className="rounded-xl border border-rose-200/20 bg-rose-950/40 p-4 text-rose-100">
-                <p className="text-sm">{error}</p>
-                <Button
-                  variant="outline"
-                  className="mt-3 border-rose-200/40 text-rose-100 hover:bg-white/10"
-                  onClick={refresh}
-                >
-                  Reessayer
-                </Button>
-              </div>
-            )}
-
-            {showEmptyState && (
-              <div className="rounded-xl border border-white/10 bg-slate-950/70 p-6 text-slate-200 backdrop-blur-md">
-                <p className="text-sm">Aucun resultat avec les filtres actuels.</p>
-                <Button
-                  variant="outline"
-                  className="mt-3 border-white/20 text-slate-100 hover:bg-white/10"
-                  onClick={refresh}
-                >
-                  Rafraichir
-                </Button>
-              </div>
-            )}
-
-            {loading && (
-              <div className="grid gap-4">
-                {Array.from({ length: 6 }).map((_, index) => (
-                  <SkeletonCard key={`list-skeleton-${index}`} />
-                ))}
-              </div>
-            )}
-
-            {!loading && filteredItems.length > 0 && (
-              <div className="grid gap-4">
-                {filteredItems.map((item) => (
-                  <Card key={item.id} className="bg-slate-950/70 border-white/10 text-white backdrop-blur-md">
-                    <CardHeader className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge className={cn("border", IMPACT_STYLES[item.impact])}>
-                          {IMPACT_LABELS[item.impact]}
+                      </ul>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {item.tags.map((tag) => (
+                        <Badge key={tag} className="bg-white/5 text-slate-100 border-white/15">
+                          {tag}
                         </Badge>
-                        <Badge className="bg-white/5 text-slate-100 border-white/15">{item.sourceName}</Badge>
-                        <span className="text-xs text-slate-300">
-                          {new Date(item.pubDate).toLocaleDateString("fr-FR", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </span>
-                        <button
-                          type="button"
-                          className="ml-auto text-slate-100 hover:text-white"
-                          onClick={() => toggleSaved(item.id)}
-                          aria-label="Sauvegarder"
-                        >
-                          {savedIds.includes(item.id) ? "?" : "?"}
-                        </button>
-                      </div>
-                      <CardTitle className="text-lg">{item.title}</CardTitle>
-                      <CardDescription className="text-slate-200 line-clamp-3">{item.summary}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <p className="text-sm font-semibold text-slate-200">Pourquoi</p>
-                        <ul className="text-sm text-slate-300 list-disc pl-5">
-                          {item.reasons.map((reason) => (
-                            <li key={reason}>{reason}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {item.tags.map((tag) => (
-                          <Badge key={tag} className="bg-white/5 text-slate-100 border-white/15">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                        <Button asChild>
-                          <a href={item.link} target="_blank" rel="noreferrer">
-                            Lire la source
-                          </a>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="border-white/20 text-slate-100 hover:bg-white/10"
-                          asChild
-                        >
-                          <a href="/contact">Demander un audit</a>
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            <div className="flex justify-center">
-              {hasMore && !loading && (
-                <Button
-                  variant="outline"
-                  className="border-white/20 text-slate-100 hover:bg-white/10"
-                  onClick={() => setOffset((prev) => prev + limit)}
-                  disabled={loading}
-                >
-                  Charger plus
-                </Button>
-              )}
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <Button asChild>
+                        <a href={item.link} target="_blank" rel="noreferrer">
+                          Lire la source
+                        </a>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="border-white/20 text-slate-100 hover:bg-white/10"
+                        asChild
+                      >
+                        <a href="/contact">Demander un audit</a>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          </section>
-        </div>
+          )}
+
+          <div className="flex justify-center">
+            {hasMore && !loading && (
+              <Button
+                variant="outline"
+                className="border-white/20 text-slate-100 hover:bg-white/10"
+                onClick={() => setOffset((prev) => prev + limit)}
+                disabled={loading}
+              >
+                Charger plus
+              </Button>
+            )}
+          </div>
+        </section>
       </div>
     </PublicLayout>
   );
