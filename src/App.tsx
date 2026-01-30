@@ -45,6 +45,9 @@ import Tarifs from "@/pages/Tarifs";
 import Contact from "@/pages/Contact";
 import InternalResources from "@/pages/InternalResources";
 
+// ✅ NOUVEAU
+import Legal from "@/pages/Legal";
+
 const queryClient = new QueryClient();
 
 export default function App() {
@@ -59,6 +62,7 @@ export default function App() {
             <BrowserRouter>
               <GlobalFiltersProvider>
                 <Routes>
+                  {/* Core */}
                   <Route path="/" element={<LeadMagnet />} />
                   <Route path="/analyse" element={<Analyse />} />
                   <Route path="/share/:id" element={<ShareDecision />} />
@@ -72,8 +76,19 @@ export default function App() {
                   <Route path="/tarifs" element={<Tarifs />} />
                   <Route path="/contact" element={<Contact />} />
                   <Route path="/newsletter" element={<Newsletter />} />
+
+                  {/* Aliases FR + legacy marketing */}
                   <Route path="/services" element={<Navigate to="/solutions" replace />} />
                   <Route path="/welcome" element={<Navigate to="/solutions" replace />} />
+                  <Route path="/ressources" element={<Navigate to="/resources" replace />} />
+
+                  {/* Legal (✅ manquant important) */}
+                  <Route path="/legal/:slug" element={<Legal />} />
+                  <Route path="/mentions-legales" element={<Navigate to="/legal/mentions-legales" replace />} />
+                  <Route path="/confidentialite" element={<Navigate to="/legal/confidentialite" replace />} />
+                  <Route path="/cookies" element={<Navigate to="/legal/cookies" replace />} />
+                  <Route path="/cgu" element={<Navigate to="/legal/cgu" replace />} />
+                  <Route path="/cgv" element={<Navigate to="/legal/cgv" replace />} />
 
                   {/* Auth */}
                   <Route path="/login" element={<Login />} />
@@ -91,6 +106,7 @@ export default function App() {
                     }
                   />
                   <Route path="/app" element={<Navigate to="/app/command-center" replace />} />
+
                   <Route
                     path="/app/explore"
                     element={
@@ -123,6 +139,7 @@ export default function App() {
                       </ProtectedRoute>
                     }
                   />
+
                   <Route
                     path="/app/centre-veille"
                     element={
@@ -139,14 +156,19 @@ export default function App() {
                       </ProtectedRoute>
                     }
                   />
+
+                  {/* ✅ Canonique : secteurs (remplace concurrence) */}
                   <Route
-                    path="/app/centre-veille/concurrence"
+                    path="/app/centre-veille/secteurs"
                     element={
                       <ProtectedRoute>
                         <WatchCommercial />
                       </ProtectedRoute>
                     }
                   />
+                  {/* ✅ Backward compatibility */}
+                  <Route path="/app/centre-veille/concurrence" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
+
                   <Route
                     path="/app/produits"
                     element={
@@ -206,10 +228,13 @@ export default function App() {
                   <Route path="/simulator" element={<Navigate to="/app/simulator" replace />} />
                   <Route path="/watch" element={<Navigate to="/app/centre-veille" replace />} />
                   <Route path="/watch/regulatory" element={<Navigate to="/app/centre-veille/reglementation" replace />} />
-                  <Route path="/watch/commercial" element={<Navigate to="/app/centre-veille/concurrence" replace />} />
-                  <Route path="/watch/competitive" element={<Navigate to="/app/centre-veille/concurrence" replace />} />
-                  <Route path="/competition" element={<Navigate to="/app/centre-veille/concurrence" replace />} />
-                  <Route path="/concurrence" element={<Navigate to="/app/centre-veille/concurrence" replace />} />
+
+                  {/* ✅ Tous les anciens chemins concurrence -> secteurs */}
+                  <Route path="/watch/commercial" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
+                  <Route path="/watch/competitive" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
+                  <Route path="/competition" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
+                  <Route path="/concurrence" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
+
                   <Route path="/products" element={<Navigate to="/app/produits" replace />} />
                   <Route path="/invoice-check" element={<Navigate to="/app/invoice-check" replace />} />
                   <Route path="/assistant" element={<Navigate to="/app/assistant" replace />} />
