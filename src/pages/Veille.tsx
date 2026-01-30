@@ -249,7 +249,7 @@ export default function Veille() {
           </div>
         </section>
 
-        <section className="sticky top-20 z-10 rounded-2xl border border-white/10 bg-slate-950/80 p-6 text-white shadow-lg backdrop-blur-md">
+        <section className="rounded-2xl border border-white/10 bg-slate-950/80 p-6 text-white shadow-lg backdrop-blur-md">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Votre operation export</h2>
