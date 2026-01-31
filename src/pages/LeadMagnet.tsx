@@ -80,6 +80,149 @@ const EU_ISO2 = new Set([
   "LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE",
 ]);
 
+const LANGUAGE_STORAGE_KEY = "mpl_lang";
+
+type ToolAction =
+  | { type: "link"; href: string }
+  | { type: "scroll"; targetId: string };
+
+type CopyContent = {
+  heroTagline: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  heroPrimary: string;
+  heroSecondary: string;
+  heroTrust: string[];
+  servicesLabel: string;
+  servicesTitle: string;
+  servicesSubtitle: string;
+  serviceCta: string;
+  serviceCards: Array<{ title: string; description: string; detail: string }>;
+  toolsLabel: string;
+  toolsTitle: string;
+  toolsSubtitle: string;
+  tools: Array<{ title: string; description: string; actionLabel: string; action: ToolAction }>;
+};
+
+const COPY: Record<"fr" | "en", CopyContent> = {
+  fr: {
+    heroTagline: "Services MPL Export Conseil",
+    heroTitle: "Nous pouvons vous aider à sécuriser vos exportations.",
+    heroSubtitle:
+      "MPL Export Conseil audite vos tarifs, documents et sanctions puis met des outils clairs à disposition pour piloter vos décisions.",
+    heroPrimary: "Planifier une validation express",
+    heroSecondary: "Découvrir les outils",
+    heroTrust: [
+      "Mise à jour sanctions quotidienne",
+      "Règles export vérifiées par nos experts",
+      "Estimations instantanées et expliquées",
+    ],
+    servicesLabel: "Services",
+    servicesTitle: "Audit, conformité, veille personnalisée",
+    servicesSubtitle:
+      "Nous accompagnons chaque exportateur : audit express, supervision continue et support réglementaire.",
+    serviceCta: "Demander un audit",
+    serviceCards: [
+      {
+        title: "Audit express",
+        description: "Contrôle complet HS, documents et taxes avant embarquement.",
+        detail: "Livraison en 48h, rapport actionnable.",
+      },
+      {
+        title: "Support conformité",
+        description: "Sanctions, licences, restrictions spécifiques par pays.",
+        detail: "Équipe dédiée pour vos zones critiques.",
+      },
+      {
+        title: "Veille & alertes",
+        description: "Signaux réglementaires et douaniers sur vos pays & HS clés.",
+        detail: "Alertes quotidiennes + restitution synthétique.",
+      },
+    ],
+    toolsLabel: "Tools",
+    toolsTitle: "Nous mettons des outils à disposition",
+    toolsSubtitle: "Analyse, contrôle rapide et veille toujours accessibles.",
+    tools: [
+      {
+        title: "Analyse export",
+        description: "Simule le landed cost, documents requis et risques par HS.",
+        actionLabel: "Ouvrir",
+        action: { type: "link", href: "/analyse" },
+      },
+      {
+        title: "Contrôle rapide",
+        description: "Estimez un risque à la volée et téléchargez un PDF.",
+        actionLabel: "Ouvrir",
+        action: { type: "scroll", targetId: "quick-control" },
+      },
+      {
+        title: "Veille personnalisée",
+        description: "Recevez les alertes sanctions et réglementations ciblées.",
+        actionLabel: "Ouvrir",
+        action: { type: "link", href: "/veille" },
+      },
+    ],
+  },
+  en: {
+    heroTagline: "MPL Export Conseil Services",
+    heroTitle: "We help you secure your exports across borders.",
+    heroSubtitle:
+      "Our team audits tariffs, documents and sanctions, then unlocks clear tools so you can act swiftly.",
+    heroPrimary: "Book an express validation",
+    heroSecondary: "Discover the tools",
+    heroTrust: [
+      "Daily sanctions updates",
+      "Verified export rules from our experts",
+      "Instant estimates with explanations",
+    ],
+    servicesLabel: "Services",
+    servicesTitle: "Audit, compliance & tailored monitoring",
+    servicesSubtitle:
+      "We support exporters with speedy audits, continuous supervision and regulatory guidance.",
+    serviceCta: "Request an audit",
+    serviceCards: [
+      {
+        title: "Express audit",
+        description: "HS, duties and documents checked before shipment.",
+        detail: "48h delivery with actionable report.",
+      },
+      {
+        title: "Compliance support",
+        description: "Sanctions, licenses and country-specific restrictions.",
+        detail: "Dedicated team for sensitive routes.",
+      },
+      {
+        title: "Monitoring & alerts",
+        description: "Regulatory signals for your priority markets and HS codes.",
+        detail: "Daily alerts and concise summaries.",
+      },
+    ],
+    toolsLabel: "Tools",
+    toolsTitle: "We put tools at your disposal",
+    toolsSubtitle: "Analysis, rapid checks, and monitoring always within reach.",
+    tools: [
+      {
+        title: "Export analysis",
+        description: "Simulate landed cost, documents, and risks per HS.",
+        actionLabel: "Open",
+        action: { type: "link", href: "/analyse" },
+      },
+      {
+        title: "Quick control",
+        description: "Estimate a risk in seconds and download a PDF.",
+        actionLabel: "Open",
+        action: { type: "scroll", targetId: "quick-control" },
+      },
+      {
+        title: "Tailored monitoring",
+        description: "Receive sanction and regulation alerts built for your needs.",
+        actionLabel: "Open",
+        action: { type: "link", href: "/veille" },
+      },
+    ],
+  },
+};
+
 function normalizeStr(s: string) {
   return (s || "")
     .trim()
@@ -240,6 +383,9 @@ function getTreatyNotesForCountry(iso2: string) {
 export default function LeadMagnet() {
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const [lang, setLang] = React.useState<"fr" | "en">("fr");
+  const copy = COPY[lang];
 
   const [productOrHs, setProductOrHs] = React.useState("");
   const [hsSuggestions, setHsSuggestions] = React.useState<HsSuggestion[]>([]);
