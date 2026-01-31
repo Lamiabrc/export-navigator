@@ -52,7 +52,6 @@ const LAST_SIM_KEY = "mpl_last_simulation";
 const EMAIL_KEY = "mpl_lead_email";
 const MAX_HISTORY = 6;
 
-const TRUST_ITEMS = ["Mise à jour sanctions quotidienne", "Règles export vérifiées", "Estimation immédiate"];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const TOP_COUNTRY_ISO2 = [
@@ -384,9 +383,6 @@ export default function LeadMagnet() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [lang, setLang] = React.useState<"fr" | "en">("fr");
-  const copy = COPY[lang];
-
   const [productOrHs, setProductOrHs] = React.useState("");
   const [hsSuggestions, setHsSuggestions] = React.useState<HsSuggestion[]>([]);
 
@@ -409,6 +405,32 @@ export default function LeadMagnet() {
 
   const [result, setResult] = React.useState<BriefResponse | null>(null);
   const [history, setHistory] = React.useState<HistoryEntry[]>([]);
+  const [lang, setLang] = React.useState<"fr" | "en">("fr");
+  const copy = COPY[lang];
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    if (stored === "fr" || stored === "en") {
+      setLang(stored);
+    }
+  }, []);
+
+  const handleLangChange = (next: "fr" | "en") => {
+    if (next === lang) return;
+    setLang(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(LANGUAGE_STORAGE_KEY, next);
+    }
+  };
+
+  const scrollToId = (id: string) => {
+    if (typeof window === "undefined") return;
+    const target = document.getElementById(id);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   // ✅ HS detection fiable
   const normalizedInput = productOrHs.trim();
@@ -718,8 +740,107 @@ export default function LeadMagnet() {
 
   return (
     <PublicLayout>
-      {/* HERO */}
-      <section className="force-white rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 md:p-10">
+      <section className="rounded-3xl border border-border bg-card/90 p-8 md:p-10 shadow-xl">
+        <div className="flex flex-col-reverse gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-6">
+            <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">{copy.heroTagline}</p>
+            <h1 className="text-4xl font-semibold leading-tight text-foreground md:text-5xl">{copy.heroTitle}</h1>
+            <p className="text-lg text-foreground/70">{copy.heroSubtitle}</p>
+            <div className="flex flex-wrap gap-3">
+              <Button variant="secondary" onClick={() => navigate("/contact?offer=express")}>
+                {copy.heroPrimary}
+              </Button>
+              <Button
+                variant="outline"
+                className="border-border text-foreground hover:border-primary hover:text-primary"
+                onClick={() => scrollToId("tools")}
+              >
+                {copy.heroSecondary}
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {copy.heroTrust.map((item) => (
+                <span
+                  key={item}
+                  className="rounded-full border border-border bg-muted/70 px-3 py-1 text-xs font-medium text-foreground/80"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col items-start gap-2 rounded-full border border-border bg-background/80 px-3 py-1 text-xs uppercase tracking-[0.35em] text-muted-foreground">
+            <span>Langue</span>
+            <div className="flex gap-1 rounded-full bg-background p-1">
+              {(["fr", "en"] as const).map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => handleLangChange(code)}
+                  className={`px-3 py-1 text-sm font-semibold transition ${
+                    lang === code
+                      ? "rounded-full bg-foreground text-background"
+                      : "rounded-full text-foreground/70 hover:text-foreground"
+                  }`}
+                >
+                  {code.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-10 rounded-3xl border border-border bg-card p-8 md:p-10 shadow-sm">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">{copy.servicesLabel}</p>
+            <h2 className="text-3xl font-semibold text-foreground">{copy.servicesTitle}</h2>
+            <p className="text-foreground/70">{copy.servicesSubtitle}</p>
+          </div>
+          <Button asChild variant="secondary">
+            <Link to="/contact?offer=audit">{copy.serviceCta}</Link>
+          </Button>
+        </div>
+        <div className="mt-6 grid gap-6 md:grid-cols-3">
+          {copy.serviceCards.map((card) => (
+            <article key={card.title} className="flex flex-col gap-3 rounded-2xl border border-border bg-background/60 p-4 text-foreground shadow-sm">
+              <h3 className="text-lg font-semibold">{card.title}</h3>
+              <p className="text-sm text-foreground/70">{card.description}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-primary">{card.detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="tools" className="mt-10 rounded-3xl border border-border bg-card p-8 md:p-10 shadow-sm">
+        <div>
+          <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">{copy.toolsLabel}</p>
+          <h2 className="mt-1 text-3xl font-semibold text-foreground">{copy.toolsTitle}</h2>
+          <p className="text-foreground/70">{copy.toolsSubtitle}</p>
+        </div>
+        <div className="mt-6 grid gap-6 md:grid-cols-3">
+          {copy.tools.map((tool) => (
+            <article key={tool.title} className="flex flex-col gap-4 rounded-2xl border border-border bg-background/60 p-4 text-foreground shadow-sm">
+              <div>
+                <h3 className="text-lg font-semibold">{tool.title}</h3>
+                <p className="mt-2 text-sm text-foreground/70">{tool.description}</p>
+              </div>
+              {tool.action.type === "link" ? (
+                <Button asChild variant="outline" className="border-border text-foreground hover:border-primary">
+                  <Link to={tool.action.href}>{tool.actionLabel}</Link>
+                </Button>
+              ) : (
+                <Button variant="outline" className="border-border text-foreground hover:border-primary" onClick={() => scrollToId(tool.action.targetId)}>
+                  {tool.actionLabel}
+                </Button>
+              )}
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="quick-control" className="mt-10 rounded-3xl border border-border bg-card/90 p-6 md:p-10 shadow-xl">
         <div className="grid gap-12 lg:grid-cols-[1.15fr_0.95fr] lg:items-start">
           <div className="space-y-6 text-white">
             <p className="text-xs uppercase tracking-[0.4em] text-blue-200">Audit • Réglementation • Veille</p>
@@ -731,14 +852,6 @@ export default function LeadMagnet() {
             <p className="text-lg text-slate-200">
               Estimation droits/taxes, documents requis et risques sanctions. Téléchargez un PDF MPL et activez la veille.
             </p>
-
-            <div className="flex flex-wrap gap-3 text-xs text-slate-200">
-              {TRUST_ITEMS.map((item) => (
-                <span key={item} className="rounded-full border border-white/20 bg-white/10 px-3 py-1">
-                  {item}
-                </span>
-              ))}
-            </div>
 
             <div className="text-xs text-white/70">
               Besoin d’un accompagnement ?{" "}
