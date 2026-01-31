@@ -1,44 +1,35 @@
-import { allowCors, json, readBodyJson, supabaseAdmin } from "./_supabase";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { allowCors, json, readJson, supabaseAdmin } from "./_supabase";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+type PrefsPayload = {
+  email: string;
+  countries: string[];
+  hsCodes: string[];
+};
 
-function cleanArray(v: any): string[] {
-  if (!Array.isArray(v)) return [];
-  return Array.from(
-    new Set(
-      v
-        .map((x) => String(x || "").trim())
-        .filter(Boolean)
-        .slice(0, 50)
-    )
-  );
-}
-
-export default async function handler(req: any, res: any) {
-  if (allowCors(req, res)) return;
-
+export default allowCors(async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return json(res, 405, { ok: false, error: "Method not allowed" });
 
   try {
-    const body = await readBodyJson(req);
-    const email = String(body?.email || "").trim().toLowerCase();
-    if (!email || !EMAIL_RE.test(email)) return json(res, 400, { ok: false, error: "Email invalide" });
+    const body = await readJson<PrefsPayload>(req);
 
-    const countries = cleanArray(body?.countries);
-    const hsCodes = cleanArray(body?.hsCodes);
+    const email = String(body?.email || "").trim();
+    const countries = Array.isArray(body?.countries) ? body.countries.map(String) : [];
+    const hsCodes = Array.isArray(body?.hsCodes) ? body.hsCodes.map(String) : [];
 
-    const { data, error } = await supabaseAdmin.rpc("upsert_watch_prefs", {
+    if (!email) return json(res, 400, { ok: false, error: "email_required" });
+
+    const supabase = supabaseAdmin();
+    const { error } = await supabase.rpc("upsert_watch_prefs", {
       p_email: email,
       p_countries: countries,
       p_hs_codes: hsCodes,
-      p_themes: [],
-      p_sources: [],
     });
 
     if (error) return json(res, 500, { ok: false, error: error.message });
 
-    return json(res, 200, { ok: Boolean(data) });
+    return json(res, 200, { ok: true });
   } catch (e: any) {
-    return json(res, 500, { ok: false, error: e?.message || "prefs failed" });
+    return json(res, 500, { ok: false, error: e?.message || "prefs_failed" });
   }
-}
+});
