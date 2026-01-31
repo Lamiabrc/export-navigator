@@ -12,6 +12,7 @@ type ContactPayload = {
 };
 
 const memoryStore: ContactPayload[] = [];
+const CONTACT_RECIPIENT = "contact@exportfrancefacile.com";
 
 function normalizeEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
@@ -105,7 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await transporter.sendMail({
       from: fromAddress,
-      to: "lamia.brechet@outlook.fr",
+      to: CONTACT_RECIPIENT,
       replyTo: payload.email,
       subject: `MPL Export Conseil - ${payload.subject || "Demande"}`,
       text: buildEmailBody(payload),

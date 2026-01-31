@@ -44,6 +44,7 @@ import Resources from "@/pages/Resources";
 import Tarifs from "@/pages/Tarifs";
 import Contact from "@/pages/Contact";
 import InternalResources from "@/pages/InternalResources";
+import ExportToFrance from "@/pages/ExportToFrance";
 
 // ✅ NOUVEAU
 import Legal from "@/pages/Legal";
@@ -75,6 +76,7 @@ export default function App() {
                   <Route path="/resources" element={<Resources />} />
                   <Route path="/tarifs" element={<Tarifs />} />
                   <Route path="/contact" element={<Contact />} />
+                  <Route path="/export-to-france" element={<ExportToFrance />} />
                   <Route path="/newsletter" element={<Newsletter />} />
 
                   {/* Aliases FR + legacy marketing */}

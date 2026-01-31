@@ -4,6 +4,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
+import { RssFooter } from "@/components/RssFooter";
 
 const NAV_ITEMS = [
   { label: "Analyse", to: "/analyse" },
@@ -11,15 +12,16 @@ const NAV_ITEMS = [
   { label: "Methodologie", to: "/methodologie" },
   { label: "Guides", to: "/guides/incoterms-ddp" },
   { label: "Contact", to: "/contact" },
+  { label: "Export to France", to: "/export-to-france" },
 ];
 
 export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
 
   return (
-    <div className="relative min-h-screen bg-slate-950 text-white">
-      <CinematicBackdrop variant="public" className="z-0" />
-      <header className="border-b border-white/10 bg-slate-950/70 backdrop-blur">
+    <div className="relative min-h-screen bg-background text-foreground">
+      <CinematicBackdrop variant="public" className="z-0 opacity-50" />
+      <header className="border-b border-border bg-white/80 text-foreground/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <BrandLogo
             size="lg"
@@ -27,14 +29,14 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             imageClassName="h-16 md:h-20"
             className="shrink-0"
           />
-          <nav className="hidden items-center gap-6 text-sm text-slate-200 md:flex">
+          <nav className="hidden items-center gap-6 text-sm text-foreground/70 md:flex">
             {NAV_ITEMS.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  "transition hover:text-white",
-                  location.pathname === item.to && "text-white font-semibold"
+                  "transition hover:text-foreground font-normal",
+                  location.pathname === item.to && "text-foreground font-semibold"
                 )}
               >
                 {item.label}
@@ -42,13 +44,13 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             ))}
           </nav>
           <div className="flex items-center gap-3">
-            <Button asChild variant="outline" className="border-white/20 text-slate-100 hover:bg-white/10">
+            <Button asChild variant="outline" className="border-border text-foreground hover:border-primary hover:text-primary hover:bg-primary/5">
               <Link to="/veille">Veille export</Link>
             </Button>
             <Button asChild variant="secondary">
               <Link to="/contact?offer=audit">Demander un audit</Link>
             </Button>
-            <Button asChild variant="ghost" className="hidden text-slate-200 hover:text-white md:inline-flex">
+            <Button asChild variant="ghost" className="hidden md:inline-flex">
               <Link to="/login">Connexion</Link>
             </Button>
           </div>
@@ -56,19 +58,26 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         <div className="h-1 bg-gradient-to-r from-blue-700 via-white to-red-600" />
       </header>
 
-      <main className="relative z-10 mx-auto w-full max-w-7xl px-6 py-12 text-slate-100 md:px-10">
+      <main className="relative z-10 mx-auto w-full max-w-7xl px-6 py-12 md:px-10">
         {children ?? <Outlet />}
       </main>
 
-      <footer className="border-t border-white/10 bg-slate-950/90">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-8 md:flex-row md:items-center md:justify-between">
-          <div className="text-sm text-slate-400">
-            MPL Export Conseil - outil gratuit d'aide a la decision export.
-          </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400">
-            <Link to="/methodologie" className="hover:text-white">Methodologie</Link>
-            <Link to="/guides/incoterms-ddp" className="hover:text-white">Guides</Link>
-            <Link to="/contact" className="hover:text-white">Contact</Link>
+      <footer className="border-t border-border bg-white/90">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10">
+          <RssFooter />
+          <div className="flex flex-col gap-3 text-sm text-foreground/70 md:flex-row md:items-center md:justify-between">
+            <div>MPL Export Conseil - outil gratuit d'aide à la décision export.</div>
+            <div className="flex flex-wrap gap-4">
+              <Link to="/methodologie" className="underline decoration-dotted underline-offset-4 hover:text-foreground/90">
+                Methodologie
+              </Link>
+              <Link to="/guides/incoterms-ddp" className="underline decoration-dotted underline-offset-4 hover:text-foreground/90">
+                Guides
+              </Link>
+              <Link to="/contact" className="underline decoration-dotted underline-offset-4 hover:text-foreground/90">
+                Contact
+              </Link>
+            </div>
           </div>
         </div>
       </footer>

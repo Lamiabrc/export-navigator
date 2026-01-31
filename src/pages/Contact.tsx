@@ -11,6 +11,7 @@ import type { RssItem } from "@/lib/rss/types";
 
 const INPUT_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
 const TEXTAREA_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
+const CONTACT_EMAIL = "contact@exportfrancefacile.com";
 
 const offerLabels: Record<string, string> = {
   express: "Validation express",
@@ -175,6 +176,12 @@ export default function Contact() {
           <h1 className="text-4xl font-semibold text-white">Parlons de votre projet export.</h1>
           <p className="text-lg text-slate-200">
             Offre selectionnee: <span className="font-semibold text-white">{offerLabels[offerType]}</span>.
+          </p>
+          <p className="text-sm text-slate-400">
+            Par mail :{" "}
+            <a className="text-blue-200 underline-offset-4 hover:text-blue-100 hover:underline" href={`mailto:${CONTACT_EMAIL}`}>
+              {CONTACT_EMAIL}
+            </a>
           </p>
         </div>
 
