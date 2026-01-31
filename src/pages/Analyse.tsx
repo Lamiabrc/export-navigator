@@ -1,7 +1,7 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,7 +57,12 @@ type SharePayload = {
 const SHARE_KEY = "mpl_share_payloads";
 
 function toNumber(value: string) {
-  const num = Number(value);
+  // Support FR: "12 345,67" / "12345,67" / "12,3"
+  const cleaned = String(value ?? "")
+    .trim()
+    .replace(/\s/g, "")
+    .replace(",", ".");
+  const num = Number(cleaned);
   return Number.isFinite(num) ? num : 0;
 }
 
@@ -100,15 +105,15 @@ function updateForm(setter: React.Dispatch<React.SetStateAction<FormState>>, key
 
 function breakdownData(result: ReturnType<typeof computeLandedCost>) {
   return [
-    { name: "Goods", value: result.breakdown.goodsValue },
-    { name: "Pre-carriage", value: result.breakdown.preCarriage },
-    { name: "Main freight", value: result.breakdown.mainFreight },
-    { name: "Insurance", value: result.breakdown.insurance },
-    { name: "Packaging", value: result.breakdown.packaging },
-    { name: "Brokerage", value: result.breakdown.brokerage },
-    { name: "Misc", value: result.breakdown.misc },
-    { name: "Duties", value: result.breakdown.duties },
-    { name: "VAT", value: result.breakdown.vat },
+    { name: "Marchandise", value: result.breakdown.goodsValue },
+    { name: "Pré-acheminement", value: result.breakdown.preCarriage },
+    { name: "Fret principal", value: result.breakdown.mainFreight },
+    { name: "Assurance", value: result.breakdown.insurance },
+    { name: "Emballage", value: result.breakdown.packaging },
+    { name: "Douane/Transit", value: result.breakdown.brokerage },
+    { name: "Divers", value: result.breakdown.misc },
+    { name: "Droits", value: result.breakdown.duties },
+    { name: "TVA import", value: result.breakdown.vat },
   ];
 }
 
@@ -137,16 +142,22 @@ async function generatePdf(payload: SharePayload) {
   const page = pdf.addPage([595, 842]);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const { width, height } = page.getSize();
+  const { height } = page.getSize();
 
   let cursor = height - 60;
   const left = 50;
   const line = 16;
 
-  page.drawText("MPL Export Conseil - Fiche Decision", { x: left, y: cursor, size: 16, font: bold, color: rgb(0.1, 0.2, 0.4) });
+  page.drawText("MPL Export Conseil — Fiche décision (landed cost)", {
+    x: left,
+    y: cursor,
+    size: 15,
+    font: bold,
+    color: rgb(0.1, 0.2, 0.4),
+  });
   cursor -= 26;
 
-  page.drawText(`Date: ${new Date(payload.createdAt).toLocaleDateString("fr-FR")}`, {
+  page.drawText(`Date : ${new Date(payload.createdAt).toLocaleDateString("fr-FR")}`, {
     x: left,
     y: cursor,
     size: 10,
@@ -156,10 +167,10 @@ async function generatePdf(payload: SharePayload) {
   cursor -= 24;
 
   const rows = [
-    `Destination: ${payload.input.destination}`,
-    `Incoterm: ${payload.input.incoterm}`,
-    `Mode: ${payload.input.mode}`,
-    `Goods value: ${formatMoney(payload.input.goodsValue, payload.input.currency)}`,
+    `Destination : ${payload.input.destination}`,
+    `Incoterm : ${payload.input.incoterm}`,
+    `Mode : ${payload.input.mode}`,
+    `Valeur marchandise : ${formatMoney(payload.input.goodsValue, payload.input.currency)}`,
   ];
   rows.forEach((text) => {
     page.drawText(text, { x: left, y: cursor, size: 11, font });
@@ -167,19 +178,19 @@ async function generatePdf(payload: SharePayload) {
   });
 
   cursor -= 10;
-  page.drawText("Breakdown", { x: left, y: cursor, size: 12, font: bold });
+  page.drawText("Détail des coûts", { x: left, y: cursor, size: 12, font: bold });
   cursor -= 18;
 
-  const breakdown = payload.result.breakdown;
+  const b = payload.result.breakdown;
   const breakdownLines = [
-    `Pre-carriage: ${formatMoney(breakdown.preCarriage, payload.input.currency)}`,
-    `Main freight: ${formatMoney(breakdown.mainFreight, payload.input.currency)}`,
-    `Insurance: ${formatMoney(breakdown.insurance, payload.input.currency)}`,
-    `Packaging: ${formatMoney(breakdown.packaging, payload.input.currency)}`,
-    `Brokerage: ${formatMoney(breakdown.brokerage, payload.input.currency)}`,
-    `Misc: ${formatMoney(breakdown.misc, payload.input.currency)}`,
-    `Duties: ${formatMoney(breakdown.duties, payload.input.currency)}`,
-    `VAT: ${formatMoney(breakdown.vat, payload.input.currency)}`,
+    `Pré-acheminement : ${formatMoney(b.preCarriage, payload.input.currency)}`,
+    `Fret principal : ${formatMoney(b.mainFreight, payload.input.currency)}`,
+    `Assurance : ${formatMoney(b.insurance, payload.input.currency)}`,
+    `Emballage : ${formatMoney(b.packaging, payload.input.currency)}`,
+    `Douane / Transit : ${formatMoney(b.brokerage, payload.input.currency)}`,
+    `Divers : ${formatMoney(b.misc, payload.input.currency)}`,
+    `Droits : ${formatMoney(b.duties, payload.input.currency)}`,
+    `TVA import : ${formatMoney(b.vat, payload.input.currency)}`,
   ];
   breakdownLines.forEach((text) => {
     page.drawText(text, { x: left, y: cursor, size: 10, font });
@@ -187,7 +198,7 @@ async function generatePdf(payload: SharePayload) {
   });
 
   cursor -= 8;
-  page.drawText(`Total landed cost: ${formatMoney(payload.result.total, payload.input.currency)}`, {
+  page.drawText(`Total landed cost : ${formatMoney(payload.result.total, payload.input.currency)}`, {
     x: left,
     y: cursor,
     size: 12,
@@ -196,7 +207,7 @@ async function generatePdf(payload: SharePayload) {
   cursor -= 18;
 
   if (payload.result.unitCost) {
-    page.drawText(`Unit cost: ${formatMoney(payload.result.unitCost, payload.input.currency)}`, {
+    page.drawText(`Coût unitaire : ${formatMoney(payload.result.unitCost, payload.input.currency)}`, {
       x: left,
       y: cursor,
       size: 10,
@@ -206,14 +217,16 @@ async function generatePdf(payload: SharePayload) {
   }
 
   cursor -= 6;
-  page.drawText("Warnings", { x: left, y: cursor, size: 12, font: bold });
+  page.drawText("Alertes / points de vigilance", { x: left, y: cursor, size: 12, font: bold });
   cursor -= 16;
-  payload.result.warnings.slice(0, 6).forEach((warning) => {
+
+  const warnings = payload.result.warnings?.length ? payload.result.warnings.slice(0, 8) : ["Aucune alerte générée avec les données actuelles."];
+  warnings.forEach((warning) => {
     page.drawText(`- ${warning}`, { x: left, y: cursor, size: 9, font });
     cursor -= 12;
   });
 
-  page.drawText("Estimation indicative - validation humaine recommandee.", {
+  page.drawText("Estimation indicative. Validation humaine recommandée (taux, origine, base taxable, incoterms).", {
     x: left,
     y: 60,
     size: 9,
@@ -226,27 +239,30 @@ async function generatePdf(payload: SharePayload) {
 }
 
 export default function Analyse() {
+  const navigate = useNavigate();
+
   const [form, setForm] = React.useState<FormState>(DEFAULT_FORM);
   const [scenarios, setScenarios] = React.useState<ScenarioState[]>([
     {
       id: "A",
-      label: "Scenario A",
+      label: "Scénario A",
       enabled: true,
       form: { ...DEFAULT_FORM, incoterm: "FCA", mode: "road" },
     },
     {
       id: "B",
-      label: "Scenario B",
+      label: "Scénario B",
       enabled: false,
       form: { ...DEFAULT_FORM, incoterm: "CIF", mode: "sea" },
     },
     {
       id: "C",
-      label: "Scenario C",
+      label: "Scénario C",
       enabled: false,
       form: { ...DEFAULT_FORM, incoterm: "DDP", mode: "air" },
     },
   ]);
+
   const [pdfLoading, setPdfLoading] = React.useState(false);
   const [shareStatus, setShareStatus] = React.useState<string | null>(null);
 
@@ -290,7 +306,7 @@ export default function Analyse() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `mpl-decision-${Date.now()}.pdf`;
+      link.download = `mpl-fiche-decision-${Date.now()}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -311,54 +327,65 @@ export default function Analyse() {
 
     const shareUrl = `${window.location.origin}/share/${payload.id}`;
     try {
-      await navigator.clipboard.writeText(shareUrl);
-      setShareStatus("Lien copie dans le presse-papiers.");
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        setShareStatus("Lien copié dans le presse-papiers.");
+      } else {
+        setShareStatus("Lien généré. Copiez-le manuellement : " + shareUrl);
+      }
     } catch {
-      setShareStatus("Lien genere. Copiez-le manuellement.");
+      setShareStatus("Lien généré. Copiez-le manuellement : " + shareUrl);
     }
   };
 
   return (
     <PublicLayout>
       <div className="space-y-10">
-        <section className="space-y-3">
-          <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Analyse export</p>
-          <h1 className="text-4xl font-semibold text-white">Landed cost en 3 minutes, sans blocage.</h1>
-          <p className="text-lg text-slate-200">
-            Estimation indicative, basee sur vos donnees manuelles. Aucun taux officiel n'est devine.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Button onClick={() => (window.location.href = "/contact")}>Demander un audit export</Button>
-            <Button
-              variant="outline"
-              className="border-white text-white hover:bg-white/10"
-              onClick={() => (window.location.href = "/veille")}
-            >
-              Veille export
-            </Button>
+        {/* Hero lisible */}
+        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 text-white md:p-10">
+          <div className="space-y-3">
+            <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Analyse export</p>
+            <h1 className="text-4xl font-semibold">Landed cost en 3 minutes, sans blocage.</h1>
+            <p className="text-lg text-slate-200">
+              Estimation indicative à partir de vos données. Les taux (droits/TVA) restent saisis manuellement.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={() => navigate("/contact?offer=audit")}>Demander un audit export</Button>
+              <Button
+                variant="outline"
+                className="border-white text-white hover:bg-white/10"
+                onClick={() => navigate("/veille")}
+              >
+                Veille export
+              </Button>
+            </div>
           </div>
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+          {/* Form */}
           <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
             <CardHeader>
-              <CardTitle>Entrees principales</CardTitle>
+              <CardTitle>Entrées principales</CardTitle>
               <CardDescription className="text-slate-200">
-                Renseignez vos couts. Droits et TVA restent manuels.
+                Renseignez vos coûts. Droits et TVA restent manuels (pas de “devinette”).
               </CardDescription>
             </CardHeader>
+
             <CardContent className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Valeur marchandise</Label>
+                  <Label className="text-slate-200">Valeur marchandise</Label>
                   <Input
                     value={form.goodsValue}
                     onChange={(e) => updateForm(setForm, "goodsValue", e.target.value)}
                     className={INPUT_CLASSES}
+                    inputMode="decimal"
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Devise</Label>
+                  <Label className="text-slate-200">Devise</Label>
                   <Select value={form.currency} onValueChange={(value) => updateForm(setForm, "currency", value)}>
                     <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                       <SelectValue />
@@ -370,24 +397,29 @@ export default function Analyse() {
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Quantite (optionnel)</Label>
+                  <Label className="text-slate-200">Quantité (optionnel)</Label>
                   <Input
                     value={form.quantity}
                     onChange={(e) => updateForm(setForm, "quantity", e.target.value)}
                     className={INPUT_CLASSES}
+                    inputMode="numeric"
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Destination (pays)</Label>
+                  <Label className="text-slate-200">Destination (pays)</Label>
                   <Input
                     value={form.destination}
                     onChange={(e) => updateForm(setForm, "destination", e.target.value)}
                     className={INPUT_CLASSES}
+                    placeholder="Ex : Allemagne"
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Incoterm</Label>
+                  <Label className="text-slate-200">Incoterm</Label>
                   <Select value={form.incoterm} onValueChange={(value) => updateForm(setForm, "incoterm", value)}>
                     <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                       <SelectValue />
@@ -401,8 +433,9 @@ export default function Analyse() {
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Mode transport</Label>
+                  <Label className="text-slate-200">Mode de transport</Label>
                   <Select value={form.mode} onValueChange={(value) => updateForm(setForm, "mode", value)}>
                     <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                       <SelectValue />
@@ -422,23 +455,27 @@ export default function Analyse() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Pre-carriage</Label>
+                  <Label className="text-slate-200">Pré-acheminement</Label>
                   <Input
                     value={form.preCarriage}
                     onChange={(e) => updateForm(setForm, "preCarriage", e.target.value)}
                     className={INPUT_CLASSES}
+                    inputMode="decimal"
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Main freight</Label>
+                  <Label className="text-slate-200">Fret principal</Label>
                   <Input
                     value={form.mainFreight}
                     onChange={(e) => updateForm(setForm, "mainFreight", e.target.value)}
                     className={INPUT_CLASSES}
+                    inputMode="decimal"
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Insurance</Label>
+                  <Label className="text-slate-200">Assurance</Label>
                   <div className="flex gap-2">
                     <Select
                       value={form.insuranceType}
@@ -449,101 +486,150 @@ export default function Analyse() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="percent">%</SelectItem>
-                        <SelectItem value="amount">Amount</SelectItem>
+                        <SelectItem value="amount">Montant</SelectItem>
                       </SelectContent>
                     </Select>
+
                     <Input
                       value={form.insuranceValue}
                       onChange={(e) => updateForm(setForm, "insuranceValue", e.target.value)}
                       className={INPUT_CLASSES}
+                      inputMode="decimal"
+                      placeholder={form.insuranceType === "percent" ? "Ex : 0,4" : "Ex : 120"}
                     />
                   </div>
+                  <p className="text-xs text-slate-300">
+                    “%” = pourcentage de la valeur marchandise (indicatif). “Montant” = valeur fixe.
+                  </p>
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Packaging</Label>
+                  <Label className="text-slate-200">Emballage</Label>
                   <Input
                     value={form.packaging}
                     onChange={(e) => updateForm(setForm, "packaging", e.target.value)}
                     className={INPUT_CLASSES}
+                    inputMode="decimal"
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Brokerage / customs</Label>
+                  <Label className="text-slate-200">Douane / Transit</Label>
                   <Input
                     value={form.brokerage}
                     onChange={(e) => updateForm(setForm, "brokerage", e.target.value)}
                     className={INPUT_CLASSES}
+                    inputMode="decimal"
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Misc</Label>
+                  <Label className="text-slate-200">Divers</Label>
                   <Input
                     value={form.misc}
                     onChange={(e) => updateForm(setForm, "misc", e.target.value)}
                     className={INPUT_CLASSES}
+                    inputMode="decimal"
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Duties rate (manual %)</Label>
+                  <Label className="text-slate-200">Taux de droits (manuel, %)</Label>
                   <Input
                     value={form.dutyRate}
                     onChange={(e) => updateForm(setForm, "dutyRate", e.target.value)}
                     className={INPUT_CLASSES}
+                    inputMode="decimal"
+                    placeholder="Ex : 4,2"
                   />
-                  <p className="text-xs text-slate-300">Enter the % you have validated manually.</p>
+                  <p className="text-xs text-slate-300">Saisissez le % que vous avez validé manuellement.</p>
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Import VAT rate (manual %)</Label>
+                  <Label className="text-slate-200">Taux de TVA import (manuel, %)</Label>
                   <Input
                     value={form.vatRate}
                     onChange={(e) => updateForm(setForm, "vatRate", e.target.value)}
                     className={INPUT_CLASSES}
+                    inputMode="decimal"
+                    placeholder="Ex : 20"
                   />
-                  <p className="text-xs text-slate-300">Manual field. No auto lookup.</p>
+                  <p className="text-xs text-slate-300">Champ manuel : aucun calcul “officiel” automatique.</p>
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Target margin (optional %)</Label>
+                  <Label className="text-slate-200">Marge cible (optionnel, %)</Label>
                   <Input
                     value={form.marginTarget}
                     onChange={(e) => updateForm(setForm, "marginTarget", e.target.value)}
                     className={INPUT_CLASSES}
+                    inputMode="decimal"
+                    placeholder="Ex : 15"
                   />
                 </div>
               </div>
             </CardContent>
           </Card>
 
+          {/* Results */}
           <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
             <CardHeader>
-              <CardTitle>Resultats</CardTitle>
-              <CardDescription className="text-slate-200">Vue de synthese + breakdown.</CardDescription>
+              <CardTitle>Résultats</CardTitle>
+              <CardDescription className="text-slate-200">Vue synthèse + détail des composantes.</CardDescription>
             </CardHeader>
+
             <CardContent className="space-y-6">
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-xl border border-white/15 bg-white/5 p-4">
                   <div className="text-xs uppercase text-slate-200">Total landed cost</div>
+                  <div className="text-2xl font-semibold">{formatMoney(baseResult.total, baseInput.currency)}</div>
+                </div>
+
+                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
+                  <div className="text-xs uppercase text-slate-200">Coût unitaire</div>
                   <div className="text-2xl font-semibold">
-                    {formatMoney(baseResult.total, baseInput.currency)}
+                    {baseResult.unitCost ? formatMoney(baseResult.unitCost, baseInput.currency) : "n/a"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
+                  <div className="text-xs uppercase text-slate-200">Droits</div>
+                  <div className="text-lg font-semibold">
+                    {formatMoney(baseResult.breakdown.duties, baseInput.currency)}
                   </div>
                 </div>
                 <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="text-xs uppercase text-slate-200">Unit cost</div>
-                  <div className="text-2xl font-semibold">
-                    {baseResult.unitCost
-                      ? formatMoney(baseResult.unitCost, baseInput.currency)
-                      : "n/a"}
+                  <div className="text-xs uppercase text-slate-200">TVA import</div>
+                  <div className="text-lg font-semibold">
+                    {formatMoney(baseResult.breakdown.vat, baseInput.currency)}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
+                  <div className="text-xs uppercase text-slate-200">Transport + divers</div>
+                  <div className="text-lg font-semibold">
+                    {formatMoney(
+                      baseResult.breakdown.preCarriage +
+                        baseResult.breakdown.mainFreight +
+                        baseResult.breakdown.insurance +
+                        baseResult.breakdown.packaging +
+                        baseResult.breakdown.brokerage +
+                        baseResult.breakdown.misc,
+                      baseInput.currency
+                    )}
                   </div>
                 </div>
               </div>
 
               {baseResult.margin && (
                 <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="text-xs uppercase text-slate-200">Target margin</div>
+                  <div className="text-xs uppercase text-slate-200">Marge cible</div>
                   <div className="mt-1 text-lg font-semibold">
                     {formatMoney(baseResult.margin.targetAmount, baseInput.currency)}
                   </div>
                   <div className="text-sm text-slate-200">
-                    Target price: {formatMoney(baseResult.margin.targetPrice, baseInput.currency)}
+                    Prix cible : {formatMoney(baseResult.margin.targetPrice, baseInput.currency)}
                   </div>
                 </div>
               )}
@@ -558,22 +644,29 @@ export default function Analyse() {
                       formatter={(value: any) => formatMoney(Number(value || 0), baseInput.currency)}
                       contentStyle={{ background: "#0f172a", border: "1px solid #334155" }}
                     />
-                    <Bar dataKey="value" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="value" fill="#60a5fa" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+
+              <div className="text-xs text-white/70">
+                NB : si vous voulez des taux “officiels” par HS + pays, l’outil doit se connecter à une base tarifaire
+                (à venir). Pour l’instant, le calcul est volontairement “manuel”.
               </div>
             </CardContent>
           </Card>
         </section>
 
         <section className="space-y-6">
+          {/* Scenarios */}
           <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
             <CardHeader>
-              <CardTitle>Comparateur de scenarios</CardTitle>
+              <CardTitle>Comparateur de scénarios</CardTitle>
               <CardDescription className="text-slate-200">
-                Modifiez incoterm, mode et couts pour comparer jusqu'a 3 scenarios.
+                Comparez jusqu’à 3 scénarios (incoterm, mode, fret). Copiez la base pour gagner du temps.
               </CardDescription>
             </CardHeader>
+
             <CardContent className="space-y-6">
               <div className="grid gap-4 lg:grid-cols-3">
                 {scenarios.map((scenario, index) => (
@@ -585,18 +678,17 @@ export default function Analyse() {
                         variant={scenario.enabled ? "default" : "outline"}
                         onClick={() =>
                           setScenarios((prev) =>
-                            prev.map((item, idx) =>
-                              idx === index ? { ...item, enabled: !item.enabled } : item
-                            )
+                            prev.map((item, idx) => (idx === index ? { ...item, enabled: !item.enabled } : item))
                           )
                         }
                       >
-                        {scenario.enabled ? "Active" : "Inactive"}
+                        {scenario.enabled ? "Actif" : "Inactif"}
                       </Button>
                     </div>
+
                     <div className={cn("mt-4 space-y-3", !scenario.enabled && "opacity-60")}>
                       <div className="space-y-2">
-                        <Label>Incoterm</Label>
+                        <Label className="text-slate-200">Incoterm</Label>
                         <Select
                           value={scenario.form.incoterm}
                           onValueChange={(value) =>
@@ -619,8 +711,9 @@ export default function Analyse() {
                           </SelectContent>
                         </Select>
                       </div>
+
                       <div className="space-y-2">
-                        <Label>Mode</Label>
+                        <Label className="text-slate-200">Mode</Label>
                         <Select
                           value={scenario.form.mode}
                           onValueChange={(value) =>
@@ -643,22 +736,23 @@ export default function Analyse() {
                           </SelectContent>
                         </Select>
                       </div>
+
                       <div className="space-y-2">
-                        <Label>Main freight</Label>
+                        <Label className="text-slate-200">Fret principal</Label>
                         <Input
                           value={scenario.form.mainFreight}
                           onChange={(e) =>
                             setScenarios((prev) =>
                               prev.map((item, idx) =>
-                                idx === index
-                                  ? { ...item, form: { ...item.form, mainFreight: e.target.value } }
-                                  : item
+                                idx === index ? { ...item, form: { ...item.form, mainFreight: e.target.value } } : item
                               )
                             )
                           }
                           className={INPUT_CLASSES}
+                          inputMode="decimal"
                         />
                       </div>
+
                       <Button
                         size="sm"
                         variant="outline"
@@ -669,7 +763,7 @@ export default function Analyse() {
                           )
                         }
                       >
-                        Use base values
+                        Copier la base
                       </Button>
                     </div>
                   </div>
@@ -680,7 +774,7 @@ export default function Analyse() {
 
               <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
                 <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="text-sm font-semibold">Comparison table</div>
+                  <div className="text-sm font-semibold">Comparaison (totaux)</div>
                   <div className="mt-3 space-y-2 text-sm text-slate-200">
                     <div className="flex items-center justify-between">
                       <span>Base</span>
@@ -692,6 +786,9 @@ export default function Analyse() {
                         <span>{formatMoney(scenario.result.total, scenario.input.currency)}</span>
                       </div>
                     ))}
+                    {scenarioResults.length === 0 && (
+                      <div className="text-xs text-white/70">Active au moins un scénario pour comparer.</div>
+                    )}
                   </div>
                 </div>
 
@@ -705,7 +802,7 @@ export default function Analyse() {
                         formatter={(value: any) => formatMoney(Number(value || 0), baseInput.currency)}
                         contentStyle={{ background: "#0f172a", border: "1px solid #334155" }}
                       />
-                      <Bar dataKey="total" fill="#60a5fa" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="total" fill="#93c5fd" radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -713,32 +810,38 @@ export default function Analyse() {
             </CardContent>
           </Card>
 
+          {/* Decision */}
           <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
             <CardHeader>
-              <CardTitle>Decision & risques</CardTitle>
+              <CardTitle>Décision & risques</CardTitle>
               <CardDescription className="text-slate-200">
-                Alerts simples, checklist documents, et rappels incoterm.
+                Alertes simples, checklist documents, partage PDF / lien.
               </CardDescription>
             </CardHeader>
+
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                {baseResult.warnings.map((warning) => (
-                  <div key={warning} className="rounded-lg border border-white/15 bg-white/5 p-3 text-sm">
-                    {warning}
-                  </div>
-                ))}
+                {(baseResult.warnings?.length ? baseResult.warnings : ["Aucune alerte générée avec les données actuelles."]).map(
+                  (warning) => (
+                    <div key={warning} className="rounded-lg border border-white/15 bg-white/5 p-3 text-sm">
+                      {warning}
+                    </div>
+                  )
+                )}
               </div>
+
               <div>
-                <div className="text-sm font-semibold">Documents checklist</div>
+                <div className="text-sm font-semibold">Checklist documents</div>
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-200">
-                  <li>Commercial invoice</li>
+                  <li>Facture commerciale</li>
                   <li>Packing list</li>
-                  <li>Certificate of origin</li>
-                  <li>Transport document (AWB, B/L, CMR)</li>
-                  <li>Insurance certificate (if applicable)</li>
-                  <li>Export declaration</li>
+                  <li>Certificat d’origine (si applicable)</li>
+                  <li>Document de transport (AWB, B/L, CMR…)</li>
+                  <li>Certificat d’assurance (si applicable)</li>
+                  <li>Déclaration export (si applicable)</li>
                 </ul>
               </div>
+
               <div className="flex flex-wrap gap-3">
                 <Button
                   variant="outline"
@@ -746,24 +849,36 @@ export default function Analyse() {
                   onClick={handlePdf}
                   disabled={pdfLoading}
                 >
-                  {pdfLoading ? "Generating..." : "Generate decision PDF"}
+                  {pdfLoading ? "Génération..." : "Générer la fiche PDF"}
                 </Button>
+
                 <Button
                   variant="outline"
                   className="border-white text-white hover:bg-white/10"
                   onClick={handleShare}
                 >
-                  Share link
+                  Copier un lien de partage
                 </Button>
+
+                <Button onClick={() => navigate("/contact?offer=audit")}>Demander un audit</Button>
               </div>
+
               {shareStatus && <p className="text-xs text-slate-200">{shareStatus}</p>}
+
+              <div className="text-xs text-white/70">
+                Rappel : pour une validation “zéro surprise”, il faut vérifier la classification, l’origine, la base taxable,
+                les règles pays et les documents.
+              </div>
             </CardContent>
           </Card>
         </section>
       </div>
 
+      {/* CTA flottant */}
       <div className="fixed bottom-6 right-6 z-50">
-        <Button size="lg" onClick={() => (window.location.href = "/contact")}>Demander un audit export</Button>
+        <Button size="lg" onClick={() => navigate("/contact?offer=audit")}>
+          Demander un audit export
+        </Button>
       </div>
     </PublicLayout>
   );
