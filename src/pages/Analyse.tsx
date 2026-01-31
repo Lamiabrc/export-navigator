@@ -1,7 +1,6 @@
 import React from "react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,8 +15,9 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 const INCOTERMS: Incoterm[] = ["EXW", "FCA", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"];
 const MODES: TransportMode[] = ["road", "air", "sea", "rail"];
 
-const INPUT_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
-const SELECT_TRIGGER_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100";
+/** ✅ Light inputs (plus de bg dark forcé) */
+const INPUT_CLASSES = "bg-background border-input text-foreground placeholder:text-muted-foreground";
+const SELECT_TRIGGER_CLASSES = "bg-background border-input text-foreground";
 
 const DEFAULT_FORM = {
   goodsValue: "12000",
@@ -137,13 +137,19 @@ async function generatePdf(payload: SharePayload) {
   const page = pdf.addPage([595, 842]);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const { width, height } = page.getSize();
+  const { height } = page.getSize();
 
   let cursor = height - 60;
   const left = 50;
   const line = 16;
 
-  page.drawText("MPL Export Conseil - Fiche Decision", { x: left, y: cursor, size: 16, font: bold, color: rgb(0.1, 0.2, 0.4) });
+  page.drawText("MPL Export Conseil - Fiche Decision", {
+    x: left,
+    y: cursor,
+    size: 16,
+    font: bold,
+    color: rgb(0.1, 0.2, 0.4),
+  });
   cursor -= 26;
 
   page.drawText(`Date: ${new Date(payload.createdAt).toLocaleDateString("fr-FR")}`, {
@@ -208,6 +214,7 @@ async function generatePdf(payload: SharePayload) {
   cursor -= 6;
   page.drawText("Warnings", { x: left, y: cursor, size: 12, font: bold });
   cursor -= 16;
+
   payload.result.warnings.slice(0, 6).forEach((warning) => {
     page.drawText(`- ${warning}`, { x: left, y: cursor, size: 9, font });
     cursor -= 12;
@@ -228,24 +235,9 @@ async function generatePdf(payload: SharePayload) {
 export default function Analyse() {
   const [form, setForm] = React.useState<FormState>(DEFAULT_FORM);
   const [scenarios, setScenarios] = React.useState<ScenarioState[]>([
-    {
-      id: "A",
-      label: "Scenario A",
-      enabled: true,
-      form: { ...DEFAULT_FORM, incoterm: "FCA", mode: "road" },
-    },
-    {
-      id: "B",
-      label: "Scenario B",
-      enabled: false,
-      form: { ...DEFAULT_FORM, incoterm: "CIF", mode: "sea" },
-    },
-    {
-      id: "C",
-      label: "Scenario C",
-      enabled: false,
-      form: { ...DEFAULT_FORM, incoterm: "DDP", mode: "air" },
-    },
+    { id: "A", label: "Scenario A", enabled: true, form: { ...DEFAULT_FORM, incoterm: "FCA", mode: "road" } },
+    { id: "B", label: "Scenario B", enabled: false, form: { ...DEFAULT_FORM, incoterm: "CIF", mode: "sea" } },
+    { id: "C", label: "Scenario C", enabled: false, form: { ...DEFAULT_FORM, incoterm: "DDP", mode: "air" } },
   ]);
   const [pdfLoading, setPdfLoading] = React.useState(false);
   const [shareStatus, setShareStatus] = React.useState<string | null>(null);
@@ -262,19 +254,13 @@ export default function Analyse() {
   const baseResult = React.useMemo(() => computeLandedCost(baseInput), [baseInput]);
 
   const scenarioResults = scenarios
-    .filter((scenario) => scenario.enabled)
-    .map((scenario) => ({
-      ...scenario,
-      input: toInput(scenario.form),
-    }))
-    .map((scenario) => ({
-      ...scenario,
-      result: computeLandedCost(scenario.input),
-    }));
+    .filter((s) => s.enabled)
+    .map((s) => ({ ...s, input: toInput(s.form) }))
+    .map((s) => ({ ...s, result: computeLandedCost(s.input) }));
 
   const comparisonData = [
     { name: "Base", total: baseResult.total },
-    ...scenarioResults.map((scenario) => ({ name: scenario.label, total: scenario.result.total })),
+    ...scenarioResults.map((s) => ({ name: s.label, total: s.result.total })),
   ];
 
   const handlePdf = async () => {
@@ -312,26 +298,28 @@ export default function Analyse() {
     const shareUrl = `${window.location.origin}/share/${payload.id}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
-      setShareStatus("Lien copie dans le presse-papiers.");
+      setShareStatus("Lien copié dans le presse-papiers.");
     } catch {
-      setShareStatus("Lien genere. Copiez-le manuellement.");
+      setShareStatus("Lien généré. Copiez-le manuellement.");
     }
   };
 
   return (
     <PublicLayout>
       <div className="space-y-10">
-        <section className="space-y-3">
+        {/* ✅ HERO CINEMATIC (option B) */}
+        <section className="rounded-3xl border border-border bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 text-white shadow-xl md:p-10">
           <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Analyse export</p>
-          <h1 className="text-4xl font-semibold text-white">Landed cost en 3 minutes, sans blocage.</h1>
-          <p className="text-lg text-slate-200">
-            Estimation indicative, basee sur vos donnees manuelles. Aucun taux officiel n'est devine.
+          <h1 className="mt-2 text-4xl font-semibold md:text-5xl">Landed cost en 3 minutes, sans blocage.</h1>
+          <p className="mt-3 max-w-2xl text-lg text-slate-200">
+            Estimation indicative, basée sur vos données manuelles. Aucun taux officiel n'est deviné.
           </p>
-          <div className="flex flex-wrap gap-3">
+
+          <div className="mt-6 flex flex-wrap gap-3">
             <Button onClick={() => (window.location.href = "/contact")}>Demander un audit export</Button>
             <Button
               variant="outline"
-              className="border-white text-white hover:bg-white/10"
+              className="border-white/30 text-white hover:bg-white/10"
               onClick={() => (window.location.href = "/veille")}
             >
               Veille export
@@ -339,27 +327,23 @@ export default function Analyse() {
           </div>
         </section>
 
+        {/* ✅ CONTENU LIGHT */}
         <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
+          <Card className="card-hover">
             <CardHeader>
-              <CardTitle>Entrees principales</CardTitle>
-              <CardDescription className="text-slate-200">
-                Renseignez vos couts. Droits et TVA restent manuels.
-              </CardDescription>
+              <CardTitle>Entrées principales</CardTitle>
+              <CardDescription>Renseignez vos coûts. Droits et TVA restent manuels.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Valeur marchandise</Label>
-                  <Input
-                    value={form.goodsValue}
-                    onChange={(e) => updateForm(setForm, "goodsValue", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.goodsValue} onChange={(e) => updateForm(setForm, "goodsValue", e.target.value)} className={INPUT_CLASSES} />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Devise</Label>
-                  <Select value={form.currency} onValueChange={(value) => updateForm(setForm, "currency", value)}>
+                  <Select value={form.currency} onValueChange={(v) => updateForm(setForm, "currency", v)}>
                     <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                       <SelectValue />
                     </SelectTrigger>
@@ -370,47 +354,43 @@ export default function Analyse() {
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
-                  <Label>Quantite (optionnel)</Label>
-                  <Input
-                    value={form.quantity}
-                    onChange={(e) => updateForm(setForm, "quantity", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Label>Quantité (optionnel)</Label>
+                  <Input value={form.quantity} onChange={(e) => updateForm(setForm, "quantity", e.target.value)} className={INPUT_CLASSES} />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Destination (pays)</Label>
-                  <Input
-                    value={form.destination}
-                    onChange={(e) => updateForm(setForm, "destination", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.destination} onChange={(e) => updateForm(setForm, "destination", e.target.value)} className={INPUT_CLASSES} />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Incoterm</Label>
-                  <Select value={form.incoterm} onValueChange={(value) => updateForm(setForm, "incoterm", value)}>
+                  <Select value={form.incoterm} onValueChange={(v) => updateForm(setForm, "incoterm", v)}>
                     <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {INCOTERMS.map((item) => (
-                        <SelectItem key={item} value={item}>
-                          {item}
+                      {INCOTERMS.map((it) => (
+                        <SelectItem key={it} value={it}>
+                          {it}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
                   <Label>Mode transport</Label>
-                  <Select value={form.mode} onValueChange={(value) => updateForm(setForm, "mode", value)}>
+                  <Select value={form.mode} onValueChange={(v) => updateForm(setForm, "mode", v)}>
                     <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {MODES.map((item) => (
-                        <SelectItem key={item} value={item}>
-                          {item}
+                      {MODES.map((it) => (
+                        <SelectItem key={it} value={it}>
+                          {it}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -418,32 +398,23 @@ export default function Analyse() {
                 </div>
               </div>
 
-              <Separator className="bg-white/10" />
+              <Separator />
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Pre-carriage</Label>
-                  <Input
-                    value={form.preCarriage}
-                    onChange={(e) => updateForm(setForm, "preCarriage", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.preCarriage} onChange={(e) => updateForm(setForm, "preCarriage", e.target.value)} className={INPUT_CLASSES} />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Main freight</Label>
-                  <Input
-                    value={form.mainFreight}
-                    onChange={(e) => updateForm(setForm, "mainFreight", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.mainFreight} onChange={(e) => updateForm(setForm, "mainFreight", e.target.value)} className={INPUT_CLASSES} />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Insurance</Label>
                   <div className="flex gap-2">
-                    <Select
-                      value={form.insuranceType}
-                      onValueChange={(value) => updateForm(setForm, "insuranceType", value)}
-                    >
+                    <Select value={form.insuranceType} onValueChange={(v) => updateForm(setForm, "insuranceType", v)}>
                       <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                         <SelectValue />
                       </SelectTrigger>
@@ -452,113 +423,89 @@ export default function Analyse() {
                         <SelectItem value="amount">Amount</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Input
-                      value={form.insuranceValue}
-                      onChange={(e) => updateForm(setForm, "insuranceValue", e.target.value)}
-                      className={INPUT_CLASSES}
-                    />
+                    <Input value={form.insuranceValue} onChange={(e) => updateForm(setForm, "insuranceValue", e.target.value)} className={INPUT_CLASSES} />
                   </div>
                 </div>
+
                 <div className="space-y-2">
                   <Label>Packaging</Label>
-                  <Input
-                    value={form.packaging}
-                    onChange={(e) => updateForm(setForm, "packaging", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.packaging} onChange={(e) => updateForm(setForm, "packaging", e.target.value)} className={INPUT_CLASSES} />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Brokerage / customs</Label>
-                  <Input
-                    value={form.brokerage}
-                    onChange={(e) => updateForm(setForm, "brokerage", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.brokerage} onChange={(e) => updateForm(setForm, "brokerage", e.target.value)} className={INPUT_CLASSES} />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Misc</Label>
-                  <Input
-                    value={form.misc}
-                    onChange={(e) => updateForm(setForm, "misc", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.misc} onChange={(e) => updateForm(setForm, "misc", e.target.value)} className={INPUT_CLASSES} />
                 </div>
+
                 <div className="space-y-2">
                   <Label>Duties rate (manual %)</Label>
-                  <Input
-                    value={form.dutyRate}
-                    onChange={(e) => updateForm(setForm, "dutyRate", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
-                  <p className="text-xs text-slate-300">Enter the % you have validated manually.</p>
+                  <Input value={form.dutyRate} onChange={(e) => updateForm(setForm, "dutyRate", e.target.value)} className={INPUT_CLASSES} />
+                  <p className="text-xs text-muted-foreground">Entrez le % validé manuellement.</p>
                 </div>
+
                 <div className="space-y-2">
                   <Label>Import VAT rate (manual %)</Label>
-                  <Input
-                    value={form.vatRate}
-                    onChange={(e) => updateForm(setForm, "vatRate", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
-                  <p className="text-xs text-slate-300">Manual field. No auto lookup.</p>
+                  <Input value={form.vatRate} onChange={(e) => updateForm(setForm, "vatRate", e.target.value)} className={INPUT_CLASSES} />
+                  <p className="text-xs text-muted-foreground">Champ manuel. Pas d’auto lookup.</p>
                 </div>
+
                 <div className="space-y-2">
                   <Label>Target margin (optional %)</Label>
-                  <Input
-                    value={form.marginTarget}
-                    onChange={(e) => updateForm(setForm, "marginTarget", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.marginTarget} onChange={(e) => updateForm(setForm, "marginTarget", e.target.value)} className={INPUT_CLASSES} />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
+          <Card className="card-hover">
             <CardHeader>
-              <CardTitle>Resultats</CardTitle>
-              <CardDescription className="text-slate-200">Vue de synthese + breakdown.</CardDescription>
+              <CardTitle>Résultats</CardTitle>
+              <CardDescription>Vue de synthèse + breakdown.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="text-xs uppercase text-slate-200">Total landed cost</div>
-                  <div className="text-2xl font-semibold">
-                    {formatMoney(baseResult.total, baseInput.currency)}
-                  </div>
+                <div className="rounded-xl border bg-card p-4">
+                  <div className="text-xs uppercase text-muted-foreground">Total landed cost</div>
+                  <div className="text-2xl font-semibold">{formatMoney(baseResult.total, baseInput.currency)}</div>
                 </div>
-                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="text-xs uppercase text-slate-200">Unit cost</div>
+                <div className="rounded-xl border bg-card p-4">
+                  <div className="text-xs uppercase text-muted-foreground">Unit cost</div>
                   <div className="text-2xl font-semibold">
-                    {baseResult.unitCost
-                      ? formatMoney(baseResult.unitCost, baseInput.currency)
-                      : "n/a"}
+                    {baseResult.unitCost ? formatMoney(baseResult.unitCost, baseInput.currency) : "n/a"}
                   </div>
                 </div>
               </div>
 
               {baseResult.margin && (
-                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="text-xs uppercase text-slate-200">Target margin</div>
-                  <div className="mt-1 text-lg font-semibold">
-                    {formatMoney(baseResult.margin.targetAmount, baseInput.currency)}
-                  </div>
-                  <div className="text-sm text-slate-200">
+                <div className="rounded-xl border bg-card p-4">
+                  <div className="text-xs uppercase text-muted-foreground">Target margin</div>
+                  <div className="mt-1 text-lg font-semibold">{formatMoney(baseResult.margin.targetAmount, baseInput.currency)}</div>
+                  <div className="text-sm text-muted-foreground">
                     Target price: {formatMoney(baseResult.margin.targetPrice, baseInput.currency)}
                   </div>
                 </div>
               )}
 
-              <div className="h-72">
+              <div className="h-72 rounded-xl border bg-card p-3">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={breakdownData(baseResult)}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="name" stroke="#e2e8f0" tick={{ fontSize: 12 }} />
-                    <YAxis stroke="#e2e8f0" tick={{ fontSize: 12 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
                     <Tooltip
                       formatter={(value: any) => formatMoney(Number(value || 0), baseInput.currency)}
-                      contentStyle={{ background: "#0f172a", border: "1px solid #334155" }}
+                      contentStyle={{
+                        background: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        color: "hsl(var(--foreground))",
+                      }}
                     />
-                    <Bar dataKey="value" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="value" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -567,17 +514,16 @@ export default function Analyse() {
         </section>
 
         <section className="space-y-6">
-          <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
+          <Card className="card-hover">
             <CardHeader>
-              <CardTitle>Comparateur de scenarios</CardTitle>
-              <CardDescription className="text-slate-200">
-                Modifiez incoterm, mode et couts pour comparer jusqu'a 3 scenarios.
-              </CardDescription>
+              <CardTitle>Comparateur de scénarios</CardTitle>
+              <CardDescription>Modifiez incoterm, mode et coûts pour comparer jusqu'à 3 scénarios.</CardDescription>
             </CardHeader>
+
             <CardContent className="space-y-6">
               <div className="grid gap-4 lg:grid-cols-3">
                 {scenarios.map((scenario, index) => (
-                  <div key={scenario.id} className="rounded-xl border border-white/15 bg-white/5 p-4">
+                  <div key={scenario.id} className="rounded-xl border bg-card p-4">
                     <div className="flex items-center justify-between">
                       <div className="font-semibold">{scenario.label}</div>
                       <Button
@@ -585,15 +531,14 @@ export default function Analyse() {
                         variant={scenario.enabled ? "default" : "outline"}
                         onClick={() =>
                           setScenarios((prev) =>
-                            prev.map((item, idx) =>
-                              idx === index ? { ...item, enabled: !item.enabled } : item
-                            )
+                            prev.map((item, idx) => (idx === index ? { ...item, enabled: !item.enabled } : item))
                           )
                         }
                       >
                         {scenario.enabled ? "Active" : "Inactive"}
                       </Button>
                     </div>
+
                     <div className={cn("mt-4 space-y-3", !scenario.enabled && "opacity-60")}>
                       <div className="space-y-2">
                         <Label>Incoterm</Label>
@@ -619,6 +564,7 @@ export default function Analyse() {
                           </SelectContent>
                         </Select>
                       </div>
+
                       <div className="space-y-2">
                         <Label>Mode</Label>
                         <Select
@@ -643,6 +589,7 @@ export default function Analyse() {
                           </SelectContent>
                         </Select>
                       </div>
+
                       <div className="space-y-2">
                         <Label>Main freight</Label>
                         <Input
@@ -650,19 +597,17 @@ export default function Analyse() {
                           onChange={(e) =>
                             setScenarios((prev) =>
                               prev.map((item, idx) =>
-                                idx === index
-                                  ? { ...item, form: { ...item.form, mainFreight: e.target.value } }
-                                  : item
+                                idx === index ? { ...item, form: { ...item.form, mainFreight: e.target.value } } : item
                               )
                             )
                           }
                           className={INPUT_CLASSES}
                         />
                       </div>
+
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-white text-white hover:bg-white/10"
                         onClick={() =>
                           setScenarios((prev) =>
                             prev.map((item, idx) => (idx === index ? { ...item, form: { ...form } } : item))
@@ -676,36 +621,40 @@ export default function Analyse() {
                 ))}
               </div>
 
-              <Separator className="bg-white/10" />
+              <Separator />
 
               <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
+                <div className="rounded-xl border bg-card p-4">
                   <div className="text-sm font-semibold">Comparison table</div>
-                  <div className="mt-3 space-y-2 text-sm text-slate-200">
+                  <div className="mt-3 space-y-2 text-sm text-muted-foreground">
                     <div className="flex items-center justify-between">
                       <span>Base</span>
-                      <span>{formatMoney(baseResult.total, baseInput.currency)}</span>
+                      <span className="text-foreground">{formatMoney(baseResult.total, baseInput.currency)}</span>
                     </div>
                     {scenarioResults.map((scenario) => (
                       <div key={scenario.id} className="flex items-center justify-between">
                         <span>{scenario.label}</span>
-                        <span>{formatMoney(scenario.result.total, scenario.input.currency)}</span>
+                        <span className="text-foreground">{formatMoney(scenario.result.total, scenario.input.currency)}</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="h-56">
+                <div className="h-56 rounded-xl border bg-card p-3">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={comparisonData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis dataKey="name" stroke="#e2e8f0" tick={{ fontSize: 12 }} />
-                      <YAxis stroke="#e2e8f0" tick={{ fontSize: 12 }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
                       <Tooltip
                         formatter={(value: any) => formatMoney(Number(value || 0), baseInput.currency)}
-                        contentStyle={{ background: "#0f172a", border: "1px solid #334155" }}
+                        contentStyle={{
+                          background: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          color: "hsl(var(--foreground))",
+                        }}
                       />
-                      <Bar dataKey="total" fill="#60a5fa" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="total" fill="hsl(var(--secondary))" radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -713,24 +662,24 @@ export default function Analyse() {
             </CardContent>
           </Card>
 
-          <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
+          <Card className="card-hover">
             <CardHeader>
-              <CardTitle>Decision & risques</CardTitle>
-              <CardDescription className="text-slate-200">
-                Alerts simples, checklist documents, et rappels incoterm.
-              </CardDescription>
+              <CardTitle>Décision & risques</CardTitle>
+              <CardDescription>Alertes simples, checklist documents, et rappels incoterm.</CardDescription>
             </CardHeader>
+
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 {baseResult.warnings.map((warning) => (
-                  <div key={warning} className="rounded-lg border border-white/15 bg-white/5 p-3 text-sm">
+                  <div key={warning} className="rounded-lg border bg-card p-3 text-sm">
                     {warning}
                   </div>
                 ))}
               </div>
+
               <div>
                 <div className="text-sm font-semibold">Documents checklist</div>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-200">
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                   <li>Commercial invoice</li>
                   <li>Packing list</li>
                   <li>Certificate of origin</li>
@@ -739,31 +688,26 @@ export default function Analyse() {
                   <li>Export declaration</li>
                 </ul>
               </div>
+
               <div className="flex flex-wrap gap-3">
-                <Button
-                  variant="outline"
-                  className="border-white text-white hover:bg-white/10"
-                  onClick={handlePdf}
-                  disabled={pdfLoading}
-                >
+                <Button variant="outline" onClick={handlePdf} disabled={pdfLoading}>
                   {pdfLoading ? "Generating..." : "Generate decision PDF"}
                 </Button>
-                <Button
-                  variant="outline"
-                  className="border-white text-white hover:bg-white/10"
-                  onClick={handleShare}
-                >
+                <Button variant="outline" onClick={handleShare}>
                   Share link
                 </Button>
               </div>
-              {shareStatus && <p className="text-xs text-slate-200">{shareStatus}</p>}
+
+              {shareStatus && <p className="text-xs text-muted-foreground">{shareStatus}</p>}
             </CardContent>
           </Card>
         </section>
       </div>
 
       <div className="fixed bottom-6 right-6 z-50">
-        <Button size="lg" onClick={() => (window.location.href = "/contact")}>Demander un audit export</Button>
+        <Button size="lg" onClick={() => (window.location.href = "/contact")}>
+          Demander un audit export
+        </Button>
       </div>
     </PublicLayout>
   );

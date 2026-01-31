@@ -1,5 +1,7 @@
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
+
+import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,9 +9,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+
 import { postLead, postPdf } from "@/lib/leadMagnetApi";
 import { useToast } from "@/hooks/use-toast";
-import { PublicLayout } from "@/components/layout/PublicLayout";
 import { formatDateTimeFr } from "@/lib/formatters";
 
 type BriefResponse = {
@@ -22,17 +24,44 @@ type BriefResponse = {
   sources: string[];
   simulationId?: string | null;
 
-  /**
-   * Optionnel (future-proof) : si ton backend renvoie des notes pays/traités, on les affiche.
-   * Exemple attendu:
-   * countryNotes: [{ title: "Traités & préférences", items: ["..."] }]
-   */
+  // optionnel backend
   countryNotes?: Array<{ title: string; items: string[] }>;
 };
 
 type HsSuggestion = { code: string; label: string };
 
-// Fallback minimal si Intl.supportedValuesOf("region") n'est pas dispo
+type ExportBriefPayload = {
+  hsInput?: string;
+  productText?: string;
+  destinationIso2: string;
+  value: number;
+  currency: string;
+  incoterm: string;
+  mode: string;
+  weightKg: number | null;
+  insurance: number | null;
+};
+
+type HistoryEntry = {
+  payload: ExportBriefPayload;
+  result: BriefResponse;
+};
+
+const HISTORY_KEY = "mpl_sim_history";
+const LAST_SIM_KEY = "mpl_last_simulation";
+const EMAIL_KEY = "mpl_lead_email";
+const MAX_HISTORY = 6;
+
+const TRUST_ITEMS = ["Mise à jour sanctions quotidienne", "Règles export vérifiées", "Estimation immédiate"];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const TOP_COUNTRY_ISO2 = [
+  "DE", "ES", "IT", "NL", "BE", "CH", "GB",
+  "US", "CA",
+  "MA", "AE",
+  "CN", "JP", "IN",
+];
+
 const COUNTRIES_FALLBACK = [
   { label: "États-Unis", iso2: "US" },
   { label: "Allemagne", iso2: "DE" },
@@ -45,16 +74,6 @@ const COUNTRIES_FALLBACK = [
   { label: "Japon", iso2: "JP" },
   { label: "Inde", iso2: "IN" },
 ];
-
-const TOP_COUNTRY_ISO2 = [
-  "DE", "ES", "IT", "NL", "BE", "CH", "GB",
-  "US", "CA",
-  "MA", "AE",
-  "CN", "JP", "IN",
-];
-
-const TRUST_ITEMS = ["Mise à jour des sanctions quotidienne", "Règles export vérifiées", "Estimation immédiate"];
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const EU_ISO2 = new Set([
   "AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT",
@@ -92,11 +111,49 @@ function riskPillClass(lvl: "low" | "medium" | "high") {
   return "border-emerald-300 bg-emerald-500/15 text-emerald-50";
 }
 
+function toNumberSafe(value: string) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function extractIso2FromDestinationText(
+  text: string,
+  countries: Array<{ label: string; iso2: string }>
+): { iso2: string; label: string } | null {
+  const raw = (text || "").trim();
+  if (!raw) return null;
+
+  // "Pays (XX)"
+  const m = raw.match(/\(([A-Za-z]{2})\)\s*$/);
+  if (m?.[1]) {
+    const iso2 = m[1].toUpperCase();
+    const found = countries.find((c) => c.iso2 === iso2);
+    return { iso2, label: found?.label || iso2 };
+  }
+
+  // "US"
+  if (/^[A-Za-z]{2}$/.test(raw)) {
+    const iso2 = raw.toUpperCase();
+    const found = countries.find((c) => c.iso2 === iso2);
+    return { iso2, label: found?.label || iso2 };
+  }
+
+  // match label exact (accents tolérés)
+  const n = normalizeStr(raw);
+  const found = countries.find((c) => normalizeStr(c.label) === n);
+  if (found) return { iso2: found.iso2, label: found.label };
+
+  // match begins-with
+  const found2 = countries.find((c) => normalizeStr(c.label).startsWith(n));
+  if (found2) return { iso2: found2.iso2, label: found2.label };
+
+  return null;
+}
+
 function getTreatyNotesForCountry(iso2: string) {
   const code = (iso2 || "").toUpperCase();
   if (!code) return [];
 
-  // Notes “pratiques” (indicatives) pour export depuis France
   if (EU_ISO2.has(code)) {
     return [
       {
@@ -114,9 +171,8 @@ function getTreatyNotesForCountry(iso2: string) {
       {
         title: "UE ↔ Royaume-Uni",
         items: [
-          "Accord UE–Royaume-Uni : préférences possibles (droits réduits/0) si règles d’origine respectées.",
+          "Préférences possibles (droits réduits/0) si règles d’origine respectées (à vérifier au cas réel).",
           "Déclaration douanière requise + attention TVA/UK VAT selon schéma.",
-          "Preuve d’origine à prévoir selon l’accord (vérification au cas réel).",
         ],
       },
     ];
@@ -127,7 +183,7 @@ function getTreatyNotesForCountry(iso2: string) {
       {
         title: "UE ↔ Suisse",
         items: [
-          "Accords UE–Suisse : préférences possibles selon règles d’origine.",
+          "Préférences possibles selon règles d’origine (à valider au cas réel).",
           "Procédures douanières et documents à sécuriser (origine, valeur, incoterms).",
         ],
       },
@@ -139,7 +195,7 @@ function getTreatyNotesForCountry(iso2: string) {
       {
         title: "UE ↔ Canada",
         items: [
-          "Accord commercial : préférences possibles selon règles d’origine.",
+          "Préférences possibles selon règles d’origine (à valider au cas réel).",
           "Vérifier la preuve d’origine et les conditions d’éligibilité.",
         ],
       },
@@ -151,20 +207,8 @@ function getTreatyNotesForCountry(iso2: string) {
       {
         title: "UE ↔ Japon",
         items: [
-          "Accord de partenariat : préférences possibles selon règles d’origine.",
+          "Préférences possibles selon règles d’origine (à valider au cas réel).",
           "Points sensibles : classification HS, origine et documents.",
-        ],
-      },
-    ];
-  }
-
-  if (code === "KR") {
-    return [
-      {
-        title: "UE ↔ Corée du Sud",
-        items: [
-          "Accord de libre-échange : préférences possibles selon règles d’origine.",
-          "Vérifier l’éligibilité à la préférence tarifaire au cas réel.",
         ],
       },
     ];
@@ -175,8 +219,8 @@ function getTreatyNotesForCountry(iso2: string) {
       {
         title: "UE ↔ États-Unis",
         items: [
-          "Pas d’accord préférentiel général : droits de douane applicables selon HS et réglementation US.",
-          "Vérifier exigences documentaires et conformité produit (étiquetage, normes, licences selon cas).",
+          "Pas d’accord préférentiel général : droits applicables selon HS/réglementation US.",
+          "Vérifier conformité produit (étiquetage, normes, licences selon cas).",
         ],
       },
     ];
@@ -193,45 +237,13 @@ function getTreatyNotesForCountry(iso2: string) {
   ];
 }
 
-function extractIso2FromDestinationText(
-  text: string,
-  countries: Array<{ label: string; iso2: string }>
-): { iso2: string; label: string } | null {
-  const raw = (text || "").trim();
-  if (!raw) return null;
-
-  // Si l'utilisateur choisit un format "Pays (XX)"
-  const m = raw.match(/\(([A-Za-z]{2})\)\s*$/);
-  if (m?.[1]) {
-    const iso2 = m[1].toUpperCase();
-    const found = countries.find((c) => c.iso2 === iso2);
-    return { iso2, label: found?.label || iso2 };
-  }
-
-  // Si l'utilisateur tape directement "US"
-  if (/^[A-Za-z]{2}$/.test(raw)) {
-    const iso2 = raw.toUpperCase();
-    const found = countries.find((c) => c.iso2 === iso2);
-    return { iso2, label: found?.label || iso2 };
-  }
-
-  // Match sur label (tolérant accents/casse)
-  const n = normalizeStr(raw);
-  const found = countries.find((c) => normalizeStr(c.label) === n);
-  if (found) return { iso2: found.iso2, label: found.label };
-
-  // Match “commence par”
-  const found2 = countries.find((c) => normalizeStr(c.label).startsWith(n));
-  if (found2) return { iso2: found2.iso2, label: found2.label };
-
-  return null;
-}
-
 export default function LeadMagnet() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const [productOrHs, setProductOrHs] = React.useState("");
+  const [hsSuggestions, setHsSuggestions] = React.useState<HsSuggestion[]>([]);
+
   const [destinationIso2, setDestinationIso2] = React.useState("");
   const [destinationLabel, setDestinationLabel] = React.useState("");
   const [destinationText, setDestinationText] = React.useState("");
@@ -242,25 +254,23 @@ export default function LeadMagnet() {
   const [mode, setMode] = React.useState("sea");
   const [weightKg, setWeightKg] = React.useState("");
   const [insurance, setInsurance] = React.useState("");
-  const [consent, setConsent] = React.useState(false);
+
   const [email, setEmail] = React.useState("");
-  const [hsSuggestions, setHsSuggestions] = React.useState<HsSuggestion[]>([]);
+  const [consent, setConsent] = React.useState(false);
 
-  const [loading, setLoading] = React.useState(false);
+  const [loadingEstimate, setLoadingEstimate] = React.useState(false);
+  const [loadingPdf, setLoadingPdf] = React.useState(false);
+
   const [result, setResult] = React.useState<BriefResponse | null>(null);
-  const [history, setHistory] = React.useState<Array<{ payload: any; result: BriefResponse }>>([]);
+  const [history, setHistory] = React.useState<HistoryEntry[]>([]);
 
+  // ✅ HS detection fiable
   const normalizedInput = productOrHs.trim();
-  const hsNormalized = normalizedInput.replace(/[^0-9]/g, "");
-  const hsOnly =
-    hsNormalized.length >= 2 &&
-    hsNormalized.length <= 6 &&
-    hsNormalized.length === normalizedInput.length;
-
-  const inferredHs = hsOnly ? hsNormalized : "";
+  const hsOnly = /^[0-9]{2,6}$/.test(normalizedInput);
+  const inferredHs = hsOnly ? normalizedInput : "";
   const inferredProduct = hsOnly ? "" : normalizedInput;
 
-  // ✅ Tous les pays (si support navigateur), sinon fallback
+  // ✅ Tous les pays (support navigateur) sinon fallback
   const allCountries = React.useMemo(() => {
     try {
       const supported = (Intl as any).supportedValuesOf?.("region") as string[] | undefined;
@@ -269,15 +279,12 @@ export default function LeadMagnet() {
       const dn = new Intl.DisplayNames(["fr"], { type: "region" });
       const list = supported
         .filter((code) => /^[A-Z]{2}$/.test(code))
-        .map((iso2) => {
-          const label = dn.of(iso2) || iso2;
-          return { iso2, label };
-        })
+        .map((iso2) => ({ iso2, label: dn.of(iso2) || iso2 }))
         .filter((c) => c.label && c.label !== c.iso2);
 
-      // unique + sort
       const map = new Map<string, string>();
       for (const c of list) map.set(c.iso2, c.label);
+
       const arr = Array.from(map.entries()).map(([iso2, label]) => ({ iso2, label }));
       arr.sort((a, b) => a.label.localeCompare(b.label, "fr", { sensitivity: "base" }));
       return arr.length ? arr : COUNTRIES_FALLBACK;
@@ -291,20 +298,20 @@ export default function LeadMagnet() {
     return TOP_COUNTRY_ISO2.map((iso2) => m.get(iso2)).filter(Boolean) as Array<{ iso2: string; label: string }>;
   }, [allCountries]);
 
+  // ✅ init storage
   React.useEffect(() => {
-    const rawHistory = localStorage.getItem("mpl_sim_history");
-    if (rawHistory) {
-      try {
-        setHistory(JSON.parse(rawHistory));
-      } catch {
-        setHistory([]);
-      }
+    try {
+      const rawHistory = localStorage.getItem(HISTORY_KEY);
+      if (rawHistory) setHistory(JSON.parse(rawHistory));
+    } catch {
+      setHistory([]);
     }
 
-    const storedEmail = localStorage.getItem("mpl_lead_email");
+    const storedEmail = localStorage.getItem(EMAIL_KEY);
     if (storedEmail) setEmail(storedEmail);
   }, []);
 
+  // ✅ suggestions HS / produit
   React.useEffect(() => {
     const query = productOrHs.trim();
     if (query.length < 2) {
@@ -319,6 +326,7 @@ export default function LeadMagnet() {
           signal: controller.signal,
         });
         if (!res.ok) return;
+
         const data = await res.json();
         const items = Array.isArray(data?.items) ? data.items : [];
         setHsSuggestions(
@@ -329,10 +337,8 @@ export default function LeadMagnet() {
             }))
             .filter((item: HsSuggestion) => item.code),
         );
-      } catch (err) {
-        if ((err as any)?.name !== "AbortError") {
-          setHsSuggestions([]);
-        }
+      } catch (err: any) {
+        if (err?.name !== "AbortError") setHsSuggestions([]);
       }
     }, 250);
 
@@ -354,28 +360,34 @@ export default function LeadMagnet() {
     }
   };
 
+  const selectCountry = (iso2: string, label: string) => {
+    setDestinationIso2(iso2);
+    setDestinationLabel(label);
+    setDestinationText(`${label} (${iso2})`);
+  };
+
   const handleEstimate = async () => {
-    if (!normalizedInput && hsNormalized.length < 2) {
-      toast({ title: "Saisie requise", description: "Saisis un produit ou un code HS (2-6 chiffres)." });
+    if (!normalizedInput) {
+      toast({ title: "Saisie requise", description: "Saisis un produit ou un code HS (2 à 6 chiffres)." });
       return;
     }
     if (!destinationIso2) {
-      toast({ title: "Pays requis", description: "Sélectionne un pays de destination (ou choisis un pays recommandé)." });
+      toast({ title: "Pays requis", description: "Sélectionne un pays (ou clique sur un pays recommandé)." });
       return;
     }
 
+    setLoadingEstimate(true);
     try {
-      setLoading(true);
-      const payload = {
+      const payload: ExportBriefPayload = {
         hsInput: inferredHs || undefined,
         productText: inferredProduct || undefined,
         destinationIso2,
-        value: Number(value || 0),
+        value: toNumberSafe(value),
         currency,
         incoterm,
         mode,
-        weightKg: weightKg ? Number(weightKg) : null,
-        insurance: insurance ? Number(insurance) : null,
+        weightKg: weightKg ? toNumberSafe(weightKg) : null,
+        insurance: insurance ? toNumberSafe(insurance) : null,
       };
 
       const res = await fetch("/api/export/brief", {
@@ -389,34 +401,34 @@ export default function LeadMagnet() {
         throw new Error(raw?.error || "Impossible de calculer.");
       }
 
-      // ✅ Supporte plusieurs formats de réponse backend
+      // support formats backend {result} ou {data} ou direct
       const brief: BriefResponse = (raw?.result ?? raw?.data ?? raw) as BriefResponse;
 
       setResult(brief);
 
-      // ✅ Historique : on stocke un objet sérialisable (payload + brief)
-      const entry = { payload, result: brief };
+      const entry: HistoryEntry = { payload, result: brief };
       setHistory((prev) => {
-        const next = [entry, ...prev].slice(0, 6);
-        localStorage.setItem("mpl_last_simulation", JSON.stringify(entry));
-        localStorage.setItem("mpl_sim_history", JSON.stringify(next));
+        const next = [entry, ...prev].slice(0, MAX_HISTORY);
+        localStorage.setItem(LAST_SIM_KEY, JSON.stringify(entry));
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
         return next;
       });
     } catch (err: any) {
       toast({ title: "Erreur estimation", description: err?.message || "Impossible de calculer." });
     } finally {
-      setLoading(false);
+      setLoadingEstimate(false);
     }
   };
 
-  const handleLead = async () => {
+  const handleLeadAndPdf = async () => {
     if (!result) {
-      toast({ title: "Calcule d'abord", description: "Lance l'estimation avant le rapport." });
+      toast({ title: "Calcule d'abord", description: "Lance l'estimation avant de générer le rapport." });
       return;
     }
+
     const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedEmail) {
-      toast({ title: "Email requis", description: "Ajoute un email pour recevoir le rapport." });
+      toast({ title: "Email requis", description: "Ajoute un email pour recevoir le PDF." });
       return;
     }
     if (!EMAIL_RE.test(trimmedEmail)) {
@@ -428,33 +440,33 @@ export default function LeadMagnet() {
       return;
     }
 
+    setLoadingPdf(true);
     try {
-      setLoading(true);
-
       await postLead({
         email: trimmedEmail,
         consent,
         simulationId: result.simulationId,
         metadata: {
-          hsInput: inferredHs,
-          productText: inferredProduct,
+          hsInput: inferredHs || undefined,
+          productText: inferredProduct || undefined,
           destinationIso2,
           incoterm,
-          value,
+          value: toNumberSafe(value),
           currency,
           mode,
         },
       });
 
-      localStorage.setItem("mpl_lead_email", trimmedEmail);
+      localStorage.setItem(EMAIL_KEY, trimmedEmail);
 
       const pdfBlob = await postPdf({
         title: "Rapport de contrôle export",
         email: trimmedEmail,
         destination: destinationLabel || destinationIso2,
         incoterm,
-        value,
+        value: toNumberSafe(value),
         currency,
+        score: clamp(Number(result.complianceScore ?? 0), 0, 100),
         result: {
           landedCost: {
             duty: result.estimate.duty,
@@ -474,17 +486,18 @@ export default function LeadMagnet() {
 
       toast({ title: "Rapport généré", description: "Le PDF est téléchargé." });
 
-      // ✅ Route existante (si pas connecté => ProtectedRoute redirige login)
+      // ✅ route existante (si pas connecté -> ProtectedRoute gère)
       navigate("/app/command-center");
     } catch (err: any) {
-      toast({ title: "Erreur lead", description: err?.message || "Impossible de finaliser." });
+      toast({ title: "Erreur", description: err?.message || "Impossible de finaliser." });
     } finally {
-      setLoading(false);
+      setLoadingPdf(false);
     }
   };
 
-  const reuseHistory = (entry: { payload: any; result: BriefResponse }) => {
-    const p = entry.payload || {};
+  const reuseHistory = (entry: HistoryEntry) => {
+    const p = entry.payload;
+
     setProductOrHs(p.hsInput || p.productText || "");
 
     const iso2 = p.destinationIso2 || "";
@@ -494,26 +507,27 @@ export default function LeadMagnet() {
     setDestinationLabel(label);
     setDestinationText(label ? `${label} (${iso2})` : iso2);
 
-    setValue(String(p.value || ""));
+    setValue(String(p.value ?? ""));
     setCurrency(p.currency || "EUR");
     setIncoterm(p.incoterm || "DAP");
     setMode(p.mode || "sea");
     setWeightKg(p.weightKg ? String(p.weightKg) : "");
     setInsurance(p.insurance ? String(p.insurance) : "");
+
     setResult(entry.result);
   };
 
   const clearHistory = () => {
     const confirmed = window.confirm("Supprimer l'historique des simulations ?");
     if (!confirmed) return;
-    localStorage.removeItem("mpl_sim_history");
-    localStorage.removeItem("mpl_last_simulation");
+    localStorage.removeItem(HISTORY_KEY);
+    localStorage.removeItem(LAST_SIM_KEY);
     setHistory([]);
   };
 
-  const downloadHistoryReport = async (entry: { payload: any; result: BriefResponse }) => {
+  const downloadHistoryReport = async (entry: HistoryEntry) => {
+    setLoadingPdf(true);
     try {
-      setLoading(true);
       const iso2 = entry.payload?.destinationIso2;
       const label = allCountries.find((c) => c.iso2 === iso2)?.label || iso2 || "Destination";
 
@@ -523,6 +537,7 @@ export default function LeadMagnet() {
         incoterm: entry.payload?.incoterm,
         value: entry.payload?.value,
         currency: entry.payload?.currency,
+        score: clamp(Number(entry.result.complianceScore ?? 0), 0, 100),
         result: {
           landedCost: {
             duty: entry.result.estimate.duty,
@@ -532,6 +547,7 @@ export default function LeadMagnet() {
           },
         },
       });
+
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
       link.href = url;
@@ -541,13 +557,12 @@ export default function LeadMagnet() {
     } catch (err: any) {
       toast({ title: "Erreur PDF", description: err?.message || "Impossible de générer le rapport." });
     } finally {
-      setLoading(false);
+      setLoadingPdf(false);
     }
   };
 
   const score = clamp(Number(result?.complianceScore ?? 0), 0, 100);
 
-  // ✅ Notes traités/spécificités : priorité au backend s’il renvoie countryNotes, sinon fallback UI
   const treatyBlocks =
     result?.countryNotes?.length
       ? result.countryNotes
@@ -557,14 +572,18 @@ export default function LeadMagnet() {
 
   return (
     <PublicLayout>
-      {/* ✅ Hero lisible (fond explicite => contraste OK même si layout change) */}
+      {/* HERO */}
       <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 md:p-10">
         <div className="grid gap-12 lg:grid-cols-[1.15fr_0.95fr] lg:items-start">
           <div className="space-y-6 text-white">
             <p className="text-xs uppercase tracking-[0.4em] text-blue-200">Audit • Réglementation • Veille</p>
-            <h1 className="text-4xl font-semibold leading-tight md:text-6xl">Votre contrôle export en 30 secondes.</h1>
+
+            <h1 className="text-4xl font-semibold leading-tight md:text-6xl">
+              Votre contrôle export en 30 secondes.
+            </h1>
+
             <p className="text-lg text-slate-200">
-              Estimation immédiate des droits/taxes, documents requis et risques sanctions. Rapport PDF MPL + veille personnalisée.
+              Estimation droits/taxes, documents requis et risques sanctions. Téléchargez un PDF MPL et activez la veille.
             </p>
 
             <div className="flex flex-wrap gap-3 text-xs text-slate-200">
@@ -588,6 +607,7 @@ export default function LeadMagnet() {
             </div>
           </div>
 
+          {/* FORM */}
           <Card className="border border-white/15 bg-white/10 text-white shadow-2xl backdrop-blur-xl">
             <CardContent className="space-y-4 p-7 md:p-8">
               <div className="grid gap-3 md:grid-cols-2">
@@ -601,19 +621,20 @@ export default function LeadMagnet() {
                     list="hs-list"
                     className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
                   />
+                  <datalist id="hs-list">
+                    {hsSuggestions.map((item) => (
+                      <option key={item.code} value={item.code} label={item.label || item.code} />
+                    ))}
+                  </datalist>
+                  <div className="text-xs text-white/70">
+                    Astuce : tape un HS (2–6 chiffres) pour forcer la recherche HS, sinon on traite comme “produit”.
+                  </div>
                 </div>
 
-                <datalist id="hs-list">
-                  {hsSuggestions.map((item) => (
-                    <option key={item.code} value={item.code} label={item.label || item.code} />
-                  ))}
-                </datalist>
-
-                {/* ✅ PAYS RECOMMANDÉS */}
                 <div className="space-y-2 md:col-span-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="destination">Destination</Label>
-                    <span className="text-xs text-white/70">Recommandés + recherche (tous les pays)</span>
+                    <span className="text-xs text-white/70">recommandés + recherche</span>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -621,11 +642,7 @@ export default function LeadMagnet() {
                       <button
                         key={c.iso2}
                         type="button"
-                        onClick={() => {
-                          setDestinationIso2(c.iso2);
-                          setDestinationLabel(c.label);
-                          setDestinationText(`${c.label} (${c.iso2})`);
-                        }}
+                        onClick={() => selectCountry(c.iso2, c.label)}
                         className={`rounded-full border px-3 py-1 text-xs ${
                           destinationIso2 === c.iso2
                             ? "border-white/40 bg-white/20 text-white"
@@ -637,7 +654,6 @@ export default function LeadMagnet() {
                     ))}
                   </div>
 
-                  {/* ✅ Recherche pays */}
                   <Input
                     id="destination"
                     value={destinationText}
@@ -646,7 +662,6 @@ export default function LeadMagnet() {
                     list="countries-list"
                     className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
                   />
-
                   <datalist id="countries-list">
                     {allCountries.map((c) => (
                       <option key={c.iso2} value={`${c.label} (${c.iso2})`} />
@@ -659,7 +674,8 @@ export default function LeadMagnet() {
                     </div>
                   ) : destinationIso2 ? (
                     <div className="text-xs text-white/70">
-                      Pays sélectionné : <span className="font-semibold text-white">{destinationLabel}</span> ({destinationIso2})
+                      Pays sélectionné :{" "}
+                      <span className="font-semibold text-white">{destinationLabel}</span> ({destinationIso2})
                     </div>
                   ) : null}
                 </div>
@@ -709,6 +725,7 @@ export default function LeadMagnet() {
                           </SelectContent>
                         </Select>
                       </div>
+
                       <div className="space-y-2">
                         <Label>Mode transport</Label>
                         <Select value={mode} onValueChange={setMode}>
@@ -722,6 +739,7 @@ export default function LeadMagnet() {
                           </SelectContent>
                         </Select>
                       </div>
+
                       <div className="space-y-2">
                         <Label>Poids (kg)</Label>
                         <Input
@@ -731,8 +749,9 @@ export default function LeadMagnet() {
                           className="border-white/20 bg-white/90 text-slate-900"
                         />
                       </div>
+
                       <div className="space-y-2">
-                        <Label>Assurance (EUR)</Label>
+                        <Label>Assurance (montant)</Label>
                         <Input
                           value={insurance}
                           onChange={(e) => setInsurance(e.target.value)}
@@ -745,8 +764,8 @@ export default function LeadMagnet() {
                 </AccordionItem>
               </Accordion>
 
-              <Button onClick={handleEstimate} disabled={loading} className="w-full">
-                {loading ? "Calcul en cours..." : "Calculer mon contrôle export"}
+              <Button onClick={handleEstimate} disabled={loadingEstimate} className="w-full">
+                {loadingEstimate ? "Calcul en cours..." : "Calculer mon contrôle export"}
               </Button>
 
               <p className="text-xs text-slate-200">
@@ -757,6 +776,7 @@ export default function LeadMagnet() {
         </div>
       </section>
 
+      {/* RESULT + PDF */}
       <section className="mt-12 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
         <Card className="border border-white/15 bg-white/10 text-white backdrop-blur-xl">
           <CardContent className="p-7 md:p-8">
@@ -771,10 +791,11 @@ export default function LeadMagnet() {
             </div>
 
             {!result ? (
-              <p className="mt-4 text-sm text-slate-200">Saisis un HS ou produit pour obtenir un résumé.</p>
+              <p className="mt-4 text-sm text-slate-200">
+                Saisis un HS/produit + pays, puis clique sur “Calculer”.
+              </p>
             ) : (
               <div className="mt-5 space-y-4">
-                {/* Score conformité */}
                 <div className="rounded-xl border border-white/15 bg-white/5 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -820,6 +841,7 @@ export default function LeadMagnet() {
                       ))}
                     </ul>
                   </div>
+
                   <div>
                     <div className="text-xs uppercase text-slate-200">Risques</div>
                     <ul className="mt-2 space-y-2 text-sm text-slate-100">
@@ -838,12 +860,9 @@ export default function LeadMagnet() {
                   </div>
                 </div>
 
-                {/* ✅ TRAITÉS / SPÉCIFICITÉS PAYS */}
                 {treatyBlocks.length > 0 && (
                   <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                    <div className="text-xs uppercase text-slate-200">
-                      Traités & spécificités pays (indication)
-                    </div>
+                    <div className="text-xs uppercase text-slate-200">Traités & spécificités pays (indication)</div>
                     <div className="mt-3 space-y-3">
                       {treatyBlocks.map((b) => (
                         <div key={b.title}>
@@ -856,6 +875,7 @@ export default function LeadMagnet() {
                         </div>
                       ))}
                     </div>
+
                     <div className="mt-3 flex flex-wrap gap-3">
                       <Button
                         variant="secondary"
@@ -871,8 +891,9 @@ export default function LeadMagnet() {
                         Audit complet
                       </Button>
                     </div>
+
                     <div className="mt-2 text-xs text-white/70">
-                      Ces indications seront “vérifiées” automatiquement quand l’API renverra les traités/règles applicables au couple (produit + pays).
+                      Indications à confirmer selon (produit + HS + origine + incoterm).
                     </div>
                   </div>
                 )}
@@ -907,9 +928,19 @@ export default function LeadMagnet() {
               </span>
             </label>
 
-            <Button onClick={handleLead} disabled={loading} className="w-full">
-              {loading ? "Génération..." : "Recevoir le rapport PDF"}
+            <Button
+              onClick={handleLeadAndPdf}
+              disabled={loadingEstimate || loadingPdf || !result}
+              className="w-full"
+            >
+              {loadingPdf ? "Génération..." : "Recevoir le rapport PDF"}
             </Button>
+
+            {!result ? (
+              <div className="text-xs text-white/70">
+                Lance une estimation pour activer la génération du PDF.
+              </div>
+            ) : null}
 
             <div className="pt-2">
               <div className="flex items-center justify-between">
@@ -930,34 +961,34 @@ export default function LeadMagnet() {
                 <div className="text-sm text-slate-200">Aucune simulation récente.</div>
               ) : (
                 <div className="space-y-2">
-                  {history.map((entry, idx) => (
-                    <div key={idx} className="rounded-lg border border-white/15 bg-white/5 p-2 text-xs">
-                      <div className="font-semibold text-white">
-                        {entry.payload?.destinationIso2 || "Pays"} —{" "}
-                        {entry.payload?.hsInput
-                          ? `HS ${entry.payload?.hsInput}`
-                          : entry.payload?.productText
-                            ? `Produit: ${entry.payload?.productText}`
-                            : "Saisie: n/a"}
+                  {history.map((entry, idx) => {
+                    const p = entry.payload;
+                    return (
+                      <div key={`${p.destinationIso2}-${idx}`} className="rounded-lg border border-white/15 bg-white/5 p-2 text-xs">
+                        <div className="font-semibold text-white">
+                          {p.destinationIso2 || "Pays"} —{" "}
+                          {p.hsInput ? `HS ${p.hsInput}` : p.productText ? `Produit: ${p.productText}` : "Saisie: n/a"}
+                        </div>
+                        <div className="text-slate-200">
+                          {p.value || 0} {p.currency || "EUR"} • {entry.result?.estimate?.total?.toFixed?.(0) ?? "—"}{" "}
+                          {entry.result?.estimate?.currency ?? ""}
+                        </div>
+                        <div className="mt-2 flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-white text-white hover:bg-white/10"
+                            onClick={() => reuseHistory(entry)}
+                          >
+                            Réutiliser
+                          </Button>
+                          <Button size="sm" onClick={() => downloadHistoryReport(entry)} disabled={loadingPdf}>
+                            PDF
+                          </Button>
+                        </div>
                       </div>
-                      <div className="text-slate-200">
-                        {entry.payload?.value || 0} {entry.payload?.currency || "EUR"}
-                      </div>
-                      <div className="mt-2 flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-white text-white hover:bg-white/10"
-                          onClick={() => reuseHistory(entry)}
-                        >
-                          Réutiliser
-                        </Button>
-                        <Button size="sm" onClick={() => downloadHistoryReport(entry)}>
-                          PDF
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -965,6 +996,7 @@ export default function LeadMagnet() {
         </Card>
       </section>
 
+      {/* BENEFITS */}
       <section className="mt-10 grid gap-6 md:grid-cols-3">
         <div className="rounded-2xl border border-white/15 bg-white/10 p-6 text-white backdrop-blur-xl">
           <div className="text-xs uppercase tracking-[0.24em] text-blue-200">Ce que vous obtenez</div>
@@ -979,9 +1011,9 @@ export default function LeadMagnet() {
         <div className="rounded-2xl border border-white/15 bg-white/10 p-6 text-white backdrop-blur-xl">
           <div className="text-xs uppercase tracking-[0.24em] text-blue-200">Comment ça marche</div>
           <ol className="mt-4 space-y-2 text-sm text-slate-200">
-            <li>1. Saisis HS ou produit + pays</li>
+            <li>1. Saisis HS/produit + pays</li>
             <li>2. Obtiens estimation & alertes</li>
-            <li>3. Reçois le rapport PDF</li>
+            <li>3. Télécharge le rapport PDF</li>
           </ol>
         </div>
 
@@ -1000,6 +1032,7 @@ export default function LeadMagnet() {
         </div>
       </section>
 
+      {/* CTA */}
       <section className="mt-10 flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-700 via-blue-900 to-red-600 p-6 text-white md:flex-row md:items-center">
         <div>
           <div className="text-xs uppercase tracking-[0.25em] text-white/70">Besoin d'une validation ?</div>
@@ -1018,6 +1051,20 @@ export default function LeadMagnet() {
           </Button>
         </div>
       </section>
+
+      <div className="mt-8 text-center text-xs text-slate-300">
+        <Link to="/mentions-legales" className="underline underline-offset-4 hover:opacity-90">
+          Mentions légales
+        </Link>{" "}
+        ·{" "}
+        <Link to="/confidentialite" className="underline underline-offset-4 hover:opacity-90">
+          Confidentialité
+        </Link>{" "}
+        ·{" "}
+        <Link to="/cookies" className="underline underline-offset-4 hover:opacity-90">
+          Cookies
+        </Link>
+      </div>
     </PublicLayout>
   );
 }

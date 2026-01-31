@@ -1,141 +1,294 @@
-import { Link, useParams } from "react-router-dom";
+import * as React from "react";
+import { useNavigate, useParams, Link } from "react-router-dom";
+import { PublicLayout } from "@/components/layout/PublicLayout";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 type LegalDoc = {
   title: string;
-  intro?: string;
-  sections: { h: string; p: string[] }[];
+  description?: string;
+  sections: Array<{ title: string; content: React.ReactNode }>;
 };
 
-const DOCS: Record<string, LegalDoc> = {
+const LEGAL_DOCS: Record<string, LegalDoc> = {
   "mentions-legales": {
     title: "Mentions légales",
-    intro: "Informations légales obligatoires — à compléter avec les données de l’éditeur.",
+    description: "Informations légales du site MPL Export Conseil.",
     sections: [
       {
-        h: "Éditeur du site",
-        p: [
-          "Nom / Raison sociale : [À compléter]",
-          "SIRET : [À compléter]",
-          "Adresse : [À compléter]",
-          "Email : [À compléter]",
-        ],
+        title: "Éditeur du site",
+        content: (
+          <div className="space-y-2">
+            <p>Nom / Raison sociale : <span className="font-semibold">À compléter</span></p>
+            <p>Adresse : <span className="font-semibold">À compléter</span></p>
+            <p>Email : <span className="font-semibold">À compléter</span></p>
+            <p>SIRET / RCS : <span className="font-semibold">À compléter</span></p>
+            <p>Directeur de publication : <span className="font-semibold">À compléter</span></p>
+          </div>
+        ),
       },
-      { h: "Directeur de publication", p: ["[À compléter]"] },
-      { h: "Hébergement", p: ["Hébergeur : Vercel Inc. (infrastructure cloud)."] },
+      {
+        title: "Hébergement",
+        content: (
+          <div className="space-y-2">
+            <p>Hébergeur : <span className="font-semibold">Vercel Inc.</span></p>
+            <p>Le site est déployé via une infrastructure cloud.</p>
+          </div>
+        ),
+      },
+      {
+        title: "Propriété intellectuelle",
+        content: (
+          <p>
+            Les contenus (textes, visuels, marque, logo) sont protégés. Toute reproduction sans autorisation est interdite.
+          </p>
+        ),
+      },
+      {
+        title: "Contact",
+        content: (
+          <p>
+            Pour toute question :{" "}
+            <Link className="underline underline-offset-4" to="/contact">
+              contactez-nous
+            </Link>
+            .
+          </p>
+        ),
+      },
     ],
   },
+
   confidentialite: {
     title: "Politique de confidentialité",
-    intro: "Explique comment MPL Export Conseil collecte et utilise les données (contact, newsletter, comptes…).",
+    description: "Comment nous collectons et utilisons vos données.",
     sections: [
       {
-        h: "Données collectées",
-        p: [
-          "Formulaire de contact : nom, email, message (et éventuellement société).",
-          "Newsletter : email (et préférences si ajoutées).",
-          "Compte : email, informations de profil (selon configuration).",
-        ],
+        title: "Données collectées",
+        content: (
+          <ul className="list-disc space-y-1 pl-5">
+            <li>Email (Lead magnet / Newsletter / Veille)</li>
+            <li>Préférences de veille (pays, codes HS) si vous les enregistrez</li>
+            <li>Données techniques minimales (ex: user-agent) pour la sécurité et le diagnostic</li>
+          </ul>
+        ),
       },
       {
-        h: "Finalités",
-        p: ["Répondre aux demandes, fournir le service, améliorer l’outil, envoyer des infos si consentement."],
+        title: "Finalités",
+        content: (
+          <ul className="list-disc space-y-1 pl-5">
+            <li>Envoi du rapport PDF demandé</li>
+            <li>Activation et envoi de la veille (si consentement)</li>
+            <li>Amélioration du service (statistiques anonymisées / debugging)</li>
+          </ul>
+        ),
       },
-      { h: "Durées de conservation", p: ["[À compléter]"] },
-      { h: "Vos droits", p: ["Accès, rectification, suppression, opposition, portabilité — contact : [email]."] },
+      {
+        title: "Base légale",
+        content: (
+          <ul className="list-disc space-y-1 pl-5">
+            <li>Exécution du service demandé (rapport PDF)</li>
+            <li>Consentement (newsletter / veille)</li>
+            <li>Intérêt légitime (sécurité, prévention fraude, amélioration)</li>
+          </ul>
+        ),
+      },
+      {
+        title: "Durées de conservation",
+        content: (
+          <p>
+            À adapter selon votre politique. Par défaut : conservation limitée au nécessaire (ex: 12–24 mois)
+            pour la veille, suppression sur demande.
+          </p>
+        ),
+      },
+      {
+        title: "Vos droits",
+        content: (
+          <p>
+            Vous pouvez demander l’accès, la rectification ou la suppression de vos données via{" "}
+            <Link className="underline underline-offset-4" to="/contact">
+              le formulaire de contact
+            </Link>
+            .
+          </p>
+        ),
+      },
     ],
   },
+
   cookies: {
-    title: "Politique cookies",
-    intro: "Décrit les cookies et traceurs utilisés sur le site.",
+    title: "Cookies",
+    description: "Informations sur l’usage des cookies.",
     sections: [
-      { h: "Cookies strictement nécessaires", p: ["Ex. session, authentification, préférences d’affichage."] },
-      { h: "Mesure d’audience", p: ["[À compléter : outil, opt-in/opt-out, durée]."] },
-      { h: "Gestion", p: ["Vous pouvez gérer vos choix via votre navigateur ou la bannière cookies."] },
+      {
+        title: "Ce site utilise-t-il des cookies ?",
+        content: (
+          <p>
+            Le site peut utiliser des stockages locaux (localStorage) pour améliorer l’expérience (ex: historique,
+            préférences). Des cookies peuvent être ajoutés si vous activez des outils d’analytics.
+          </p>
+        ),
+      },
+      {
+        title: "Gestion",
+        content: (
+          <p>
+            Vous pouvez gérer les cookies via votre navigateur. Si vous ajoutez un bandeau de consentement, cette page
+            doit être ajustée.
+          </p>
+        ),
+      },
     ],
   },
+
   cgu: {
     title: "Conditions Générales d’Utilisation (CGU)",
-    intro: "Encadre l’utilisation du site et de l’outil (responsabilités, limites, disponibilité).",
+    description: "Règles d’utilisation de la plateforme.",
     sections: [
-      { h: "Accès au service", p: ["[À compléter]"] },
-      { h: "Responsabilités", p: ["[À compléter]"] },
-      { h: "Propriété intellectuelle", p: ["[À compléter]"] },
+      {
+        title: "Objet",
+        content: (
+          <p>
+            La plateforme fournit des outils d’aide à la décision export (estimation, veille, checklists). Les résultats
+            sont indicatifs et nécessitent une validation humaine selon les cas.
+          </p>
+        ),
+      },
+      {
+        title: "Responsabilité",
+        content: (
+          <p>
+            MPL Export Conseil ne peut être tenu responsable d’une décision prise uniquement sur la base d’une estimation
+            indicative. Vérifiez HS, origine, incoterms, sanctions et licences.
+          </p>
+        ),
+      },
+      {
+        title: "Accès au service",
+        content: (
+          <p>
+            L’accès peut être restreint à certaines fonctionnalités (espaces protégés). Des interruptions peuvent survenir
+            pour maintenance.
+          </p>
+        ),
+      },
     ],
   },
+
   cgv: {
     title: "Conditions Générales de Vente (CGV)",
-    intro: "Si tu vends une prestation (audit, consulting, abonnement), c’est ici.",
+    description: "Conditions applicables aux prestations/audits si vous facturez.",
     sections: [
-      { h: "Offres et prix", p: ["[À compléter]"] },
-      { h: "Paiement et facturation", p: ["[À compléter]"] },
-      { h: "Annulation / rétractation", p: ["[À compléter]"] },
+      {
+        title: "Prestations",
+        content: (
+          <p>
+            Décrire ici vos offres (validation express, audit complet, accompagnement). À compléter selon votre modèle
+            commercial.
+          </p>
+        ),
+      },
+      {
+        title: "Tarification et paiement",
+        content: <p>À compléter (prix, modalités, délais, facturation, etc.).</p>,
+      },
+      {
+        title: "Rétractation / annulation",
+        content: <p>À compléter selon votre cadre (B2B/B2C) et votre politique.</p>,
+      },
     ],
   },
 };
 
+function getDoc(slug?: string): LegalDoc {
+  const key = (slug || "").toLowerCase();
+  return (
+    LEGAL_DOCS[key] || {
+      title: "Document légal",
+      description: "Document introuvable.",
+      sections: [
+        {
+          title: "Erreur",
+          content: (
+            <p>
+              Ce document n’existe pas encore. Retournez à{" "}
+              <Link className="underline underline-offset-4" to="/mentions-legales">
+                Mentions légales
+              </Link>
+              .
+            </p>
+          ),
+        },
+      ],
+    }
+  );
+}
+
 export default function Legal() {
+  const navigate = useNavigate();
   const { slug } = useParams();
-  const doc = (slug && DOCS[slug]) || null;
+
+  const doc = React.useMemo(() => getDoc(slug), [slug]);
+
+  const links = [
+    { to: "/mentions-legales", label: "Mentions légales" },
+    { to: "/confidentialite", label: "Confidentialité" },
+    { to: "/cookies", label: "Cookies" },
+    { to: "/cgu", label: "CGU" },
+    { to: "/cgv", label: "CGV" },
+  ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-3xl px-4 py-10">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link to="/solutions" className="text-sm underline opacity-80 hover:opacity-100">
-            ← Retour
-          </Link>
-          <div className="flex flex-wrap gap-3 text-sm">
-            <Link to="/mentions-legales" className="underline opacity-80 hover:opacity-100">
-              Mentions
-            </Link>
-            <Link to="/confidentialite" className="underline opacity-80 hover:opacity-100">
-              Confidentialité
-            </Link>
-            <Link to="/cookies" className="underline opacity-80 hover:opacity-100">
-              Cookies
-            </Link>
-            <Link to="/cgu" className="underline opacity-80 hover:opacity-100">
-              CGU
-            </Link>
-            <Link to="/cgv" className="underline opacity-80 hover:opacity-100">
-              CGV
-            </Link>
+    <PublicLayout>
+      <div className="space-y-8">
+        <section className="space-y-3">
+          <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Informations</p>
+          <h1 className="text-4xl font-semibold text-white">{doc.title}</h1>
+          {doc.description ? <p className="text-lg text-slate-200">{doc.description}</p> : null}
+
+          <div className="flex flex-wrap gap-2">
+            {links.map((l) => (
+              <Button
+                key={l.to}
+                variant="outline"
+                className="border-white/20 text-slate-100 hover:bg-white/10"
+                onClick={() => navigate(l.to)}
+              >
+                {l.label}
+              </Button>
+            ))}
           </div>
-        </div>
+        </section>
 
-        {!doc ? (
-          <div className="rounded-xl border p-6">
-            <h1 className="text-2xl font-bold">Document introuvable</h1>
-            <p className="mt-2 opacity-80">Le document demandé n’existe pas. Utilise le menu ci-dessus.</p>
-          </div>
-        ) : (
-          <article className="rounded-xl border p-6">
-            <h1 className="text-3xl font-bold">{doc.title}</h1>
-            {doc.intro ? <p className="mt-2 opacity-80">{doc.intro}</p> : null}
+        <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
+          <CardHeader>
+            <CardTitle>Contenu</CardTitle>
+            <CardDescription className="text-slate-200">
+              Pense à compléter les champs “À compléter” avec tes infos légales réelles.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-8">
+            {doc.sections.map((s) => (
+              <div key={s.title} className="space-y-2">
+                <h2 className="text-xl font-semibold">{s.title}</h2>
+                <div className="text-sm text-slate-200 leading-relaxed">{s.content}</div>
+              </div>
+            ))}
 
-            <div className="mt-8 space-y-6">
-              {doc.sections.map((s) => (
-                <section key={s.h}>
-                  <h2 className="text-xl font-semibold">{s.h}</h2>
-                  <div className="mt-2 space-y-2">
-                    {s.p.map((line, idx) => (
-                      <p key={idx} className="leading-relaxed opacity-90">
-                        {line}
-                      </p>
-                    ))}
-                  </div>
-                </section>
-              ))}
+            <div className="flex flex-wrap gap-3 pt-2">
+              <Button onClick={() => navigate("/contact")}>Nous contacter</Button>
+              <Button
+                variant="outline"
+                className="border-white/20 text-slate-100 hover:bg-white/10"
+                onClick={() => navigate("/")}
+              >
+                Retour accueil
+              </Button>
             </div>
-
-            <div className="mt-10 rounded-lg bg-muted p-4">
-              <p className="text-sm opacity-80">
-                Modèle à compléter avec tes informations légales.
-              </p>
-            </div>
-          </article>
-        )}
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </PublicLayout>
   );
 }

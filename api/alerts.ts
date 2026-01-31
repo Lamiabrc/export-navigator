@@ -1,74 +1,79 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getSupabaseClient } from "./_supabase";
+import { allowCors, json, supabaseAdmin } from "./_supabase";
 
-const ALLOWED_METHODS = ["GET", "OPTIONS"];
-
-function setCorsHeaders(res: VercelResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS.join(", "));
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+function normalize(s: string) {
+  return (s || "").toLowerCase();
 }
 
-function normalizeEmail(value: unknown) {
-  return String(value || "").trim().toLowerCase();
-}
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setCorsHeaders(res);
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).json({ ok: true });
-  }
-
-  if (req.method !== "GET") {
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
-  }
-
-  const emailQuery = Array.isArray(req.query.email) ? req.query.email[0] : req.query.email;
-  const email = normalizeEmail(emailQuery);
-
-  if (!email) {
-    return res.status(400).json({ ok: false, error: "Email required" });
-  }
-
-  const supabase = getSupabaseClient();
-  if (!supabase) {
-    return res.status(500).json({ ok: false, error: "Supabase not configured" });
-  }
+export default allowCors(async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "GET") return json(res, 405, { error: "Method not allowed" });
 
   try {
-    const { data, error } = await supabase.rpc("mpl_get_alerts", {
-      p_email: email,
-      p_limit: 25,
-      p_offset: 0,
-    });
+    const email = String((req.query as any)?.email ?? "").trim();
+    const supabase = supabaseAdmin();
 
-    if (error) {
-      console.error("[api/alerts] rpc error", error);
-      return res.status(500).json({ ok: false, error: error.message || "Alerts fetch failed" });
+    // On charge des prefs si email fourni
+    let countries: string[] = [];
+    let hsCodes: string[] = [];
+
+    if (email) {
+      const { data: prefs, error: prefsErr } = await supabase
+        .from("watch_prefs")
+        .select("countries, hs_codes")
+        .eq("email", normalize(email))
+        .maybeSingle();
+
+      if (!prefsErr && prefs) {
+        countries = Array.isArray((prefs as any).countries) ? (prefs as any).countries : [];
+        hsCodes = Array.isArray((prefs as any).hs_codes) ? (prefs as any).hs_codes : [];
+      }
     }
 
-    const rows = Array.isArray(data) ? data : [];
-    const alerts = rows.map((row: any) => ({
-      id: String(row.id),
+    // On prend un pool d’items HIGH et on filtre en JS si prefs existantes
+    const { data, error } = await supabase
+      .from("rss_items")
+      .select("id, title, summary, impact, pub_date, source_name, tags")
+      .eq("impact", "HIGH")
+      .order("pub_date", { ascending: false })
+      .limit(200);
+
+    if (error) return json(res, 500, { error: error.message });
+
+    const pool = (data || []).map((row: any) => {
+      const text = normalize(`${row.title} ${row.summary} ${(row.tags || []).join(" ")}`);
+      return { row, text };
+    });
+
+    let filtered = pool;
+
+    if (countries.length) {
+      const cNorm = countries.map(normalize);
+      filtered = filtered.filter((x) => cNorm.some((c) => x.text.includes(c)));
+    }
+
+    if (hsCodes.length) {
+      const hsNorm = hsCodes.map((h) => normalize(String(h).replace(/\D/g, ""))).filter(Boolean);
+      if (hsNorm.length) {
+        filtered = filtered.filter((x) => hsNorm.some((h) => x.text.includes(h)));
+      }
+    }
+
+    const alerts = filtered.slice(0, 50).map(({ row }: any) => ({
+      id: row.id,
       title: row.title,
-      message: row.message,
-      severity: row.severity,
-      country: row.country,
-      hsPrefix: row.hs_prefix,
-      detectedAt: row.detected_at,
-      source: row.source,
+      message: row.summary,
+      severity: row.impact,
+      country: null,
+      hsPrefix: null,
+      detectedAt: row.pub_date,
+      source: row.source_name,
     }));
 
-    return res.status(200).json({
-      ok: true,
-      data: {
-        updatedAt: new Date().toISOString(),
-        alerts,
-      },
+    return json(res, 200, {
+      updatedAt: new Date().toISOString(),
+      alerts,
     });
-  } catch (error: any) {
-    console.error("[api/alerts] error", error?.message || error);
-    return res.status(500).json({ ok: false, error: "Alerts fetch failed" });
+  } catch (e: any) {
+    return json(res, 500, { error: e?.message || "alerts_failed" });
   }
-}
+});
