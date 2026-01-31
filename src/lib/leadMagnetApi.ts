@@ -44,13 +44,23 @@ export type PrefsPayload = {
   hsCodes: string[];
 };
 
+async function safeJson(res: Response) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { ok: false, error: text || "invalid json" };
+  }
+}
+
 export async function postLead(payload: LeadPayload): Promise<LeadResponse> {
   const res = await fetch("/api/lead", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
-  const data = await res.json();
+
+  const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.error || "lead failed");
   return data as LeadResponse;
 }
@@ -61,17 +71,19 @@ export async function postPdf(payload: PdfPayload): Promise<Blob> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
+
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "pdf failed");
+    const data = await safeJson(res);
+    throw new Error(data?.error || "pdf failed");
   }
+
   return await res.blob();
 }
 
 export async function getAlerts(email?: string): Promise<AlertsResponse> {
   const qs = email ? `?email=${encodeURIComponent(email)}` : "";
   const res = await fetch(`/api/alerts${qs}`);
-  const data = await res.json();
+  const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.error || "alerts failed");
   return data as AlertsResponse;
 }
@@ -82,7 +94,7 @@ export async function postPrefs(payload: PrefsPayload): Promise<{ ok: boolean }>
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
-  const data = await res.json();
+  const data = await safeJson(res);
   if (!res.ok) throw new Error(data?.error || "prefs failed");
   return data as { ok: boolean };
 }
