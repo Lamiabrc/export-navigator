@@ -1,851 +1,442 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
+import * as React from "react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import type { ImpactLevel, RssFeedSource, RssItem } from "@/lib/rss/types";
-import { DEFAULT_FEEDS } from "@/lib/rss/feeds";
-import { Bookmark, BookmarkCheck } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { getAlerts, postPrefs } from "@/lib/leadMagnetApi";
+import { formatDateTimeFr } from "@/lib/formatters";
 
-const IMPACT_LABELS: Record<ImpactLevel, string> = {
-  LOW: "Faible",
-  MED: "Moyen",
-  HIGH: "Élevé",
+type RssItem = {
+  title?: string;
+  link?: string;
+  source?: string;
+  publishedAt?: string;
+  summary?: string;
+  country?: string | null;
+  hsPrefix?: string | null;
 };
 
-const IMPACT_STYLES: Record<ImpactLevel, string> = {
-  LOW: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  MED: "bg-amber-50 text-amber-700 border-amber-200",
-  HIGH: "bg-rose-50 text-rose-700 border-rose-200",
-};
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const THEME_PRESETS = ["Douanes", "TVA", "Sanctions", "Transport", "Accords"];
-const SECTOR_PRESETS = ["Agroalimentaire", "Industrie", "Cosmétique", "Pharma", "Tech", "Services"];
+const COUNTRIES_FALLBACK = [
+  { label: "Allemagne", iso2: "DE" },
+  { label: "États-Unis", iso2: "US" },
+  { label: "Royaume-Uni", iso2: "GB" },
+  { label: "Suisse", iso2: "CH" },
+  { label: "Maroc", iso2: "MA" },
+  { label: "Canada", iso2: "CA" },
+  { label: "Chine", iso2: "CN" },
+  { label: "Émirats arabes unis", iso2: "AE" },
+  { label: "Japon", iso2: "JP" },
+  { label: "Inde", iso2: "IN" },
+];
 
-const INPUT_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
+const TOP_COUNTRY_ISO2 = ["DE", "ES", "IT", "NL", "BE", "CH", "GB", "US", "CA", "MA", "AE", "CN", "JP", "IN"];
 
-type WatchPrefs = {
-  countries: string[];
-  themes: string[];
-  sources: string[];
-};
-
-type BriefSource = {
-  id: string;
-  title: string;
-  link: string;
-  sourceName: string;
-  pubDate: string;
-  impact: string;
-};
-
-type BriefData = {
-  summary: string;
-  sources: BriefSource[];
-  createdAt: string;
-  model: string;
-};
-
-const EMPTY_PREFS: WatchPrefs = {
-  countries: [],
-  themes: [],
-  sources: [],
-};
-
-function toggleValue(values: string[], value: string) {
-  return values.includes(value) ? values.filter((v) => v !== value) : [...values, value];
-}
-
-function normalizeText(value: string) {
-  return (value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+function normalizeHsPrefix(v: string) {
+  const digits = (v || "").replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  // on autorise 2 à 6 chiffres (préfixe HS)
+  if (digits.length < 2) return "";
+  return digits.slice(0, 6);
 }
 
 export default function Veille() {
-  const navigate = useNavigate();
+  const { toast } = useToast();
 
-  const [items, setItems] = React.useState<RssItem[]>([]);
-  const [sources, setSources] = React.useState<RssFeedSource[]>(DEFAULT_FEEDS);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-  const [offset, setOffset] = React.useState(0);
-  const [total, setTotal] = React.useState(0);
+  const [email, setEmail] = React.useState("");
+  const [emailOk, setEmailOk] = React.useState(false);
 
-  const [search, setSearch] = React.useState("");
-  const [impactFilter, setImpactFilter] = React.useState<ImpactLevel | "ALL">("ALL");
-  const [sourceFilters, setSourceFilters] = React.useState<string[]>([]);
-  const [themeFilters, setThemeFilters] = React.useState<string[]>([]);
+  const [countries, setCountries] = React.useState<string[]>([]);
+  const [countryText, setCountryText] = React.useState("");
+  const [hsCodes, setHsCodes] = React.useState<string[]>([]);
+  const [hsInput, setHsInput] = React.useState("");
 
-  const { value: prefs, setValue: setPrefs } = useLocalStorage<WatchPrefs>("mpl_watch_prefs", EMPTY_PREFS);
-  const { value: savedIds, setValue: setSavedIds } = useLocalStorage<string[]>("mpl_saved_watch", []);
+  const [alertsLoading, setAlertsLoading] = React.useState(false);
+  const [alertsUpdatedAt, setAlertsUpdatedAt] = React.useState<string | null>(null);
+  const [alerts, setAlerts] = React.useState<
+    Array<{ id: string; title: string; message: string; severity: string; country?: string | null; hsPrefix?: string | null; detectedAt?: string | null; source?: string | null }>
+  >([]);
 
-  const [useMyWatch, setUseMyWatch] = React.useState(false);
-  const [countryInput, setCountryInput] = React.useState("");
+  const [rssLoading, setRssLoading] = React.useState(false);
+  const [rssItems, setRssItems] = React.useState<RssItem[]>([]);
 
-  const [sector, setSector] = React.useState("");
-  const [product, setProduct] = React.useState("");
-  const [destination, setDestination] = React.useState("");
-
-  const [briefData, setBriefData] = React.useState<BriefData | null>(null);
-  const [briefLoading, setBriefLoading] = React.useState(false);
-  const [briefError, setBriefError] = React.useState<string | null>(null);
-
-  const limit = 40;
-
-  const load = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const allCountries = React.useMemo(() => {
     try {
-      const response = await fetch(`/api/rss?limit=${limit}&offset=${offset}`);
-      const payload = await response.json().catch(() => ({}));
+      const supported = (Intl as any).supportedValuesOf?.("region") as string[] | undefined;
+      if (!supported?.length) return COUNTRIES_FALLBACK;
 
-      if (!payload?.ok) {
-        throw new Error(payload?.error || "Impossible de charger la veille");
-      }
+      const dn = new Intl.DisplayNames(["fr"], { type: "region" });
+      const list = supported
+        .filter((code) => /^[A-Z]{2}$/.test(code))
+        .map((iso2) => ({ iso2, label: dn.of(iso2) || iso2 }))
+        .filter((c) => c.label && c.label !== c.iso2);
 
-      const data = payload.data as { items: RssItem[]; total: number; sources: RssFeedSource[] };
+      const map = new Map<string, string>();
+      for (const c of list) map.set(c.iso2, c.label);
 
-      setSources(data.sources?.length ? data.sources : DEFAULT_FEEDS);
-      setTotal(data.total ?? 0);
-
-      setItems((prev) => {
-        if (offset === 0) return data.items;
-        const existing = new Set(prev.map((item) => item.id));
-        const merged = [...prev];
-        data.items.forEach((item) => {
-          if (!existing.has(item.id)) merged.push(item);
-        });
-        return merged;
-      });
-    } catch (err: any) {
-      setError(err?.message || "Erreur de chargement");
-    } finally {
-      setLoading(false);
+      const arr = Array.from(map.entries()).map(([iso2, label]) => ({ iso2, label }));
+      arr.sort((a, b) => a.label.localeCompare(b.label, "fr", { sensitivity: "base" }));
+      return arr.length ? arr : COUNTRIES_FALLBACK;
+    } catch {
+      return COUNTRIES_FALLBACK;
     }
-  }, [offset]);
+  }, []);
+
+  const topCountries = React.useMemo(() => {
+    const m = new Map(allCountries.map((c) => [c.iso2, c]));
+    return TOP_COUNTRY_ISO2.map((iso2) => m.get(iso2)).filter(Boolean) as Array<{ iso2: string; label: string }>;
+  }, [allCountries]);
 
   React.useEffect(() => {
-    void load();
-  }, [load]);
-
-  const refresh = React.useCallback(() => {
-    if (offset !== 0) setOffset(0);
-    else void load();
-  }, [offset, load]);
-
-  const availableTags = React.useMemo(() => {
-    const tagSet = new Set<string>();
-    items.forEach((item) => item.tags.forEach((tag) => tagSet.add(tag)));
-    return Array.from(tagSet).sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
-  }, [items]);
-
-  const activeSources = useMyWatch && prefs.sources.length ? prefs.sources : sourceFilters;
-  const activeThemes = useMyWatch && prefs.themes.length ? prefs.themes : themeFilters;
-  const activeCountries = useMyWatch ? prefs.countries : [];
-
-  const filteredItems = React.useMemo(() => {
-    const query = normalizeText(search.trim());
-    return items.filter((item) => {
-      const inSource = activeSources.length === 0 || activeSources.includes(item.sourceName);
-      const inImpact = impactFilter === "ALL" || item.impact === impactFilter;
-      const inTheme = activeThemes.length === 0 || activeThemes.some((theme) => item.tags.includes(theme));
-
-      const haystack = normalizeText(`${item.title} ${item.summary} ${item.tags.join(" ")} ${item.sourceName}`);
-      const inSearch = !query || haystack.includes(query);
-
-      const inCountry =
-        activeCountries.length === 0 ||
-        activeCountries.some((country) => haystack.includes(normalizeText(country)));
-
-      return inSource && inImpact && inTheme && inSearch && inCountry;
-    });
-  }, [items, activeSources, activeThemes, impactFilter, search, activeCountries]);
-
-  const topImpactItems = React.useMemo(
-    () => filteredItems.filter((item) => item.impact === "HIGH").slice(0, 10),
-    [filteredItems]
-  );
-
-  const hasMore = items.length < total;
-  const showEmptyState = !loading && filteredItems.length === 0 && !error;
-
-  const toggleSaved = React.useCallback(
-    (id: string) => {
-      setSavedIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
-    },
-    [setSavedIds]
-  );
-
-  const applyOperationToFilters = () => {
-    const parts = [sector, product, destination].filter(Boolean).join(" ");
-    if (parts) setSearch(parts);
-
-    if (destination) {
-      setPrefs((prev) => ({
-        ...prev,
-        countries: Array.from(new Set([...prev.countries, destination])),
-      }));
+    const stored = localStorage.getItem("mpl_lead_email");
+    if (stored) {
+      setEmail(stored);
+      setEmailOk(EMAIL_RE.test(stored));
     }
-  };
 
-  const generateBrief = async () => {
-    setBriefLoading(true);
-    setBriefError(null);
-    try {
-      const params = new URLSearchParams();
-      if (sector) params.set("sector", sector);
-      if (product) params.set("product", product);
-      if (destination) params.set("destination", destination);
-
-      const res = await fetch(`/api/brief?${params.toString()}`);
-      const payload = await res.json().catch(() => ({}));
-
-      if (!res.ok || payload?.ok === false) {
-        throw new Error(payload?.error || "Impossible de générer le brief");
+    const storedPrefs = localStorage.getItem("mpl_watch_prefs");
+    if (storedPrefs) {
+      try {
+        const p = JSON.parse(storedPrefs);
+        if (Array.isArray(p?.countries)) setCountries(p.countries);
+        if (Array.isArray(p?.hsCodes)) setHsCodes(p.hsCodes);
+      } catch {
+        // ignore
       }
+    }
+  }, []);
 
-      setBriefData(payload.data as BriefData);
-    } catch (err: any) {
-      setBriefError(err?.message || "Erreur de génération");
+  const loadAlerts = React.useCallback(
+    async (mail: string) => {
+      setAlertsLoading(true);
+      try {
+        const data = await getAlerts(mail);
+        setAlertsUpdatedAt(data.updatedAt);
+        setAlerts(data.alerts || []);
+      } catch (e: any) {
+        toast({ title: "Erreur alertes", description: e?.message || "Impossible de charger les alertes." });
+      } finally {
+        setAlertsLoading(false);
+      }
+    },
+    [toast]
+  );
+
+  const loadRss = React.useCallback(async () => {
+    setRssLoading(true);
+    try {
+      const res = await fetch("/api/rss");
+      const raw = await res.json().catch(() => ({}));
+      const items = Array.isArray(raw?.items) ? raw.items : Array.isArray(raw?.data?.items) ? raw.data.items : [];
+      setRssItems(items.slice(0, 12));
+    } catch {
+      setRssItems([]);
     } finally {
-      setBriefLoading(false);
+      setRssLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    // RSS utile même sans email
+    loadRss();
+  }, [loadRss]);
+
+  const handleSavePrefs = async () => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed || !EMAIL_RE.test(trimmed)) {
+      toast({ title: "Email requis", description: "Ajoute un email valide pour activer la veille personnalisée." });
+      return;
+    }
+
+    try {
+      setAlertsLoading(true);
+      await postPrefs({ email: trimmed, countries, hsCodes });
+      localStorage.setItem("mpl_lead_email", trimmed);
+      localStorage.setItem("mpl_watch_prefs", JSON.stringify({ countries, hsCodes }));
+      toast({ title: "Préférences enregistrées", description: "Veille personnalisée activée." });
+      await loadAlerts(trimmed);
+    } catch (e: any) {
+      toast({ title: "Erreur préférences", description: e?.message || "Impossible d'enregistrer." });
+    } finally {
+      setAlertsLoading(false);
     }
   };
 
-  const SkeletonCard = () => (
-    <div className="rounded-xl border border-white/10 bg-slate-950/70 p-5 shadow-lg backdrop-blur-md">
-      <div className="h-4 w-32 rounded bg-white/10" />
-      <div className="mt-3 h-6 w-3/4 rounded bg-white/10" />
-      <div className="mt-3 space-y-2">
-        <div className="h-3 w-full rounded bg-white/10" />
-        <div className="h-3 w-5/6 rounded bg-white/10" />
-      </div>
-      <div className="mt-4 flex gap-2">
-        <div className="h-8 w-28 rounded bg-white/10" />
-        <div className="h-8 w-32 rounded bg-white/10" />
-      </div>
-    </div>
-  );
+  const addCountryFromText = (text: string) => {
+    setCountryText(text);
+    const m = text.match(/\(([A-Za-z]{2})\)\s*$/);
+    const iso2 = m?.[1]?.toUpperCase();
+    if (!iso2) return;
+
+    if (!countries.includes(iso2)) {
+      setCountries((prev) => [...prev, iso2]);
+    }
+    setCountryText("");
+  };
+
+  const addHs = () => {
+    const hs = normalizeHsPrefix(hsInput);
+    if (!hs) {
+      toast({ title: "HS invalide", description: "Entre un préfixe HS de 2 à 6 chiffres (ex : 30, 3004, 8517)." });
+      return;
+    }
+    if (!hsCodes.includes(hs)) setHsCodes((prev) => [...prev, hs]);
+    setHsInput("");
+  };
+
+  const badgeClass = (severity: string) => {
+    const s = (severity || "").toLowerCase();
+    if (s.includes("high") || s.includes("crit") || s.includes("risk")) return "badge-risk";
+    if (s.includes("med") || s.includes("warn")) return "badge-warning";
+    if (s.includes("low") || s.includes("info")) return "badge-neutral";
+    return "badge-neutral";
+  };
 
   return (
     <PublicLayout>
       <div className="space-y-10">
-        {/* Hero lisible */}
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 text-white md:p-10">
-          <div className="space-y-4">
-            <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Veille export</p>
-            <h1 className="text-4xl font-semibold">Décisions plus rapides avec une veille priorisée.</h1>
-            <p className="text-lg text-slate-200">
-              Les flux sont agrégés côté serveur, filtrés et scorés pour faire ressortir l’impact opérationnel.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <Button onClick={() => navigate("/analyse")}>Analyser un export</Button>
-              <Button
-                variant="outline"
-                className="border-white/20 text-slate-100 hover:bg-white/10"
-                onClick={() => navigate("/contact?offer=audit")}
-              >
-                Demander un audit export
-              </Button>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-white/10 bg-slate-950/80 p-6 text-white shadow-lg backdrop-blur-md">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-xl font-semibold">Votre opération export</h2>
-              <p className="text-sm text-slate-200">Choisissez un secteur, un produit et un pays pour cibler la veille.</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <Label htmlFor="my-watch" className="text-slate-200">
-                Mode Ma veille
-              </Label>
-              <Switch id="my-watch" checked={useMyWatch} onCheckedChange={setUseMyWatch} />
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-4 lg:grid-cols-3">
-            <div className="space-y-2">
-              <Label className="text-slate-200">Secteur</Label>
-              <div className="flex flex-wrap gap-2">
-                {SECTOR_PRESETS.map((item) => (
-                  <Button
-                    key={item}
-                    type="button"
-                    variant="outline"
-                    className={cn(
-                      "border-white/15 bg-white/5 text-slate-100 hover:bg-white/10",
-                      sector === item && "bg-white/15 text-white"
-                    )}
-                    onClick={() => setSector(item)}
-                  >
-                    {item}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-slate-200">Produit</Label>
-              <Input
-                value={product}
-                onChange={(event) => setProduct(event.target.value)}
-                placeholder="Ex : pièces mécaniques"
-                className={INPUT_CLASSES}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-slate-200">Pays de destination</Label>
-              <Input
-                value={destination}
-                onChange={(event) => setDestination(event.target.value)}
-                placeholder="Ex : Allemagne"
-                className={INPUT_CLASSES}
-              />
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Button
-              variant="outline"
-              className="border-white/20 text-slate-100 hover:bg-white/10"
-              onClick={applyOperationToFilters}
-            >
-              Appliquer aux filtres
-            </Button>
-            <Button
-              variant="outline"
-              className="border-white/20 text-slate-100 hover:bg-white/10"
-              onClick={() => setSearch("")}
-            >
-              Réinitialiser la recherche
-            </Button>
-            <Button onClick={generateBrief} disabled={briefLoading}>
-              {briefLoading ? "Génération..." : "Générer un brief actionnable"}
-            </Button>
-          </div>
-
-          <Separator className="my-6 bg-white/10" />
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div className="space-y-2">
-              <Label className="text-slate-200">Recherche</Label>
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Mot-clé, pays, mesure..."
-                className={INPUT_CLASSES}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-slate-200">Impact</Label>
-              <div className="flex flex-wrap gap-2">
-                {(["ALL", "LOW", "MED", "HIGH"] as const).map((level) => (
-                  <Button
-                    key={level}
-                    type="button"
-                    variant={impactFilter === level ? "default" : "outline"}
-                    className={cn("text-slate-100", impactFilter !== level && "border-white/20 hover:bg-white/10")}
-                    onClick={() => setImpactFilter(level)}
-                  >
-                    {level === "ALL" ? "Tous" : IMPACT_LABELS[level]}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-slate-200">Sources</Label>
-              <div className="flex flex-wrap gap-2">
-                {sources.map((source) => {
-                  const selected = activeSources.includes(source.name);
-                  return (
-                    <Button
-                      key={source.id}
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        "border-white/15 bg-white/5 text-slate-100 hover:bg-white/10",
-                        selected && "bg-white/15 text-white"
-                      )}
-                      onClick={() => {
-                        if (useMyWatch) {
-                          setPrefs((prev) => ({ ...prev, sources: toggleValue(prev.sources, source.name) }));
-                        } else {
-                          setSourceFilters((prev) => toggleValue(prev, source.name));
-                        }
-                      }}
-                    >
-                      {source.name}
-                    </Button>
-                  );
-                })}
-              </div>
-              {useMyWatch && (
-                <div className="text-xs text-white/70">
-                  En mode “Ma veille”, tes sources sélectionnées sont sauvegardées dans ton navigateur.
-                </div>
-              )}
-            </div>
-          </div>
-
-          <Separator className="my-6 bg-white/10" />
-
-          <div className="space-y-3">
-            <Label className="text-slate-200">Thèmes</Label>
-            <div className="flex flex-wrap gap-2">
-              {availableTags.length === 0 && (
-                <p className="text-sm text-slate-300">Les thèmes s’affichent dès la première collecte.</p>
-              )}
-              {availableTags.map((tag) => (
-                <Badge
-                  key={tag}
-                  onClick={() => {
-                    if (useMyWatch) {
-                      setPrefs((prev) => ({ ...prev, themes: toggleValue(prev.themes, tag) }));
-                    } else {
-                      setThemeFilters((prev) => toggleValue(prev, tag));
-                    }
-                  }}
-                  className={cn(
-                    "cursor-pointer border bg-white/5 text-slate-100 border-white/15 hover:bg-white/10",
-                    activeThemes.includes(tag) && "bg-white/15 text-white"
-                  )}
-                >
-                  {tag}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-4 lg:grid-cols-3">
-          <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
-            <div className="text-sm font-semibold text-white">Infos de base</div>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
-              <li>Vérifier la classification douanière du produit.</li>
-              <li>Confirmer les documents requis (facture, origine, transport).</li>
-              <li>Rappeler : droits & TVA peuvent varier selon l’origine, l’accord, et la base taxable.</li>
-            </ul>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
-            <div className="text-sm font-semibold text-white">Risques à surveiller</div>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
-              <li>Incoterm et répartition des risques/coûts.</li>
-              <li>Sanctions, contrôles export, restrictions sectorielles.</li>
-              <li>Délais et congestion transport.</li>
-            </ul>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-slate-950/70 p-4 text-slate-200">
-            <div className="text-sm font-semibold text-white">Prochaine étape</div>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-300">
-              <li>Estimer le coût complet pour {destination || "votre destination"}.</li>
-              <li>Comparer 2–3 scénarios (incoterms, modes).</li>
-              <li>Demander un audit pour valider la stratégie.</li>
-            </ul>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-lg backdrop-blur-md">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-semibold">Brief actionnable</h2>
-              <p className="text-sm text-slate-200">
-                Synthèse basée sur des sources récentes. Ajoute tes critères avant de générer.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Button onClick={() => navigate("/analyse")}>Estimer les coûts</Button>
-              <Button
-                variant="outline"
-                className="border-white/20 text-slate-100 hover:bg-white/10"
-                onClick={() => navigate("/contact?offer=audit")}
-              >
-                Être accompagné par MPL
-              </Button>
-            </div>
-          </div>
-
-          {briefError && (
-            <div className="mt-4 rounded-lg border border-rose-200/20 bg-rose-950/40 p-4 text-rose-100">
-              {briefError}
-            </div>
-          )}
-
-          {!briefError && !briefData && (
-            <div className="mt-4 rounded-lg border border-white/10 bg-slate-950/70 p-4 text-sm text-slate-300">
-              Clique sur “Générer un brief actionnable” pour obtenir une synthèse actualisée.
-            </div>
-          )}
-
-          {briefData && (
-            <div className="mt-4 space-y-4">
-              <div className="rounded-lg border border-white/10 bg-slate-950/80 p-4 text-sm text-slate-200 whitespace-pre-line">
-                {briefData.summary}
-              </div>
-              <div className="text-xs text-slate-400">
-                Généré le {new Date(briefData.createdAt).toLocaleString("fr-FR")} via {briefData.model}.
-              </div>
-              <div className="space-y-2">
-                <div className="text-sm font-semibold text-white">Sources utilisées</div>
-                <div className="grid gap-2">
-                  {briefData.sources.map((source) => (
-                    <a
-                      key={source.id}
-                      href={source.link}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-lg border border-white/10 bg-slate-950/70 p-3 text-sm text-slate-200 hover:bg-white/5"
-                    >
-                      <div className="font-semibold text-white">{source.title}</div>
-                      <div className="text-xs text-slate-400">
-                        {source.sourceName} • {new Date(source.pubDate).toLocaleDateString("fr-FR")} • {source.impact}
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-semibold text-white">Top impacts (Élevé)</h2>
-            <Badge className="bg-white/5 text-slate-100 border-white/15">{topImpactItems.length} items</Badge>
-          </div>
-
-          {loading && (
-            <div className="grid gap-4 md:grid-cols-2">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <SkeletonCard key={`top-skeleton-${index}`} />
-              ))}
-            </div>
-          )}
-
-          {!loading && topImpactItems.length === 0 && (
-            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-6 text-slate-200 backdrop-blur-md">
-              Aucun item “impact élevé” pour le moment.
-            </div>
-          )}
-
-          {!loading && topImpactItems.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-2">
-              {topImpactItems.map((item) => (
-                <Card key={item.id} className="bg-slate-950/70 border-white/10 text-white backdrop-blur-md">
-                  <CardHeader className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge className={cn("border", IMPACT_STYLES[item.impact])}>
-                        {IMPACT_LABELS[item.impact]}
-                      </Badge>
-                      <Badge className="bg-white/5 text-slate-100 border-white/15">{item.sourceName}</Badge>
-                      <span className="text-xs text-slate-300">
-                        {new Date(item.pubDate).toLocaleDateString("fr-FR", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </span>
-
-                      <button
-                        type="button"
-                        className="ml-auto inline-flex items-center justify-center rounded-md p-2 text-slate-100 hover:bg-white/10 hover:text-white"
-                        onClick={() => toggleSaved(item.id)}
-                        aria-label={savedIds.includes(item.id) ? "Retirer des sauvegardes" : "Sauvegarder"}
-                      >
-                        {savedIds.includes(item.id) ? <BookmarkCheck className="h-5 w-5" /> : <Bookmark className="h-5 w-5" />}
-                      </button>
-                    </div>
-
-                    <CardTitle className="text-lg">{item.title}</CardTitle>
-                    <CardDescription className="text-slate-200 line-clamp-3">{item.summary}</CardDescription>
-                  </CardHeader>
-
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <p className="text-sm font-semibold text-slate-200">Pourquoi</p>
-                      <ul className="text-sm text-slate-300 list-disc pl-5">
-                        {item.reasons.map((reason) => (
-                          <li key={reason}>{reason}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {item.tags.map((tag) => (
-                        <Badge key={tag} className="bg-white/5 text-slate-100 border-white/15">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                      <Button asChild>
-                        <a href={item.link} target="_blank" rel="noreferrer">
-                          Lire la source
-                        </a>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="border-white/20 text-slate-100 hover:bg-white/10"
-                        onClick={() => navigate("/contact?offer=audit")}
-                      >
-                        Demander un audit
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-6 text-white shadow-lg backdrop-blur-md">
-          <h2 className="text-xl font-semibold">Ma veille</h2>
-          <p className="text-sm text-slate-200">
-            Ajoute tes pays, thèmes et sources préférés. Tout est stocké localement dans ton navigateur.
+        {/* ✅ HERO CINEMATIC (option B) */}
+        <section className="rounded-3xl border border-border bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 text-white shadow-xl md:p-10">
+          <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Veille export</p>
+          <h1 className="mt-2 text-4xl font-semibold md:text-5xl">Alertes sanctions & signaux pays, utiles au quotidien.</h1>
+          <p className="mt-3 max-w-2xl text-lg text-slate-200">
+            Configure tes pays + préfixes HS : tu reçois une veille ciblée et tu gardes un centre de suivi clair.
           </p>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="text-slate-200">Pays suivis (séparés par une virgule)</Label>
-              <div className="flex gap-2">
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button onClick={() => (window.location.href = "/contact?offer=express")}>Validation express</Button>
+            <Button variant="outline" className="border-white/30 text-white hover:bg-white/10" onClick={() => (window.location.href = "/contact?offer=audit")}>
+              Audit complet
+            </Button>
+          </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+          {/* Preferences */}
+          <Card className="card-hover">
+            <CardHeader>
+              <CardTitle>Ma veille personnalisée</CardTitle>
+              <CardDescription>Email + pays + préfixes HS (2–6 chiffres).</CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-5">
+              <div className="space-y-2">
+                <Label>Email</Label>
                 <Input
-                  value={countryInput}
-                  onChange={(event) => setCountryInput(event.target.value)}
-                  placeholder="France, Allemagne, Maroc"
-                  className={INPUT_CLASSES}
-                />
-                <Button
-                  type="button"
-                  onClick={() => {
-                    const countries = countryInput
-                      .split(",")
-                      .map((value) => value.trim())
-                      .filter(Boolean);
-                    if (!countries.length) return;
-                    setPrefs((prev) => ({
-                      ...prev,
-                      countries: Array.from(new Set([...prev.countries, ...countries])),
-                    }));
-                    setCountryInput("");
+                  value={email}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setEmail(v);
+                    setEmailOk(EMAIL_RE.test(v.trim().toLowerCase()));
                   }}
-                >
-                  Ajouter
-                </Button>
+                  placeholder="email@entreprise.com"
+                />
+                {!emailOk && email.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">Format email non valide.</p>
+                ) : null}
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {prefs.countries.map((country) => (
-                  <Badge
-                    key={country}
-                    onClick={() =>
-                      setPrefs((prev) => ({
-                        ...prev,
-                        countries: prev.countries.filter((item) => item !== country),
-                      }))
-                    }
-                    className="cursor-pointer bg-white/5 text-slate-100 border-white/15 hover:bg-white/10"
-                  >
-                    {country}
-                  </Badge>
-                ))}
-              </div>
-            </div>
+              <Separator />
 
-            <div className="space-y-2">
-              <Label className="text-slate-200">Thèmes préférés</Label>
-              <div className="flex flex-wrap gap-2">
-                {THEME_PRESETS.map((tag) => (
-                  <Badge
-                    key={tag}
-                    onClick={() =>
-                      setPrefs((prev) => ({
-                        ...prev,
-                        themes: toggleValue(prev.themes, tag),
-                      }))
-                    }
-                    className={cn(
-                      "cursor-pointer border bg-white/5 text-slate-100 border-white/15 hover:bg-white/10",
-                      prefs.themes.includes(tag) && "bg-white/15 text-white"
-                    )}
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
+              <div className="space-y-2">
+                <Label>Pays suivis</Label>
 
-              <Separator className="my-4 bg-white/10" />
+                <div className="flex flex-wrap gap-2">
+                  {topCountries.map((c) => (
+                    <button
+                      key={c.iso2}
+                      type="button"
+                      onClick={() => setCountries((prev) => (prev.includes(c.iso2) ? prev : [...prev, c.iso2]))}
+                      className="rounded-full border border-border bg-card px-3 py-1 text-xs hover:bg-muted"
+                    >
+                      + {c.label}
+                    </button>
+                  ))}
+                </div>
 
-              <Label className="text-slate-200">Sources préférées</Label>
-              <div className="flex flex-wrap gap-2">
-                {sources.map((s) => (
-                  <Badge
-                    key={s.id}
-                    onClick={() =>
-                      setPrefs((prev) => ({
-                        ...prev,
-                        sources: toggleValue(prev.sources, s.name),
-                      }))
-                    }
-                    className={cn(
-                      "cursor-pointer border bg-white/5 text-slate-100 border-white/15 hover:bg-white/10",
-                      prefs.sources.includes(s.name) && "bg-white/15 text-white"
-                    )}
-                  >
-                    {s.name}
-                  </Badge>
-                ))}
-              </div>
+                <Input
+                  value={countryText}
+                  onChange={(e) => setCountryText(e.target.value)}
+                  onBlur={(e) => addCountryFromText(e.target.value)}
+                  placeholder='Recherche : "Suisse (CH)"'
+                  list="countries-list"
+                />
 
-              <div className="mt-3">
-                <Button
-                  variant="outline"
-                  className="border-white/20 text-slate-100 hover:bg-white/10"
-                  onClick={() => setPrefs(EMPTY_PREFS)}
-                >
-                  Réinitialiser “Ma veille”
-                </Button>
-              </div>
-            </div>
-          </div>
-        </section>
+                <datalist id="countries-list">
+                  {allCountries.map((c) => (
+                    <option key={c.iso2} value={`${c.label} (${c.iso2})`} />
+                  ))}
+                </datalist>
 
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-semibold text-white">Flux récents</h2>
-            <Badge className="bg-white/5 text-slate-100 border-white/15">{filteredItems.length} articles</Badge>
-          </div>
-
-          {error && (
-            <div className="rounded-xl border border-rose-200/20 bg-rose-950/40 p-4 text-rose-100">
-              <p className="text-sm">{error}</p>
-              <Button
-                variant="outline"
-                className="mt-3 border-rose-200/40 text-rose-100 hover:bg-white/10"
-                onClick={refresh}
-              >
-                Réessayer
-              </Button>
-            </div>
-          )}
-
-          {showEmptyState && (
-            <div className="rounded-xl border border-white/10 bg-slate-950/70 p-6 text-slate-200 backdrop-blur-md">
-              <p className="text-sm">Aucun résultat avec les filtres actuels.</p>
-              <Button
-                variant="outline"
-                className="mt-3 border-white/20 text-slate-100 hover:bg-white/10"
-                onClick={refresh}
-              >
-                Rafraîchir
-              </Button>
-            </div>
-          )}
-
-          {loading && (
-            <div className="grid gap-4">
-              {Array.from({ length: 6 }).map((_, index) => (
-                <SkeletonCard key={`list-skeleton-${index}`} />
-              ))}
-            </div>
-          )}
-
-          {!loading && filteredItems.length > 0 && (
-            <div className="grid gap-4">
-              {filteredItems.map((item) => (
-                <Card key={item.id} className="bg-slate-950/70 border-white/10 text-white backdrop-blur-md">
-                  <CardHeader className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge className={cn("border", IMPACT_STYLES[item.impact])}>
-                        {IMPACT_LABELS[item.impact]}
-                      </Badge>
-                      <Badge className="bg-white/5 text-slate-100 border-white/15">{item.sourceName}</Badge>
-                      <span className="text-xs text-slate-300">
-                        {new Date(item.pubDate).toLocaleDateString("fr-FR", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </span>
-
+                {countries.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {countries.map((iso2) => (
                       <button
+                        key={iso2}
                         type="button"
-                        className="ml-auto inline-flex items-center justify-center rounded-md p-2 text-slate-100 hover:bg-white/10 hover:text-white"
-                        onClick={() => toggleSaved(item.id)}
-                        aria-label={savedIds.includes(item.id) ? "Retirer des sauvegardes" : "Sauvegarder"}
+                        onClick={() => setCountries((prev) => prev.filter((x) => x !== iso2))}
+                        className="rounded-full border border-border bg-muted px-3 py-1 text-xs text-foreground hover:opacity-80"
+                        title="Cliquer pour retirer"
                       >
-                        {savedIds.includes(item.id) ? <BookmarkCheck className="h-5 w-5" /> : <Bookmark className="h-5 w-5" />}
+                        {iso2} ✕
                       </button>
-                    </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Ajoute 1–3 pays pour une veille vraiment utile.</p>
+                )}
+              </div>
 
-                    <CardTitle className="text-lg">{item.title}</CardTitle>
-                    <CardDescription className="text-slate-200 line-clamp-3">{item.summary}</CardDescription>
-                  </CardHeader>
+              <Separator />
 
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <p className="text-sm font-semibold text-slate-200">Pourquoi</p>
-                      <ul className="text-sm text-slate-300 list-disc pl-5">
-                        {item.reasons.map((reason) => (
-                          <li key={reason}>{reason}</li>
-                        ))}
-                      </ul>
-                    </div>
+              <div className="space-y-2">
+                <Label>Préfixes HS suivis</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={hsInput}
+                    onChange={(e) => setHsInput(e.target.value)}
+                    placeholder="Ex : 30, 3004, 8517"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addHs();
+                      }
+                    }}
+                  />
+                  <Button type="button" onClick={addHs} variant="outline">
+                    Ajouter
+                  </Button>
+                </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {item.tags.map((tag) => (
-                        <Badge key={tag} className="bg-white/5 text-slate-100 border-white/15">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                      <Button asChild>
-                        <a href={item.link} target="_blank" rel="noreferrer">
-                          Lire la source
-                        </a>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="border-white/20 text-slate-100 hover:bg-white/10"
-                        onClick={() => navigate("/contact?offer=audit")}
+                {hsCodes.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {hsCodes.map((hs) => (
+                      <button
+                        key={hs}
+                        type="button"
+                        onClick={() => setHsCodes((prev) => prev.filter((x) => x !== hs))}
+                        className="rounded-full border border-border bg-muted px-3 py-1 text-xs text-foreground hover:opacity-80"
+                        title="Cliquer pour retirer"
                       >
-                        Demander un audit
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+                        HS {hs} ✕
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Ajoute 1–3 préfixes HS (2–6 chiffres) liés à tes produits.</p>
+                )}
+              </div>
 
-          <div className="flex justify-center">
-            {hasMore && !loading && (
-              <Button
-                variant="outline"
-                className="border-white/20 text-slate-100 hover:bg-white/10"
-                onClick={() => setOffset((prev) => prev + limit)}
-                disabled={loading}
-              >
-                Charger plus
+              <Button onClick={handleSavePrefs} disabled={alertsLoading} className="w-full">
+                {alertsLoading ? "Enregistrement..." : "Activer / mettre à jour ma veille"}
               </Button>
-            )}
-          </div>
+
+              <p className="text-xs text-muted-foreground">
+                Objectif : recevoir uniquement des alertes pertinentes (pays + HS), pas du bruit.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Alerts */}
+          <Card className="card-hover">
+            <CardHeader>
+              <CardTitle>Alertes importantes</CardTitle>
+              <CardDescription>
+                {alertsUpdatedAt ? `Dernière mise à jour : ${formatDateTimeFr(alertsUpdatedAt)}` : "Connecte ton email pour charger les alertes personnalisées."}
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-3">
+              {!emailOk ? (
+                <div className="rounded-lg border border-border bg-muted p-4 text-sm text-muted-foreground">
+                  Ajoute un email valide puis “Activer / mettre à jour ma veille” pour charger les alertes liées à tes préférences.
+                </div>
+              ) : (
+                <Button variant="outline" onClick={() => loadAlerts(email.trim().toLowerCase())} disabled={alertsLoading} className="w-full">
+                  {alertsLoading ? "Chargement..." : "Recharger mes alertes"}
+                </Button>
+              )}
+
+              <Separator />
+
+              {alertsLoading ? (
+                <div className="text-sm text-muted-foreground">Chargement…</div>
+              ) : alerts.length === 0 ? (
+                <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+                  Aucune alerte pour l’instant (ou pas encore de préférences).
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {alerts.slice(0, 12).map((a) => (
+                    <div key={a.id} className="rounded-xl border border-border bg-card p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="font-semibold">{a.title}</div>
+                        <span className={`rounded-full px-2 py-1 text-xs ${badgeClass(a.severity)}`}>
+                          {a.severity}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm text-muted-foreground">{a.message}</p>
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        {a.country ? <span className="rounded-full border border-border bg-muted px-2 py-1">Pays: {a.country}</span> : null}
+                        {a.hsPrefix ? <span className="rounded-full border border-border bg-muted px-2 py-1">HS: {a.hsPrefix}</span> : null}
+                        {a.detectedAt ? <span className="rounded-full border border-border bg-muted px-2 py-1">{formatDateTimeFr(a.detectedAt)}</span> : null}
+                        {a.source ? <span className="rounded-full border border-border bg-muted px-2 py-1">Source: {a.source}</span> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </section>
+
+        {/* RSS */}
+        <Card className="card-hover">
+          <CardHeader>
+            <CardTitle>Flux RSS (résumé)</CardTitle>
+            <CardDescription>Signaux “macro” utiles : sanctions, géopolitique, commerce, douane…</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-3">
+              <Button variant="outline" onClick={loadRss} disabled={rssLoading}>
+                {rssLoading ? "Actualisation..." : "Actualiser le flux"}
+              </Button>
+              <Button onClick={() => (window.location.href = "/contact?offer=express")}>Transformer ça en action (express)</Button>
+            </div>
+
+            <Separator />
+
+            {rssLoading ? (
+              <div className="text-sm text-muted-foreground">Chargement…</div>
+            ) : rssItems.length === 0 ? (
+              <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+                Pas d’items RSS disponibles (ou handler /api/rss en erreur).
+              </div>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                {rssItems.map((it, idx) => (
+                  <div key={`${it.link || it.title || "item"}_${idx}`} className="rounded-xl border border-border bg-card p-4">
+                    <div className="text-sm font-semibold">{it.title || "Sans titre"}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {it.source ? `${it.source} • ` : ""}
+                      {it.publishedAt ? formatDateTimeFr(it.publishedAt) : ""}
+                    </div>
+                    {it.summary ? <p className="mt-2 text-sm text-muted-foreground line-clamp-3">{it.summary}</p> : null}
+                    {it.link ? (
+                      <a className="mt-3 inline-flex text-sm font-medium text-primary hover:underline" href={it.link} target="_blank" rel="noreferrer">
+                        Lire la source →
+                      </a>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </PublicLayout>
   );
