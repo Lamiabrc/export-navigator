@@ -50,11 +50,11 @@
     --status-ok: 142 62% 38%;
     --status-ok-foreground: 0 0% 98%;
     --status-ok-bg: 142 62% 94%;
-    
+
     --status-warning: 32 100% 50%;
     --status-warning-foreground: 0 0% 100%;
     --status-warning-bg: 32 95% 93%;
-    
+
     --status-risk: 355 78% 52%;
     --status-risk-foreground: 0 0% 100%;
     --status-risk-bg: 355 85% 95%;
@@ -123,10 +123,33 @@
     --sidebar-border: 220 32% 18%;
     --sidebar-ring: 25 96% 54%;
   }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  }
+
+  /* ✅ FIX IMPORTANT: supprime l’effet Vite “site centré + padding + text-align:center” */
+  #root {
+    min-height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    text-align: initial;
+  }
 }
 
 /* Control Tower world */
-  .control-tower-world {
+.control-tower-world {
   --background: 210 36% 97%;
   --foreground: 222 34% 12%;
   --card: 0 0% 100%;
@@ -145,20 +168,9 @@
   --chart-5: 205 68% 50%;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92)),
-    radial-gradient(circle at 20% 15%, rgba(37, 99, 235, 0.1), transparent 42%),
-    radial-gradient(circle at 80% 10%, rgba(239, 68, 68, 0.1), transparent 45%),
+    radial-gradient(circle at 20% 15%, rgba(37, 99, 235, 0.10), transparent 42%),
+    radial-gradient(circle at 80% 10%, rgba(239, 68, 68, 0.10), transparent 45%),
     #f8fafc;
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-
-  body {
-    @apply bg-background text-foreground antialiased;
-    font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
-  }
 }
 
 @layer utilities {
@@ -166,11 +178,11 @@
   .badge-ok {
     @apply bg-[hsl(var(--status-ok-bg))] text-[hsl(var(--status-ok))] border border-[hsl(var(--status-ok)/0.3)];
   }
-  
+
   .badge-warning {
     @apply bg-[hsl(var(--status-warning-bg))] text-[hsl(var(--status-warning))] border border-[hsl(var(--status-warning)/0.3)];
   }
-  
+
   .badge-risk {
     @apply bg-[hsl(var(--status-risk-bg))] text-[hsl(var(--status-risk))] border border-[hsl(var(--status-risk)/0.3)];
   }
@@ -198,9 +210,9 @@
     @apply transition-all duration-200 ease-in-out;
   }
 
-  /* Glass effect */
+  /* Glass effect (✅ ajusté pour light) */
   .glass {
-    @apply bg-card/70 backdrop-blur-lg border border-white/10 shadow-xl shadow-black/40;
+    @apply bg-card/80 backdrop-blur-lg border border-border shadow-sm;
   }
 
   .cinematic-gradient {
