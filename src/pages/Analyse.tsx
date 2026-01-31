@@ -1,5 +1,4 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,8 +15,9 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 const INCOTERMS: Incoterm[] = ["EXW", "FCA", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"];
 const MODES: TransportMode[] = ["road", "air", "sea", "rail"];
 
-const INPUT_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
-const SELECT_TRIGGER_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100";
+/** ✅ Light inputs (plus de bg dark forcé) */
+const INPUT_CLASSES = "bg-background border-input text-foreground placeholder:text-muted-foreground";
+const SELECT_TRIGGER_CLASSES = "bg-background border-input text-foreground";
 
 const DEFAULT_FORM = {
   goodsValue: "12000",
@@ -57,12 +57,7 @@ type SharePayload = {
 const SHARE_KEY = "mpl_share_payloads";
 
 function toNumber(value: string) {
-  // Support FR: "12 345,67" / "12345,67" / "12,3"
-  const cleaned = String(value ?? "")
-    .trim()
-    .replace(/\s/g, "")
-    .replace(",", ".");
-  const num = Number(cleaned);
+  const num = Number(value);
   return Number.isFinite(num) ? num : 0;
 }
 
@@ -105,15 +100,15 @@ function updateForm(setter: React.Dispatch<React.SetStateAction<FormState>>, key
 
 function breakdownData(result: ReturnType<typeof computeLandedCost>) {
   return [
-    { name: "Marchandise", value: result.breakdown.goodsValue },
-    { name: "Pré-acheminement", value: result.breakdown.preCarriage },
-    { name: "Fret principal", value: result.breakdown.mainFreight },
-    { name: "Assurance", value: result.breakdown.insurance },
-    { name: "Emballage", value: result.breakdown.packaging },
-    { name: "Douane/Transit", value: result.breakdown.brokerage },
-    { name: "Divers", value: result.breakdown.misc },
-    { name: "Droits", value: result.breakdown.duties },
-    { name: "TVA import", value: result.breakdown.vat },
+    { name: "Goods", value: result.breakdown.goodsValue },
+    { name: "Pre-carriage", value: result.breakdown.preCarriage },
+    { name: "Main freight", value: result.breakdown.mainFreight },
+    { name: "Insurance", value: result.breakdown.insurance },
+    { name: "Packaging", value: result.breakdown.packaging },
+    { name: "Brokerage", value: result.breakdown.brokerage },
+    { name: "Misc", value: result.breakdown.misc },
+    { name: "Duties", value: result.breakdown.duties },
+    { name: "VAT", value: result.breakdown.vat },
   ];
 }
 
@@ -148,16 +143,16 @@ async function generatePdf(payload: SharePayload) {
   const left = 50;
   const line = 16;
 
-  page.drawText("MPL Export Conseil — Fiche décision (landed cost)", {
+  page.drawText("MPL Export Conseil - Fiche Decision", {
     x: left,
     y: cursor,
-    size: 15,
+    size: 16,
     font: bold,
     color: rgb(0.1, 0.2, 0.4),
   });
   cursor -= 26;
 
-  page.drawText(`Date : ${new Date(payload.createdAt).toLocaleDateString("fr-FR")}`, {
+  page.drawText(`Date: ${new Date(payload.createdAt).toLocaleDateString("fr-FR")}`, {
     x: left,
     y: cursor,
     size: 10,
@@ -167,10 +162,10 @@ async function generatePdf(payload: SharePayload) {
   cursor -= 24;
 
   const rows = [
-    `Destination : ${payload.input.destination}`,
-    `Incoterm : ${payload.input.incoterm}`,
-    `Mode : ${payload.input.mode}`,
-    `Valeur marchandise : ${formatMoney(payload.input.goodsValue, payload.input.currency)}`,
+    `Destination: ${payload.input.destination}`,
+    `Incoterm: ${payload.input.incoterm}`,
+    `Mode: ${payload.input.mode}`,
+    `Goods value: ${formatMoney(payload.input.goodsValue, payload.input.currency)}`,
   ];
   rows.forEach((text) => {
     page.drawText(text, { x: left, y: cursor, size: 11, font });
@@ -178,19 +173,19 @@ async function generatePdf(payload: SharePayload) {
   });
 
   cursor -= 10;
-  page.drawText("Détail des coûts", { x: left, y: cursor, size: 12, font: bold });
+  page.drawText("Breakdown", { x: left, y: cursor, size: 12, font: bold });
   cursor -= 18;
 
-  const b = payload.result.breakdown;
+  const breakdown = payload.result.breakdown;
   const breakdownLines = [
-    `Pré-acheminement : ${formatMoney(b.preCarriage, payload.input.currency)}`,
-    `Fret principal : ${formatMoney(b.mainFreight, payload.input.currency)}`,
-    `Assurance : ${formatMoney(b.insurance, payload.input.currency)}`,
-    `Emballage : ${formatMoney(b.packaging, payload.input.currency)}`,
-    `Douane / Transit : ${formatMoney(b.brokerage, payload.input.currency)}`,
-    `Divers : ${formatMoney(b.misc, payload.input.currency)}`,
-    `Droits : ${formatMoney(b.duties, payload.input.currency)}`,
-    `TVA import : ${formatMoney(b.vat, payload.input.currency)}`,
+    `Pre-carriage: ${formatMoney(breakdown.preCarriage, payload.input.currency)}`,
+    `Main freight: ${formatMoney(breakdown.mainFreight, payload.input.currency)}`,
+    `Insurance: ${formatMoney(breakdown.insurance, payload.input.currency)}`,
+    `Packaging: ${formatMoney(breakdown.packaging, payload.input.currency)}`,
+    `Brokerage: ${formatMoney(breakdown.brokerage, payload.input.currency)}`,
+    `Misc: ${formatMoney(breakdown.misc, payload.input.currency)}`,
+    `Duties: ${formatMoney(breakdown.duties, payload.input.currency)}`,
+    `VAT: ${formatMoney(breakdown.vat, payload.input.currency)}`,
   ];
   breakdownLines.forEach((text) => {
     page.drawText(text, { x: left, y: cursor, size: 10, font });
@@ -198,7 +193,7 @@ async function generatePdf(payload: SharePayload) {
   });
 
   cursor -= 8;
-  page.drawText(`Total landed cost : ${formatMoney(payload.result.total, payload.input.currency)}`, {
+  page.drawText(`Total landed cost: ${formatMoney(payload.result.total, payload.input.currency)}`, {
     x: left,
     y: cursor,
     size: 12,
@@ -207,7 +202,7 @@ async function generatePdf(payload: SharePayload) {
   cursor -= 18;
 
   if (payload.result.unitCost) {
-    page.drawText(`Coût unitaire : ${formatMoney(payload.result.unitCost, payload.input.currency)}`, {
+    page.drawText(`Unit cost: ${formatMoney(payload.result.unitCost, payload.input.currency)}`, {
       x: left,
       y: cursor,
       size: 10,
@@ -217,16 +212,15 @@ async function generatePdf(payload: SharePayload) {
   }
 
   cursor -= 6;
-  page.drawText("Alertes / points de vigilance", { x: left, y: cursor, size: 12, font: bold });
+  page.drawText("Warnings", { x: left, y: cursor, size: 12, font: bold });
   cursor -= 16;
 
-  const warnings = payload.result.warnings?.length ? payload.result.warnings.slice(0, 8) : ["Aucune alerte générée avec les données actuelles."];
-  warnings.forEach((warning) => {
+  payload.result.warnings.slice(0, 6).forEach((warning) => {
     page.drawText(`- ${warning}`, { x: left, y: cursor, size: 9, font });
     cursor -= 12;
   });
 
-  page.drawText("Estimation indicative. Validation humaine recommandée (taux, origine, base taxable, incoterms).", {
+  page.drawText("Estimation indicative - validation humaine recommandee.", {
     x: left,
     y: 60,
     size: 9,
@@ -239,30 +233,12 @@ async function generatePdf(payload: SharePayload) {
 }
 
 export default function Analyse() {
-  const navigate = useNavigate();
-
   const [form, setForm] = React.useState<FormState>(DEFAULT_FORM);
   const [scenarios, setScenarios] = React.useState<ScenarioState[]>([
-    {
-      id: "A",
-      label: "Scénario A",
-      enabled: true,
-      form: { ...DEFAULT_FORM, incoterm: "FCA", mode: "road" },
-    },
-    {
-      id: "B",
-      label: "Scénario B",
-      enabled: false,
-      form: { ...DEFAULT_FORM, incoterm: "CIF", mode: "sea" },
-    },
-    {
-      id: "C",
-      label: "Scénario C",
-      enabled: false,
-      form: { ...DEFAULT_FORM, incoterm: "DDP", mode: "air" },
-    },
+    { id: "A", label: "Scenario A", enabled: true, form: { ...DEFAULT_FORM, incoterm: "FCA", mode: "road" } },
+    { id: "B", label: "Scenario B", enabled: false, form: { ...DEFAULT_FORM, incoterm: "CIF", mode: "sea" } },
+    { id: "C", label: "Scenario C", enabled: false, form: { ...DEFAULT_FORM, incoterm: "DDP", mode: "air" } },
   ]);
-
   const [pdfLoading, setPdfLoading] = React.useState(false);
   const [shareStatus, setShareStatus] = React.useState<string | null>(null);
 
@@ -278,19 +254,13 @@ export default function Analyse() {
   const baseResult = React.useMemo(() => computeLandedCost(baseInput), [baseInput]);
 
   const scenarioResults = scenarios
-    .filter((scenario) => scenario.enabled)
-    .map((scenario) => ({
-      ...scenario,
-      input: toInput(scenario.form),
-    }))
-    .map((scenario) => ({
-      ...scenario,
-      result: computeLandedCost(scenario.input),
-    }));
+    .filter((s) => s.enabled)
+    .map((s) => ({ ...s, input: toInput(s.form) }))
+    .map((s) => ({ ...s, result: computeLandedCost(s.input) }));
 
   const comparisonData = [
     { name: "Base", total: baseResult.total },
-    ...scenarioResults.map((scenario) => ({ name: scenario.label, total: scenario.result.total })),
+    ...scenarioResults.map((s) => ({ name: s.label, total: s.result.total })),
   ];
 
   const handlePdf = async () => {
@@ -306,7 +276,7 @@ export default function Analyse() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `mpl-fiche-decision-${Date.now()}.pdf`;
+      link.download = `mpl-decision-${Date.now()}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
     } finally {
@@ -327,66 +297,53 @@ export default function Analyse() {
 
     const shareUrl = `${window.location.origin}/share/${payload.id}`;
     try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareUrl);
-        setShareStatus("Lien copié dans le presse-papiers.");
-      } else {
-        setShareStatus("Lien généré. Copiez-le manuellement : " + shareUrl);
-      }
+      await navigator.clipboard.writeText(shareUrl);
+      setShareStatus("Lien copié dans le presse-papiers.");
     } catch {
-      setShareStatus("Lien généré. Copiez-le manuellement : " + shareUrl);
+      setShareStatus("Lien généré. Copiez-le manuellement.");
     }
   };
 
   return (
     <PublicLayout>
       <div className="space-y-10">
-        {/* Hero lisible */}
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 text-white md:p-10">
-          <div className="space-y-3">
-            <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Analyse export</p>
-            <h1 className="text-4xl font-semibold">Landed cost en 3 minutes, sans blocage.</h1>
-            <p className="text-lg text-slate-200">
-              Estimation indicative à partir de vos données. Les taux (droits/TVA) restent saisis manuellement.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <Button onClick={() => navigate("/contact?offer=audit")}>Demander un audit export</Button>
-              <Button
-                variant="outline"
-                className="border-white text-white hover:bg-white/10"
-                onClick={() => navigate("/veille")}
-              >
-                Veille export
-              </Button>
-            </div>
+        {/* ✅ HERO CINEMATIC (option B) */}
+        <section className="rounded-3xl border border-border bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 text-white shadow-xl md:p-10">
+          <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Analyse export</p>
+          <h1 className="mt-2 text-4xl font-semibold md:text-5xl">Landed cost en 3 minutes, sans blocage.</h1>
+          <p className="mt-3 max-w-2xl text-lg text-slate-200">
+            Estimation indicative, basée sur vos données manuelles. Aucun taux officiel n'est deviné.
+          </p>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button onClick={() => (window.location.href = "/contact")}>Demander un audit export</Button>
+            <Button
+              variant="outline"
+              className="border-white/30 text-white hover:bg-white/10"
+              onClick={() => (window.location.href = "/veille")}
+            >
+              Veille export
+            </Button>
           </div>
         </section>
 
+        {/* ✅ CONTENU LIGHT */}
         <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          {/* Form */}
-          <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
+          <Card className="card-hover">
             <CardHeader>
               <CardTitle>Entrées principales</CardTitle>
-              <CardDescription className="text-slate-200">
-                Renseignez vos coûts. Droits et TVA restent manuels (pas de “devinette”).
-              </CardDescription>
+              <CardDescription>Renseignez vos coûts. Droits et TVA restent manuels.</CardDescription>
             </CardHeader>
-
             <CardContent className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Valeur marchandise</Label>
-                  <Input
-                    value={form.goodsValue}
-                    onChange={(e) => updateForm(setForm, "goodsValue", e.target.value)}
-                    className={INPUT_CLASSES}
-                    inputMode="decimal"
-                  />
+                  <Label>Valeur marchandise</Label>
+                  <Input value={form.goodsValue} onChange={(e) => updateForm(setForm, "goodsValue", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Devise</Label>
-                  <Select value={form.currency} onValueChange={(value) => updateForm(setForm, "currency", value)}>
+                  <Label>Devise</Label>
+                  <Select value={form.currency} onValueChange={(v) => updateForm(setForm, "currency", v)}>
                     <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                       <SelectValue />
                     </SelectTrigger>
@@ -399,35 +356,25 @@ export default function Analyse() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Quantité (optionnel)</Label>
-                  <Input
-                    value={form.quantity}
-                    onChange={(e) => updateForm(setForm, "quantity", e.target.value)}
-                    className={INPUT_CLASSES}
-                    inputMode="numeric"
-                  />
+                  <Label>Quantité (optionnel)</Label>
+                  <Input value={form.quantity} onChange={(e) => updateForm(setForm, "quantity", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Destination (pays)</Label>
-                  <Input
-                    value={form.destination}
-                    onChange={(e) => updateForm(setForm, "destination", e.target.value)}
-                    className={INPUT_CLASSES}
-                    placeholder="Ex : Allemagne"
-                  />
+                  <Label>Destination (pays)</Label>
+                  <Input value={form.destination} onChange={(e) => updateForm(setForm, "destination", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Incoterm</Label>
-                  <Select value={form.incoterm} onValueChange={(value) => updateForm(setForm, "incoterm", value)}>
+                  <Label>Incoterm</Label>
+                  <Select value={form.incoterm} onValueChange={(v) => updateForm(setForm, "incoterm", v)}>
                     <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {INCOTERMS.map((item) => (
-                        <SelectItem key={item} value={item}>
-                          {item}
+                      {INCOTERMS.map((it) => (
+                        <SelectItem key={it} value={it}>
+                          {it}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -435,15 +382,15 @@ export default function Analyse() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Mode de transport</Label>
-                  <Select value={form.mode} onValueChange={(value) => updateForm(setForm, "mode", value)}>
+                  <Label>Mode transport</Label>
+                  <Select value={form.mode} onValueChange={(v) => updateForm(setForm, "mode", v)}>
                     <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {MODES.map((item) => (
-                        <SelectItem key={item} value={item}>
-                          {item}
+                      {MODES.map((it) => (
+                        <SelectItem key={it} value={it}>
+                          {it}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -451,226 +398,132 @@ export default function Analyse() {
                 </div>
               </div>
 
-              <Separator className="bg-white/10" />
+              <Separator />
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Pré-acheminement</Label>
-                  <Input
-                    value={form.preCarriage}
-                    onChange={(e) => updateForm(setForm, "preCarriage", e.target.value)}
-                    className={INPUT_CLASSES}
-                    inputMode="decimal"
-                  />
+                  <Label>Pre-carriage</Label>
+                  <Input value={form.preCarriage} onChange={(e) => updateForm(setForm, "preCarriage", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Fret principal</Label>
-                  <Input
-                    value={form.mainFreight}
-                    onChange={(e) => updateForm(setForm, "mainFreight", e.target.value)}
-                    className={INPUT_CLASSES}
-                    inputMode="decimal"
-                  />
+                  <Label>Main freight</Label>
+                  <Input value={form.mainFreight} onChange={(e) => updateForm(setForm, "mainFreight", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Assurance</Label>
+                  <Label>Insurance</Label>
                   <div className="flex gap-2">
-                    <Select
-                      value={form.insuranceType}
-                      onValueChange={(value) => updateForm(setForm, "insuranceType", value)}
-                    >
+                    <Select value={form.insuranceType} onValueChange={(v) => updateForm(setForm, "insuranceType", v)}>
                       <SelectTrigger className={SELECT_TRIGGER_CLASSES}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="percent">%</SelectItem>
-                        <SelectItem value="amount">Montant</SelectItem>
+                        <SelectItem value="amount">Amount</SelectItem>
                       </SelectContent>
                     </Select>
-
-                    <Input
-                      value={form.insuranceValue}
-                      onChange={(e) => updateForm(setForm, "insuranceValue", e.target.value)}
-                      className={INPUT_CLASSES}
-                      inputMode="decimal"
-                      placeholder={form.insuranceType === "percent" ? "Ex : 0,4" : "Ex : 120"}
-                    />
+                    <Input value={form.insuranceValue} onChange={(e) => updateForm(setForm, "insuranceValue", e.target.value)} className={INPUT_CLASSES} />
                   </div>
-                  <p className="text-xs text-slate-300">
-                    “%” = pourcentage de la valeur marchandise (indicatif). “Montant” = valeur fixe.
-                  </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Emballage</Label>
-                  <Input
-                    value={form.packaging}
-                    onChange={(e) => updateForm(setForm, "packaging", e.target.value)}
-                    className={INPUT_CLASSES}
-                    inputMode="decimal"
-                  />
+                  <Label>Packaging</Label>
+                  <Input value={form.packaging} onChange={(e) => updateForm(setForm, "packaging", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Douane / Transit</Label>
-                  <Input
-                    value={form.brokerage}
-                    onChange={(e) => updateForm(setForm, "brokerage", e.target.value)}
-                    className={INPUT_CLASSES}
-                    inputMode="decimal"
-                  />
+                  <Label>Brokerage / customs</Label>
+                  <Input value={form.brokerage} onChange={(e) => updateForm(setForm, "brokerage", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Divers</Label>
-                  <Input
-                    value={form.misc}
-                    onChange={(e) => updateForm(setForm, "misc", e.target.value)}
-                    className={INPUT_CLASSES}
-                    inputMode="decimal"
-                  />
+                  <Label>Misc</Label>
+                  <Input value={form.misc} onChange={(e) => updateForm(setForm, "misc", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Taux de droits (manuel, %)</Label>
-                  <Input
-                    value={form.dutyRate}
-                    onChange={(e) => updateForm(setForm, "dutyRate", e.target.value)}
-                    className={INPUT_CLASSES}
-                    inputMode="decimal"
-                    placeholder="Ex : 4,2"
-                  />
-                  <p className="text-xs text-slate-300">Saisissez le % que vous avez validé manuellement.</p>
+                  <Label>Duties rate (manual %)</Label>
+                  <Input value={form.dutyRate} onChange={(e) => updateForm(setForm, "dutyRate", e.target.value)} className={INPUT_CLASSES} />
+                  <p className="text-xs text-muted-foreground">Entrez le % validé manuellement.</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Taux de TVA import (manuel, %)</Label>
-                  <Input
-                    value={form.vatRate}
-                    onChange={(e) => updateForm(setForm, "vatRate", e.target.value)}
-                    className={INPUT_CLASSES}
-                    inputMode="decimal"
-                    placeholder="Ex : 20"
-                  />
-                  <p className="text-xs text-slate-300">Champ manuel : aucun calcul “officiel” automatique.</p>
+                  <Label>Import VAT rate (manual %)</Label>
+                  <Input value={form.vatRate} onChange={(e) => updateForm(setForm, "vatRate", e.target.value)} className={INPUT_CLASSES} />
+                  <p className="text-xs text-muted-foreground">Champ manuel. Pas d’auto lookup.</p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-slate-200">Marge cible (optionnel, %)</Label>
-                  <Input
-                    value={form.marginTarget}
-                    onChange={(e) => updateForm(setForm, "marginTarget", e.target.value)}
-                    className={INPUT_CLASSES}
-                    inputMode="decimal"
-                    placeholder="Ex : 15"
-                  />
+                  <Label>Target margin (optional %)</Label>
+                  <Input value={form.marginTarget} onChange={(e) => updateForm(setForm, "marginTarget", e.target.value)} className={INPUT_CLASSES} />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Results */}
-          <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
+          <Card className="card-hover">
             <CardHeader>
               <CardTitle>Résultats</CardTitle>
-              <CardDescription className="text-slate-200">Vue synthèse + détail des composantes.</CardDescription>
+              <CardDescription>Vue de synthèse + breakdown.</CardDescription>
             </CardHeader>
-
             <CardContent className="space-y-6">
               <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="text-xs uppercase text-slate-200">Total landed cost</div>
+                <div className="rounded-xl border bg-card p-4">
+                  <div className="text-xs uppercase text-muted-foreground">Total landed cost</div>
                   <div className="text-2xl font-semibold">{formatMoney(baseResult.total, baseInput.currency)}</div>
                 </div>
-
-                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="text-xs uppercase text-slate-200">Coût unitaire</div>
+                <div className="rounded-xl border bg-card p-4">
+                  <div className="text-xs uppercase text-muted-foreground">Unit cost</div>
                   <div className="text-2xl font-semibold">
                     {baseResult.unitCost ? formatMoney(baseResult.unitCost, baseInput.currency) : "n/a"}
                   </div>
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="text-xs uppercase text-slate-200">Droits</div>
-                  <div className="text-lg font-semibold">
-                    {formatMoney(baseResult.breakdown.duties, baseInput.currency)}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="text-xs uppercase text-slate-200">TVA import</div>
-                  <div className="text-lg font-semibold">
-                    {formatMoney(baseResult.breakdown.vat, baseInput.currency)}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="text-xs uppercase text-slate-200">Transport + divers</div>
-                  <div className="text-lg font-semibold">
-                    {formatMoney(
-                      baseResult.breakdown.preCarriage +
-                        baseResult.breakdown.mainFreight +
-                        baseResult.breakdown.insurance +
-                        baseResult.breakdown.packaging +
-                        baseResult.breakdown.brokerage +
-                        baseResult.breakdown.misc,
-                      baseInput.currency
-                    )}
-                  </div>
-                </div>
-              </div>
-
               {baseResult.margin && (
-                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="text-xs uppercase text-slate-200">Marge cible</div>
-                  <div className="mt-1 text-lg font-semibold">
-                    {formatMoney(baseResult.margin.targetAmount, baseInput.currency)}
-                  </div>
-                  <div className="text-sm text-slate-200">
-                    Prix cible : {formatMoney(baseResult.margin.targetPrice, baseInput.currency)}
+                <div className="rounded-xl border bg-card p-4">
+                  <div className="text-xs uppercase text-muted-foreground">Target margin</div>
+                  <div className="mt-1 text-lg font-semibold">{formatMoney(baseResult.margin.targetAmount, baseInput.currency)}</div>
+                  <div className="text-sm text-muted-foreground">
+                    Target price: {formatMoney(baseResult.margin.targetPrice, baseInput.currency)}
                   </div>
                 </div>
               )}
 
-              <div className="h-72">
+              <div className="h-72 rounded-xl border bg-card p-3">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={breakdownData(baseResult)}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="name" stroke="#e2e8f0" tick={{ fontSize: 12 }} />
-                    <YAxis stroke="#e2e8f0" tick={{ fontSize: 12 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
                     <Tooltip
                       formatter={(value: any) => formatMoney(Number(value || 0), baseInput.currency)}
-                      contentStyle={{ background: "#0f172a", border: "1px solid #334155" }}
+                      contentStyle={{
+                        background: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        color: "hsl(var(--foreground))",
+                      }}
                     />
-                    <Bar dataKey="value" fill="#60a5fa" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="value" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
-              </div>
-
-              <div className="text-xs text-white/70">
-                NB : si vous voulez des taux “officiels” par HS + pays, l’outil doit se connecter à une base tarifaire
-                (à venir). Pour l’instant, le calcul est volontairement “manuel”.
               </div>
             </CardContent>
           </Card>
         </section>
 
         <section className="space-y-6">
-          {/* Scenarios */}
-          <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
+          <Card className="card-hover">
             <CardHeader>
               <CardTitle>Comparateur de scénarios</CardTitle>
-              <CardDescription className="text-slate-200">
-                Comparez jusqu’à 3 scénarios (incoterm, mode, fret). Copiez la base pour gagner du temps.
-              </CardDescription>
+              <CardDescription>Modifiez incoterm, mode et coûts pour comparer jusqu'à 3 scénarios.</CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-6">
               <div className="grid gap-4 lg:grid-cols-3">
                 {scenarios.map((scenario, index) => (
-                  <div key={scenario.id} className="rounded-xl border border-white/15 bg-white/5 p-4">
+                  <div key={scenario.id} className="rounded-xl border bg-card p-4">
                     <div className="flex items-center justify-between">
                       <div className="font-semibold">{scenario.label}</div>
                       <Button
@@ -682,13 +535,13 @@ export default function Analyse() {
                           )
                         }
                       >
-                        {scenario.enabled ? "Actif" : "Inactif"}
+                        {scenario.enabled ? "Active" : "Inactive"}
                       </Button>
                     </div>
 
                     <div className={cn("mt-4 space-y-3", !scenario.enabled && "opacity-60")}>
                       <div className="space-y-2">
-                        <Label className="text-slate-200">Incoterm</Label>
+                        <Label>Incoterm</Label>
                         <Select
                           value={scenario.form.incoterm}
                           onValueChange={(value) =>
@@ -713,7 +566,7 @@ export default function Analyse() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-slate-200">Mode</Label>
+                        <Label>Mode</Label>
                         <Select
                           value={scenario.form.mode}
                           onValueChange={(value) =>
@@ -738,7 +591,7 @@ export default function Analyse() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label className="text-slate-200">Fret principal</Label>
+                        <Label>Main freight</Label>
                         <Input
                           value={scenario.form.mainFreight}
                           onChange={(e) =>
@@ -749,60 +602,59 @@ export default function Analyse() {
                             )
                           }
                           className={INPUT_CLASSES}
-                          inputMode="decimal"
                         />
                       </div>
 
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-white text-white hover:bg-white/10"
                         onClick={() =>
                           setScenarios((prev) =>
                             prev.map((item, idx) => (idx === index ? { ...item, form: { ...form } } : item))
                           )
                         }
                       >
-                        Copier la base
+                        Use base values
                       </Button>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <Separator className="bg-white/10" />
+              <Separator />
 
               <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-                <div className="rounded-xl border border-white/15 bg-white/5 p-4">
-                  <div className="text-sm font-semibold">Comparaison (totaux)</div>
-                  <div className="mt-3 space-y-2 text-sm text-slate-200">
+                <div className="rounded-xl border bg-card p-4">
+                  <div className="text-sm font-semibold">Comparison table</div>
+                  <div className="mt-3 space-y-2 text-sm text-muted-foreground">
                     <div className="flex items-center justify-between">
                       <span>Base</span>
-                      <span>{formatMoney(baseResult.total, baseInput.currency)}</span>
+                      <span className="text-foreground">{formatMoney(baseResult.total, baseInput.currency)}</span>
                     </div>
                     {scenarioResults.map((scenario) => (
                       <div key={scenario.id} className="flex items-center justify-between">
                         <span>{scenario.label}</span>
-                        <span>{formatMoney(scenario.result.total, scenario.input.currency)}</span>
+                        <span className="text-foreground">{formatMoney(scenario.result.total, scenario.input.currency)}</span>
                       </div>
                     ))}
-                    {scenarioResults.length === 0 && (
-                      <div className="text-xs text-white/70">Active au moins un scénario pour comparer.</div>
-                    )}
                   </div>
                 </div>
 
-                <div className="h-56">
+                <div className="h-56 rounded-xl border bg-card p-3">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={comparisonData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                      <XAxis dataKey="name" stroke="#e2e8f0" tick={{ fontSize: 12 }} />
-                      <YAxis stroke="#e2e8f0" tick={{ fontSize: 12 }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 12 }} />
                       <Tooltip
                         formatter={(value: any) => formatMoney(Number(value || 0), baseInput.currency)}
-                        contentStyle={{ background: "#0f172a", border: "1px solid #334155" }}
+                        contentStyle={{
+                          background: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          color: "hsl(var(--foreground))",
+                        }}
                       />
-                      <Bar dataKey="total" fill="#93c5fd" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="total" fill="hsl(var(--secondary))" radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -810,73 +662,50 @@ export default function Analyse() {
             </CardContent>
           </Card>
 
-          {/* Decision */}
-          <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
+          <Card className="card-hover">
             <CardHeader>
               <CardTitle>Décision & risques</CardTitle>
-              <CardDescription className="text-slate-200">
-                Alertes simples, checklist documents, partage PDF / lien.
-              </CardDescription>
+              <CardDescription>Alertes simples, checklist documents, et rappels incoterm.</CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                {(baseResult.warnings?.length ? baseResult.warnings : ["Aucune alerte générée avec les données actuelles."]).map(
-                  (warning) => (
-                    <div key={warning} className="rounded-lg border border-white/15 bg-white/5 p-3 text-sm">
-                      {warning}
-                    </div>
-                  )
-                )}
+                {baseResult.warnings.map((warning) => (
+                  <div key={warning} className="rounded-lg border bg-card p-3 text-sm">
+                    {warning}
+                  </div>
+                ))}
               </div>
 
               <div>
-                <div className="text-sm font-semibold">Checklist documents</div>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-200">
-                  <li>Facture commerciale</li>
+                <div className="text-sm font-semibold">Documents checklist</div>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                  <li>Commercial invoice</li>
                   <li>Packing list</li>
-                  <li>Certificat d’origine (si applicable)</li>
-                  <li>Document de transport (AWB, B/L, CMR…)</li>
-                  <li>Certificat d’assurance (si applicable)</li>
-                  <li>Déclaration export (si applicable)</li>
+                  <li>Certificate of origin</li>
+                  <li>Transport document (AWB, B/L, CMR)</li>
+                  <li>Insurance certificate (if applicable)</li>
+                  <li>Export declaration</li>
                 </ul>
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <Button
-                  variant="outline"
-                  className="border-white text-white hover:bg-white/10"
-                  onClick={handlePdf}
-                  disabled={pdfLoading}
-                >
-                  {pdfLoading ? "Génération..." : "Générer la fiche PDF"}
+                <Button variant="outline" onClick={handlePdf} disabled={pdfLoading}>
+                  {pdfLoading ? "Generating..." : "Generate decision PDF"}
                 </Button>
-
-                <Button
-                  variant="outline"
-                  className="border-white text-white hover:bg-white/10"
-                  onClick={handleShare}
-                >
-                  Copier un lien de partage
+                <Button variant="outline" onClick={handleShare}>
+                  Share link
                 </Button>
-
-                <Button onClick={() => navigate("/contact?offer=audit")}>Demander un audit</Button>
               </div>
 
-              {shareStatus && <p className="text-xs text-slate-200">{shareStatus}</p>}
-
-              <div className="text-xs text-white/70">
-                Rappel : pour une validation “zéro surprise”, il faut vérifier la classification, l’origine, la base taxable,
-                les règles pays et les documents.
-              </div>
+              {shareStatus && <p className="text-xs text-muted-foreground">{shareStatus}</p>}
             </CardContent>
           </Card>
         </section>
       </div>
 
-      {/* CTA flottant */}
       <div className="fixed bottom-6 right-6 z-50">
-        <Button size="lg" onClick={() => navigate("/contact?offer=audit")}>
+        <Button size="lg" onClick={() => (window.location.href = "/contact")}>
           Demander un audit export
         </Button>
       </div>
