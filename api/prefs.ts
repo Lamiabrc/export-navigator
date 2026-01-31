@@ -1,37 +1,44 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { allowCors, json, supabaseAdmin } from "./_supabase";
+import { allowCors, json, readBodyJson, supabaseAdmin } from "./_supabase";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function uniq(arr: string[]) {
-  return Array.from(new Set((arr || []).map((x) => String(x || "").trim()).filter(Boolean)));
+function cleanArray(v: any): string[] {
+  if (!Array.isArray(v)) return [];
+  return Array.from(
+    new Set(
+      v
+        .map((x) => String(x || "").trim())
+        .filter(Boolean)
+        .slice(0, 50)
+    )
+  );
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  allowCors(res);
-  if (req.method === "OPTIONS") return res.status(204).end();
+export default async function handler(req: any, res: any) {
+  if (allowCors(req, res)) return;
+
   if (req.method !== "POST") return json(res, 405, { ok: false, error: "Method not allowed" });
 
   try {
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-
+    const body = await readBodyJson(req);
     const email = String(body?.email || "").trim().toLowerCase();
-    const countries = uniq(body?.countries || []);
-    const hsCodes = uniq(body?.hsCodes || []);
-
     if (!email || !EMAIL_RE.test(email)) return json(res, 400, { ok: false, error: "Email invalide" });
 
-    const { error } = await supabaseAdmin
-      .from("watch_prefs")
-      .upsert(
-        { email, countries, hs_codes: hsCodes },
-        { onConflict: "email" }
-      );
+    const countries = cleanArray(body?.countries);
+    const hsCodes = cleanArray(body?.hsCodes);
+
+    const { data, error } = await supabaseAdmin.rpc("upsert_watch_prefs", {
+      p_email: email,
+      p_countries: countries,
+      p_hs_codes: hsCodes,
+      p_themes: [],
+      p_sources: [],
+    });
 
     if (error) return json(res, 500, { ok: false, error: error.message });
 
-    return json(res, 200, { ok: true });
+    return json(res, 200, { ok: Boolean(data) });
   } catch (e: any) {
-    return json(res, 500, { ok: false, error: e?.message || "Erreur serveur" });
+    return json(res, 500, { ok: false, error: e?.message || "prefs failed" });
   }
 }
