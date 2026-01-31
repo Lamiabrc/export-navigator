@@ -1,55 +1,64 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { allowCors, json } from "./_supabase";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { allowCors } from "./_supabase";
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  allowCors(res);
-  if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST") return json(res, 405, { ok: false, error: "Method not allowed" });
+function toText(v: any) {
+  return String(v ?? "").trim();
+}
+
+export default async function handler(req: any, res: any) {
+  if (allowCors(req, res)) return;
+
+  if (req.method !== "POST") {
+    res.statusCode = 405;
+    res.end("Method not allowed");
+    return;
+  }
 
   try {
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const chunks: any[] = [];
+    for await (const c of req) chunks.push(c);
+    const raw = Buffer.concat(chunks).toString("utf-8");
+    const payload = raw ? JSON.parse(raw) : {};
 
-    const title = String(body?.title || "Rapport de contrôle export");
-    const email = String(body?.email || "");
-    const destination = String(body?.destination || "");
-    const incoterm = String(body?.incoterm || "");
-    const currency = String(body?.currency || "EUR");
-    const value = body?.value != null ? String(body.value) : "";
-
-    const landed = body?.result?.landedCost || null;
+    const title = toText(payload?.title) || "Rapport de contrôle export";
+    const email = toText(payload?.email);
+    const destination = toText(payload?.destination);
+    const incoterm = toText(payload?.incoterm);
+    const value = payload?.value;
+    const currency = toText(payload?.currency) || "EUR";
+    const landed = payload?.result?.landedCost;
 
     const pdf = await PDFDocument.create();
-    const page = pdf.addPage([595, 842]); // A4
+    const page = pdf.addPage([595, 842]);
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
     const { height } = page.getSize();
-    let y = height - 70;
+    let y = height - 60;
     const x = 50;
 
-    page.drawText("MPL Export Conseil", { x, y, size: 18, font: bold, color: rgb(0.1, 0.2, 0.45) });
-    y -= 24;
-    page.drawText(title, { x, y, size: 12, font: bold, color: rgb(0.2, 0.2, 0.2) });
+    page.drawText("MPL Export Conseil", { x, y, size: 12, font: bold, color: rgb(0.1, 0.2, 0.4) });
     y -= 18;
+    page.drawText(title, { x, y, size: 16, font: bold, color: rgb(0.05, 0.1, 0.2) });
 
-    page.drawText(`Généré le : ${new Date().toLocaleString("fr-FR")}`, { x, y, size: 10, font, color: rgb(0.35, 0.35, 0.35) });
-    y -= 20;
+    y -= 22;
+    page.drawText(`Date : ${new Date().toLocaleString("fr-FR")}`, { x, y, size: 10, font, color: rgb(0.3, 0.3, 0.3) });
 
+    y -= 22;
     const lines = [
       email ? `Email : ${email}` : null,
       destination ? `Destination : ${destination}` : null,
       incoterm ? `Incoterm : ${incoterm}` : null,
-      value ? `Valeur : ${value} ${currency}` : null,
+      value != null ? `Valeur : ${value} ${currency}` : null,
     ].filter(Boolean) as string[];
 
-    lines.forEach((t) => {
-      page.drawText(t, { x, y, size: 11, font, color: rgb(0.15, 0.15, 0.15) });
+    for (const l of lines) {
+      page.drawText(l, { x, y, size: 11, font });
       y -= 16;
-    });
+    }
 
     y -= 10;
-    page.drawText("Estimation (indicative)", { x, y, size: 12, font: bold, color: rgb(0.15, 0.15, 0.15) });
+    page.drawText("Synthèse estimation (indicative)", { x, y, size: 12, font: bold });
     y -= 18;
 
     if (landed) {
@@ -57,29 +66,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       y -= 16;
       page.drawText(`Taxes : ${Number(landed.taxes || 0).toFixed(0)} ${landed.currency || currency}`, { x, y, size: 11, font });
       y -= 16;
-      page.drawText(`Total : ${Number(landed.total || 0).toFixed(0)} ${landed.currency || currency}`, { x, y, size: 11, font: bold });
-      y -= 16;
+      page.drawText(`Total : ${Number(landed.total || 0).toFixed(0)} ${landed.currency || currency}`, { x, y, size: 12, font: bold });
+      y -= 18;
     } else {
-      page.drawText("Aucune estimation chiffrée fournie.", { x, y, size: 11, font });
+      page.drawText("Aucune donnée de coût fournie.", { x, y, size: 11, font });
       y -= 16;
     }
 
-    y -= 12;
-    page.drawText("Important", { x, y, size: 12, font: bold, color: rgb(0.65, 0.1, 0.1) });
-    y -= 16;
-    page.drawText(
-      "Estimation indicative. Une validation humaine est recommandée (HS exact, origine, incoterms, sanctions, licences).",
-      { x, y, size: 10, font, color: rgb(0.35, 0.35, 0.35) }
-    );
+    page.drawText("Note : ce rapport est informatif. Validation humaine recommandée.", {
+      x,
+      y: 60,
+      size: 9,
+      font,
+      color: rgb(0.4, 0.4, 0.4),
+    });
 
     const bytes = await pdf.save();
-
-    res.status(200);
-    res.setHeader("content-type", "application/pdf");
-    res.setHeader("content-disposition", `attachment; filename="mpl-rapport-export.pdf"`);
-    res.setHeader("cache-control", "no-store");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="mpl-rapport-export.pdf"`);
+    res.statusCode = 200;
     res.end(Buffer.from(bytes));
   } catch (e: any) {
-    return json(res, 500, { ok: false, error: e?.message || "Erreur génération PDF" });
+    res.statusCode = 500;
+    res.end(e?.message || "pdf failed");
   }
 }
