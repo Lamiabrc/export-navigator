@@ -308,7 +308,7 @@ export default function Analyse() {
     <PublicLayout>
       <div className="space-y-10">
         {/* ✅ HERO CINEMATIC (option B) */}
-        <section className="rounded-3xl border border-border bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 text-white shadow-xl md:p-10">
+        <section className="force-white rounded-3xl border border-border bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 text-white shadow-xl md:p-10">
           <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Analyse export</p>
           <h1 className="mt-2 text-4xl font-semibold md:text-5xl">Landed cost en 3 minutes, sans blocage.</h1>
           <p className="mt-3 max-w-2xl text-lg text-slate-200">

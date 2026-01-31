@@ -55,7 +55,7 @@ export default function Guide() {
           </CardContent>
         </Card>
 
-        <section className="rounded-2xl border border-border bg-gradient-to-r from-primary/90 via-secondary to-primary/50 p-6 text-white shadow-lg">
+        <section className="force-white rounded-2xl border border-border bg-gradient-to-r from-primary/90 via-secondary to-primary/50 p-6 text-white shadow-lg">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="text-xs uppercase tracking-[0.25em] text-white/80">Passez a l'action</div>

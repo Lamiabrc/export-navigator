@@ -46,7 +46,7 @@ export default function Solutions() {
     <PublicLayout>
       <div className="space-y-10">
         {/* Hero lisible */}
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 text-white md:p-10">
+        <section className="force-white rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 text-white md:p-10">
           <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-4">
               <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Solutions MPL Export Conseil</p>
@@ -144,7 +144,7 @@ export default function Solutions() {
         </section>
 
         {/* CTA final */}
-        <section className="rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-700 via-blue-900 to-red-600 p-6 text-white">
+        <section className="force-white rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-700 via-blue-900 to-red-600 p-6 text-white">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="text-xs uppercase tracking-[0.25em] text-white/70">Prêt à sécuriser vos expéditions ?</div>

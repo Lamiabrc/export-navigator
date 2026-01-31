@@ -17,7 +17,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
 
   return (
-    <div className="relative min-h-screen bg-background text-foreground">
+    <div className="public-shell relative min-h-screen bg-background text-foreground">
       {/* Backdrop + voile clair pour éviter l’effet “trop sombre” */}
       <div className="pointer-events-none absolute inset-0 z-0">
         <CinematicBackdrop variant="public" className="h-full w-full opacity-35" />

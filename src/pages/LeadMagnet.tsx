@@ -573,7 +573,7 @@ export default function LeadMagnet() {
   return (
     <PublicLayout>
       {/* HERO */}
-      <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 md:p-10">
+      <section className="force-white rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 md:p-10">
         <div className="grid gap-12 lg:grid-cols-[1.15fr_0.95fr] lg:items-start">
           <div className="space-y-6 text-white">
             <p className="text-xs uppercase tracking-[0.4em] text-blue-200">Audit • Réglementation • Veille</p>
@@ -1033,7 +1033,7 @@ export default function LeadMagnet() {
       </section>
 
       {/* CTA */}
-      <section className="mt-10 flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-700 via-blue-900 to-red-600 p-6 text-white md:flex-row md:items-center">
+      <section className="force-white mt-10 flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-700 via-blue-900 to-red-600 p-6 text-white md:flex-row md:items-center">
         <div>
           <div className="text-xs uppercase tracking-[0.25em] text-white/70">Besoin d'une validation ?</div>
           <div className="text-2xl font-semibold">Demandez un audit complet ou une validation express.</div>

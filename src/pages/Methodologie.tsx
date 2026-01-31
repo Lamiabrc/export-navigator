@@ -92,7 +92,7 @@ export default function Methodologie() {
           </Card>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-700 via-blue-900 to-red-600 p-6 text-white">
+        <section className="force-white rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-700 via-blue-900 to-red-600 p-6 text-white">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="text-xs uppercase tracking-[0.25em] text-white/70">Besoin d'une validation ?</div>

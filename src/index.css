@@ -124,6 +124,14 @@
     --sidebar-ring: 25 96% 54%;
   }
 
+  .public-shell [class*="text-white"] {
+    color: hsl(var(--foreground)) !important;
+  }
+
+  .public-shell .force-white [class*="text-white"] {
+    color: #fff !important;
+  }
+
   * {
     @apply border-border;
   }
