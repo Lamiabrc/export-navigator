@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { ReactNode } from "react";
 
 import { useI18n } from "@/contexts/LanguageContext";
+import { usePlan } from "@/auth/PlanContext";
 import type { LanguageCode } from "@/i18n/translations";
 
 const navLinks: Array<{ key: string; to: string }> = [
@@ -14,22 +15,29 @@ const navLinks: Array<{ key: string; to: string }> = [
 ];
 
 const flags: Record<LanguageCode, string> = {
-  fr: "🇫🇷",
-  en: "🇬🇧",
+  fr: "ðŸ‡«ðŸ‡·",
+  en: "ðŸ‡¬ðŸ‡§",
 };
+
+const planOptions = [
+  { label: "FREE", value: "FREE" },
+  { label: "PRO", value: "PRO" },
+  { label: "VIP", value: "VIP" },
+];
 
 export const MarketingLayout = ({ children }: { children: ReactNode }) => {
   const { lang, t, setLang } = useI18n();
+  const { plan, setPlan } = usePlan();
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
-      <header className="sticky top-0 z-40 border-b border-neutral-900/5 bg-white/90 shadow-sm backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 shadow-xl shadow-slate-900/10 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-3">
           <Link to="/" className="text-lg font-semibold tracking-wide text-slate-900">
             Export Navigator
           </Link>
 
-          <nav className="flex flex-1 items-center justify-center gap-4 text-sm font-medium text-slate-600">
+          <nav className="flex flex-1 items-center justify-center gap-4 text-sm font-semibold text-slate-600">
             {navLinks.map((link) => {
               const label = ((t(link.key) as string) ?? link.key) as string;
               return (
@@ -49,7 +57,7 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
             <div
               role="group"
               aria-label={t("header.languageAria") as string}
-              className="flex items-center rounded-full border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 shadow-sm"
+              className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm"
             >
               {(["fr", "en"] as LanguageCode[]).map((code) => (
                 <button
@@ -65,6 +73,22 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
                   <span>{code.toUpperCase()}</span>
                 </button>
               ))}
+            </div>
+
+            <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.35em] text-slate-600 shadow-sm md:flex">
+              <span>Plan</span>
+              <select
+                value={plan}
+                onChange={(event) => setPlan(event.target.value as typeof plan)}
+                className="bg-transparent text-[11px] font-bold uppercase tracking-[0.35em] outline-none"
+                aria-label="Select plan"
+              >
+                {planOptions.map((option) => (
+                  <option key={option.value} value={option.value} className="text-slate-900">
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <Link

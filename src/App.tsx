@@ -10,6 +10,8 @@ import { GlobalFiltersProvider } from "@/contexts/GlobalFiltersContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ThemeProvider } from "@/components/theme-provider";
+import { PlanProvider } from "@/auth/PlanContext";
+import { RequirePlan } from "@/components/RequirePlan";
 
 import Home from "@/pages/Home";
 import ToolPage from "@/pages/Tool";
@@ -50,6 +52,11 @@ import Tarifs from "@/pages/Tarifs";
 import Contact from "@/pages/Contact";
 import InternalResources from "@/pages/InternalResources";
 import ExportToFrance from "@/pages/ExportToFrance";
+import Pricing from "@/pages/Pricing";
+import HistoryPage from "@/pages/History";
+import ImportCheckInvoice from "@/pages/ImportCheckInvoice";
+import ExportCostingPage from "@/pages/ExportCosting";
+import VipRentability from "@/pages/VipRentability";
 
 // ✅ NOUVEAU
 import Legal from "@/pages/Legal";
@@ -65,9 +72,10 @@ export default function App() {
             <Toaster />
             <Sonner />
 
-            <LanguageProvider>
-              <BrowserRouter>
-                <GlobalFiltersProvider>
+            <PlanProvider>
+              <LanguageProvider>
+                <BrowserRouter>
+                  <GlobalFiltersProvider>
                   <Routes>
                     {/* Marketing */}
                     <Route path="/" element={<Home />} />
@@ -76,6 +84,32 @@ export default function App() {
                     <Route path="/watch" element={<WatchPage />} />
                     <Route path="/veille" element={<WatchPage />} />
                     <Route path="/about" element={<AboutPage />} />
+                    <Route path="/pricing" element={<Pricing />} />
+                    <Route
+                      path="/history"
+                      element={
+                        <RequirePlan minPlan="PRO">
+                          <HistoryPage />
+                        </RequirePlan>
+                      }
+                    />
+                    <Route
+                      path="/import/check-invoice"
+                      element={
+                        <RequirePlan minPlan="VIP">
+                          <ImportCheckInvoice />
+                        </RequirePlan>
+                      }
+                    />
+                    <Route path="/export/costing" element={<ExportCostingPage />} />
+                    <Route
+                      path="/vip/rentability"
+                      element={
+                        <RequirePlan minPlan="VIP">
+                          <VipRentability />
+                        </RequirePlan>
+                      }
+                    />
                     {/* Core */}
                     <Route path="/analyse" element={<Analyse />} />
                     <Route path="/share/:id" element={<ShareDecision />} />
@@ -254,9 +288,10 @@ export default function App() {
 
                     <Route path="*" element={<NotFound />} />
                   </Routes>
-                </GlobalFiltersProvider>
-              </BrowserRouter>
-            </LanguageProvider>
+                  </GlobalFiltersProvider>
+                </BrowserRouter>
+              </LanguageProvider>
+            </PlanProvider>
           </ThemeProvider>
         </AuthProvider>
       </TooltipProvider>
