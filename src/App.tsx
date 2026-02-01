@@ -7,10 +7,15 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 
 import { AuthProvider } from "@/contexts/AuthContext";
 import { GlobalFiltersProvider } from "@/contexts/GlobalFiltersContext";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ThemeProvider } from "@/components/theme-provider";
 
-import LeadMagnet from "@/pages/LeadMagnet";
+import Home from "@/pages/Home";
+import ToolPage from "@/pages/Tool";
+import ServicesPage from "@/pages/Services";
+import WatchPage from "@/pages/Watch";
+import AboutPage from "@/pages/About";
 import Analyse from "@/pages/Analyse";
 import ShareDecision from "@/pages/ShareDecision";
 import Methodologie from "@/pages/Methodologie";
@@ -60,104 +65,109 @@ export default function App() {
             <Toaster />
             <Sonner />
 
-            <BrowserRouter>
-              <GlobalFiltersProvider>
-                <Routes>
-                  {/* Core */}
-                  <Route path="/" element={<LeadMagnet />} />
-                  <Route path="/analyse" element={<Analyse />} />
-                  <Route path="/share/:id" element={<ShareDecision />} />
-                  <Route path="/methodologie" element={<Methodologie />} />
-                  <Route path="/guides/:slug" element={<Guide />} />
+            <LanguageProvider>
+              <BrowserRouter>
+                <GlobalFiltersProvider>
+                  <Routes>
+                    {/* Marketing */}
+                    <Route path="/" element={<Home />} />
+                    <Route path="/tool" element={<ToolPage />} />
+                    <Route path="/services" element={<ServicesPage />} />
+                    <Route path="/watch" element={<WatchPage />} />
+                    <Route path="/veille" element={<WatchPage />} />
+                    <Route path="/about" element={<AboutPage />} />
+                    {/* Core */}
+                    <Route path="/analyse" element={<Analyse />} />
+                    <Route path="/share/:id" element={<ShareDecision />} />
+                    <Route path="/methodologie" element={<Methodologie />} />
+                    <Route path="/guides/:slug" element={<Guide />} />
 
-                  {/* Public */}
-                  <Route path="/solutions" element={<Solutions />} />
-                  <Route path="/veille" element={<Veille />} />
-                  <Route path="/resources" element={<Resources />} />
-                  <Route path="/tarifs" element={<Tarifs />} />
-                  <Route path="/contact" element={<Contact />} />
-                  <Route path="/export-to-france" element={<ExportToFrance />} />
-                  <Route path="/newsletter" element={<Newsletter />} />
+                    {/* Public */}
+                    <Route path="/solutions" element={<Solutions />} />
+                    <Route path="/resources" element={<Resources />} />
+                    <Route path="/tarifs" element={<Tarifs />} />
+                    <Route path="/contact" element={<Contact />} />
+                    <Route path="/export-to-france" element={<ExportToFrance />} />
+                    <Route path="/newsletter" element={<Newsletter />} />
 
-                  {/* Aliases FR + legacy marketing */}
-                  <Route path="/services" element={<Navigate to="/solutions" replace />} />
-                  <Route path="/welcome" element={<Navigate to="/solutions" replace />} />
-                  <Route path="/ressources" element={<Navigate to="/resources" replace />} />
+                    {/* Aliases FR + legacy marketing */}
+                    <Route path="/welcome" element={<Navigate to="/solutions" replace />} />
+                    <Route path="/ressources" element={<Navigate to="/resources" replace />} />
 
-                  {/* Legal (✅ manquant important) */}
-                  <Route path="/legal/:slug" element={<Legal />} />
-                  <Route path="/mentions-legales" element={<Navigate to="/legal/mentions-legales" replace />} />
-                  <Route path="/confidentialite" element={<Navigate to="/legal/confidentialite" replace />} />
-                  <Route path="/cookies" element={<Navigate to="/legal/cookies" replace />} />
-                  <Route path="/cgu" element={<Navigate to="/legal/cgu" replace />} />
-                  <Route path="/cgv" element={<Navigate to="/legal/cgv" replace />} />
+                    {/* Legal (✅ manquant important) */}
+                    <Route path="/legal/:slug" element={<Legal />} />
+                    <Route path="/mentions-legales" element={<Navigate to="/legal/mentions-legales" replace />} />
+                    <Route path="/confidentialite" element={<Navigate to="/legal/confidentialite" replace />} />
+                    <Route path="/cookies" element={<Navigate to="/legal/cookies" replace />} />
+                    <Route path="/cgu" element={<Navigate to="/legal/cgu" replace />} />
+                    <Route path="/cgv" element={<Navigate to="/legal/cgv" replace />} />
 
-                  {/* Auth */}
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/register" element={<Register />} />
-                  <Route path="/forgot-password" element={<ForgotPassword />} />
-                  <Route path="/set-password" element={<SetPassword />} />
+                    {/* Auth */}
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/set-password" element={<SetPassword />} />
 
-                  {/* App */}
-                  <Route
-                    path="/app/command-center"
-                    element={
-                      <ProtectedRoute>
-                        <CommandCenter />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route path="/app" element={<Navigate to="/app/command-center" replace />} />
+                    {/* App */}
+                    <Route
+                      path="/app/command-center"
+                      element={
+                        <ProtectedRoute>
+                          <CommandCenter />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route path="/app" element={<Navigate to="/app/command-center" replace />} />
 
-                  <Route
-                    path="/app/explore"
-                    element={
-                      <ProtectedRoute>
-                        <Sales />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/app/invoices/:invoiceNumber"
-                    element={
-                      <ProtectedRoute>
-                        <InvoiceDetail />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/app/taxes-om"
-                    element={
-                      <ProtectedRoute>
-                        <TaxesOM />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/app/simulator"
-                    element={
-                      <ProtectedRoute>
-                        <Simulator />
-                      </ProtectedRoute>
-                    }
-                  />
+                    <Route
+                      path="/app/explore"
+                      element={
+                        <ProtectedRoute>
+                          <Sales />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/app/invoices/:invoiceNumber"
+                      element={
+                        <ProtectedRoute>
+                          <InvoiceDetail />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/app/taxes-om"
+                      element={
+                        <ProtectedRoute>
+                          <TaxesOM />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/app/simulator"
+                      element={
+                        <ProtectedRoute>
+                          <Simulator />
+                        </ProtectedRoute>
+                      }
+                    />
 
-                  <Route
-                    path="/app/centre-veille"
-                    element={
-                      <ProtectedRoute>
-                        <WatchCenter />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/app/centre-veille/reglementation"
-                    element={
-                      <ProtectedRoute>
-                        <WatchRegulatory />
-                      </ProtectedRoute>
-                    }
-                  />
+                    <Route
+                      path="/app/centre-veille"
+                      element={
+                        <ProtectedRoute>
+                          <WatchCenter />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/app/centre-veille/reglementation"
+                      element={
+                        <ProtectedRoute>
+                          <WatchRegulatory />
+                        </ProtectedRoute>
+                      }
+                    />
 
                   {/* ✅ Canonique : secteurs (remplace concurrence) */}
                   <Route
@@ -220,33 +230,33 @@ export default function App() {
                     }
                   />
 
-                  {/* Legacy aliases */}
-                  <Route path="/hub" element={<Navigate to="/app/command-center" replace />} />
-                  <Route path="/command-center" element={<Navigate to="/app/command-center" replace />} />
-                  <Route path="/dashboard" element={<Navigate to="/app/command-center" replace />} />
-                  <Route path="/explore" element={<Navigate to="/app/explore" replace />} />
-                  <Route path="/sales" element={<Navigate to="/app/explore" replace />} />
-                  <Route path="/taxes-om" element={<Navigate to="/app/taxes-om" replace />} />
-                  <Route path="/simulator" element={<Navigate to="/app/simulator" replace />} />
-                  <Route path="/watch" element={<Navigate to="/app/centre-veille" replace />} />
-                  <Route path="/watch/regulatory" element={<Navigate to="/app/centre-veille/reglementation" replace />} />
+                    {/* Legacy aliases */}
+                    <Route path="/hub" element={<Navigate to="/app/command-center" replace />} />
+                    <Route path="/command-center" element={<Navigate to="/app/command-center" replace />} />
+                    <Route path="/dashboard" element={<Navigate to="/app/command-center" replace />} />
+                    <Route path="/explore" element={<Navigate to="/app/explore" replace />} />
+                    <Route path="/sales" element={<Navigate to="/app/explore" replace />} />
+                    <Route path="/taxes-om" element={<Navigate to="/app/taxes-om" replace />} />
+                    <Route path="/simulator" element={<Navigate to="/app/simulator" replace />} />
+                    <Route path="/watch/regulatory" element={<Navigate to="/app/centre-veille/reglementation" replace />} />
 
-                  {/* ✅ Tous les anciens chemins concurrence -> secteurs */}
-                  <Route path="/watch/commercial" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
-                  <Route path="/watch/competitive" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
-                  <Route path="/competition" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
-                  <Route path="/concurrence" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
+                    {/* ✅ Tous les anciens chemins concurrence -> secteurs */}
+                    <Route path="/watch/commercial" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
+                    <Route path="/watch/competitive" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
+                    <Route path="/competition" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
+                    <Route path="/concurrence" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
 
-                  <Route path="/products" element={<Navigate to="/app/produits" replace />} />
-                  <Route path="/invoice-check" element={<Navigate to="/app/invoice-check" replace />} />
-                  <Route path="/assistant" element={<Navigate to="/app/assistant" replace />} />
-                  <Route path="/admin" element={<Navigate to="/app/admin" replace />} />
-                  <Route path="/settings" element={<Navigate to="/app/settings" replace />} />
+                    <Route path="/products" element={<Navigate to="/app/produits" replace />} />
+                    <Route path="/invoice-check" element={<Navigate to="/app/invoice-check" replace />} />
+                    <Route path="/assistant" element={<Navigate to="/app/assistant" replace />} />
+                    <Route path="/admin" element={<Navigate to="/app/admin" replace />} />
+                    <Route path="/settings" element={<Navigate to="/app/settings" replace />} />
 
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </GlobalFiltersProvider>
-            </BrowserRouter>
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </GlobalFiltersProvider>
+              </BrowserRouter>
+            </LanguageProvider>
           </ThemeProvider>
         </AuthProvider>
       </TooltipProvider>

@@ -1,257 +1,110 @@
-import * as React from "react";
-import { useLocation } from "react-router-dom";
-import { PublicLayout } from "@/components/layout/PublicLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
-import type { RssItem } from "@/lib/rss/types";
+import { FormEvent, useState } from "react";
 
-const INPUT_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
-const TEXTAREA_CLASSES = "bg-slate-950/70 border-white/10 text-slate-100 placeholder:text-slate-400";
-const CONTACT_EMAIL = "contact@exportfrancefacile.com";
-
-const offerLabels: Record<string, string> = {
-  express: "Validation express",
-  pricing: "Offre tarifaire",
-  audit: "Audit complet",
-};
-
-function readScenarioSummary() {
-  try {
-    const raw = localStorage.getItem("mpl_last_simulation");
-    if (!raw) return "";
-    const parsed = JSON.parse(raw) as any;
-    if (!parsed?.payload) return "";
-
-    const payload = parsed.payload as Record<string, any>;
-    const lines = [
-      `Destination: ${payload.destination || payload.destinationIso2 || "n/a"}`,
-      `Incoterm: ${payload.incoterm || "n/a"}`,
-      `Mode: ${payload.mode || "n/a"}`,
-      `Valeur marchandise: ${payload.goodsValue || payload.value || "n/a"}`,
-    ];
-    return lines.join(" | ");
-  } catch {
-    return "";
-  }
-}
-
-function pickFranceNews(items: RssItem[]) {
-  const normalized = items.map((item) => ({
-    item,
-    haystack: `${item.title} ${item.summary}`.toLowerCase(),
-  }));
-  const match = normalized.find((row) => row.haystack.includes("france"));
-  return match?.item || items[0] || null;
-}
+import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { useI18n } from "@/contexts/LanguageContext";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
 export default function Contact() {
-  const location = useLocation();
-  const { toast } = useToast();
+  const { t } = useI18n();
+  usePageMeta("meta.contact.title", "meta.contact.description");
 
-  const params = new URLSearchParams(location.search);
-  const offerParam = params.get("offer") || "audit";
-  const offerType = offerLabels[offerParam] ? offerParam : "audit";
+  const formCopy = (t("contactPage.form") as {
+    name: string;
+    email: string;
+    message: string;
+    submit: string;
+  }) ?? {
+    name: "Nom / société",
+    email: "Email professionnel",
+    message: "Votre demande",
+    submit: "Envoyer et réserver",
+  };
 
-  const [firstName, setFirstName] = React.useState("");
-  const [company, setCompany] = React.useState("");
-  const [email, setEmail] = React.useState("");
-  const [subject, setSubject] = React.useState(offerLabels[offerType]);
-  const [message, setMessage] = React.useState("");
-  const [includeScenario, setIncludeScenario] = React.useState(false);
-  const [scenarioSummary, setScenarioSummary] = React.useState("");
-  const [sending, setSending] = React.useState(false);
+  const blockCopy = (t("contactPage.bookBlock") as {
+    title: string;
+    body: string;
+    cta: string;
+  }) ?? {
+    title: "Réserver un appel 20 min",
+    body: "Je vous rappelle pour valider vos risques TVA, douane et DDP avant toute expédition.",
+    cta: "Choisir un créneau",
+  };
 
-  const [newsItem, setNewsItem] = React.useState<RssItem | null>(null);
-  const [newsError, setNewsError] = React.useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
 
-  React.useEffect(() => {
-    setSubject(offerLabels[offerType]);
-  }, [offerType]);
-
-  React.useEffect(() => {
-    if (includeScenario) {
-      setScenarioSummary(readScenarioSummary());
-    }
-  }, [includeScenario]);
-
-  React.useEffect(() => {
-    let mounted = true;
-    const loadNews = async () => {
-      try {
-        const res = await fetch("/api/rss?limit=6&offset=0");
-        const data = await res.json();
-        if (!res.ok || data?.ok === false) throw new Error(data?.error || "Erreur RSS");
-        const items = (data?.data?.items || []) as RssItem[];
-        if (!mounted) return;
-        setNewsItem(pickFranceNews(items));
-      } catch (err: any) {
-        if (!mounted) return;
-        setNewsError(err?.message || "Actualite indisponible");
-      }
-    };
-    void loadNews();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const submit = async () => {
-    if (!firstName.trim()) {
-      toast({ title: "Prenom requis", description: "Merci d'indiquer votre prenom." });
-      return;
-    }
-    if (!email.trim()) {
-      toast({ title: "Email requis", description: "Merci de renseigner un email de contact." });
-      return;
-    }
-    if (!message.trim()) {
-      toast({ title: "Message requis", description: "Merci d'indiquer votre besoin." });
-      return;
-    }
-    try {
-      setSending(true);
-      const res = await fetch("/api/contact", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          firstName: firstName.trim(),
-          email: email.trim().toLowerCase(),
-          company: company.trim(),
-          subject: subject.trim(),
-          message: message.trim(),
-          offerType,
-          scenarioSummary: includeScenario ? scenarioSummary : undefined,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.ok === false) {
-        throw new Error(data?.error || "Impossible d'envoyer la demande.");
-      }
-      toast({ title: "Demande envoyee", description: "Nous revenons vers vous rapidement." });
-      setMessage("");
-    } catch (err: any) {
-      toast({ title: "Erreur", description: err?.message || "Impossible d'envoyer la demande." });
-    } finally {
-      setSending(false);
-    }
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitted(true);
   };
 
   return (
-    <PublicLayout>
-      <div className="space-y-8">
-        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 text-slate-100 shadow-lg backdrop-blur-md">
-          <div className="flex flex-wrap items-center gap-3">
-            <Badge className="bg-white/5 text-slate-100 border-white/15">Actualite export France</Badge>
-            {newsError && <span className="text-sm text-rose-200">{newsError}</span>}
-            {!newsError && !newsItem && <span className="text-sm text-slate-300">Chargement...</span>}
-            {newsItem && (
-              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-200">
-                <span className="font-semibold text-white">{newsItem.title}</span>
-                <span className="text-xs text-slate-400">
-                  {new Date(newsItem.pubDate).toLocaleDateString("fr-FR", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </span>
-                <a
-                  href={newsItem.link}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-blue-200 hover:text-blue-100"
+    <MarketingLayout>
+      <section className="bg-white py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
+            <div>
+              <p className="text-xs uppercase tracking-[0.5em] text-slate-400">{t("contactPage.headline")}</p>
+              <h1 className="mt-3 text-4xl font-semibold text-slate-900">{t("contactPage.headline")}</h1>
+              <p className="mt-4 text-base text-slate-700">{t("contactPage.body")}</p>
+
+              <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+                <label className="flex flex-col gap-2 text-sm text-slate-700">
+                  <span className="font-semibold">{formCopy.name}</span>
+                  <input
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm focus:border-slate-900 focus:outline-none"
+                    placeholder={formCopy.name}
+                    required
+                  />
+                </label>
+
+                <label className="flex flex-col gap-2 text-sm text-slate-700">
+                  <span className="font-semibold">{formCopy.email}</span>
+                  <input
+                    type="email"
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm focus:border-slate-900 focus:outline-none"
+                    placeholder={formCopy.email}
+                    required
+                  />
+                </label>
+
+                <label className="flex flex-col gap-2 text-sm text-slate-700">
+                  <span className="font-semibold">{formCopy.message}</span>
+                  <textarea
+                    rows={4}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm focus:border-slate-900 focus:outline-none"
+                    placeholder={formCopy.message}
+                    required
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  className="w-full rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-slate-800"
                 >
-                  Lire la source
-                </a>
-              </div>
-            )}
-          </div>
-        </div>
+                  {formCopy.submit}
+                </button>
 
-        <div>
-          <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Contact</p>
-          <h1 className="text-4xl font-semibold text-white">Parlons de votre projet export.</h1>
-          <p className="text-lg text-slate-200">
-            Offre selectionnee: <span className="font-semibold text-white">{offerLabels[offerType]}</span>.
-          </p>
-          <p className="text-sm text-slate-400">
-            Par mail :{" "}
-            <a className="text-blue-200 underline-offset-4 hover:text-blue-100 hover:underline" href={`mailto:${CONTACT_EMAIL}`}>
-              {CONTACT_EMAIL}
-            </a>
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-white/15 bg-white/10 p-6 shadow-lg backdrop-blur space-y-4 max-w-2xl">
-          <div className="space-y-2">
-            <Label className="text-slate-200">Prenom</Label>
-            <Input
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              placeholder="Prenom"
-              className={INPUT_CLASSES}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-slate-200">Email</Label>
-            <Input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="vous@exemple.com"
-              className={INPUT_CLASSES}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-slate-200">Societe</Label>
-            <Input
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              placeholder="Nom de l'entreprise"
-              className={INPUT_CLASSES}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-slate-200">Sujet</Label>
-            <Input
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Sujet"
-              className={INPUT_CLASSES}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-slate-200">Message</Label>
-            <Textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Besoin, pays, HS, urgence..."
-              className={TEXTAREA_CLASSES}
-            />
-          </div>
-          <div className="flex items-center gap-2 text-sm text-slate-200">
-            <input
-              id="scenario"
-              type="checkbox"
-              checked={includeScenario}
-              onChange={(e) => setIncludeScenario(e.target.checked)}
-            />
-            <Label htmlFor="scenario" className="text-slate-200">
-              Joindre mon scenario d'analyse
-            </Label>
-          </div>
-          {includeScenario && scenarioSummary && (
-            <div className="rounded-lg border border-white/15 bg-white/5 p-3 text-xs text-slate-200">
-              {scenarioSummary}
+                {submitted && (
+                  <p className="text-xs uppercase tracking-[0.4em] text-slate-500">
+                    {t("contactPage.body")}
+                  </p>
+                )}
+              </form>
             </div>
-          )}
-          <Button onClick={submit} disabled={sending}>
-            {sending ? "Envoi..." : "Envoyer la demande"}
-          </Button>
+
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-lg">
+              <h2 className="text-xl font-semibold text-slate-900">{blockCopy.title}</h2>
+              <p className="mt-3 text-sm text-slate-600">{blockCopy.body}</p>
+              <button
+                type="button"
+                className="mt-6 rounded-full border border-slate-900/20 bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.4em] text-slate-900 transition hover:bg-slate-100"
+              >
+                {blockCopy.cta}
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-    </PublicLayout>
+      </section>
+    </MarketingLayout>
   );
 }
