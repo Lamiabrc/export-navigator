@@ -14,9 +14,10 @@ const navLinks: Array<{ key: string; to: string }> = [
   { key: "header.menu.contact", to: "/contact" },
 ];
 
+// ✅ Encoding-safe flags (avoid broken emoji bytes)
 const flags: Record<LanguageCode, string> = {
-  fr: "ðŸ‡«ðŸ‡·",
-  en: "ðŸ‡¬ðŸ‡§",
+  fr: String.fromCodePoint(0x1f1eb, 0x1f1f7), // 🇫🇷
+  en: String.fromCodePoint(0x1f1ec, 0x1f1e7), // 🇬🇧
 };
 
 const planOptions = [
