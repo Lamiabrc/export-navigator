@@ -1,4 +1,5 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { useI18n } from "@/contexts/LanguageContext";
@@ -9,6 +10,8 @@ type Topic = "audit" | "ddp" | "tvadouane" | "sanctions" | "autre";
 export default function Contact() {
   const { t } = useI18n();
   usePageMeta("meta.contact.title", "meta.contact.description");
+
+  const [searchParams] = useSearchParams();
 
   const formCopy =
     (t("contactPage.form") as {
@@ -48,9 +51,28 @@ export default function Contact() {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [copied, setCopied] = useState<null | "phone" | "emailMain" | "emailDirect">(null);
 
+  // ✅ Support du CTA /contact?offer=diagnostic (depuis MarketingLayout)
+  useEffect(() => {
+    const offer = (searchParams.get("offer") || "").toLowerCase().trim();
+    if (!offer) return;
+
+    // mapping simple
+    if (offer === "diagnostic" || offer === "audit" || offer === "express") setTopic("audit");
+    else if (offer === "ddp") setTopic("ddp");
+    else if (offer === "tvadouane" || offer === "tva" || offer === "douane") setTopic("tvadouane");
+    else if (offer === "sanctions" || offer === "conformite") setTopic("sanctions");
+    else if (offer === "autre") setTopic("autre");
+  }, [searchParams]);
+
   const messageCount = message.trim().length;
+
   const canSubmit = useMemo(() => {
-    return name.trim().length > 1 && email.trim().length > 4 && message.trim().length > 10 && status !== "sending";
+    return (
+      name.trim().length > 1 &&
+      email.trim().length > 4 &&
+      message.trim().length > 10 &&
+      status !== "sending"
+    );
   }, [name, email, message, status]);
 
   const topicLabel = (value: Topic) => {
@@ -59,7 +81,7 @@ export default function Contact() {
         return "Audit express";
       case "ddp":
         return "DDP / Incoterms";
-      case "tvadoucouane":
+      case "tvadouane":
         return "TVA / Douane";
       case "sanctions":
         return "Sanctions / conformité";
@@ -68,12 +90,6 @@ export default function Contact() {
       default:
         return "Audit express";
     }
-  };
-
-  // petit correctif typo (si jamais)
-  const normalizedTopicLabel = (value: Topic) => {
-    if (value === ("tvadoucouane" as unknown as Topic)) return "TVA / Douane";
-    return topicLabel(value);
   };
 
   const copy = async (value: string, kind: "phone" | "emailMain" | "emailDirect") => {
@@ -87,16 +103,18 @@ export default function Contact() {
   };
 
   const buildMailto = () => {
-    const subject = `[ExportFranceFacile] Demande — ${normalizedTopicLabel(topic)} — ${name || "Nouveau contact"}`;
+    const subject = `[ExportFranceFacile] Demande — ${topicLabel(topic)} — ${name || "Nouveau contact"}`;
     const body =
       `Bonjour,\n\n` +
       `Je vous contacte via exportfrancefacile.com\n\n` +
       `Nom / société : ${name}\n` +
       `Email : ${email}\n` +
-      `Sujet : ${normalizedTopicLabel(topic)}\n\n` +
+      `Sujet : ${topicLabel(topic)}\n\n` +
       `Message :\n${message}\n\n` +
       `—\nRappel : ${phonePretty} | ${emailMain}`;
-    return `mailto:${encodeURIComponent(emailMain)}?cc=${encodeURIComponent(emailDirect)}&subject=${encodeURIComponent(
+
+    // ✅ Ne pas encoder l’adresse dans mailto:
+    return `mailto:${emailMain}?cc=${encodeURIComponent(emailDirect)}&subject=${encodeURIComponent(
       subject
     )}&body=${encodeURIComponent(body)}`;
   };
@@ -107,7 +125,6 @@ export default function Contact() {
 
     setStatus("sending");
 
-    // 1) Tentative d’envoi vers une API (si tu as déjà /api/contact côté Vercel)
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
@@ -127,11 +144,11 @@ export default function Contact() {
         return;
       }
 
-      // Si API répond mais pas OK => fallback mailto
+      // API répond mais pas OK => fallback mailto
       window.location.href = buildMailto();
       setStatus("sent");
     } catch {
-      // 2) Pas d’API / erreur réseau => fallback mailto
+      // Pas d’API / erreur réseau => fallback mailto
       window.location.href = buildMailto();
       setStatus("sent");
     }
@@ -145,8 +162,12 @@ export default function Contact() {
         <div className="mx-auto max-w-6xl px-6 py-14">
           <div className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr]">
             <div>
-              <p className="text-xs uppercase tracking-[0.5em] text-slate-400">{t("contactPage.headline")}</p>
-              <h1 className="mt-3 text-4xl font-semibold text-slate-900">{t("contactPage.headline")}</h1>
+              <p className="text-xs uppercase tracking-[0.5em] text-slate-400">
+                {t("contactPage.headline")}
+              </p>
+              <h1 className="mt-3 text-4xl font-semibold text-slate-900">
+                {t("contactPage.headline")}
+              </h1>
               <p className="mt-4 max-w-xl text-base text-slate-700">{t("contactPage.body")}</p>
 
               {/* TOPIC CHIPS */}
@@ -275,133 +296,3 @@ export default function Contact() {
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-lg">
                 <h2 className="text-xl font-semibold text-slate-900">{blockCopy.title}</h2>
                 <p className="mt-3 text-sm text-slate-600">{blockCopy.body}</p>
-
-                <div className="mt-6 grid gap-3">
-                  <a
-                    href={`tel:${phoneRaw}`}
-                    className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-slate-800"
-                  >
-                    Appeler {phonePretty}
-                  </a>
-
-                  <a
-                    href={`mailto:${emailMain}`}
-                    className="inline-flex items-center justify-center rounded-full border border-slate-900/20 bg-white px-5 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-slate-900 transition hover:bg-slate-100"
-                  >
-                    {blockCopy.cta}
-                  </a>
-
-                  <p className="text-xs text-slate-500">
-                    Réponse généralement sous 24h ouvrées. (Urgent : appelle directement.)
-                  </p>
-                </div>
-              </div>
-
-              {/* CONTACT DIRECT */}
-              <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">Contact direct</h3>
-
-                <div className="mt-5 space-y-4 text-sm text-slate-700">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.3em] text-slate-500">Téléphone</div>
-                      <a className="mt-1 inline-block font-semibold text-slate-900 underline" href={`tel:${phoneRaw}`}>
-                        {phonePretty}
-                      </a>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => copy(phoneRaw, "phone")}
-                      className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700 hover:bg-slate-100"
-                    >
-                      {copied === "phone" ? "Copié ✓" : "Copier"}
-                    </button>
-                  </div>
-
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.3em] text-slate-500">Email (site)</div>
-                      <a className="mt-1 inline-block font-semibold text-slate-900 underline" href={`mailto:${emailMain}`}>
-                        {emailMain}
-                      </a>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => copy(emailMain, "emailMain")}
-                      className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700 hover:bg-slate-100"
-                    >
-                      {copied === "emailMain" ? "Copié ✓" : "Copier"}
-                    </button>
-                  </div>
-
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.3em] text-slate-500">Email (direct)</div>
-                      <a
-                        className="mt-1 inline-block font-semibold text-slate-900 underline"
-                        href={`mailto:${emailDirect}`}
-                      >
-                        {emailDirect}
-                      </a>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => copy(emailDirect, "emailDirect")}
-                      className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700 hover:bg-slate-100"
-                    >
-                      {copied === "emailDirect" ? "Copié ✓" : "Copier"}
-                    </button>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
-                    <div className="font-semibold text-slate-800">Ce que tu peux obtenir rapidement</div>
-                    <ul className="mt-2 list-disc space-y-1 pl-4">
-                      <li>Validation TVA / douane / Incoterms</li>
-                      <li>Check DDP &amp; coûts cachés</li>
-                      <li>Points sanctions / restrictions</li>
-                      <li>Conseils opérationnels actionnables</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* FAQ */}
-              <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">FAQ</h3>
-                <div className="mt-4 space-y-3">
-                  <details className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                    <summary className="cursor-pointer text-sm font-semibold text-slate-900">
-                      J’ai un HS code approximatif, ça suffit ?
-                    </summary>
-                    <p className="mt-2 text-sm text-slate-700">
-                      Oui. Donne l’estimation + description produit + pays de destination : on affine ensuite.
-                    </p>
-                  </details>
-
-                  <details className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                    <summary className="cursor-pointer text-sm font-semibold text-slate-900">
-                      Est-ce que tu traites aussi les DROM ?
-                    </summary>
-                    <p className="mt-2 text-sm text-slate-700">
-                      Oui. Précise le territoire (ex: Martinique, Réunion) et ton Incoterm.
-                    </p>
-                  </details>
-
-                  <details className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                    <summary className="cursor-pointer text-sm font-semibold text-slate-900">
-                      Comment ça se passe après le premier contact ?
-                    </summary>
-                    <p className="mt-2 text-sm text-slate-700">
-                      On fait un point rapide (20 min), puis je te propose un audit ciblé avec priorités + plan d’actions.
-                    </p>
-                  </details>
-                </div>
-              </div>
-            </div>
-            {/* /SIDEBAR */}
-          </div>
-        </div>
-      </section>
-    </MarketingLayout>
-  );
-}
