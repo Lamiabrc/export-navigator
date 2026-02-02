@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
-type TierSlug = "FREE" | "PRO" | "VIP";
+type TierSlug = "FREE" | "TOOL" | "PRO" | "VIP";
 
 function safeLangGuess(): string {
   try {
@@ -49,43 +49,55 @@ export default function Pricing() {
   const defaults = useMemo(() => {
     if (!isFR) {
       return {
-        headline: "Replace a fixed hire with a tool + export follow-up",
-        subhead: "Invoice checks + full simulator. Watch is VIP-only.",
+        headline: "Replace a fixed export admin hire with a tool + expert follow-up",
+        subhead: "Simulator + invoice checks from €149/mo. Premium watch is VIP-only.",
         description:
-          "Instead of hiring an export admin, secure operations with a structured tool and regular expert follow-up.",
+          "Instead of adding headcount (salary + ramp-up + turnover risk), secure shipments with a structured tool and targeted support on critical points.",
         cta: "Talk to us",
         tiers: {
           FREE: {
             name: "FREE",
             price: "€0 (one-time)",
-            description: "Try once: reduced simulator + express invoice check.",
+            description: "Try once: reduced simulator (single use).",
             features: [
               "1 reduced simulation (single use)",
-              "1 express invoice check (level 1 consistency)",
-              "No history / no PDF report",
+              "Basic risk flags (level 1)",
+              "No history / no ops tracking",
+              "No watch (VIP only)",
+            ],
+          },
+          TOOL: {
+            name: "TOOL",
+            price: "€149 / month",
+            description: "100% online access: simulator + import/export invoice checks.",
+            features: [
+              "Full simulator (landed cost / cost-to-serve)",
+              "Invoice verification (import/export): incoterms, totals, fees, currency, consistency alerts",
+              "Operations tracking: docs, tasks, milestones, checklists",
+              "History & repeatable controls",
+              "Standard support (async)",
               "No watch (VIP only)",
             ],
           },
           PRO: {
             name: "PRO",
             price: "€250 / month",
-            description: "Tool + 1 hour/week follow-up (video or on-site).",
+            description: "TOOL + 1 hour/week follow-up (video or on-site).",
             features: [
-              "Full simulator (landed cost / cost-to-serve)",
-              "Unlimited invoice verification (consistency alerts)",
-              "Operations tracking (docs, tasks, milestones)",
-              "1h/week follow-up (video or on-site) — action plan & corrections",
-              "Standard support",
+              "Everything in TOOL",
+              "1h/week follow-up (video or on-site) — corrections & action plan",
+              "Operational templates (docs, checklists, shipment readiness)",
+              "Standard priority handling",
             ],
           },
           VIP: {
             name: "VIP",
             price: "€480 / month",
-            description: "Full tool + premium watch + 1 day/month export follow-up.",
+            description: "Full package: PRO + premium watch + 1 day/month export pilot.",
             features: [
               "Everything in PRO",
-              "Premium watch (destination-based) — VIP only",
-              "Advanced invoice checks (rules, thresholds)",
+              "Premium watch tool (destination-based) — VIP only",
+              "Advanced invoice checks (rules, thresholds, exceptions)",
               "1 day/month export follow-up (workshop + operational setup)",
               "Priority support",
             ],
@@ -95,42 +107,54 @@ export default function Pricing() {
     }
 
     return {
-      headline: "Remplacez un recrutement fixe par un outil + du suivi export",
-      subhead: "Vérification facture + simulateur complet. La veille est réservée au VIP.",
+      headline: "Évitez un recrutement ADV export : prenez l’outil + le suivi ciblé",
+      subhead: "Simulateur + vérification facture dès 149€/mois. La veille premium est réservée au VIP.",
       description:
-        "Plutôt que recruter une ADV export, sécurisez vos opérations avec un outil structurant et un suivi régulier sur les points critiques.",
+        "Plutôt que d’ajouter un coût fixe (salaire + charges + formation + risque de turnover), sécurisez vos opérations avec un outil structurant et un accompagnement sur les points qui coûtent cher.",
       cta: "Nous contacter",
       tiers: {
         FREE: {
           name: "FREE",
           price: "0 € (usage unique)",
-          description: "Tester une fois : simulateur réduit + vérification facture express.",
+          description: "Tester une fois : simulateur réduit (usage unique).",
           features: [
             "1 simulation réduite (usage unique)",
-            "1 vérification facture “express” (cohérence niveau 1)",
-            "Pas d’historique / pas de rapport PDF",
+            "Alertes basiques (niveau 1)",
+            "Pas d’historique / pas de suivi opération",
+            "Pas de veille (réservée VIP)",
+          ],
+        },
+        TOOL: {
+          name: "TOOL",
+          price: "149 € / mois",
+          description: "Accès 100% en ligne : simulateur complet + vérification facture import/export.",
+          features: [
+            "Simulateur complet (coût rendu / landed cost)",
+            "Vérification facture (import/export) : incoterm, totaux, frais, devise, alertes de cohérence",
+            "Suivi d’opérations export : docs, tâches, jalons, checklists",
+            "Historique & contrôles réutilisables",
+            "Support standard (asynchrone)",
             "Pas de veille (réservée VIP)",
           ],
         },
         PRO: {
           name: "PRO",
           price: "250 € / mois",
-          description: "Outil + 1h/semaine de suivi (visio ou visite).",
+          description: "TOOL + 1h/semaine de suivi (visio ou visite).",
           features: [
-            "Simulateur complet (coût rendu / landed cost)",
-            "Vérification facture illimitée (alertes de cohérence)",
-            "Suivi d’opérations export (docs, tâches, jalons)",
+            "Tout TOOL",
             "1h/semaine de suivi (visio ou visite) — corrections & plan d’actions",
-            "Support standard",
+            "Templates opérationnels (docs, checklists, readiness expédition)",
+            "Traitement standard priorisé",
           ],
         },
         VIP: {
           name: "VIP",
           price: "480 € / mois",
-          description: "Formule complète + veille premium + 1 journée/mois de suivi export.",
+          description: "Formule complète : PRO + veille premium + 1 journée/mois de pilotage export.",
           features: [
             "Tout PRO",
-            "Veille premium par destination (VIP uniquement)",
+            "Veille premium dans l’outil (par destination) — VIP uniquement",
             "Contrôles facture avancés (règles, seuils, exceptions)",
             "1 journée/mois de suivi export (atelier + mise en place opérationnelle)",
             "Support prioritaire",
@@ -143,7 +167,7 @@ export default function Pricing() {
   const resolved = useMemo(() => {
     if (!pricingMeta) return defaults;
 
-    const tierKeys: TierSlug[] = ["FREE", "PRO", "VIP"];
+    const tierKeys: TierSlug[] = ["FREE", "TOOL", "PRO", "VIP"];
     const tiers = {} as Record<TierSlug, { name: string; price: string; description: string; features: string[] }>;
 
     for (const k of tierKeys) {
@@ -167,7 +191,7 @@ export default function Pricing() {
     };
   }, [pricingMeta, defaults]);
 
-  const tierKeys: TierSlug[] = ["FREE", "PRO", "VIP"];
+  const tierKeys: TierSlug[] = ["FREE", "TOOL", "PRO", "VIP"];
 
   return (
     <MarketingLayout>
@@ -179,8 +203,26 @@ export default function Pricing() {
           <p className="mt-4 text-lg text-white/80">{resolved.subhead}</p>
           <p className="mt-2 text-sm text-white/70">{resolved.description}</p>
 
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            <Badge variant="outline" className="border-white/20 text-white/80">
+              {isFR ? "FREE : 1 usage" : "FREE: 1 use"}
+            </Badge>
+            <Badge variant="outline" className="border-white/20 text-white/80">
+              {isFR ? "TOOL : 149€/mois (en ligne)" : "TOOL: €149/mo (online)"}
+            </Badge>
+            <Badge variant="outline" className="border-white/20 text-white/80">
+              {isFR ? "PRO : 1h/semaine" : "PRO: 1h/week"}
+            </Badge>
+            <Badge variant="outline" className="border-white/20 text-white/80">
+              {isFR ? "VIP : veille + 1 journée/mois" : "VIP: watch + 1 day/month"}
+            </Badge>
+          </div>
+
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button asChild className="rounded-full bg-[#1E3A8A] px-6 py-5 text-xs font-semibold uppercase tracking-[0.35em] hover:bg-[#162864]">
+            <Button
+              asChild
+              className="rounded-full bg-[#1E3A8A] px-6 py-5 text-xs font-semibold uppercase tracking-[0.35em] hover:bg-[#162864]"
+            >
               <Link to="/contact">{resolved.cta}</Link>
             </Button>
             <Button
@@ -211,44 +253,46 @@ export default function Pricing() {
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle className="text-lg">
                     {isFR
-                      ? "Pourquoi ça remplace souvent un recrutement ADV export"
-                      : "Why this often replaces an export admin hire"}
+                      ? "Pourquoi ça remplace souvent une assistante ADV export"
+                      : "Why this often replaces an export admin assistant"}
                   </CardTitle>
-                  <Badge variant="outline">{isFR ? "ROI" : "ROI"}</Badge>
+                  <Badge variant="outline">ROI</Badge>
                 </div>
                 <CardDescription>
                   {isFR
-                    ? "Vous remplacez un coût fixe par un outil + un suivi régulier, focalisé sur les erreurs qui coûtent cher."
-                    : "Replace fixed cost with a tool + regular follow-up focused on costly mistakes."}
+                    ? "Objectif : éviter un coût fixe et réduire les erreurs (factures, incoterms, frais, documents) qui font perdre du temps et de l’argent."
+                    : "Goal: avoid fixed cost and reduce costly mistakes (invoices, incoterms, fees, documents)."}
                 </CardDescription>
               </CardHeader>
+
               <CardContent className="space-y-4 text-sm text-slate-700">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
-                      {isFR ? "Fixe" : "Fixed"}
+                      {isFR ? "Coût fixe" : "Fixed cost"}
                     </p>
                     <p className="mt-2 font-semibold text-slate-900">
-                      {isFR ? "Recruter (coût + temps + dépendance)" : "Hiring (cost + time + dependency)"}
+                      {isFR ? "Recruter (salaire + charges + formation)" : "Hiring (salary + overhead + ramp-up)"}
                     </p>
                     <ul className="mt-3 space-y-2">
-                      <li>• {isFR ? "Coût fixe mensuel + charges + gestion" : "Fixed monthly cost + overhead"}</li>
-                      <li>• {isFR ? "Montée en compétence et turnover possible" : "Ramp-up time + turnover risk"}</li>
-                      <li>• {isFR ? "Contrôles facture souvent non outillés" : "Invoice controls often not tooled"}</li>
+                      <li>• {isFR ? "Temps de montée en compétence" : "Ramp-up time"}</li>
+                      <li>• {isFR ? "Dépendance à une personne / turnover" : "Single-person dependency / turnover risk"}</li>
+                      <li>• {isFR ? "Contrôles facture souvent “à la main”" : "Invoice checks often manual"}</li>
                     </ul>
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
-                      {isFR ? "Flexible" : "Flexible"}
+                      {isFR ? "Alternative utile" : "Practical alternative"}
                     </p>
                     <p className="mt-2 font-semibold text-slate-900">
-                      {isFR ? "Outil + suivi (PRO/VIP)" : "Tool + follow-up (PRO/VIP)"}
+                      {isFR ? "Outil + suivi ciblé (TOOL/PRO/VIP)" : "Tool + targeted follow-up (TOOL/PRO/VIP)"}
                     </p>
                     <ul className="mt-3 space-y-2">
-                      <li>• {isFR ? "Simulateur + vérification facture = décisions plus sûres" : "Simulator + invoice checks = safer decisions"}</li>
-                      <li>• {isFR ? "Suivi hebdo / journée VIP = sécurisation des points critiques" : "Weekly follow-up / VIP day = critical-point security"}</li>
-                      <li>• {isFR ? "Veille destination réservée VIP = moins de surprises" : "VIP watch = fewer surprises"}</li>
+                      <li>• {isFR ? "Vérification facture import/export outillée" : "Tooled import/export invoice checks"}</li>
+                      <li>• {isFR ? "Simulateur = décisions plus sûres (coût rendu)" : "Simulator = safer decisions (landed cost)"}</li>
+                      <li>• {isFR ? "Suivi opération = docs/jalons/checklists" : "Ops tracking = docs/milestones/checklists"}</li>
+                      <li>• {isFR ? "Veille premium (VIP) = moins de surprises" : "Premium watch (VIP) = fewer surprises"}</li>
                     </ul>
                   </div>
                 </div>
@@ -265,34 +309,42 @@ export default function Pricing() {
 
             <Card className="rounded-3xl border-slate-200/70 shadow-sm">
               <CardHeader>
-                <CardTitle className="text-lg">{isFR ? "Ce que l’outil fait" : "What the tool does"}</CardTitle>
+                <CardTitle className="text-lg">{isFR ? "Ce que l’outil couvre" : "What the tool covers"}</CardTitle>
                 <CardDescription>
                   {isFR ? "Du concret : calculer, vérifier, suivre." : "Concrete: calculate, verify, track."}
                 </CardDescription>
               </CardHeader>
+
               <CardContent className="space-y-3 text-sm text-slate-700">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="font-semibold text-slate-900">{isFR ? "Simulateur complet" : "Full simulator"}</p>
                   <p className="mt-1 text-slate-600">
-                    {isFR ? "Coût rendu / landed cost, frais, surcharges, minimums." : "Landed cost, fees, surcharges, minimums."}
+                    {isFR
+                      ? "Coût rendu/landed cost : frais, surcharges, minimums, scénarios."
+                      : "Landed cost: fees, surcharges, minimums, scenarios."}
                   </p>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="font-semibold text-slate-900">{isFR ? "Vérification facture" : "Invoice verification"}</p>
                   <p className="mt-1 text-slate-600">
-                    {isFR ? "Incoterm, devise, totaux, frais, cohérences, alertes." : "Incoterms, currency, totals, fees, consistency alerts."}
+                    {isFR
+                      ? "Import/export : incoterm, devise, totaux, frais, cohérences, alertes."
+                      : "Import/export: incoterms, currency, totals, fees, consistency alerts."}
                   </p>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="font-semibold text-slate-900">{isFR ? "Suivi opération" : "Ops tracking"}</p>
                   <p className="mt-1 text-slate-600">
-                    {isFR ? "Docs, tâches, jalons, checklists." : "Docs, tasks, milestones, checklists."}
+                    {isFR ? "Documents, tâches, jalons, checklists d’expédition." : "Docs, tasks, milestones, shipment checklists."}
                   </p>
                 </div>
 
-                <Button asChild className="mt-2 w-full rounded-full bg-[#1E3A8A] text-xs font-semibold uppercase tracking-[0.35em] hover:bg-[#162864]">
+                <Button
+                  asChild
+                  className="mt-2 w-full rounded-full bg-[#1E3A8A] text-xs font-semibold uppercase tracking-[0.35em] hover:bg-[#162864]"
+                >
                   <Link to="/contact">{isFR ? "Demander une démo" : "Request a demo"}</Link>
                 </Button>
               </CardContent>
@@ -311,8 +363,8 @@ export default function Pricing() {
               </h2>
               <p className="mt-1 text-sm text-slate-600">
                 {isFR
-                  ? "PRO = suivi hebdo. VIP = formule complète + veille + journée de pilotage."
-                  : "PRO = weekly follow-up. VIP = full tool + watch + a monthly pilot day."}
+                  ? "TOOL = en ligne. PRO = suivi hebdo. VIP = formule complète + veille + journée de pilotage."
+                  : "TOOL = online. PRO = weekly follow-up. VIP = full package + watch + monthly pilot day."}
               </p>
             </div>
             <Badge variant="outline" className="rounded-full">
@@ -320,25 +372,41 @@ export default function Pricing() {
             </Badge>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {tierKeys.map((key) => {
               const tier = resolved.tiers[key];
               const isPrimary = key === "PRO";
+              const isTool = key === "TOOL";
+              const isVip = key === "VIP";
 
               return (
                 <article
                   key={key}
+                  id={key.toLowerCase()}
                   className={[
-                    "flex h-full flex-col justify-between gap-6 rounded-3xl border p-6 shadow-xl",
+                    "flex h-full flex-col justify-between gap-6 rounded-3xl border p-6 shadow-xl scroll-mt-24",
                     isPrimary ? "border-[#1E3A8A]/40 bg-white" : "border-slate-200/70 bg-slate-50",
                   ].join(" ")}
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs uppercase tracking-[0.5em] text-slate-500">{tier.name}</p>
+
+                      {isTool && (
+                        <Badge className="rounded-full bg-slate-900 text-white">
+                          {isFR ? "Outil" : "Tool"}
+                        </Badge>
+                      )}
+
                       {isPrimary && (
                         <Badge className="rounded-full bg-[#1E3A8A] text-white">
                           {isFR ? "Recommandé" : "Recommended"}
+                        </Badge>
+                      )}
+
+                      {isVip && (
+                        <Badge className="rounded-full bg-amber-500 text-slate-900">
+                          VIP
                         </Badge>
                       )}
                     </div>
@@ -350,11 +418,11 @@ export default function Pricing() {
                       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
                         {isFR ? (
                           <>
-                            <span className="font-semibold text-slate-900">Veille :</span> accessible uniquement en VIP.
+                            <span className="font-semibold text-slate-900">Veille premium :</span> accessible uniquement en VIP (outil + alertes).
                           </>
                         ) : (
                           <>
-                            <span className="font-semibold text-slate-900">Watch:</span> VIP only.
+                            <span className="font-semibold text-slate-900">Premium watch:</span> VIP only (tool + alerts).
                           </>
                         )}
                       </div>
@@ -375,7 +443,9 @@ export default function Pricing() {
                       to="/contact"
                       className={[
                         "inline-flex w-full items-center justify-center rounded-full px-4 py-3 text-xs font-semibold uppercase tracking-[0.4em] transition",
-                        isPrimary ? "bg-[#1E3A8A] text-white hover:bg-[#162864]" : "bg-slate-900 text-white hover:bg-slate-800",
+                        isPrimary
+                          ? "bg-[#1E3A8A] text-white hover:bg-[#162864]"
+                          : "bg-slate-900 text-white hover:bg-slate-800",
                       ].join(" ")}
                     >
                       {resolved.cta}
@@ -400,8 +470,8 @@ export default function Pricing() {
                 </p>
                 <p className="mt-2 text-base font-semibold text-slate-900">
                   {isFR
-                    ? "La veille est réservée au VIP. PRO se concentre sur le calcul + la vérification facture + le suivi hebdo."
-                    : "Watch is VIP-only. PRO focuses on calculation + invoice verification + weekly follow-up."}
+                    ? "TOOL = accès en ligne. PRO = suivi hebdo. VIP = veille premium + journée de pilotage."
+                    : "TOOL = online access. PRO = weekly follow-up. VIP = premium watch + monthly pilot day."}
                 </p>
                 <p className="mt-1 text-sm text-slate-600">
                   {isFR
