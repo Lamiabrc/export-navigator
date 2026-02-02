@@ -112,9 +112,9 @@ const COPY: Record<"fr" | "en", CopyContent> = {
     heroPrimary: "Planifier une validation express",
     heroSecondary: "Découvrir les outils",
     heroTrust: [
-      "Mise à jour sanctions quotidienne",
-      "Règles export vérifiées par nos experts",
-      "Estimations instantanées et expliquées",
+      "PDF gratuit de contrôle (sur demande)",
+      "Contrôles facture & coûts instantanés",
+      "Veille personnalisée réservée VIP",
     ],
     servicesLabel: "Services",
     servicesTitle: "Audit, conformité, veille personnalisée",
@@ -133,14 +133,14 @@ const COPY: Record<"fr" | "en", CopyContent> = {
         detail: "Équipe dédiée pour vos zones critiques.",
       },
       {
-        title: "Veille & alertes",
+        title: "Veille & alertes (VIP)",
         description: "Signaux réglementaires et douaniers sur vos pays & HS clés.",
-        detail: "Alertes quotidiennes + restitution synthétique.",
+        detail: "Accès outil réservé VIP.",
       },
     ],
     toolsLabel: "Tools",
     toolsTitle: "Nous mettons des outils à disposition",
-    toolsSubtitle: "Analyse, contrôle rapide et veille toujours accessibles.",
+    toolsSubtitle: "Analyse et contrôle rapide accessibles. Veille personnalisée réservée VIP.",
     tools: [
       {
         title: "Analyse export",
@@ -155,10 +155,10 @@ const COPY: Record<"fr" | "en", CopyContent> = {
         action: { type: "scroll", targetId: "quick-control" },
       },
       {
-        title: "Veille personnalisée",
-        description: "Recevez les alertes sanctions et réglementations ciblées.",
-        actionLabel: "Ouvrir",
-        action: { type: "link", href: "/veille" },
+        title: "Veille premium (VIP)",
+        description: "Alertes sanctions & réglementations ciblées (réservé VIP).",
+        actionLabel: "Voir l’offre VIP",
+        action: { type: "link", href: "/pricing#vip" },
       },
     ],
   },
@@ -170,9 +170,9 @@ const COPY: Record<"fr" | "en", CopyContent> = {
     heroPrimary: "Book an express validation",
     heroSecondary: "Discover the tools",
     heroTrust: [
-      "Daily sanctions updates",
-      "Verified export rules from our experts",
-      "Instant estimates with explanations",
+      "Free control PDF (on request)",
+      "Instant invoice & cost checks",
+      "Tailored watch is VIP-only",
     ],
     servicesLabel: "Services",
     servicesTitle: "Audit, compliance & tailored monitoring",
@@ -191,14 +191,14 @@ const COPY: Record<"fr" | "en", CopyContent> = {
         detail: "Dedicated team for sensitive routes.",
       },
       {
-        title: "Monitoring & alerts",
+        title: "Monitoring & alerts (VIP)",
         description: "Regulatory signals for your priority markets and HS codes.",
-        detail: "Daily alerts and concise summaries.",
+        detail: "VIP tool access only.",
       },
     ],
     toolsLabel: "Tools",
     toolsTitle: "We put tools at your disposal",
-    toolsSubtitle: "Analysis, rapid checks, and monitoring always within reach.",
+    toolsSubtitle: "Analysis and quick checks available. Tailored monitoring is VIP-only.",
     tools: [
       {
         title: "Export analysis",
@@ -213,10 +213,10 @@ const COPY: Record<"fr" | "en", CopyContent> = {
         action: { type: "scroll", targetId: "quick-control" },
       },
       {
-        title: "Tailored monitoring",
-        description: "Receive sanction and regulation alerts built for your needs.",
-        actionLabel: "Open",
-        action: { type: "link", href: "/veille" },
+        title: "Premium watch (VIP)",
+        description: "Sanctions & regulations alerts tailored to your markets (VIP only).",
+        actionLabel: "See VIP plan",
+        action: { type: "link", href: "/pricing#vip" },
       },
     ],
   },
@@ -652,10 +652,13 @@ export default function LeadMagnet() {
       link.click();
       URL.revokeObjectURL(url);
 
-      toast({ title: "Rapport généré", description: "Le PDF est téléchargé." });
+      toast({
+        title: "Rapport généré",
+        description: "Le PDF est téléchargé. Pour la veille premium, découvrez l’offre VIP.",
+      });
 
-      // ✅ route existante (si pas connecté -> ProtectedRoute gère)
-      navigate("/app/command-center");
+      // ✅ cohérent avec “veille réservée VIP”
+      navigate("/pricing?from=leadmagnet#vip");
     } catch (err: any) {
       toast({ title: "Erreur", description: err?.message || "Impossible de finaliser." });
     } finally {
@@ -843,15 +846,27 @@ export default function LeadMagnet() {
       <section id="quick-control" className="mt-10 rounded-3xl border border-border bg-card/90 p-6 md:p-10 shadow-xl">
         <div className="grid gap-12 lg:grid-cols-[1.15fr_0.95fr] lg:items-start">
           <div className="space-y-6 text-white">
-            <p className="text-xs uppercase tracking-[0.4em] text-blue-200">Audit • Réglementation • Veille</p>
+            <p className="text-xs uppercase tracking-[0.4em] text-blue-200">Audit • Réglementation • Veille (VIP)</p>
 
             <h1 className="text-4xl font-semibold leading-tight md:text-6xl">
               Votre contrôle export en 30 secondes.
             </h1>
 
             <p className="text-lg text-slate-200">
-              Estimation droits/taxes, documents requis et risques sanctions. Téléchargez un PDF MPL et activez la veille.
+              Estimation droits/taxes, documents requis et risques sanctions. Téléchargez un PDF MPL.
+              <span className="block mt-2 text-sm text-slate-200/90">
+                Veille personnalisée dans l’outil : <span className="font-semibold">réservée VIP</span> (voir l’offre).
+              </span>
             </p>
+
+            <div className="flex flex-wrap gap-3">
+              <Button variant="secondary" onClick={() => navigate("/contact?offer=express")}>
+                Demander une validation express
+              </Button>
+              <Button variant="outline" className="border-white text-white hover:bg-white/10" onClick={() => navigate("/pricing#vip")}>
+                Voir l’offre VIP
+              </Button>
+            </div>
 
             <div className="text-xs text-white/70">
               Besoin d’un accompagnement ?{" "}
@@ -1028,7 +1043,10 @@ export default function LeadMagnet() {
               </Button>
 
               <p className="text-xs text-slate-200">
-                Résultat immédiat, sans email. L'email sert uniquement à recevoir le PDF et activer la veille.
+                Résultat immédiat, sans email. L'email sert uniquement à recevoir le PDF (et, si vous le souhaitez, la newsletter).
+                <span className="block mt-1">
+                  La veille personnalisée dans l’outil est réservée au <span className="font-semibold">VIP</span>.
+                </span>
               </p>
             </CardContent>
           </Card>
@@ -1149,6 +1167,13 @@ export default function LeadMagnet() {
                       >
                         Audit complet
                       </Button>
+                      <Button
+                        variant="outline"
+                        className="border-white text-white hover:bg-white/10"
+                        onClick={() => navigate(`/pricing#vip`)}
+                      >
+                        Veille premium (VIP)
+                      </Button>
                     </div>
 
                     <div className="mt-2 text-xs text-white/70">
@@ -1167,7 +1192,12 @@ export default function LeadMagnet() {
 
         <Card className="border border-white/15 bg-white/10 text-white backdrop-blur-xl">
           <CardContent className="space-y-4 p-7 md:p-8">
-            <div className="text-sm font-semibold">Recevoir le rapport PDF + veille</div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-semibold">Recevoir le rapport PDF (gratuit)</div>
+              <span className="rounded-full border border-white/20 bg-white/10 px-2 py-1 text-[11px] text-white/90">
+                Veille outil = VIP
+              </span>
+            </div>
 
             <Input
               value={email}
@@ -1179,7 +1209,7 @@ export default function LeadMagnet() {
             <label className="flex items-start gap-2 text-xs text-slate-200">
               <Checkbox checked={consent} onCheckedChange={(v) => setConsent(Boolean(v))} />
               <span>
-                J'accepte de recevoir la veille MPL (RGPD).{" "}
+                J'accepte de recevoir le rapport PDF et des informations MPL (RGPD).{" "}
                 <Link className="underline hover:opacity-90" to="/confidentialite">
                   Politique de confidentialité
                 </Link>
@@ -1187,12 +1217,20 @@ export default function LeadMagnet() {
               </span>
             </label>
 
+            <div className="rounded-xl border border-white/15 bg-white/5 p-3 text-xs text-slate-200">
+              La veille personnalisée dans l’outil est réservée au <span className="font-semibold text-white">VIP</span>.{" "}
+              <button type="button" className="underline hover:opacity-90" onClick={() => navigate("/pricing#vip")}>
+                Voir l’offre VIP
+              </button>
+              .
+            </div>
+
             <Button
               onClick={handleLeadAndPdf}
               disabled={loadingEstimate || loadingPdf || !result}
               className="w-full"
             >
-              {loadingPdf ? "Génération..." : "Recevoir le rapport PDF"}
+              {loadingPdf ? "Génération..." : "Télécharger le PDF"}
             </Button>
 
             {!result ? (
@@ -1277,17 +1315,26 @@ export default function LeadMagnet() {
         </div>
 
         <div className="rounded-2xl border border-white/15 bg-white/10 p-6 text-white backdrop-blur-xl">
-          <div className="text-xs uppercase tracking-[0.24em] text-blue-200">Centre veille</div>
+          <div className="text-xs uppercase tracking-[0.24em] text-blue-200">Veille premium (VIP)</div>
           <p className="mt-4 text-sm text-slate-200">
-            Signaux sanctions, documents & taxes. Personnalise les pays et HS suivis pour recevoir la veille.
+            Alertes sanctions, réglementations et signaux par destination/HS. Accès via l’offre VIP (outil de veille personnalisé).
           </p>
-          <Button
-            className="mt-4 border-white text-white hover:bg-white/10"
-            variant="outline"
-            onClick={() => navigate("/veille")}
-          >
-            Voir la veille
-          </Button>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              className="border-white text-white hover:bg-white/10"
+              variant="outline"
+              onClick={() => navigate("/pricing#vip")}
+            >
+              Découvrir l’offre VIP
+            </Button>
+            <Button
+              className="border-white text-white hover:bg-white/10"
+              variant="outline"
+              onClick={() => navigate("/newsletter")}
+            >
+              Newsletter veille (gratuite)
+            </Button>
+          </div>
         </div>
       </section>
 
@@ -1304,9 +1351,9 @@ export default function LeadMagnet() {
           <Button
             variant="outline"
             className="border-white text-white hover:bg-white/10"
-            onClick={() => navigate("/newsletter")}
+            onClick={() => navigate("/pricing#vip")}
           >
-            Recevoir la veille
+            Veille premium (VIP)
           </Button>
         </div>
       </section>
