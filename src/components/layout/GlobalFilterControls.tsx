@@ -1,5 +1,5 @@
 import React from "react";
-import { CalendarClock, RefreshCw, RotateCw, X } from "lucide-react";
+import { CalendarClock, RefreshCw, RotateCw } from "lucide-react";
 import { useGlobalFilters, TimeRangePreset, TimeRangeValue } from "@/contexts/GlobalFiltersContext";
 
 import { Button } from "@/components/ui/button";
@@ -11,123 +11,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const ALL = "__all__";
-
-function useDebounced<T>(value: T, delayMs = 250) {
-  const [v, setV] = React.useState(value);
-  React.useEffect(() => {
-    const id = window.setTimeout(() => setV(value), delayMs);
-    return () => window.clearTimeout(id);
-  }, [value, delayMs]);
-  return v;
-}
-
-type Option = { value: string; label: string };
-
-function RemotePicker({
-  label,
-  placeholder,
-  value,
-  selectedLabel,
-  options,
-  loading,
-  onSearch,
-  onSelect,
-  onClear,
-  buttonClassName,
-}: {
-  label: string;
-  placeholder: string;
-  value: string | null | undefined;
-  selectedLabel: string | null | undefined;
-  options: Option[];
-  loading: boolean;
-  onSearch: (term: string) => void;
-  onSelect: (value: string) => void;
-  onClear: () => void;
-  buttonClassName?: string;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const [term, setTerm] = React.useState("");
-  const debounced = useDebounced(term, 250);
-
-  React.useEffect(() => {
-    if (!open) return;
-    onSearch(debounced);
-  }, [open, debounced, onSearch]);
-
-  React.useEffect(() => {
-    if (!open) return;
-    onSearch(""); // petite liste à l’ouverture
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  return (
-    <div className="min-w-[200px]">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" className={`w-full justify-between ${buttonClassName || ""}`}>
-            <span className="truncate">{selectedLabel || (value ? value : placeholder)}</span>
-            <span className="text-muted-foreground">{loading ? "…" : "▾"}</span>
-          </Button>
-        </PopoverTrigger>
-
-        <PopoverContent align="start" className="w-[360px] p-3">
-          <Input
-            value={term}
-            onChange={(e) => setTerm(e.target.value)}
-            placeholder="Rechercher… (2 caractères conseillé)"
-          />
-
-          <div className="mt-2 max-h-[260px] overflow-auto rounded-md border">
-            {loading ? (
-              <div className="p-3 text-sm text-muted-foreground">Recherche…</div>
-            ) : options.length === 0 ? (
-              <div className="p-3 text-sm text-muted-foreground">Aucun résultat.</div>
-            ) : (
-              options.map((opt) => {
-                const active = opt.value === value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => {
-                      onSelect(opt.value);
-                      setOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-sm border-b last:border-b-0 hover:bg-muted/40 ${
-                      active ? "bg-muted/50 font-medium" : ""
-                    }`}
-                    title={opt.label}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })
-            )}
-          </div>
-
-          <div className="mt-2 flex justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setTerm("");
-                onClear();
-              }}
-              className="gap-2"
-            >
-              <X className="h-4 w-4" />
-              Effacer
-            </Button>
-          </div>
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
-}
 
 /** ✅ Export attendu par MainLayout.tsx */
 export function TimeRangePicker(props: { className?: string } = {}) {
@@ -154,6 +37,9 @@ export function TimeRangePicker(props: { className?: string } = {}) {
 
   const applyCustom = () => {
     if (!customFrom || !customTo) return;
+    // petite validation simple
+    if (customFrom > customTo) return;
+
     const v: TimeRangeValue = { preset: "custom", from: customFrom, to: customTo };
     setTimeRange(v);
     refreshNow();
@@ -172,6 +58,7 @@ export function TimeRangePicker(props: { className?: string } = {}) {
 
         <PopoverContent align="start" className="w-[360px] p-3">
           <Label className="text-xs text-muted-foreground">Période</Label>
+
           <Select
             value={timeRange.preset}
             onValueChange={(v) => {
@@ -212,6 +99,10 @@ export function TimeRangePicker(props: { className?: string } = {}) {
                 <RotateCw className="h-4 w-4" />
                 Appliquer
               </Button>
+
+              {customFrom && customTo && customFrom > customTo ? (
+                <div className="text-xs text-destructive mt-1">La date de début doit être avant la date de fin.</div>
+              ) : null}
             </div>
           ) : (
             <div className="mt-2 text-xs text-muted-foreground">
@@ -242,7 +133,10 @@ export function AutoRefreshControl(props: { className?: string } = {}) {
 
   return (
     <div className={`flex items-center gap-2 ${props.className || ""}`}>
-      <Switch checked={autoRefresh.enabled} onCheckedChange={(checked) => setAutoRefresh({ ...autoRefresh, enabled: checked })} />
+      <Switch
+        checked={autoRefresh.enabled}
+        onCheckedChange={(checked) => setAutoRefresh({ ...autoRefresh, enabled: checked })}
+      />
       <span className="text-sm hidden lg:inline">Auto</span>
 
       <Select
@@ -271,29 +165,26 @@ export function SavedViewsMenu(_props: { className?: string } = {}) {
   return null;
 }
 
-/** ✅ Export attendu : VariablesBar = filtres (territoire + client + produit) */
+/**
+ * ✅ VariablesBar (nouveau positionnement)
+ * - Pays/destination (Monde) = filtre principal
+ * - pas de Client/Produit (ça fait “CRM” et données sensibles)
+ */
 export function VariablesBar(props: { className?: string } = {}) {
-  const {
-    variables,
-    setVariable,
-    refreshNow,
-    lookups,
-    lookupsLoading,
-    searchingClients,
-    searchingProducts,
-    searchClients,
-    searchProducts,
-    labels,
-  } = useGlobalFilters();
+  const { variables, setVariable, refreshNow, lookups, lookupsLoading, labels } = useGlobalFilters();
 
-  const clientOptions: Option[] = (lookups.clients ?? []).map((c) => ({ value: c.id, label: c.label }));
-  const productOptions: Option[] = (lookups.products ?? []).map((p) => ({ value: p.id, label: p.label }));
+  const selectedCountryLabel =
+    labels.territory_label ||
+    (variables.territory_code ? variables.territory_code : null);
+
+  const isAll = !variables.territory_code;
 
   return (
     <div className={`flex flex-col xl:flex-row xl:items-end gap-3 ${props.className || ""}`}>
-      {/* Territoire */}
-      <div className="min-w-[220px]">
-        <Label className="text-xs text-muted-foreground">Territoire</Label>
+      {/* Pays / Destination */}
+      <div className="min-w-[240px]">
+        <Label className="text-xs text-muted-foreground">Pays / destination</Label>
+
         <Select
           value={variables.territory_code ?? ALL}
           onValueChange={(v) => {
@@ -303,8 +194,9 @@ export function VariablesBar(props: { className?: string } = {}) {
           disabled={lookupsLoading}
         >
           <SelectTrigger className="justify-between">
-            <SelectValue placeholder="Tous territoires" />
+            <SelectValue placeholder="Tous pays" />
           </SelectTrigger>
+
           <SelectContent>
             <SelectItem value={ALL}>Tous</SelectItem>
             {lookups.territories.map((t) => (
@@ -315,52 +207,20 @@ export function VariablesBar(props: { className?: string } = {}) {
           </SelectContent>
         </Select>
 
-        {labels.territory_label ? (
+        {selectedCountryLabel ? (
           <div className="mt-1">
             <Badge variant="secondary" className="text-xs">
-              {labels.territory_label}
+              {selectedCountryLabel}
             </Badge>
           </div>
         ) : null}
+
+        {isAll ? (
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            L’export dépend des relations, sanctions et traités : sélectionne un pays pour une lecture précise.
+          </div>
+        ) : null}
       </div>
-
-      {/* Client */}
-      <RemotePicker
-        label="Client"
-        placeholder="Tous clients"
-        value={variables.client_id ?? null}
-        selectedLabel={labels.client_label}
-        options={clientOptions}
-        loading={searchingClients}
-        onSearch={(t) => void searchClients(t)}
-        onSelect={(id) => {
-          setVariable("client_id", id);
-          refreshNow();
-        }}
-        onClear={() => {
-          setVariable("client_id", null);
-          refreshNow();
-        }}
-      />
-
-      {/* Produit */}
-      <RemotePicker
-        label="Produit"
-        placeholder="Tous produits"
-        value={variables.product_id ?? null}
-        selectedLabel={labels.product_label}
-        options={productOptions}
-        loading={searchingProducts}
-        onSearch={(t) => void searchProducts(t)}
-        onSelect={(id) => {
-          setVariable("product_id", id);
-          refreshNow();
-        }}
-        onClear={() => {
-          setVariable("product_id", null);
-          refreshNow();
-        }}
-      />
     </div>
   );
 }
@@ -368,6 +228,7 @@ export function VariablesBar(props: { className?: string } = {}) {
 /** Optionnel : barre complète */
 export function GlobalFilterControls() {
   const { resetFilters } = useGlobalFilters();
+
   return (
     <div className="w-full rounded-xl border bg-background p-3">
       <div className="flex flex-col xl:flex-row xl:items-end gap-3">
