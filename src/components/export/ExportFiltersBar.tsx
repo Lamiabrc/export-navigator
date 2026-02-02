@@ -23,84 +23,119 @@ function looksLikeUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function useDebounced<T>(value: T, delay = 250) {
+  const [debounced, setDebounced] = React.useState(value);
+  React.useEffect(() => {
+    const t = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
 export function ExportFiltersBar({ value, onChange, onRefresh, loading, showInvoiceSearch = true }: Props) {
   const { lookups, lookupsLoading } = useGlobalFilters();
+
+  // Recherche client scalable (serveur)
   const [clientSearch, setClientSearch] = React.useState("");
+  const debouncedClientSearch = useDebounced(clientSearch, 250);
 
   const handleChange = <K extends keyof ExportFilters>(key: K, v: ExportFilters[K]) => {
-    onChange({ ...value, [key]: v || undefined });
+    onChange({ ...value, [key]: (v as any) || undefined });
   };
 
   const reset = () => {
-    onChange({ invoiceNumber: undefined, territory: undefined, clientId: undefined, from: undefined, to: undefined });
+    onChange({
+      invoiceNumber: undefined,
+      territory: undefined, // on l’utilise comme "Pays" dans l’UI
+      clientId: undefined,
+      from: undefined,
+      to: undefined,
+      search: undefined,
+    });
+    setClientSearch("");
   };
 
-  // ✅ Source fiable pour afficher "raison sociale" = clients.libelle_client
+  // ✅ Clients: on ne charge plus toute la table, on recherche côté DB
   const clientsQuery = useQuery({
-    queryKey: ["lookup-clients-libelle"],
+    queryKey: ["lookup-clients-libelle", debouncedClientSearch],
     enabled: SUPABASE_ENV_OK,
+    staleTime: 60_000,
     queryFn: async (): Promise<ClientLookupRow[]> => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, libelle_client")
-        .order("libelle_client", { ascending: true });
+      const term = debouncedClientSearch.trim();
 
+      let q = supabase.from("clients").select("id, libelle_client").order("libelle_client", { ascending: true }).limit(80);
+
+      // Si on tape quelque chose => filtre DB
+      if (term) {
+        // recherche “contains” sur libelle_client
+        q = q.ilike("libelle_client", `%${term}%`);
+      }
+
+      const { data, error } = await q;
       if (error) throw error;
       return (data || []) as ClientLookupRow[];
     },
   });
 
   const clients = clientsQuery.data || [];
-  const filteredClients = React.useMemo(() => {
-    const term = clientSearch.trim().toLowerCase();
-    if (!term) return clients;
-
-    return clients.filter((c) => {
-      const label = (c.libelle_client || "").toLowerCase();
-      const id = (c.id || "").toLowerCase();
-      return label.includes(term) || id.includes(term);
-    });
-  }, [clients, clientSearch]);
 
   return (
     <div className="rounded-xl border border-border bg-muted/40 p-4">
       <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Du</Label>
-          <Input type="date" value={value.from || ""} onChange={(e) => handleChange("from", e.target.value || undefined)} />
+          <Input
+            type="date"
+            value={value.from || ""}
+            onChange={(e) => handleChange("from", (e.target.value || undefined) as any)}
+          />
         </div>
 
         <div className="space-y-1">
           <Label className="text-xs">Au</Label>
-          <Input type="date" value={value.to || ""} onChange={(e) => handleChange("to", e.target.value || undefined)} />
+          <Input
+            type="date"
+            value={value.to || ""}
+            onChange={(e) => handleChange("to", (e.target.value || undefined) as any)}
+          />
         </div>
 
+        {/* ✅ Nouveau wording : pays (monde), France est le centre mais le filtre porte sur le pays */}
         <div className="space-y-1">
-          <Label className="text-xs">Territoire / île</Label>
+          <Label className="text-xs">Pays (origine / destination)</Label>
           <Select
             value={value.territory || "all"}
-            onValueChange={(v) => handleChange("territory", v === "all" ? undefined : (v as string))}
+            onValueChange={(v) => handleChange("territory", (v === "all" ? undefined : (v as any)) as any)}
             disabled={lookupsLoading}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Tous" />
+              <SelectValue placeholder={lookupsLoading ? "Chargement..." : "Tous les pays"} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Tous</SelectItem>
+              <SelectItem value="all">Tous les pays</SelectItem>
+
+              {/* lookups.territories => idéalement tu y mets les codes ISO pays + label */}
               {lookups.territories.map((t) => (
                 <SelectItem key={t.code} value={t.code}>
-                  {t.code} {t.label ? `- ${t.label}` : ""}
+                  {t.label ? `${t.label} (${t.code})` : t.code}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+
+          {/* Petit rappel “pays utile” (sans bloquer ici, car c’est une barre de filtres) */}
+          {!value.territory ? (
+            <div className="text-[11px] text-muted-foreground">
+              Astuce : l’import/export dépend des accords, sanctions et règles locales — filtrer par pays rend l’analyse plus fiable.
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-1">
           <Label className="text-xs">Client</Label>
           <Select
             value={value.clientId || "all"}
-            onValueChange={(v) => handleChange("clientId", v === "all" ? undefined : (v as string))}
+            onValueChange={(v) => handleChange("clientId", (v === "all" ? undefined : (v as any)) as any)}
             disabled={clientsQuery.isLoading}
           >
             <SelectTrigger>
@@ -110,7 +145,7 @@ export function ExportFiltersBar({ value, onChange, onRefresh, loading, showInvo
             <SelectContent className="max-h-72">
               <SelectItem value="all">Tous</SelectItem>
 
-              {/* 🔎 recherche dans la liste */}
+              {/* 🔎 recherche dans la liste (mais filtrage DB via query) */}
               <div className="p-2 sticky top-0 bg-popover z-10 border-b">
                 <Input
                   value={clientSearch}
@@ -120,7 +155,7 @@ export function ExportFiltersBar({ value, onChange, onRefresh, loading, showInvo
                   onMouseDown={(e) => e.stopPropagation()}
                 />
                 <div className="mt-1 text-[11px] text-muted-foreground">
-                  {clients.length} clients • {filteredClients.length} affichés
+                  {clientsQuery.isLoading ? "Recherche..." : `${clients.length} résultat(s)`}
                 </div>
               </div>
 
@@ -128,13 +163,16 @@ export function ExportFiltersBar({ value, onChange, onRefresh, loading, showInvo
                 <SelectItem value="loading" disabled>
                   Chargement...
                 </SelectItem>
-              ) : filteredClients.length === 0 ? (
+              ) : clients.length === 0 ? (
                 <SelectItem value="none" disabled>
                   Aucun résultat
                 </SelectItem>
               ) : (
-                filteredClients.map((c) => {
-                  const label = c.libelle_client?.trim() || (looksLikeUuid(c.id) ? "Client (raison sociale manquante)" : c.id);
+                clients.map((c) => {
+                  const label =
+                    c.libelle_client?.trim() ||
+                    (looksLikeUuid(c.id) ? "Client (raison sociale manquante)" : c.id);
+
                   return (
                     <SelectItem key={c.id} value={c.id}>
                       {label}
@@ -150,18 +188,18 @@ export function ExportFiltersBar({ value, onChange, onRefresh, loading, showInvo
           <div className="space-y-1">
             <Label className="text-xs">Recherche facture</Label>
             <Input
-              placeholder="invoice_number..."
+              placeholder="invoice_number…"
               value={value.invoiceNumber || ""}
-              onChange={(e) => handleChange("invoiceNumber", e.target.value)}
+              onChange={(e) => handleChange("invoiceNumber", e.target.value as any)}
             />
           </div>
         ) : (
           <div className="space-y-1">
             <Label className="text-xs">Recherche</Label>
             <Input
-              placeholder="invoice_number, client..."
-              value={value.search || ""}
-              onChange={(e) => handleChange("search", e.target.value)}
+              placeholder="facture, client…"
+              value={(value.search as any) || ""}
+              onChange={(e) => handleChange("search", e.target.value as any)}
             />
           </div>
         )}
