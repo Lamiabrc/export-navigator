@@ -1,4 +1,3 @@
-import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { PublicLayout } from "@/components/layout/PublicLayout";
@@ -60,10 +59,22 @@ const whatToolDoesNot = [
 ];
 
 const steps = [
-  { title: "Saisie", body: "Vous renseignez les coûts et paramètres clés (destination, frais, quantités, incoterm)." },
-  { title: "Calcul", body: "L’outil calcule le coût total, le coût unitaire et met en évidence les postes sensibles." },
-  { title: "Comparaison", body: "Vous comparez plusieurs scénarios (transport / incoterm / coûts) pour arbitrer." },
-  { title: "Décision", body: "Sortie actionnable : risques, checklist documents, rappel incoterms & points de vigilance." },
+  {
+    title: "Saisie",
+    body: "Vous renseignez les coûts et paramètres clés (destination, frais, quantités, incoterm).",
+  },
+  {
+    title: "Calcul",
+    body: "L’outil calcule le coût total, le coût unitaire et met en évidence les postes sensibles.",
+  },
+  {
+    title: "Comparaison",
+    body: "Vous comparez plusieurs scénarios (transport / incoterm / coûts) pour arbitrer.",
+  },
+  {
+    title: "Décision",
+    body: "Sortie actionnable : risques, checklist documents, rappel incoterms & points de vigilance.",
+  },
 ];
 
 const rgpd = [
@@ -87,39 +98,43 @@ export default function Methodologie() {
   const phonePretty = "06 76 43 55 51";
   const emailMain = "contact@exportfrancefacile.com";
 
+  // Change si ton routeur utilise une autre route (ex: /veille)
+  const watchPath = "/watch";
+
   return (
     <PublicLayout>
-      <div className="space-y-10">
+      <div className="mx-auto max-w-6xl space-y-10">
         {/* HERO */}
         <section className="space-y-3 text-white">
           <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Méthodologie</p>
           <h1 className="text-4xl font-semibold">Comment MPL Export Conseil calcule vos estimations</h1>
           <p className="text-lg text-slate-200">
-            Transparence, limites et sources. Objectif : aider à décider vite — pas remplacer un expert.
+            Transparence, limites et sources. Objectif : vous aider à décider vite — sans remplacer un expert.
           </p>
 
-          {/* contact quick */}
-          <div className="flex flex-wrap gap-2 pt-2 text-xs uppercase tracking-[0.3em] text-white/80">
-            <a
-              href={`tel:${phoneRaw}`}
-              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 backdrop-blur transition hover:bg-white/15"
-            >
-              <Phone className="h-4 w-4" />
-              Appeler {phonePretty}
-            </a>
-            <a
-              href={`mailto:${emailMain}`}
-              className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 backdrop-blur transition hover:bg-white/15"
-            >
-              <Mail className="h-4 w-4" />
-              {emailMain}
-            </a>
-            <Link
-              to="/contact"
-              className="inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 transition hover:border-white/60"
-            >
-              Demander un audit
-            </Link>
+          {/* CTA quick */}
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Button asChild variant="secondary" className="rounded-full">
+              <a href={`tel:${phoneRaw}`} className="inline-flex items-center gap-2">
+                <Phone className="h-4 w-4" />
+                Appeler {phonePretty}
+              </a>
+            </Button>
+
+            <Button asChild variant="secondary" className="rounded-full">
+              <a href={`mailto:${emailMain}`} className="inline-flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                {emailMain}
+              </a>
+            </Button>
+
+            <Button asChild variant="outline" className="rounded-full border-white/30 text-white hover:bg-white/10">
+              <Link to="/contact">Demander un audit</Link>
+            </Button>
+
+            <Button asChild className="rounded-full">
+              <Link to="/analyse">Lancer l’outil</Link>
+            </Button>
           </div>
         </section>
 
@@ -166,7 +181,7 @@ export default function Methodologie() {
             <CardHeader>
               <CardTitle>Étapes de calcul</CardTitle>
               <CardDescription className="text-slate-200">
-                La logique est simple et reproductible.
+                Une logique simple, reproductible et actionnable.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-slate-200">
@@ -186,7 +201,7 @@ export default function Methodologie() {
             <CardHeader>
               <CardTitle>Checklist avant expédition</CardTitle>
               <CardDescription className="text-slate-200">
-                À utiliser comme garde-fou décisionnel.
+                Un garde-fou décisionnel avant engagement.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-slate-200">
@@ -196,12 +211,14 @@ export default function Methodologie() {
                   <span>{item}</span>
                 </div>
               ))}
+
               <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4 text-xs text-slate-200/90">
                 <div className="flex items-start gap-2">
                   <Info className="mt-0.5 h-4 w-4 text-white/70" />
                   <span>
-                    Astuce : si tu es en DDP, vérifie systématiquement qui supporte TVA + droits + frais de dédouanement
-                    et comment la preuve d’export est conservée.
+                    Astuce : si vous êtes en <strong>DDP</strong>, vérifiez systématiquement qui supporte{" "}
+                    <strong>TVA + droits + frais de dédouanement</strong>, et comment la{" "}
+                    <strong>preuve d’export</strong> est conservée.
                   </span>
                 </div>
               </div>
@@ -213,9 +230,14 @@ export default function Methodologie() {
         <section className="grid gap-6 lg:grid-cols-2">
           <Card className="border border-white/15 bg-white/10 text-white backdrop-blur">
             <CardHeader>
-              <CardTitle>Sources de veille</CardTitle>
+              <CardTitle className="flex items-center justify-between gap-3">
+                <span>Sources de veille</span>
+                <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10">
+                  <Link to={watchPath}>Voir la veille</Link>
+                </Button>
+              </CardTitle>
               <CardDescription className="text-slate-200">
-                Références utilisées comme repères (la veille détaillée est sur la page Veille).
+                Références utilisées comme repères (les contenus peuvent évoluer selon les pays/produits).
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-slate-200">
@@ -237,9 +259,10 @@ export default function Methodologie() {
                     <a
                       href={s.url}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs uppercase tracking-[0.25em] text-white/90 transition hover:bg-white/15"
-                      title="Ouvrir la source"
+                      title={`Ouvrir ${s.label}`}
+                      aria-label={`Ouvrir ${s.label} (nouvel onglet)`}
                     >
                       <ExternalLink className="h-4 w-4" />
                       Ouvrir
@@ -268,7 +291,8 @@ export default function Methodologie() {
                 <div className="flex items-start gap-2">
                   <Info className="mt-0.5 h-4 w-4 text-white/70" />
                   <span>
-                    Besoin d’un cadre contractuel (NDA / confidentialité / clauses) : on peut le mettre en place avant tout échange de données sensibles.
+                    Besoin d’un cadre contractuel (NDA / confidentialité / clauses) : nous pouvons le mettre en place
+                    avant tout échange de données sensibles.
                   </span>
                 </div>
               </div>
@@ -281,9 +305,9 @@ export default function Methodologie() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="text-xs uppercase tracking-[0.25em] text-white/70">Besoin d’une validation ?</div>
-              <div className="mt-1 text-2xl font-semibold">Demandez une validation express ou un audit complet</div>
+              <div className="mt-1 text-2xl font-semibold">Validation express ou audit complet</div>
               <div className="mt-2 text-sm text-white/80">
-                L’outil vous alerte. La consultante confirme (TVA, DDP, conformité, cas spécifiques).
+                L’outil vous alerte. Ensuite, une revue humaine confirme (TVA, DDP, conformité, cas spécifiques).
               </div>
             </div>
 
@@ -303,7 +327,7 @@ export default function Methodologie() {
               <Button
                 variant="outline"
                 className="border-white/70 text-white hover:bg-white/10"
-                onClick={() => navigate("/tool")}
+                onClick={() => navigate("/analyse")}
               >
                 Lancer l’outil
               </Button>
