@@ -11,29 +11,69 @@ import { Separator } from "@/components/ui/separator";
 import { useProducts, safeNumber } from "@/hooks/useProducts";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
+/**
+ * ✅ Pays destination (monde)
+ * OM n'est PAS lié au "hors UE" → OM dépend du territoire DROM.
+ */
 const DESTINATIONS = ["France", "Belgique", "Espagne", "Allemagne", "Suisse", "Etats-Unis", "Chine"] as const;
+type Destination = (typeof DESTINATIONS)[number];
 
 const INCOTERMS = ["EXW", "DAP", "DDP"] as const;
-
-type Destination = (typeof DESTINATIONS)[number];
 type Incoterm = (typeof INCOTERMS)[number];
 
-function formatCurrency(n: number) {
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(Number.isFinite(n) ? n : 0);
-}
+/**
+ * ✅ Territoires France (pour OM)
+ * - METRO : TVA possible
+ * - DROM : OM possible (selon HS4)
+ */
+const FR_TERRITORIES = ["METRO", "GP", "MQ", "GF", "RE", "YT"] as const;
+type FranceTerritory = (typeof FR_TERRITORIES)[number];
+
+const FR_TERRITORY_LABEL: Record<FranceTerritory, string> = {
+  METRO: "France (Métropole)",
+  GP: "Guadeloupe (DROM)",
+  MQ: "Martinique (DROM)",
+  GF: "Guyane (DROM)",
+  RE: "La Réunion (DROM)",
+  YT: "Mayotte (DROM)",
+};
 
 const EU_DESTINATIONS = new Set<Destination>(["France", "Belgique", "Espagne", "Allemagne"]);
 
-function getZoneLabel(dest: Destination) {
+type ZoneLabel = "UE" | "Hors UE" | "Outre-mer";
+
+/** Simple détection langue (cohérent avec Pricing) */
+function safeLangGuess(): string {
+  try {
+    const lsLang =
+      (typeof window !== "undefined" &&
+        (window.localStorage?.getItem("lang") || window.localStorage?.getItem("language"))) ||
+      "";
+    const docLang = typeof document !== "undefined" ? document.documentElement.lang : "";
+    const navLang = typeof navigator !== "undefined" ? navigator.language : "";
+    return (lsLang || docLang || navLang || "fr").toLowerCase();
+  } catch {
+    return "fr";
+  }
+}
+
+function formatCurrency(n: number, locale: string) {
+  return new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" }).format(Number.isFinite(n) ? n : 0);
+}
+
+function getZoneLabel(dest: Destination, frTerritory: FranceTerritory): ZoneLabel {
+  if (dest === "France" && frTerritory !== "METRO") return "Outre-mer";
   if (EU_DESTINATIONS.has(dest)) return "UE";
   return "Hors UE";
 }
 
-function estimateTransport(dest: Destination, weightKg: number) {
+function estimateTransport(zone: ZoneLabel, weightKg: number) {
   const w = Math.max(0.5, weightKg || 0);
-  const zone = getZoneLabel(dest);
-  const base = zone === "Hors UE" ? 55 : 18;
-  const perKg = zone === "Hors UE" ? 4.5 : 1.4;
+
+  // Estimation simple & cohérente
+  const base = zone === "Hors UE" ? 55 : zone === "Outre-mer" ? 35 : 18;
+  const perKg = zone === "Hors UE" ? 4.5 : zone === "Outre-mer" ? 3.0 : 1.4;
+
   return base + perKg * w;
 }
 
@@ -57,8 +97,10 @@ type OmRateRow = {
 
 function MiniBars({
   items,
+  locale,
 }: {
   items: Array<{ label: string; value: number; hint?: string }>;
+  locale: string;
 }) {
   const total = Math.max(
     1,
@@ -67,10 +109,10 @@ function MiniBars({
 
   return (
     <div className="space-y-2">
-      <div className="h-3 w-full rounded-full bg-muted overflow-hidden flex">
+      <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
         {items.map((it) => {
           const pct = Math.max(0, Math.min(100, (it.value / total) * 100));
-          // couleurs via classes (pas de lib externe)
+
           const cls =
             it.label.includes("HT")
               ? "bg-primary/80"
@@ -87,7 +129,7 @@ function MiniBars({
               key={it.label}
               className={`${cls} h-full`}
               style={{ width: `${pct}%` }}
-              title={`${it.label}: ${formatCurrency(it.value)}${it.hint ? ` — ${it.hint}` : ""}`}
+              title={`${it.label}: ${formatCurrency(it.value, locale)}${it.hint ? ` — ${it.hint}` : ""}`}
             />
           );
         })}
@@ -100,14 +142,12 @@ function MiniBars({
               <div className="text-xs font-semibold">{it.label}</div>
               {it.hint ? <div className="text-[11px] text-muted-foreground">{it.hint}</div> : null}
             </div>
-            <div className="text-sm font-bold">{formatCurrency(it.value)}</div>
+            <div className="text-sm font-bold">{formatCurrency(it.value, locale)}</div>
           </div>
         ))}
       </div>
 
-      <p className="text-[11px] text-muted-foreground">
-        Survole les barres pour afficher le détail.
-      </p>
+      <p className="text-[11px] text-muted-foreground">Survole les barres pour afficher le détail.</p>
     </div>
   );
 }
@@ -115,9 +155,12 @@ function MiniBars({
 export default function Simulator() {
   const { products, isLoading, error, envOk } = useProducts({ pageSize: 2000 });
 
+  const locale = useMemo(() => (safeLangGuess().startsWith("fr") ? "fr-FR" : "en-US"), []);
+
   const [sku, setSku] = useState("");
   const [qty, setQty] = useState(1);
   const [destination, setDestination] = useState<Destination>("France");
+  const [frTerritory, setFrTerritory] = useState<FranceTerritory>("METRO");
   const [incoterm, setIncoterm] = useState<Incoterm>("DDP");
 
   const [manualPrice, setManualPrice] = useState<number | "">("");
@@ -127,6 +170,11 @@ export default function Simulator() {
   const [omRow, setOmRow] = useState<OmRateRow | null>(null);
   const [omLoading, setOmLoading] = useState(false);
   const [omError, setOmError] = useState<string | null>(null);
+
+  // Si on quitte France → pas de territoire OM
+  useEffect(() => {
+    if (destination !== "France") setFrTerritory("METRO");
+  }, [destination]);
 
   const product = useMemo(() => products.find((p) => p.code === sku), [products, sku]);
 
@@ -143,8 +191,7 @@ export default function Simulator() {
 
   const ht = unitPrice * qty;
 
-  const zone = useMemo(() => getZoneLabel(destination), [destination]);
-  const territory = useMemo(() => destination, [destination]);
+  const zone = useMemo(() => getZoneLabel(destination, frTerritory), [destination, frTerritory]);
 
   const hsCode = useMemo(() => {
     const raw = String((product as any)?.hs_code || (product as any)?.hsCode || "").replace(/[^\d]/g, "");
@@ -153,25 +200,34 @@ export default function Simulator() {
 
   const hs4 = useMemo(() => (hsCode && hsCode.length >= 4 ? hsCode.slice(0, 4) : null), [hsCode]);
 
-  // TVA (simplifiée)
+  const isOMTerritory = useMemo(() => destination === "France" && frTerritory !== "METRO", [destination, frTerritory]);
+
+  // TVA (simple et cohérente)
+  // - France Métropole : TVA produit (ou 20%)
+  // - Autres cas : 0 (export / DOM)
   const tvaRate = useMemo(() => {
-    if (destination === "Metropole") return Number((product as any)?.tva ?? 20);
+    if (destination === "France" && frTerritory === "METRO") return Number((product as any)?.tva ?? 20);
     return 0;
-  }, [destination, product]);
+  }, [destination, frTerritory, product]);
 
   const tva = ht * (tvaRate / 100);
-  const transportEst = useMemo(() => estimateTransport(destination, weightKg), [destination, weightKg]);
+
+  const transportEst = useMemo(() => estimateTransport(zone, weightKg), [zone, weightKg]);
+
+  // frais fixes (dossier / gestion)
   const feesFixed = 15;
 
+  // OM rates
   const omRate = normalizeRateToFraction(safeNumber(omRow?.om_rate));
   const omrRate = normalizeRateToFraction(safeNumber(omRow?.omr_rate));
   const omTotalRate = omRate + omrRate;
 
   const omTheoretical = useMemo(() => {
-    if (zone !== "Hors UE") return 0;
+    // ✅ OM uniquement si destination = France + territoire DROM
+    if (!isOMTerritory) return 0;
     if (!hs4) return 0;
     return ht * omTotalRate;
-  }, [zone, hs4, ht, omTotalRate]);
+  }, [isOMTerritory, hs4, ht, omTotalRate]);
 
   // Incoterm impact (vision "facture / vendeur")
   const transportSeller = incoterm === "EXW" ? 0 : transportEst;
@@ -183,7 +239,7 @@ export default function Simulator() {
   const transportBuyer = incoterm === "EXW" ? transportEst : 0;
   const omBuyer = incoterm === "DDP" ? 0 : omTheoretical;
 
-  // Fetch OM rates
+  // Fetch OM rates (Supabase) — uniquement si OM applicable
   useEffect(() => {
     let alive = true;
 
@@ -194,8 +250,7 @@ export default function Simulator() {
       if (!SUPABASE_ENV_OK) return;
       if (!envOk) return;
 
-      if (zone !== "Hors UE") return;
-      if (!territory) return;
+      if (!isOMTerritory) return;
       if (!hs4) return;
 
       setOmLoading(true);
@@ -203,7 +258,7 @@ export default function Simulator() {
         const { data, error } = await supabase
           .from("om_rates")
           .select("om_rate, omr_rate, year, source")
-          .eq("territory_code", territory)
+          .eq("territory_code", frTerritory) // ✅ GP/MQ/GF/RE/YT
           .eq("hs4", hs4)
           .order("year", { ascending: false })
           .limit(1);
@@ -230,26 +285,46 @@ export default function Simulator() {
     return () => {
       alive = false;
     };
-  }, [envOk, zone, territory, hs4]);
+  }, [envOk, isOMTerritory, frTerritory, hs4]);
 
   const omStatus = useMemo(() => {
-    if (zone !== "Hors UE") return { ok: true, label: "Non applicable (hors Hors UE)" };
+    if (!isOMTerritory) return { ok: true, label: "Non applicable" };
     if (!hs4) return { ok: false, label: "HS manquant" };
     if (omLoading) return { ok: false, label: "Chargement..." };
     if (!omRow || (omRow.om_rate == null && omRow.omr_rate == null)) return { ok: false, label: "Taux OM non trouvé" };
     return { ok: true, label: "OK" };
-  }, [zone, hs4, omLoading, omRow]);
+  }, [isOMTerritory, hs4, omLoading, omRow]);
 
-  const bars = useMemo(
-    () => [
+  const bars = useMemo(() => {
+    const arr: Array<{ label: string; value: number; hint?: string }> = [
       { label: "Marchandise HT", value: ht, hint: product?.label ? product.label.slice(0, 40) : "" },
-      { label: `TVA (${tvaRate.toFixed(2)}%)`, value: tva, hint: destination === "Metropole" ? "TVA France" : "TVA 0% (export par défaut)" },
-      { label: "Transport (vendeur)", value: transportSeller, hint: incoterm === "EXW" ? "EXW : non inclus vendeur" : "Estimé selon poids/destination" },
+      {
+        label: `TVA (${tvaRate.toFixed(2)}%)`,
+        value: tva,
+        hint:
+          destination === "France" && frTerritory === "METRO"
+            ? "TVA France métropole"
+            : "TVA 0% (export / DOM par défaut)",
+      },
+      {
+        label: "Transport (vendeur)",
+        value: transportSeller,
+        hint: incoterm === "EXW" ? "EXW : non inclus vendeur" : "Estimé selon poids / zone",
+      },
       { label: "Frais fixes", value: feesFixed, hint: "Dossier / gestion" },
-      { label: "OM (vendeur)", value: omSeller, hint: incoterm === "DDP" ? "DDP : OM inclus vendeur" : "Non inclus vendeur" },
-    ],
-    [ht, product, tva, tvaRate, destination, transportSeller, incoterm, omSeller],
-  );
+    ];
+
+    // ✅ On n’affiche OM que si territoire DROM
+    if (isOMTerritory) {
+      arr.push({
+        label: "OM (vendeur)",
+        value: omSeller,
+        hint: incoterm === "DDP" ? "DDP : OM inclus vendeur" : "Non inclus vendeur",
+      });
+    }
+
+    return arr;
+  }, [ht, product, tva, tvaRate, destination, frTerritory, transportSeller, incoterm, feesFixed, isOMTerritory, omSeller]);
 
   return (
     <AppLayout contentClassName="md:p-6">
@@ -257,9 +332,7 @@ export default function Simulator() {
         <div>
           <p className="text-xs uppercase tracking-[0.35em] text-cyan-400">Simulateur export</p>
           <h1 className="text-2xl font-bold">Estimation rapide prix / charges</h1>
-          <p className="text-sm text-muted-foreground">
-            Produit + destination + incoterm : détail HT / TVA / OM / transport.
-          </p>
+          <p className="text-sm text-muted-foreground">Produit + destination + incoterm : détail HT / TVA / OM (DROM) / transport.</p>
         </div>
 
         {!SUPABASE_ENV_OK ? (
@@ -307,9 +380,7 @@ export default function Simulator() {
                   <div className="flex flex-wrap gap-2 pt-2">
                     <Badge variant="outline">Zone: {zone}</Badge>
                     <Badge variant="outline">HS: {hsCode || "non renseigné"}</Badge>
-                    {zone === "Hors UE" ? (
-                      <Badge variant={omStatus.ok ? "default" : "destructive"}>OM: {omStatus.label}</Badge>
-                    ) : null}
+                    {isOMTerritory ? <Badge variant={omStatus.ok ? "default" : "destructive"}>OM: {omStatus.label}</Badge> : null}
                   </div>
                 ) : null}
               </div>
@@ -317,12 +388,21 @@ export default function Simulator() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label>Quantité</Label>
-                  <Input type="number" min={1} value={qty} onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))} />
+                  <Input
+                    type="number"
+                    min={1}
+                    value={qty}
+                    onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))}
+                  />
                 </div>
                 <div>
                   <Label>Prix unitaire (€) (optionnel)</Label>
-                  <Input type="number" value={manualPrice} onChange={(e) => setManualPrice(e.target.value === "" ? "" : Number(e.target.value))} />
-                  <p className="text-[11px] text-muted-foreground">Auto : prix unitaire demo ou renseigne.</p>
+                  <Input
+                    type="number"
+                    value={manualPrice}
+                    onChange={(e) => setManualPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                  />
+                  <p className="text-[11px] text-muted-foreground">Auto : prix unitaire demo ou renseigné catalogue.</p>
                 </div>
               </div>
 
@@ -330,38 +410,78 @@ export default function Simulator() {
                 <div>
                   <Label>Destination</Label>
                   <Select value={destination} onValueChange={(v) => setDestination(v as Destination)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {DESTINATIONS.map((d) => (
-                        <SelectItem key={d} value={d}>{d}</SelectItem>
+                        <SelectItem key={d} value={d}>
+                          {d}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div>
                   <Label>Incoterm</Label>
                   <Select value={incoterm} onValueChange={(v) => setIncoterm(v as Incoterm)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {INCOTERMS.map((i) => (
-                        <SelectItem key={i} value={i}>{i}</SelectItem>
+                        <SelectItem key={i} value={i}>
+                          {i}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">EXW : transport/OM acheteur • DAP : transport vendeur • DDP : transport + OM vendeur</p>
+                </div>
+              </div>
+
+              {/* ✅ Territoire France (uniquement si destination France) */}
+              {destination === "France" ? (
+                <div className="space-y-1">
+                  <Label>Territoire (France)</Label>
+                  <Select value={frTerritory} onValueChange={(v) => setFrTerritory(v as FranceTerritory)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FR_TERRITORIES.map((tCode) => (
+                        <SelectItem key={tCode} value={tCode}>
+                          {FR_TERRITORY_LABEL[tCode]}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <p className="text-[11px] text-muted-foreground">
-                    EXW : transport/OM acheteur • DAP : transport vendeur • DDP : transport + OM vendeur
+                    OM affiché uniquement pour les territoires DROM (GP/MQ/GF/RE/YT).
                   </p>
                 </div>
-              </div>
+              ) : null}
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label>Poids total (kg) (optionnel)</Label>
-                  <Input type="number" value={manualWeight} onChange={(e) => setManualWeight(e.target.value === "" ? "" : Number(e.target.value))} />
+                  <Input
+                    type="number"
+                    value={manualWeight}
+                    onChange={(e) => setManualWeight(e.target.value === "" ? "" : Number(e.target.value))}
+                  />
                   <p className="text-[11px] text-muted-foreground">Auto : poids brut × quantité.</p>
                 </div>
                 <div className="flex items-end justify-end">
-                  <Button type="button" variant="outline" onClick={() => { setManualPrice(""); setManualWeight(""); }}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setManualPrice("");
+                      setManualWeight("");
+                    }}
+                  >
                     Reset valeurs auto
                   </Button>
                 </div>
@@ -377,65 +497,69 @@ export default function Simulator() {
             </CardHeader>
 
             <CardContent className="space-y-3">
-              <MiniBars items={bars} />
+              <MiniBars items={bars} locale={locale} />
 
               <Separator />
 
-              <div className="rounded-lg border p-3 bg-slate-50 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold">OM théorique</div>
-                    <div className="text-xs text-muted-foreground">
-                      {zone !== "Hors UE"
-                        ? "Destination hors Hors UE : pas d'OM"
-                        : !hs4
-                        ? "HS manquant : OM non calculable"
-                        : omLoading
-                        ? "Chargement des taux OM..."
-                        : !omRow
-                        ? "Taux OM non trouvé"
-                        : `HS4 ${hs4} • OM ${omRow.om_rate == null ? "—" : formatRatePercent(Number(omRow.om_rate))} • OMR ${omRow.omr_rate == null ? "—" : formatRatePercent(Number(omRow.omr_rate))}${omRow.year ? ` • ${omRow.year}` : ""}`}
+              {/* ✅ Bloc OM visible seulement si DROM */}
+              {isOMTerritory ? (
+                <div className="space-y-2 rounded-lg border bg-slate-50 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-semibold">OM théorique</div>
+                      <div className="text-xs text-muted-foreground">
+                        {!hs4
+                          ? "HS manquant : OM non calculable"
+                          : omLoading
+                          ? "Chargement des taux OM..."
+                          : !omRow
+                          ? "Taux OM non trouvé"
+                          : `HS4 ${hs4} • OM ${omRow.om_rate == null ? "—" : formatRatePercent(Number(omRow.om_rate))} • OMR ${
+                              omRow.omr_rate == null ? "—" : formatRatePercent(Number(omRow.omr_rate))
+                            }${omRow.year ? ` • ${omRow.year}` : ""}`}
+                      </div>
+                      {omRow?.source ? <div className="text-[11px] text-muted-foreground">Source : {omRow.source}</div> : null}
                     </div>
-                    {omRow?.source ? (
-                      <div className="text-[11px] text-muted-foreground">Source : {omRow.source}</div>
-                    ) : null}
-                  </div>
-                  <div className="text-lg font-bold">{formatCurrency(omTheoretical)}</div>
-                </div>
 
-                {omError ? (
-                  <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">
-                    Erreur OM : {omError}
+                    <div className="text-lg font-bold">{formatCurrency(omTheoretical, locale)}</div>
                   </div>
-                ) : null}
 
-                <div className="flex flex-wrap gap-2 text-xs">
-                  <Badge variant="outline">OM à charge vendeur : {formatCurrency(omSeller)}</Badge>
-                  <Badge variant="outline">OM à charge acheteur : {formatCurrency(omBuyer)}</Badge>
+                  {omError ? (
+                    <div className="rounded border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+                      Erreur OM : {omError}
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <Badge variant="outline">OM à charge vendeur : {formatCurrency(omSeller, locale)}</Badge>
+                    <Badge variant="outline">OM à charge acheteur : {formatCurrency(omBuyer, locale)}</Badge>
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
               <div className="grid gap-2 sm:grid-cols-2">
-                <div className="rounded-lg border p-3 bg-white">
+                <div className="rounded-lg border bg-white p-3">
                   <div className="text-sm font-semibold">Total vendeur estimé</div>
-                  <div className="text-xs text-muted-foreground">Inclut : HT + TVA + (transport si DAP/DDP) + (OM si DDP) + frais fixes</div>
-                  <div className="pt-2 text-lg font-bold">{formatCurrency(totalSeller)}</div>
+                  <div className="text-xs text-muted-foreground">
+                    Inclut : HT + TVA + (transport si DAP/DDP) + (OM si DDP, DROM) + frais fixes
+                  </div>
+                  <div className="pt-2 text-lg font-bold">{formatCurrency(totalSeller, locale)}</div>
                 </div>
 
-                <div className="rounded-lg border p-3 bg-white">
+                <div className="rounded-lg border bg-white p-3">
                   <div className="text-sm font-semibold">Surcoûts acheteur estimés</div>
-                  <div className="text-xs text-muted-foreground">Selon incoterm : transport EXW + OM si non DDP</div>
-                  <div className="pt-2 text-lg font-bold">{formatCurrency(transportBuyer + omBuyer)}</div>
+                  <div className="text-xs text-muted-foreground">Selon incoterm : transport EXW + OM si non DDP (DROM)</div>
+                  <div className="pt-2 text-lg font-bold">{formatCurrency(transportBuyer + omBuyer, locale)}</div>
                   <div className="pt-1 text-[11px] text-muted-foreground">
-                    Transport acheteur : {formatCurrency(transportBuyer)} • OM acheteur : {formatCurrency(omBuyer)}
+                    Transport acheteur : {formatCurrency(transportBuyer, locale)} • OM acheteur : {formatCurrency(omBuyer, locale)}
                   </div>
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 <Badge variant="outline">Poids : {weightKg.toFixed(2)} kg</Badge>
-                <Badge variant="outline">Tarif : {formatCurrency(unitPrice)} /u</Badge>
-                {zone === "Hors UE" && territory ? <Badge variant="outline">Territoire : {territory}</Badge> : null}
+                <Badge variant="outline">Tarif : {formatCurrency(unitPrice, locale)} /u</Badge>
+                {destination === "France" ? <Badge variant="outline">Territoire : {FR_TERRITORY_LABEL[frTerritory]}</Badge> : null}
               </div>
             </CardContent>
           </Card>
@@ -444,6 +568,3 @@ export default function Simulator() {
     </AppLayout>
   );
 }
-
-
-
