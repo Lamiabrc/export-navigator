@@ -27,20 +27,17 @@ const selectPrice = (points: PricePoint[]) => {
 };
 
 /**
- * Essaie de deduire un prix MPL depuis la fiche produit DB
- * (sans imposer un schema strict : on lit plusieurs cles possibles).
- *
- * On garde ca volontairement permissif car ton type `Product` cote pricing
- * n'est pas forcement le meme que ta table `products`.
+ * Prix "MPL" fallback : lecture permissive depuis un objet produit (DB ou autre)
+ * On évite de dépendre d'un schema strict.
  */
 const getFallbackMplPriceFromProduct = (product: Product): number | undefined => {
   const p: any = product as any;
 
-  // Priorites (ajuste si besoin) :
-  // 1) un champ "mplPrice" si tu l'ajoutes dans le futur
+  // Priorités :
+  // 1) mplPrice (si ajouté un jour)
   // 2) tarif_catalogue_2025 (table products)
-  // 3) tarif_ref_eur (si tu veux piloter via tarif reference)
-  // 4) catalogPrice / price (si ton type pricing le contient)
+  // 3) tarif_ref_eur (tarif de référence)
+  // 4) catalogPrice / price (selon ton type pricing)
   return (
     safeNumber(p?.mplPrice) ??
     safeNumber(p?.tarif_catalogue_2025) ??
@@ -50,13 +47,19 @@ const getFallbackMplPriceFromProduct = (product: Product): number | undefined =>
   );
 };
 
-export const computeBestCompetitorPrice = (points: PricePoint[]) => {
+/**
+ * ✅ Benchmarks marché
+ * On garde les types existants (Brand) mais :
+ * - brand !== "MPL" = "source marché" (benchmark) au lieu de "concurrent"
+ */
+export const computeBestBenchmarkPrice = (points: PricePoint[]) => {
   if (!points.length) return undefined;
   const best = [...points].sort((a, b) => a.price - b.price)[0];
   return { brand: best.brand as Brand, price: best.price };
 };
 
-export const computeAvgCompetitorPrice = (points: PricePoint[]) => {
+/** Moyenne des benchmarks marché */
+export const computeAvgBenchmarkPrice = (points: PricePoint[]) => {
   if (!points.length) return undefined;
   const sum = points.reduce((acc, p) => acc + p.price, 0);
   return sum / points.length;
@@ -68,18 +71,36 @@ export const computeGaps = (
   avg?: number
 ): { gapBestPct?: number; gapAvgPct?: number } => {
   if (mplPrice === undefined) return {};
-  const gapBestPct = best ? ((mplPrice - best.price) / best.price) * 100 : undefined;
-  const gapAvgPct = avg ? ((mplPrice - avg) / avg) * 100 : undefined;
+
+  const bestBase = best?.price;
+  const avgBase = avg;
+
+  // ⚠️ évite division par zéro
+  const gapBestPct =
+    bestBase && bestBase > 0 ? ((mplPrice - bestBase) / bestBase) * 100 : undefined;
+
+  const gapAvgPct =
+    avgBase && avgBase > 0 ? ((mplPrice - avgBase) / avgBase) * 100 : undefined;
+
   return { gapBestPct, gapAvgPct };
 };
 
-export const classifyPositioning = (gapAvgPct?: number, config?: PricingConfig): Positioning => {
+/**
+ * Positioning = lecture simple "par rapport au marché"
+ */
+export const classifyPositioning = (
+  gapAvgPct?: number,
+  config?: PricingConfig
+): Positioning => {
   if (gapAvgPct === undefined || config === undefined) return "no_data";
   if (gapAvgPct > config.premiumThreshold) return "premium";
   if (gapAvgPct < config.alignLow) return "underpriced";
   return "aligned";
 };
 
+/**
+ * Recos orientées "marché / stratégie" (pas concurrence)
+ */
 export const recommendAction = (
   positioning: Positioning,
   gapBestPct?: number,
@@ -88,13 +109,14 @@ export const recommendAction = (
   config?: PricingConfig
 ): { recommendation: string; hint: string } => {
   if (!config) {
-    return { recommendation: "Collecter donnees", hint: "Config pricing manquante" };
+    return { recommendation: "Collecter les données", hint: "Configuration pricing manquante" };
   }
 
   if (positioning === "no_data") {
     return {
-      recommendation: "Collecter donnees",
-      hint: "Pas assez de prix concurrents ou prix MPL manquant",
+      recommendation: "Renseigner le contexte",
+      hint:
+        "Données de marché insuffisantes (benchmarks) ou prix interne manquant. Ajoutez des sources/observations pour fiabiliser l'analyse.",
     };
   }
 
@@ -102,25 +124,31 @@ export const recommendAction = (
     const target = gapAvgPct !== undefined ? `${Math.abs(gapAvgPct).toFixed(0)}%` : "";
     return {
       recommendation: "Revaloriser",
-      hint: `Prix sous la moyenne concurrente ${target}. Revoir tarifs / bundles.`,
+      hint: `Prix sous la référence marché ${target}. Ajuster le tarif ou renforcer l'offre (bundle / service / garanties).`,
     };
   }
 
   if (positioning === "premium") {
     const deltaBest = gapBestPct !== undefined ? `${gapBestPct.toFixed(0)}%` : "";
-    const marginInfo = cost !== undefined ? ` (cout ${cost} EUR estime)` : "";
+    const marginInfo = cost !== undefined ? ` (coût estimé ${cost} €)` : "";
     return {
-      recommendation: "Aligner partiellement",
-      hint: `Au-dessus du marche ${deltaBest}. Verifier valeur percue${marginInfo} ou descendre vers best.`,
+      recommendation: "Arbitrer premium",
+      hint: `Au-dessus des références marché ${deltaBest}.${marginInfo} Vérifier la valeur perçue, ou rapprocher le tarif d'un benchmark bas.`,
     };
   }
 
   return {
     recommendation: "Maintenir",
-    hint: "Prix aligne. Monitorer volumes et signaux concurrence.",
+    hint: "Positionnement cohérent vs références marché. Surveiller l'évolution (sources, saisonnalité, conditions).",
   };
 };
 
+/**
+ * ⚙️ Fonction principale :
+ * - Regroupe par productId + market/channel
+ * - Injecte un point MPL synthétique si aucun prix MPL n'existe mais qu'on a un fallback catalogue
+ * - Produit des PositionRow (compat avec tes écrans actuels)
+ */
 export const groupByProductMarketChannel = (
   products: Product[],
   pricePoints: PricePoint[],
@@ -128,7 +156,7 @@ export const groupByProductMarketChannel = (
 ): PositionRow[] => {
   const rows: PositionRow[] = [];
 
-  // index points by product
+  // Index points by product
   const byProduct = pricePoints.reduce<Record<string, PricePoint[]>>((acc, pp) => {
     if (pp.confidence < config.minConfidence) return acc;
     const list = acc[pp.productId] || [];
@@ -149,11 +177,11 @@ export const groupByProductMarketChannel = (
       byMarketChannel.set(key, arr);
     });
 
-    // Fallback MPL si absent (prix "catalogue")
+    // Fallback MPL si absent (prix catalogue)
     const fallbackMplPrice = getFallbackMplPriceFromProduct(product);
 
     if (fallbackMplPrice !== undefined) {
-      // Pour chaque couple market/channel existant : si pas de MPL, on injecte un point synthetique
+      // Pour chaque couple market/channel existant : si pas de MPL, on injecte un point synthétique
       byMarketChannel.forEach((points, key) => {
         const hasMpl = points.some((p) => p.brand === "MPL");
         if (hasMpl) return;
@@ -173,7 +201,7 @@ export const groupByProductMarketChannel = (
         } as any);
       });
 
-      // Si aucun point du tout sur ce produit, on cree au moins 1 ligne "DEFAULT"
+      // Si aucun point du tout sur ce produit, on crée au moins 1 ligne "DEFAULT"
       if (byMarketChannel.size === 0) {
         const key = `DEFAULT__DEFAULT`;
         byMarketChannel.set(key, [
@@ -196,11 +224,11 @@ export const groupByProductMarketChannel = (
       const [market, channel] = key.split("__");
 
       const mplPoints = points.filter((p) => p.brand === "MPL");
-      const competitorPoints = points.filter((p) => p.brand !== "MPL");
+      const benchmarkPoints = points.filter((p) => p.brand !== "MPL"); // ✅ pas "competitor"
 
       const chosenMpl = selectPrice(mplPoints);
-      const best = computeBestCompetitorPrice(competitorPoints);
-      const avg = computeAvgCompetitorPrice(competitorPoints);
+      const best = computeBestBenchmarkPrice(benchmarkPoints);
+      const avg = computeAvgBenchmarkPrice(benchmarkPoints);
 
       const { gapBestPct, gapAvgPct } = computeGaps(chosenMpl?.price, best, avg);
       const positioning = classifyPositioning(gapAvgPct, config);
@@ -224,8 +252,11 @@ export const groupByProductMarketChannel = (
         market,
         channel,
         mplPrice: chosenMpl?.price,
+
+        // ✅ on garde les champs (pour compat UI), mais ce sont des "benchmarks marché"
         bestCompetitor: best,
         avgCompetitorPrice: avg,
+
         gapBestPct,
         gapAvgPct,
         positioning,
@@ -238,3 +269,10 @@ export const groupByProductMarketChannel = (
 
   return rows;
 };
+
+/**
+ * ✅ Compat : si des écrans importent encore les anciens noms
+ * (tu peux supprimer plus tard quand tout est refactor).
+ */
+export const computeBestCompetitorPrice = computeBestBenchmarkPrice;
+export const computeAvgCompetitorPrice = computeAvgBenchmarkPrice;
