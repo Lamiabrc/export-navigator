@@ -38,7 +38,6 @@ import Simulator from "@/pages/Simulator";
 
 import Products from "@/pages/Products";
 import Sales from "@/pages/Sales";
-import TaxesOM from "@/pages/TaxesOM";
 import InvoiceDetail from "@/pages/InvoiceDetail";
 
 import Admin from "@/pages/Admin";
@@ -85,7 +84,7 @@ export default function App() {
                       <Route path="/tool" element={<ToolPage />} />
                       <Route path="/services" element={<ServicesPage />} />
 
-                      {/* ✅ EN/legacy marketing (page Watch supprimée => redirect) */}
+                      {/* ✅ EN/legacy marketing (Watch supprimée => redirect) */}
                       <Route path="/watch" element={<Navigate to="/veille" replace />} />
 
                       {/* ✅ FR canonique */}
@@ -190,12 +189,12 @@ export default function App() {
                         }
                       />
 
-                      {/* ✅ Route canonique neutre (Monde) */}
+                      {/* ✅ Taxes OM supprimée => on garde l'URL mais redirection vers Command Center */}
                       <Route
                         path="/app/droits-taxes"
                         element={
                           <ProtectedRoute>
-                            <TaxesOM />
+                            <Navigate to="/app/command-center" replace />
                           </ProtectedRoute>
                         }
                       />
