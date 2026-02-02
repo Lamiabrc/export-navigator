@@ -15,16 +15,31 @@ import {
 
 export type ProductType = "regulated" | "standard";
 
+/**
+ * ✅ Sens de flux (positionnement France ↔ Monde)
+ * - export_fr : France -> Monde (droits/TVA import côté destination)
+ * - import_fr : Monde -> France (droits/TVA import côté France)
+ */
+export type TradeDirection = "export_fr" | "import_fr";
+
 // Custom rates interface for overriding defaults
 export interface CustomRates {
   vatRates?: VatRate[];
+
   /**
-   * ✅ IMPORTANT: On supporte maintenant des "OctroiMerRate" enrichis avec hs_code (depuis Supabase)
-   * sans casser le type importé.
+   * ✅ Référentiel "droits & taxes à l'import" (générique)
+   * - On garde le type OctroiMerRate pour compat (historique), mais on ne l'affiche plus comme "Octroi de mer"
+   * - On supporte hs_code si présent (depuis Supabase)
    *
-   * Exemple attendu (côté DB): { destination, hs_code, om_rate, omr_rate, notes }
+   * Champs attendus (compat / DB possible) :
+   * { destination, hs_code, om_rate, omr_rate, notes, category? }
+   *
+   * Interprétation :
+   * - om_rate  => taux droits/taxe de base
+   * - omr_rate => taux taxe additionnelle (si applicable)
    */
   octroiMerRates?: OctroiMerRate[] | Array<OctroiMerRate & { hs_code?: string }>;
+
   transportCosts?: TransportCost[];
   serviceCharges?: ServiceCharge[];
 }
@@ -44,7 +59,25 @@ export interface ClientContext {
 
 export interface CostCalculationParams {
   goodsValue: number; // Valeur marchandise HT
+
+  /**
+   * ✅ destination = pays "cible" du flux (ISO recommandé: FR, US, CN...)
+   * - export_fr : pays de destination client
+   * - import_fr : destination peut rester FR, mais on garde la signature existante
+   */
   destination: Destination;
+
+  /**
+   * ✅ origine (optionnel) :
+   * - utile pour import_fr (Monde -> France) afin d'évaluer la zone depuis l'origine
+   */
+  origin?: Destination;
+
+  /**
+   * ✅ sens du flux (par défaut export_fr pour compat)
+   */
+  direction?: TradeDirection;
+
   incoterm: Incoterm;
   productType: ProductType;
   transportMode: TransportMode;
@@ -52,7 +85,7 @@ export interface CostCalculationParams {
 
   /**
    * ✅ HS code / code douanier (ex: "90211010")
-   * - utilisé pour droits de douane (quand disponibles)
+   * - utilisé pour droits/taxes à l'import (quand disponibles)
    */
   customsCode?: string;
 
@@ -114,40 +147,42 @@ function normalizeHsCode(input?: string): string {
   return String(input).replace(/[^0-9]/g, "").trim();
 }
 
+/**
+ * ✅ Trouve le "duty rate" via référentiel (hs_code > prefix 6/4 > fallback category)
+ * Note: on utilise octroiMerRates pour compat, mais le sens est générique (droits/taxes import).
+ */
 function findDutyRate(params: {
-  destination: Destination;
+  dutyCountry: Destination;
   productType: ProductType;
   customsCode?: string;
-  omRates: Array<OctroiMerRate & { hs_code?: string }>;
+  dutyRates: Array<OctroiMerRate & { hs_code?: string }>;
 }): (OctroiMerRate & { hs_code?: string }) | undefined {
-  const { destination, productType, customsCode, omRates } = params;
+  const { dutyCountry, productType, customsCode, dutyRates } = params;
 
-  const ratesForDest = omRates.filter((r) => (r as any).destination === destination);
+  const ratesForCountry = dutyRates.filter((r) => (r as any).destination === dutyCountry);
 
   // 1) ✅ priorité HS code (si présent)
   const hs = normalizeHsCode(customsCode);
   if (hs) {
-    // Matching "strict" puis "prefix" (ex: HS 8 chiffres match un HS 4/6 chiffres en base)
-    const exact = ratesForDest.find((r) => normalizeHsCode((r as any).hs_code) === hs);
+    const exact = ratesForCountry.find((r) => normalizeHsCode((r as any).hs_code) === hs);
     if (exact) return exact;
 
     const prefix6 = hs.slice(0, 6);
     const prefix4 = hs.slice(0, 4);
 
-    const match6 = ratesForDest.find((r) => normalizeHsCode((r as any).hs_code) === prefix6);
+    const match6 = ratesForCountry.find((r) => normalizeHsCode((r as any).hs_code) === prefix6);
     if (match6) return match6;
 
-    const match4 = ratesForDest.find((r) => normalizeHsCode((r as any).hs_code) === prefix4);
+    const match4 = ratesForCountry.find((r) => normalizeHsCode((r as any).hs_code) === prefix4);
     if (match4) return match4;
   }
 
-  // 2) fallback catégorie (comportement historique)
-  const ratesForCategory = ratesForDest; // mêmes rates, mais on cherche "category"
+  // 2) fallback catégorie (compat historique)
   const byCategory =
     productType === "regulated"
-      ? ratesForCategory.find((r) => (r as any).category === "Reglemente") ||
-        ratesForCategory.find((r) => (r as any).category === "Standard")
-      : ratesForCategory.find((r) => (r as any).category === "Standard");
+      ? ratesForCountry.find((r) => (r as any).category === "Reglemente") ||
+        ratesForCountry.find((r) => (r as any).category === "Standard")
+      : ratesForCountry.find((r) => (r as any).category === "Standard");
 
   return byCategory as any;
 }
@@ -185,7 +220,9 @@ function netCostForPayer(lines: CostLine[], payer: "Fournisseur" | "Client"): nu
 export function calculateCosts(params: CostCalculationParams): CostBreakdown {
   const {
     goodsValue: rawGoodsValue,
-    destination,
+    destination: rawDestination,
+    origin: rawOrigin,
+    direction: rawDirection,
     incoterm,
     productType,
     transportMode,
@@ -200,14 +237,29 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
   const weight = Math.max(0, safeNumber(rawWeight));
   const margin = Math.max(0, safeNumber(rawMargin));
 
+  const direction: TradeDirection = rawDirection ?? "export_fr";
+  const destination: Destination = rawDestination;
+  const origin: Destination = rawOrigin ?? "FR";
+
+  /**
+   * ✅ Pays où s'appliquent droits & TVA import
+   * - export_fr => côté destination
+   * - import_fr => côté France (destination=FR normalement)
+   */
+  const importCountry: Destination = direction === "import_fr" ? "FR" : destination;
+
+  /**
+   * ✅ Zone calculée selon le pays "importCountry" (là où se fait l'import)
+   * - si importCountry dans l'UE => UE, sinon Hors UE
+   */
+  const zone = getZoneFromDestination(importCountry);
+
   const vatRates = (customRates?.vatRates || defaultVatRates) as VatRate[];
-  const omRates = (customRates?.octroiMerRates || defaultOmRates) as Array<OctroiMerRate & { hs_code?: string }>;
+  const dutyRates = (customRates?.octroiMerRates || defaultOmRates) as Array<OctroiMerRate & { hs_code?: string }>;
   const transportCostsData = (customRates?.transportCosts || defaultTransportCosts) as TransportCost[];
   const serviceChargesData = (customRates?.serviceCharges || defaultServiceCharges) as ServiceCharge[];
 
-  const zone = getZoneFromDestination(destination);
-
-  const vatRate = vatRates.find((v) => v.destination === destination);
+  const vatRate = vatRates.find((v) => v.destination === importCountry);
 
   const incotermRule = incotermPayerRules.find((r) => r.incoterm === incoterm);
 
@@ -222,7 +274,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
     ? Math.max(weight * transportCost.cost_per_kg, transportCost.min_cost)
     : estimateTransportCost(zone, transportMode, weight);
 
-  const transportPayer = incotermRule?.transport_principal || "Fournisseur";
+  const transportPayer = (incotermRule as any)?.transport_principal || "Fournisseur";
 
   const transportTvaRate = 20;
   const transportTva = transportAmount * (transportTvaRate / 100);
@@ -240,7 +292,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
 
   // 2) SURCHARGE CARBURANT
   const fuelSurcharge = environmentalTaxes.find(
-    (t) => t.transport_mode === transportMode && t.type.includes("carburant"),
+    (t) => t.transport_mode === transportMode && String(t.type || "").includes("carburant"),
   );
   if (fuelSurcharge?.rate_percentage) {
     const surchargeAmount = transportAmount * (fuelSurcharge.rate_percentage / 100);
@@ -258,13 +310,13 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
     });
   }
 
-  // 3) DEDOUANEMENT EXPORT
-  if (zone !== "UE") {
+  // 3) DEDOUANEMENT EXPORT (si export_fr et Hors UE côté destination)
+  if (direction === "export_fr" && zone !== "UE") {
     const dedouanementExport = serviceChargesData.find(
       (s) => s.type === "dedouanement_export" && s.zone === zone,
     );
     if (dedouanementExport?.fixed_cost) {
-      const payer = incotermRule?.dedouanement_export || "Fournisseur";
+      const payer = (incotermRule as any)?.dedouanement_export || "Fournisseur";
       const tva = dedouanementExport.fixed_cost * (dedouanementExport.tva_on_service / 100);
 
       lines.push({
@@ -283,24 +335,24 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
     }
   }
 
-  // 4) DEDOUANEMENT IMPORT
+  // 4) DEDOUANEMENT IMPORT (si Hors UE côté importCountry)
   if (zone !== "UE") {
     const dedouanementImport = serviceChargesData.find(
       (s) => s.type === "dedouanement_import" && s.zone === zone,
     );
     if (dedouanementImport?.fixed_cost) {
-      const payer = incotermRule?.dedouanement_import || "Client";
+      const payer = (incotermRule as any)?.dedouanement_import || "Client";
       const tva = dedouanementImport.fixed_cost * (dedouanementImport.tva_on_service / 100);
 
       lines.push({
-        label: "Dédouanement import",
+        label: `Dédouanement import (${importCountry})`,
         amount: dedouanementImport.fixed_cost,
         payer,
         tvaApplicable: dedouanementImport.tva_on_service > 0,
         tvaAmount: tva,
         isRecoverable: false,
         category: "prestation",
-        notes: "TVA destination (non récupérable en France) => coût réel",
+        notes: "TVA locale/non récupérable par défaut => coût réel (à affiner selon statut)",
       });
     }
   }
@@ -321,7 +373,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
       notes:
         manutention.tva_on_service === 20
           ? "TVA 20% récupérable (FR)"
-          : "TVA destination / non récupérable => coût réel",
+          : "TVA locale / non récupérable => coût réel",
     });
   }
 
@@ -329,7 +381,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
   const assurance = serviceChargesData.find((s) => s.type === "assurance" && s.zone === zone);
   if (assurance?.percentage) {
     const amount = goodsValue * (assurance.percentage / 100);
-    const payer = incotermRule?.assurance || "Fournisseur";
+    const payer = (incotermRule as any)?.assurance || "Fournisseur";
 
     lines.push({
       label: "Assurance transport",
@@ -339,74 +391,81 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
       tvaAmount: 0,
       isRecoverable: false,
       category: "prestation",
-      notes: "Exonéré de TVA",
+      notes: "Exonéré de TVA (générique)",
     });
   }
 
-  // 7) DROITS DE DOUANE (Hors UE) — placeholder (sera remplacé par HS catalog + règles)
+  // 7) DROITS & TAXES A L'IMPORT (Hors UE) — Générique + HS si dispo, sinon fallback
   if (zone === "Hors UE") {
-    const droitsRate = productType === "regulated" ? 0 : 3;
-    const amount = goodsValue * (droitsRate / 100);
-
-    if (amount > 0) {
-      lines.push({
-        label: "Droits de douane",
-        amount,
-        payer: incotermRule?.droits_douane || "Client",
-        tvaApplicable: false,
-        tvaAmount: 0,
-        isRecoverable: false,
-        category: "taxe",
-        notes: `${droitsRate}% - NON RECUPERABLE (placeholder)`,
-      });
-    }
-  }
-
-  // 8) DROITS IMPORT (si disponibles)
-  if (zone === "Hors UE") {
-    const omRate = findDutyRate({
-      destination,
+    const found = findDutyRate({
+      dutyCountry: importCountry,
       productType,
       customsCode,
-      omRates,
+      dutyRates,
     });
 
-    if (omRate) {
-      const omAmount = goodsValue * (safeNumber((omRate as any).om_rate) / 100);
-      const omrAmount = goodsValue * (safeNumber((omRate as any).omr_rate) / 100);
-      const payer = incotermRule?.octroi_mer || "Client";
+    const payer =
+      (incotermRule as any)?.droits_douane ||
+      (incotermRule as any)?.octroi_mer || // compat ancienne règle
+      "Client";
 
-      const hsInfo = normalizeHsCode((omRate as any).hs_code) ? `HS ${normalizeHsCode((omRate as any).hs_code)}` : "categorie";
+    if (found) {
+      const baseRate = safeNumber((found as any).om_rate);
+      const addRate = safeNumber((found as any).omr_rate);
 
-      if (omAmount > 0) {
+      const baseAmount = goodsValue * (baseRate / 100);
+      const addAmount = goodsValue * (addRate / 100);
+
+      const hsInfo = normalizeHsCode((found as any).hs_code)
+        ? `HS ${normalizeHsCode((found as any).hs_code)}`
+        : "catégorie";
+
+      if (baseAmount > 0) {
         lines.push({
-          label: "Droits import (base)",
-          amount: omAmount,
+          label: `Droits à l'import (${importCountry})`,
+          amount: baseAmount,
           payer,
           tvaApplicable: false,
           tvaAmount: 0,
           isRecoverable: false,
           category: "taxe",
-          notes: `${safeNumber((omRate as any).om_rate)}% - NON RECUPERABLE (${hsInfo}) ${(omRate as any).notes || ""}`.trim(),
+          notes: `${baseRate}% - non récupérable (${hsInfo}) ${(found as any).notes || ""}`.trim(),
         });
       }
 
-      if (omrAmount > 0) {
+      if (addAmount > 0) {
         lines.push({
-          label: "Droits import (complement)",
-          amount: omrAmount,
+          label: `Taxe additionnelle (${importCountry})`,
+          amount: addAmount,
           payer,
           tvaApplicable: false,
           tvaAmount: 0,
           isRecoverable: false,
           category: "taxe",
-          notes: `${safeNumber((omRate as any).omr_rate)}% - NON RECUPERABLE (${hsInfo})`.trim(),
+          notes: `${addRate}% - non récupérable (${hsInfo})`.trim(),
+        });
+      }
+    } else {
+      // fallback (placeholder)
+      const fallbackRate = productType === "regulated" ? 0 : 3;
+      const amount = goodsValue * (fallbackRate / 100);
+
+      if (amount > 0) {
+        lines.push({
+          label: `Droits à l'import (${importCountry})`,
+          amount,
+          payer,
+          tvaApplicable: false,
+          tvaAmount: 0,
+          isRecoverable: false,
+          category: "taxe",
+          notes: `${fallbackRate}% - placeholder (à remplacer par tarif HS réel)`,
         });
       }
     }
   }
 
-  // 9) TVA IMPORT (Hors UE) — modele simplifie
+  // 8) TVA IMPORT (Hors UE) — modèle simplifié, cohérent France ↔ Monde
   if (zone !== "UE" && vatRate) {
     const rate = productType === "regulated" ? vatRate.rate_regulated : vatRate.rate_standard;
 
@@ -420,13 +479,16 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
       const baseTva = goodsValue + taxesAmount + prestationsFournisseur;
       const tvaImportAmount = baseTva * (rate / 100);
 
-      // Autoliquidation: on garde la logique existante (à affiner via table export_destinations/settings)
-      const isAuto = Boolean(vatRate.autoliquidation) && zone !== "Hors UE";
-      const payer = incotermRule?.tva_import || "Client";
+      /**
+       * ✅ Bugfix: avant, c'était toujours false.
+       * Ici: autoliquidation = param dans vatRate, sans condition de zone absurde.
+       */
+      const isAuto = Boolean((vatRate as any).autoliquidation);
+      const payer = (incotermRule as any)?.tva_import || "Client";
       const recoverable = isAuto && payer === "Fournisseur";
 
       lines.push({
-        label: `TVA Import ${destination}`,
+        label: `TVA import (${importCountry})`,
         amount: tvaImportAmount,
         payer,
         tvaApplicable: false,
@@ -440,7 +502,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
     }
   }
 
-  // 10) TAXE CARBONE (ETS) — placeholder (peut devenir paramétrable)
+  // 9) TAXE CARBONE (ETS) — placeholder (peut devenir paramétrable)
   const carbonTax = environmentalTaxes.find(
     (t) => t.transport_mode === transportMode && t.type === "taxe_carbone_ets",
   );
@@ -455,7 +517,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
       tvaAmount: 0,
       isRecoverable: false,
       category: "taxe",
-      notes: "NON RECUPERABLE",
+      notes: "NON RECUPERABLE (placeholder)",
     });
   }
 
@@ -491,7 +553,7 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
     .filter((l) => l.payer === "Client")
     .reduce((s, l) => s + safeNumber(l.amount) + (l.tvaApplicable ? safeNumber(l.tvaAmount) : 0), 0);
 
-  // ✅ VRAI coût fournisseur (HT + TVA non récupérable + TVA import non récupérable)
+  // ✅ VRAI coût fournisseur
   const totalFournisseurNetCost = netCostForPayer(lines, "Fournisseur");
 
   // ✅ prix de revient = marchandise + vrai coût fournisseur
