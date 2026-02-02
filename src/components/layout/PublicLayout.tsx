@@ -5,12 +5,15 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
 
-const NAV_ITEMS = [
-  { label: "Analyse", to: "/analyse" },
+type NavItem = { label: string; to: string };
+
+const NAV_ITEMS: NavItem[] = [
+  { label: "Accueil", to: "/" },
+  { label: "Outil", to: "/tool" },
+  { label: "Offre", to: "/services" },
   { label: "Veille", to: "/veille" },
+  { label: "Guides", to: "/guides" },
   { label: "Méthodologie", to: "/methodologie" },
-  { label: "Guides", to: "/guides/incoterms-ddp" },
-  { label: "Export to France", to: "/export-to-france" },
   { label: "Contact", to: "/contact" },
 ];
 
@@ -54,9 +57,7 @@ function FooterRss() {
 
         const res = await fetch("/api/rss", {
           signal: controller.signal,
-          headers: {
-            Accept: "application/xml,text/xml,application/rss+xml,*/*",
-          },
+          headers: { Accept: "application/xml,text/xml,application/rss+xml,*/*" },
         });
 
         const text = await res.text();
@@ -96,10 +97,10 @@ function FooterRss() {
   }, []);
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <div className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
             Veille export (RSS)
           </div>
           <div className="mt-1 text-sm text-muted-foreground">
@@ -124,14 +125,14 @@ function FooterRss() {
         )}
 
         {status === "error" && (
-          <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm text-foreground">
+          <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm text-foreground">
             Le flux RSS n’est pas lisible pour le moment. Vérifie que{" "}
             <span className="font-semibold">/api/rss</span> renvoie bien un XML RSS (status 200 + content-type xml).
           </div>
         )}
 
         {status === "ok" && items.length === 0 && (
-          <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm text-foreground">
+          <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm text-foreground">
             Aucun item RSS à afficher (flux vide).
           </div>
         )}
@@ -162,12 +163,15 @@ function FooterRss() {
         )}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-5 flex flex-wrap gap-3">
         <Button asChild>
           <Link to="/veille">Voir la veille</Link>
         </Button>
-        <Button asChild variant="secondary">
-          <Link to="/contact?offer=express">Validation express</Link>
+        <Button
+          asChild
+          className="bg-[#DC2626] text-white hover:bg-[#B0231D]"
+        >
+          <Link to="/contact?offer=diagnostic">Demander un diagnostic</Link>
         </Button>
       </div>
     </div>
@@ -177,16 +181,30 @@ function FooterRss() {
 export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
 
+  const phoneRaw = "0676435551";
+  const phonePretty = "06 76 43 55 51";
+  const emailMain = "contact@exportfrancefacile.com";
+
   return (
     <div className="relative min-h-screen bg-background text-foreground">
       {/* Backdrop “light-friendly” */}
       <CinematicBackdrop variant="public" className="z-0 opacity-25" />
       <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-background/80 via-background/85 to-background" />
 
-      <header className="relative z-10 border-b border-border bg-background/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <BrandLogo size="lg" showText={false} imageClassName="h-14 md:h-16" className="shrink-0" />
+      <header className="relative z-10 border-b border-border bg-background/85 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
+          {/* Brand */}
+          <Link to="/" className="flex items-center gap-3">
+            <BrandLogo size="lg" showText={false} imageClassName="h-12 md:h-14" className="shrink-0" />
+            <div className="hidden sm:block leading-tight">
+              <div className="text-sm font-semibold text-foreground">Export Navigator</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+                par MPL Export Conseil
+              </div>
+            </div>
+          </Link>
 
+          {/* Desktop nav */}
           <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
             {NAV_ITEMS.map((item) => {
               const active = isActivePath(location.pathname, item.to);
@@ -194,10 +212,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                 <Link
                   key={item.to}
                   to={item.to}
-                  className={cn(
-                    "transition hover:text-foreground",
-                    active && "text-foreground font-semibold"
-                  )}
+                  className={cn("transition hover:text-foreground", active && "text-foreground font-semibold")}
                 >
                   {item.label}
                 </Link>
@@ -205,16 +220,43 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             })}
           </nav>
 
+          {/* Actions */}
           <div className="flex items-center gap-3">
-            <Button asChild variant="outline">
-              <Link to="/veille">Veille export</Link>
+            <Button
+              asChild
+              className="bg-[#DC2626] text-white hover:bg-[#B0231D]"
+            >
+              <Link to="/contact?offer=diagnostic">Demander un diagnostic</Link>
             </Button>
-            <Button asChild variant="secondary">
-              <Link to="/contact?offer=audit">Demander un audit</Link>
-            </Button>
+
             <Button asChild variant="ghost" className="hidden md:inline-flex">
               <Link to="/login">Connexion</Link>
             </Button>
+          </div>
+        </div>
+
+        {/* Mobile nav */}
+        <div className="md:hidden border-t border-border bg-background/70">
+          <div className="mx-auto max-w-6xl overflow-x-auto px-4 py-2">
+            <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+              {NAV_ITEMS.map((item) => {
+                const active = isActivePath(location.pathname, item.to);
+                return (
+                  <Link
+                    key={`${item.to}-m`}
+                    to={item.to}
+                    className={cn(
+                      "whitespace-nowrap rounded-full border px-3 py-2 transition",
+                      active
+                        ? "border-foreground bg-foreground text-background"
+                        : "border-border bg-background text-foreground/80 hover:border-foreground/40"
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -227,26 +269,35 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
       </main>
 
       <footer className="relative z-10 border-t border-border bg-background/80">
-        <div className="mx-auto grid max-w-7xl gap-6 px-6 py-10 md:px-10 lg:grid-cols-[1fr_0.9fr]">
+        <div className="mx-auto grid max-w-7xl gap-6 px-6 py-10 md:px-10 lg:grid-cols-[1fr_0.95fr]">
           <div className="space-y-3">
-            <div className="text-sm font-semibold text-foreground">MPL Export Conseil</div>
+            <div className="text-sm font-semibold text-foreground">Export Navigator</div>
             <div className="text-sm text-muted-foreground">
-              Audit, conformité, veille personnalisée — et outils gratuits pour décider vite.
+              Outil d’aide à la décision export — par MPL Export Conseil (audit, conformité, veille personnalisée).
             </div>
 
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
               <Link to="/methodologie" className="hover:text-foreground hover:underline">
                 Méthodologie
               </Link>
-              <Link to="/guides/incoterms-ddp" className="hover:text-foreground hover:underline">
+              <Link to="/guides" className="hover:text-foreground hover:underline">
                 Guides
               </Link>
-              <Link to="/export-to-france" className="hover:text-foreground hover:underline">
-                Export to France
+              <Link to="/veille" className="hover:text-foreground hover:underline">
+                Veille
               </Link>
               <Link to="/contact" className="hover:text-foreground hover:underline">
                 Contact
               </Link>
+            </div>
+
+            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+              <a href={`tel:${phoneRaw}`} className="hover:text-foreground hover:underline">
+                {phonePretty}
+              </a>
+              <a href={`mailto:${emailMain}`} className="hover:text-foreground hover:underline">
+                {emailMain}
+              </a>
             </div>
 
             <div className="text-xs text-muted-foreground">
