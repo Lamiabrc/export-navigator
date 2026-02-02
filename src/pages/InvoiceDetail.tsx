@@ -7,19 +7,25 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, CheckCircle, NotebookPen, AlertTriangle } from "lucide-react";
+import { ArrowLeft, CheckCircle, NotebookPen, AlertTriangle, Trash2 } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { fetchInvoiceByNumber } from "@/domain/export/queries";
+import type { InvoiceDetail } from "@/domain/export/types";
 import { supabase } from "@/integrations/supabase/client";
 import { isMissingTableError } from "@/domain/calc";
 import { toast } from "sonner";
 
-function money(n: number | null | undefined) {
+const num = (v: unknown) => {
+  const n = Number(v ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+function money(n: unknown) {
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
     currency: "EUR",
     maximumFractionDigits: 0,
-  }).format(Number(n || 0));
+  }).format(num(n));
 }
 
 type NoteRow = {
@@ -37,16 +43,17 @@ export default function InvoiceDetailPage() {
   const [notesAvailable, setNotesAvailable] = React.useState<boolean | null>(null);
   const [notesWarning, setNotesWarning] = React.useState<string>("");
 
-  const storageKey = React.useMemo(() => {
-    return `mpl:invoice:notes:${invoiceNumber || "unknown"}`;
-  }, [invoiceNumber]);
-
+  const storageKey = React.useMemo(() => `mpl:invoice:notes:${invoiceNumber || "unknown"}`, [invoiceNumber]);
   const [notes, setNotes] = React.useState<NoteRow[]>([]);
   const [notesLoading, setNotesLoading] = React.useState(false);
 
+  const isServerNotes = notesAvailable === true;
+  const isLocalNotes = notesAvailable !== true; // null ou false => local par défaut
+
   const loadLocalNotes = React.useCallback((): NoteRow[] => {
     try {
-      const raw = localStorage.getItem(storageKey);
+      if (typeof window === "undefined") return [];
+      const raw = window.localStorage.getItem(storageKey);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
@@ -58,49 +65,67 @@ export default function InvoiceDetailPage() {
     }
   }, [storageKey]);
 
-  const pushLocalNote = React.useCallback(
-    (body: string) => {
-      const next: NoteRow[] = [
-        { body, created_at: new Date().toISOString() },
-        ...loadLocalNotes(),
-      ].slice(0, 50);
+  const saveLocalNotes = React.useCallback(
+    (list: NoteRow[]) => {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(next));
+        if (typeof window === "undefined") return;
+        window.localStorage.setItem(storageKey, JSON.stringify(list.slice(0, 50)));
       } catch {
         // ignore
       }
-      setNotes(next);
     },
-    [loadLocalNotes, storageKey]
+    [storageKey]
   );
 
-  const detailQuery = useQuery({
+  const pushLocalNote = React.useCallback(
+    (body: string) => {
+      const next: NoteRow[] = [{ body, created_at: new Date().toISOString() }, ...loadLocalNotes()].slice(0, 50);
+      saveLocalNotes(next);
+      setNotes(next);
+    },
+    [loadLocalNotes, saveLocalNotes]
+  );
+
+  const clearLocalNotes = React.useCallback(() => {
+    try {
+      if (typeof window === "undefined") return;
+      window.localStorage.removeItem(storageKey);
+    } catch {
+      // ignore
+    }
+    setNotes([]);
+    toast.success("Notes locales effacées.");
+  }, [storageKey]);
+
+  const detailQuery = useQuery<InvoiceDetail | null, Error>({
     queryKey: ["invoice-detail", invoiceNumber],
     queryFn: () => fetchInvoiceByNumber(invoiceNumber || ""),
     enabled: Boolean(invoiceNumber),
   });
 
-  // Detect presence of table notes to avoid misleading CTA
+  // Reset champ note quand on change de facture
+  React.useEffect(() => {
+    setNote("");
+  }, [invoiceNumber]);
+
+  // Detect presence of table notes; charge local tout de suite
   React.useEffect(() => {
     let mounted = true;
 
-    // charge immédiatement les notes locales (utile en mode demo)
     setNotes(loadLocalNotes());
 
     supabase
       .from("notes")
       .select("id", { head: true, count: "exact" })
-      .limit(1)
       .then(({ error }) => {
         if (!mounted) return;
         if (error) {
-          if (isMissingTableError(error)) {
-            setNotesAvailable(false);
-            setNotesWarning("Notes non disponibles côté serveur (mode démo). Stockage local activé.");
-          } else {
-            setNotesAvailable(false);
-            setNotesWarning(error.message || "Notes indisponibles côté serveur. Stockage local activé.");
-          }
+          setNotesAvailable(false);
+          setNotesWarning(
+            isMissingTableError(error)
+              ? "Notes serveur indisponibles (mode démo). Stockage local activé."
+              : (error.message || "Notes serveur indisponibles. Stockage local activé.")
+          );
         } else {
           setNotesAvailable(true);
           setNotesWarning("");
@@ -109,7 +134,7 @@ export default function InvoiceDetailPage() {
       .catch((err) => {
         if (!mounted) return;
         setNotesAvailable(false);
-        setNotesWarning(err?.message || "Notes indisponibles côté serveur. Stockage local activé.");
+        setNotesWarning(err?.message || "Notes serveur indisponibles. Stockage local activé.");
       });
 
     return () => {
@@ -121,8 +146,7 @@ export default function InvoiceDetailPage() {
   React.useEffect(() => {
     if (!invoiceNumber) return;
 
-    if (notesAvailable !== true) {
-      // mode demo: on reste sur localStorage
+    if (!isServerNotes) {
       setNotes(loadLocalNotes());
       return;
     }
@@ -142,7 +166,7 @@ export default function InvoiceDetailPage() {
         if (error) {
           if (isMissingTableError(error)) {
             setNotesAvailable(false);
-            setNotesWarning("Notes non disponibles côté serveur (mode démo). Stockage local activé.");
+            setNotesWarning("Notes serveur indisponibles (mode démo). Stockage local activé.");
             setNotes(loadLocalNotes());
           } else {
             setNotesWarning(error.message || "Impossible de charger les notes.");
@@ -159,23 +183,39 @@ export default function InvoiceDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [invoiceNumber, notesAvailable, loadLocalNotes]);
+  }, [invoiceNumber, isServerNotes, loadLocalNotes]);
 
   const invoice = detailQuery.data;
 
   const costComponents = invoice?.estimated_export_costs;
   const baseMargin = invoice
-    ? invoice.products_ht_eur - invoice.transit_fee_eur - (costComponents?.total || 0)
+    ? num(invoice.products_ht_eur) - num(invoice.transit_fee_eur) - num(costComponents?.total)
     : 0;
-  const marginAfterTransport = invoice ? baseMargin - (invoice.transport_cost_eur || 0) : 0;
+  const marginAfterTransport = invoice ? baseMargin - num(invoice.transport_cost_eur) : 0;
+
+  const refreshServerNotes = React.useCallback(async () => {
+    if (!invoiceNumber || !isServerNotes) return;
+    setNotesLoading(true);
+    try {
+      const { data } = await supabase
+        .from("notes")
+        .select("id, body, created_at")
+        .eq("target", "invoice")
+        .eq("target_id", invoiceNumber)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      setNotes((data as NoteRow[]) || []);
+    } finally {
+      setNotesLoading(false);
+    }
+  }, [invoiceNumber, isServerNotes]);
 
   const handleValidate = async () => {
     if (!invoiceNumber) return;
 
     setSaving(true);
     try {
-      // Mode demo => localStorage
-      if (notesAvailable === false) {
+      if (!isServerNotes) {
         pushLocalNote("✅ Validation facture");
         toast.success("Facture marquée comme validée (mémo local).");
         return;
@@ -191,30 +231,20 @@ export default function InvoiceDetailPage() {
       if (error) {
         if (isMissingTableError(error)) {
           setNotesAvailable(false);
-          setNotesWarning("Notes non disponibles côté serveur (mode démo). Stockage local activé.");
+          setNotesWarning("Notes serveur indisponibles (mode démo). Stockage local activé.");
           pushLocalNote("✅ Validation facture");
           toast.success("Facture marquée comme validée (mémo local).");
         } else {
           throw error;
         }
       } else {
-        toast.success("Facture marquée comme validée (note ajoutée).");
-        // refresh notes
-        setNotesLoading(true);
-        const { data } = await supabase
-          .from("notes")
-          .select("id, body, created_at")
-          .eq("target", "invoice")
-          .eq("target_id", invoiceNumber)
-          .order("created_at", { ascending: false })
-          .limit(20);
-        setNotes((data as NoteRow[]) || []);
+        toast.success("Facture marquée comme validée (note serveur ajoutée).");
+        await refreshServerNotes();
       }
     } catch (err: any) {
       toast.error(err?.message || "Erreur validation");
     } finally {
       setSaving(false);
-      setNotesLoading(false);
     }
   };
 
@@ -225,8 +255,7 @@ export default function InvoiceDetailPage() {
 
     setSaving(true);
     try {
-      // Mode demo => localStorage
-      if (notesAvailable === false) {
+      if (!isServerNotes) {
         pushLocalNote(body);
         toast.success("Note ajoutée (mémo local).");
         setNote("");
@@ -243,7 +272,7 @@ export default function InvoiceDetailPage() {
       if (error) {
         if (isMissingTableError(error)) {
           setNotesAvailable(false);
-          setNotesWarning("Notes non disponibles côté serveur (mode démo). Stockage local activé.");
+          setNotesWarning("Notes serveur indisponibles (mode démo). Stockage local activé.");
           pushLocalNote(body);
           toast.success("Note ajoutée (mémo local).");
           setNote("");
@@ -251,24 +280,14 @@ export default function InvoiceDetailPage() {
           throw error;
         }
       } else {
-        toast.success("Note ajoutée");
+        toast.success("Note ajoutée (serveur)");
         setNote("");
-        // refresh notes
-        setNotesLoading(true);
-        const { data } = await supabase
-          .from("notes")
-          .select("id, body, created_at")
-          .eq("target", "invoice")
-          .eq("target_id", invoiceNumber)
-          .order("created_at", { ascending: false })
-          .limit(20);
-        setNotes((data as NoteRow[]) || []);
+        await refreshServerNotes();
       }
     } catch (err: any) {
       toast.error(err?.message || "Erreur ajout note");
     } finally {
       setSaving(false);
-      setNotesLoading(false);
     }
   };
 
@@ -280,9 +299,12 @@ export default function InvoiceDetailPage() {
             <ArrowLeft className="h-4 w-4" />
             Retour
           </Button>
-          <div>
+          <div className="flex-1">
             <p className="text-sm text-muted-foreground">Détail facture</p>
-            <h1 className="text-2xl font-bold">{invoiceNumber || "—"}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">{invoiceNumber || "—"}</h1>
+              <Badge variant="outline">{isServerNotes ? "Notes serveur" : "Notes locales"}</Badge>
+            </div>
           </div>
         </div>
 
@@ -292,9 +314,7 @@ export default function InvoiceDetailPage() {
           </Card>
         ) : detailQuery.error ? (
           <Card className="border-red-200 bg-red-50">
-            <CardContent className="py-6 text-sm text-red-800">
-              {(detailQuery.error as Error).message}
-            </CardContent>
+            <CardContent className="py-6 text-sm text-red-800">{(detailQuery.error as Error).message}</CardContent>
           </Card>
         ) : invoice ? (
           <>
@@ -396,7 +416,6 @@ export default function InvoiceDetailPage() {
               </CardContent>
             </Card>
 
-            {/* NOTES + ACTIONS */}
             <Card>
               <CardHeader>
                 <CardTitle>Actions & notes</CardTitle>
@@ -405,15 +424,20 @@ export default function InvoiceDetailPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {notesWarning ? (
-                  <div className="text-sm text-muted-foreground">{notesWarning}</div>
-                ) : null}
+                {notesWarning ? <div className="text-sm text-muted-foreground">{notesWarning}</div> : null}
 
                 <div className="flex flex-wrap gap-2">
                   <Button className="gap-2" onClick={handleValidate} disabled={saving}>
                     <CheckCircle className="h-4 w-4" />
-                    {notesAvailable === false ? "Marquer comme validée (local)" : "Marquer comme validée"}
+                    {isLocalNotes ? "Marquer comme validée (local)" : "Marquer comme validée"}
                   </Button>
+
+                  {isLocalNotes ? (
+                    <Button variant="outline" className="gap-2" onClick={clearLocalNotes} disabled={saving}>
+                      <Trash2 className="h-4 w-4" />
+                      Effacer notes locales
+                    </Button>
+                  ) : null}
                 </div>
 
                 <div className="space-y-2">
@@ -425,7 +449,7 @@ export default function InvoiceDetailPage() {
                   />
                   <Button variant="outline" onClick={handleAddNote} disabled={saving || !note.trim()}>
                     <NotebookPen className="mr-2 h-4 w-4" />
-                    {notesAvailable === false ? "Ajouter note (local)" : "Ajouter note"}
+                    {isLocalNotes ? "Ajouter note (local)" : "Ajouter note"}
                   </Button>
                 </div>
 
@@ -433,9 +457,7 @@ export default function InvoiceDetailPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-xs text-muted-foreground">Historique des notes</div>
-                      <div className="text-sm font-semibold">
-                        {notesAvailable === false ? "Stockage local" : notesAvailable === true ? "Stockage serveur" : "—"}
-                      </div>
+                      <div className="text-sm font-semibold">{isServerNotes ? "Stockage serveur" : "Stockage local"}</div>
                     </div>
                     <Badge variant="outline">{notes.length}</Badge>
                   </div>
