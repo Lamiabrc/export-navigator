@@ -16,7 +16,6 @@ import { RequirePlan } from "@/components/RequirePlan";
 import Home from "@/pages/Home";
 import ToolPage from "@/pages/Tool";
 import ServicesPage from "@/pages/Services";
-import WatchPage from "@/pages/Watch";
 import AboutPage from "@/pages/About";
 import Analyse from "@/pages/Analyse";
 import ShareDecision from "@/pages/ShareDecision";
@@ -86,8 +85,8 @@ export default function App() {
                       <Route path="/tool" element={<ToolPage />} />
                       <Route path="/services" element={<ServicesPage />} />
 
-                      {/* ✅ EN/legacy marketing */}
-                      <Route path="/watch" element={<WatchPage />} />
+                      {/* ✅ EN/legacy marketing (page Watch supprimée => redirect) */}
+                      <Route path="/watch" element={<Navigate to="/veille" replace />} />
 
                       {/* ✅ FR canonique */}
                       <Route path="/veille" element={<Veille />} />
