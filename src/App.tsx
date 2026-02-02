@@ -99,6 +99,9 @@ export default function App() {
                       <Route path="/analyse" element={<Analyse />} />
                       <Route path="/share/:id" element={<ShareDecision />} />
                       <Route path="/methodologie" element={<Methodologie />} />
+
+                      {/* ✅ FIX: /guides existe (redirige vers un guide par défaut) */}
+                      <Route path="/guides" element={<Navigate to="/guides/incoterms-ddp" replace />} />
                       <Route path="/guides/:slug" element={<Guide />} />
 
                       <Route path="/solutions" element={<Solutions />} />
