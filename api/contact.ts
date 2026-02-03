@@ -140,26 +140,35 @@ async function supabaseInsert(row: ContactRow) {
 
   const endpoint = `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/contact_requests`;
 
-  const r = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=minimal",
-    },
-    body: JSON.stringify(row),
-  });
+  try {
+    const r = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(row),
+    });
 
-  if (r.ok) return { ok: true as const };
+    if (r.ok) return { ok: true as const };
 
-  const text = await r.text().catch(() => "");
-  return {
-    ok: false as const,
-    code: "supabase_insert_failed",
-    status: r.status,
-    detail: (text || r.statusText || "Unknown error").slice(0, 800),
-  };
+    const text = await r.text().catch(() => "");
+    return {
+      ok: false as const,
+      code: "supabase_insert_failed",
+      status: r.status,
+      detail: (text || r.statusText || "Unknown error").slice(0, 800),
+    };
+  } catch (err: unknown) {
+    return {
+      ok: false as const,
+      code: "supabase_insert_failed",
+      status: 0,
+      detail: safeString(err, 800) || "Unknown error",
+    };
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -226,16 +235,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     const insert = await supabaseInsert(row);
-    if (!insert.ok && insert.code !== "missing_env") {
-      console.error("[api/contact] insert error:", insert);
-      return res.status(500).json({
-        ok: false,
-        error: insert.code,
-        supabase_status: insert.status,
-        detail: insert.detail,
-        version: VERSION,
-      });
-    }
     if (!insert.ok) {
       console.warn("[api/contact] supabase skipped:", insert.detail || insert.code);
     }
@@ -245,7 +244,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error("[api/contact] notification error:", notification);
     }
 
-    return res.status(200).json({ ok: true, stored: true, version: VERSION });
+    return res.status(200).json({ ok: true, stored: insert.ok, version: VERSION });
   } catch (err: any) {
     console.error("[api/contact] fatal:", err?.message || err);
     return res.status(500).json({
