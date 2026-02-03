@@ -7,6 +7,8 @@ import { usePageMeta } from "@/hooks/usePageMeta";
 
 type Topic = "audit" | "ddp" | "tvadouane" | "sanctions" | "autre";
 
+const CONTACT_ENDPOINT = (import.meta as any).env?.VITE_CONTACT_ENDPOINT || "/api/contact";
+
 export default function Contact() {
   const { t } = useI18n();
   usePageMeta("meta.contact.title", "meta.contact.description");
@@ -37,7 +39,7 @@ export default function Contact() {
       cta: "Choisir un créneau",
     };
 
-  // Coordonnées (demandées)
+  // Coordonnées
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
   const emailMain = "contact@exportfrancefacile.com";
@@ -124,8 +126,7 @@ export default function Contact() {
     setStatus("sending");
 
     try {
-      // Si tu as /api/contact (Vercel), on tente d’abord
-      const res = await fetch("/api/contact", {
+      const res = await fetch(CONTACT_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -143,13 +144,10 @@ export default function Contact() {
         return;
       }
 
-      // fallback mailto si API non OK
-      window.location.href = buildMailto();
-      setStatus("sent");
+      // IMPORTANT : ne pas auto-ouvrir mailto ici (peut être bloqué après await)
+      setStatus("error");
     } catch {
-      // fallback mailto si API absente / erreur réseau
-      window.location.href = buildMailto();
-      setStatus("sent");
+      setStatus("error");
     }
   };
 
@@ -204,6 +202,7 @@ export default function Contact() {
                     onChange={(e) => setName(e.target.value)}
                     className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm focus:border-slate-900 focus:outline-none"
                     placeholder={formCopy.name}
+                    autoComplete="organization"
                     required
                   />
                 </label>
@@ -216,6 +215,7 @@ export default function Contact() {
                     type="email"
                     className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm focus:border-slate-900 focus:outline-none"
                     placeholder={formCopy.email}
+                    autoComplete="email"
                     required
                   />
                 </label>
@@ -250,22 +250,41 @@ export default function Contact() {
                 </button>
 
                 {status === "sent" && (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                    <div className="font-semibold">Message prêt ✅</div>
+                  <div
+                    className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+                    aria-live="polite"
+                  >
+                    <div className="font-semibold">Message envoyé ✅</div>
                     <div className="mt-1 text-emerald-900/80">
-                      Si l’envoi automatique n’est pas configuré, ton email s’ouvre en brouillon (fallback). Sinon, c’est
-                      bien envoyé.
+                      Merci ! Je reviens vers vous rapidement (souvent &lt; 24h ouvrées).
                     </div>
                   </div>
                 )}
 
                 {status === "error" && (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
-                    Un souci est survenu. Réessaye ou écris directement à{" "}
-                    <a className="underline" href={`mailto:${emailMain}`}>
-                      {emailMain}
-                    </a>
-                    .
+                  <div
+                    className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                    aria-live="polite"
+                  >
+                    <div className="font-semibold">Envoi automatique indisponible</div>
+                    <div className="mt-1 text-amber-900/80">
+                      Cliquez sur <span className="font-semibold">“Ouvrir en email”</span> (ci-dessous) pour envoyer
+                      votre demande, ou contactez-moi directement.
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <a
+                        href={buildMailto()}
+                        className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-white transition hover:bg-slate-800"
+                      >
+                        Ouvrir en email
+                      </a>
+                      <a
+                        href={`tel:${phoneRaw}`}
+                        className="rounded-full border border-slate-900/20 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-900 transition hover:bg-slate-100"
+                      >
+                        Appeler
+                      </a>
+                    </div>
                   </div>
                 )}
 
@@ -307,9 +326,7 @@ export default function Contact() {
                     {blockCopy.cta}
                   </a>
 
-                  <p className="text-xs text-slate-500">
-                    Réponse généralement sous 24h ouvrées. (Urgent : appelle directement.)
-                  </p>
+                  <p className="text-xs text-slate-500">Réponse généralement sous 24h ouvrées. (Urgent : appelle directement.)</p>
                 </div>
               </div>
 
@@ -352,10 +369,7 @@ export default function Contact() {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <div className="text-xs uppercase tracking-[0.3em] text-slate-500">Email (direct)</div>
-                      <a
-                        className="mt-1 inline-block font-semibold text-slate-900 underline"
-                        href={`mailto:${emailDirect}`}
-                      >
+                      <a className="mt-1 inline-block font-semibold text-slate-900 underline" href={`mailto:${emailDirect}`}>
                         {emailDirect}
                       </a>
                     </div>
