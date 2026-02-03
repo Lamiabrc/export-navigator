@@ -11,8 +11,8 @@ type ContactPayload = {
   scenarioSummary?: string;
 };
 
-const memoryStore: ContactPayload[] = [];
-const CONTACT_RECIPIENT = "contact@exportfrancefacile.com";
+const CONTACT_RECIPIENT = process.env.CONTACT_TO || "contact@exportfrancefacile.com";
+const CONTACT_CC = process.env.CONTACT_CC || ""; // optionnel: "lamia.brechet@outlook.fr"
 
 function normalizeEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
@@ -43,9 +43,9 @@ function buildTransporter() {
   });
 }
 
-function buildEmailBody(payload: ContactPayload) {
+function buildEmailBody(payload: ContactPayload, raw: Record<string, unknown>) {
   const lines = [
-    `Prenom: ${payload.firstName}`,
+    `Prenom/Nom: ${payload.firstName}`,
     `Email: ${payload.email}`,
     `Societe: ${payload.company || "n/a"}`,
     `Sujet: ${payload.subject || "n/a"}`,
@@ -59,37 +59,47 @@ function buildEmailBody(payload: ContactPayload) {
     lines.push("", "Scenario:", payload.scenarioSummary);
   }
 
+  // Petit bonus debug (sans spammer)
+  if (raw?.source) lines.push("", `Source: ${String(raw.source)}`);
+  if (raw?.topic && !payload.subject) lines.push("", `Topic (raw): ${String(raw.topic)}`);
+
   return lines.join("\n");
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).json({ ok: true });
-  }
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
-  }
+  if (req.method === "OPTIONS") return res.status(200).json({ ok: true });
+  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
 
   try {
     const body = (req.body || {}) as Record<string, unknown>;
 
+    // Compatibilité avec l'ancien payload du front:
+    // - name => firstName
+    // - topic => subject
+    const firstName = safeString(body.firstName || body.name || body.fullName);
+    const email = normalizeEmail(body.email);
+    const message = safeString(body.message);
+
     const payload: ContactPayload = {
-      firstName: safeString(body.firstName),
-      email: normalizeEmail(body.email),
-      company: safeString(body.company),
-      subject: safeString(body.subject),
-      message: safeString(body.message),
-      offerType: safeString(body.offerType || body.offer_type),
+      firstName,
+      email,
+      company: safeString(body.company || body.societe),
+      subject: safeString(body.subject || body.topic),
+      message,
+      offerType: safeString(body.offerType || body.offer_type || body.topic),
       scenarioSummary: safeString(body.scenarioSummary || body.scenario_summary),
     };
 
     if (!payload.firstName || !payload.email || !payload.message) {
-      return res.status(400).json({ ok: false, error: "Missing required fields" });
+      return res.status(400).json({
+        ok: false,
+        error: "Missing required fields",
+        required: ["firstName(or name)", "email", "message"],
+      });
     }
 
     if (!isEmailValid(payload.email)) {
@@ -102,17 +112,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ ok: false, error: "Email service not configured" });
     }
 
-    const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || "no-reply@mpl-export-conseil.fr";
+    const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER || "no-reply@exportfrancefacile.com";
+
+    const to = CONTACT_RECIPIENT.split(",").map((s) => s.trim()).filter(Boolean);
+    const cc = CONTACT_CC.split(",").map((s) => s.trim()).filter(Boolean);
 
     await transporter.sendMail({
       from: fromAddress,
-      to: CONTACT_RECIPIENT,
+      to,
+      cc: cc.length ? cc : undefined,
       replyTo: payload.email,
-      subject: `MPL Export Conseil - ${payload.subject || "Demande"}`,
-      text: buildEmailBody(payload),
+      subject: `ExportFranceFacile - ${payload.subject || "Demande"}`,
+      text: buildEmailBody(payload, body),
     });
-
-    memoryStore.push({ ...payload });
 
     return res.status(200).json({ ok: true, data: { delivered: true } });
   } catch (error: any) {
