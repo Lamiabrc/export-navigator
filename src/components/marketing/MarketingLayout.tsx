@@ -41,6 +41,8 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
     if (!candidate || candidate === "header.cta") return "Demander un diagnostic";
     return candidate;
   })();
+  const heroDisclaimers = (t("heroLanding.disclaimers") as string[]) ?? [];
+  const globalDisclaimers = (t("disclaimers") as string[]) ?? [];
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
@@ -172,6 +174,18 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
       <div className="border-t border-slate-200 bg-white/80 px-6 py-8">
         <div className="mx-auto max-w-6xl">
           <GdprGuarantee />
+
+          {(globalDisclaimers.length > 0 || heroDisclaimers.length > 0) && (
+            <div className="mt-6 grid gap-2 text-xs text-slate-600 md:grid-cols-2">
+              {[...heroDisclaimers, ...globalDisclaimers]
+                .filter(Boolean)
+                .map((text, index) => (
+                  <p key={`${text}-${index}`} className="text-xs text-slate-500">
+                    {text}
+                  </p>
+                ))}
+            </div>
+          )}
         </div>
       </div>
       <footer className="border-t border-slate-200 bg-white/80 py-8 text-center text-xs font-medium text-slate-500">

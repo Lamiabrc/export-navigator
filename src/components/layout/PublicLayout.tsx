@@ -171,6 +171,7 @@ function FooterRss() {
 export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const { t } = useI18n();
+  const siteDisclaimers = (t("disclaimers") as string[]) ?? [];
 
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
@@ -295,6 +296,13 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
             <div className="text-xs text-muted-foreground">
               © {new Date().getFullYear()} MPL Export Conseil — outil d’aide à la décision.
+            </div>
+            <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground md:mt-2">
+              {siteDisclaimers.map((text, index) => (
+                <span key={`foot-disclaimer-${index}`} className="leading-snug">
+                  {text}
+                </span>
+              ))}
             </div>
           </div>
 

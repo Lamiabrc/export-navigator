@@ -104,14 +104,72 @@ const fr = {
   },
 
   hero: {
-    title: "France ↔ Monde : maîtrisez vos coûts. Décidez mieux.",
-    subtitle: "Export Navigator vous donne une première lecture (coût complet, Incoterms, documents, risques).",
+    title: "Le département export digital des PME.",
+    subtitle: "Simulation, documents, conformité et veille — sans recruter, sans multiplier les outils.",
     paragraph:
-      "Ensuite, je vous accompagne pour valider votre montage (douane / TVA / DDP), sécuriser vos documents et protéger votre marge, en import comme en export.",
-    ctaPrimary: "Lancer une simulation",
-    ctaSecondary: "Réserver un diagnostic (20 min)",
+      "Export Navigator agit comme un assistant sur les tâches récurrentes du service export (ADV, responsable, consultant) en automatisant les étapes routinières tout en laissant la décision finale humaine.",
+    ctaPrimary: "Tester gratuitement",
+    ctaSecondary: "Découvrir les plans",
     brandLabel: "Export Navigator",
+    bullets: [
+      "Automatise une grande partie du travail d’un service export (ADV, responsable, consultant sur tâches récurrentes)",
+      "Simulateur coût rendu (Incoterms, transport, frais) + rapports PDF",
+      "Checklists documentaires standardisées",
+      "Veille réglementaire automatisée (flux + filtres + digest)",
+    ],
   },
+  automationProof: {
+    title: "What the tool automates instead of hiring",
+    items: [
+      {
+        title: "Export back-office",
+        detail: "Checklists, documents and report-ready PDFs shared across teams.",
+      },
+      {
+        title: "Export manager / ADV lead",
+        detail: "Standardization, quality control and histories for every export lane.",
+      },
+      {
+        title: "Export consultant (recurring basics)",
+        detail: "Scoping, synthesis and templated reporting without dedicating a consultant.",
+      },
+      {
+        title: "Watch & compliance",
+        detail: "RSS feeds, filters and alerts by country/HS tailored to your plan.",
+      },
+    ],
+  },
+  disclaimers: [
+    "Non-contractual indications. Does not replace a licensed customs agent/forwarder.",
+    "Estimates and checklists are indicative; sources provided when available.",
+    "The user remains responsible for the final compliance decision.",
+  ],
+  automationProof: {
+    title: "Ce que l’outil automatise (au lieu d’embaucher)",
+    items: [
+      {
+        title: "ADV export",
+        detail: "Checklists, documents et PDF prêts à partager avec vos opérationnels.",
+      },
+      {
+        title: "Responsable export / ADV",
+        detail: "Standardisation, contrôle qualité et historiques pour piloter chaque flux.",
+      },
+      {
+        title: "Consultant export (tâches récurrentes)",
+        detail: "Cadrage, synthèse et rapports sans mobiliser un consultant pour les basiques.",
+      },
+      {
+        title: "Veille & conformité",
+        detail: "Flux RSS, filtres et alertes par pays/HS selon votre plan.",
+      },
+    ],
+  },
+  disclaimers: [
+    "Indications non contractuelles. Ne remplace pas un agent en douane/commissionnaire.",
+    "Estimations et checklists à titre indicatif, avec sources quand disponibles.",
+    "L’utilisateur reste responsable de la conformité finale.",
+  ],
 
   sections: {
     whoTitle: "Pour qui ?",
@@ -397,13 +455,19 @@ const en = {
   },
 
   hero: {
-    title: "France ↔ World: control costs. Decide better.",
-    subtitle: "Export Navigator gives you a first answer (landed cost, Incoterms, documents, risks).",
+    title: "Your digital export department for SMEs.",
+    subtitle: "Costs, documents, compliance watch — without hiring.",
     paragraph:
-      "Then I help you validate your customs/VAT setup, secure documentation, and protect margins — for imports and exports.",
-    ctaPrimary: "Run a free simulation",
-    ctaSecondary: "Book a 20-min diagnostic call",
+      "Export Navigator automates a large part of your export team's routine work (ADV, export manager, consultant) while ensuring final compliance decisions stay human and contextual.",
+    ctaPrimary: "Try for free",
+    ctaSecondary: "Explore the plans",
     brandLabel: "Export Navigator",
+    bullets: [
+      "Automates a large part of export workflows (ADV, export manager, consultant on recurring tasks)",
+      "Landed-cost simulator (Incoterms, transport, fees) + one-page PDF reports",
+      "Standardized documentation checklists",
+      "Automated compliance watch (feeds + filters + digest)",
+    ],
   },
 
   sections: {

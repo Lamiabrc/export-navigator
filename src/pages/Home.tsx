@@ -24,6 +24,19 @@ export default function Home() {
     ? (featureCardsRaw as unknown as FeatureCard[])
     : [];
 
+  const heroBulletsRaw = t("heroLanding.bullets");
+  const heroBullets: string[] = Array.isArray(heroBulletsRaw)
+    ? (heroBulletsRaw as string[])
+    : [];
+
+  const proofTitle = (t("heroLanding.proofTitle") as string) ?? "Ce que l’outil automatise (au lieu d’embaucher)";
+  const proofDescription = (t("heroLanding.proofDescription") as string) ?? "";
+  const proofItemsRaw = t("heroLanding.proofItems");
+  const proofItems =
+    Array.isArray(proofItemsRaw) && proofItemsRaw.length
+      ? (proofItemsRaw as Array<{ title: string; description: string }>)
+      : [];
+
   const featureCards: FeatureCard[] =
     featureCardsFromI18n?.length > 0
       ? featureCardsFromI18n
@@ -84,7 +97,7 @@ export default function Home() {
           />
         </div>
 
-        <div className="relative z-10 mx-auto flex min-h-[88vh] max-w-5xl flex-col items-center justify-center gap-6 px-6 text-center">
+          <div className="relative z-10 mx-auto flex min-h-[88vh] max-w-5xl flex-col items-center justify-center gap-6 px-6 text-center">
           <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.6em] text-white/70">
             Export Navigator
             <span className="hidden rounded-full bg-white/10 px-2 py-1 text-[10px] tracking-[0.3em] text-white/70 sm:inline">
@@ -97,6 +110,14 @@ export default function Home() {
           </h1>
 
           <p className="max-w-3xl text-lg leading-relaxed text-white/80 md:text-xl">{heroSubtitle}</p>
+
+          <div className="mt-4 grid w-full max-w-3xl grid-cols-1 gap-2 text-xs uppercase tracking-[0.6em] text-white/80 md:grid-cols-2">
+            {heroBullets.map((bullet) => (
+              <div key={bullet} className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2">
+                {bullet}
+              </div>
+            ))}
+          </div>
 
           <div className="flex flex-wrap justify-center gap-4 text-xs font-semibold uppercase tracking-[0.35em] md:text-sm">
             <Link
@@ -158,6 +179,31 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* AUTOMATION PROOF */}
+      {proofItems.length > 0 && (
+        <section className="bg-white py-16">
+          <div className="mx-auto max-w-6xl px-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.6em] text-[#1E3A8A]">{proofTitle}</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  {proofDescription}
+                </p>
+              </div>
+            </div>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {proofItems.map((item) => (
+              <article key={item.title} className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-[#1E3A8A]">{item.title}</h3>
+                <p className="text-sm text-slate-600">{item.description}</p>
+              </article>
+            ))}
+          </div>
+          </div>
+        </section>
+      )}
 
       {/* FOCUS */}
       <section className="bg-white py-16">

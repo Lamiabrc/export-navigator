@@ -9,27 +9,41 @@ export const marketingTranslations = {
     },
 
     heroLanding: {
-      title: "France ↔ Monde : sécurisez vos décisions import/export.",
-      subtitle:
-        "Estimez vos coûts complets, repérez les risques (Incoterms, TVA, droits, documents) et accédez à une veille internationale basée sur des sources officielles.",
-      ctaPrimary: "Lancer une estimation gratuite",
-      ctaSecondary: "Découvrir PRO / VIP",
-      featureCards: [
+      title: "Le département export digital des PME.",
+      subtitle: "Simulation, documents, conformité et veille — sans recruter, sans multiplier les outils.",
+      ctaPrimary: "Tester gratuitement",
+      ctaSecondary: "Découvrir les plans",
+      proofDescription:
+        "Voilà comment la plateforme remplace les tâches routinières de l’ADV, du responsable export et du consultant sur les routines.",
+      proofTitle: "Ce que l’outil automatise (au lieu d’embaucher)",
+      proofItems: [
         {
-          title: "Coût complet (landed cost) France ↔ Monde",
-          description:
-            "Transport, assurance, droits, TVA, frais annexes : une vision claire du coût réel pour chiffrer, négocier et décider.",
+          title: "ADV export",
+          description: "Checklists, documents et PDF prêts à partager avec vos opérationnels.",
         },
         {
-          title: "Conformité & risques opérationnels",
-          description:
-            "Contrôles Incoterms, cohérence des montants, alertes documents et points de vigilance douane/TVA — avec recommandations actionnables.",
+          title: "Responsable export / ADV",
+          description: "Standardisation, contrôle et historiques pour piloter vos flux.",
         },
         {
-          title: "Veille internationale & accords",
-          description:
-            "Sanctions, restrictions, douanes, exigences documentaires : une veille utile pour anticiper (et pas juste “lire des actus”).",
+          title: "Consultant export (taches récurrentes)",
+          description: "Cadrage, synthèse et rapports sans mobiliser un consultant trop souvent.",
         },
+        {
+          title: "Veille & conformité",
+          description: "Flux RSS, filtres et alertes par pays/HS selon votre plan.",
+        },
+      ],
+      bullets: [
+        "Automatise une grande partie du travail d’un service export (ADV, responsable, consultant sur tâches récurrentes)",
+        "Simulateur coût rendu (Incoterms, transport, frais) + rapports PDF",
+        "Checklists documentaires standardisées",
+        "Veille réglementaire automatisée (flux + filtres + digest)",
+      ],
+      disclaimers: [
+        "Ne remplace pas un agent en douane/commissionnaire.",
+        "Estimations et checklists à titre indicatif, sources fournies quand disponibles.",
+        "L’utilisateur reste responsable de la conformité finale.",
       ],
     },
 
@@ -147,27 +161,41 @@ export const marketingTranslations = {
     },
 
     heroLanding: {
-      title: "France ↔ World: secure your import/export decisions.",
-      subtitle:
-        "Estimate real landed costs, spot risks (Incoterms, VAT, duties, documents) and use international monitoring built on official sources.",
-      ctaPrimary: "Start a free estimate",
-      ctaSecondary: "Explore PRO / VIP",
-      featureCards: [
+      title: "Your digital export department for SMEs.",
+      subtitle: "Costs, documents, compliance watch — without hiring.",
+      ctaPrimary: "Try for free",
+      ctaSecondary: "See the plans",
+      proofDescription:
+        "This is how the platform removes routine workloads from your ADV, export manager and consultant.",
+      proofTitle: "What the tool automates instead of hiring",
+      proofItems: [
         {
-          title: "Real landed cost France ↔ World",
-          description:
-            "Freight, insurance, duties, VAT, ancillary costs — a clear view of real cost to quote, negotiate and decide.",
+          title: "Export back-office",
+          description: "Checklists, documents and PDFs ready to share across teams.",
         },
         {
-          title: "Compliance & operational risks",
-          description:
-            "Incoterm checks, amount consistency, document alerts and customs/VAT watch points — with actionable recommendations.",
+          title: "Export manager / ADV lead",
+          description: "Standardization, quality control and history logs for every flow.",
         },
         {
-          title: "International monitoring & trade context",
-          description:
-            "Sanctions, restrictions, customs requirements: monitoring designed to anticipate, not just read news.",
+          title: "Export consultant (repeating tasks)",
+          description: "Scoping, synthesis and templated reporting without overloading consultants.",
         },
+        {
+          title: "Watch & compliance",
+          description: "RSS feeds, filters and alerts by country/HS tailored to your plan.",
+        },
+      ],
+      bullets: [
+        "Automates a large part of export work (ADV, manager, consultant on recurring tasks)",
+        "Landed-cost simulator (Incoterms, transport, fees) + PDF reports",
+        "Standardized documentation checklists",
+        "Automated compliance watch (feeds + filters + digest)",
+      ],
+      disclaimers: [
+        "Does not replace a licensed customs agent/forwarder.",
+        "Estimates and checklists are indicative; sources provided when available.",
+        "The user remains responsible for the final compliance decision.",
       ],
     },
 
