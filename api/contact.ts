@@ -225,9 +225,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       status: isSpam ? "spam" : "ok",
     };
 
-  const insert = await supabaseInsert(row);
-  if (!insert.ok) {
-    console.error("[api/contact] insert error:", insert);
+    const insert = await supabaseInsert(row);
+    if (!insert.ok) {
+      console.error("[api/contact] insert error:", insert);
     return res.status(500).json({
       ok: false,
       error: insert.code,
