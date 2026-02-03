@@ -232,11 +232,11 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         <div className="md:hidden border-t border-border bg-background/70">
           <div className="mx-auto max-w-6xl overflow-x-auto px-4 py-2">
             <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-            {navLinks.map((link) => {
-              const active = isActivePath(location.pathname, link.to);
-              const label = (t(link.key) as string) ?? link.fallback;
-              return (
-                <Link
+              {navLinks.map((link) => {
+                const active = isActivePath(location.pathname, link.to);
+                const label = (t(link.key) as string) ?? link.fallback;
+                return (
+                  <Link
                     key={`${link.to}-m`}
                     to={link.to}
                     className={cn(
@@ -246,7 +246,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                         : "border-border bg-background text-foreground/80 hover:border-foreground/40"
                     )}
                   >
-                    {item.label}
+                    {label}
                   </Link>
                 );
               })}
