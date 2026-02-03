@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-export type TierSlug = "FREE" | "PRO" | "VIP";
+export type TierSlug = "FREE" | "PRO_ONLINE" | "PRO_VISIO" | "PILOTAGE";
 
 export type PricingTier = {
   name: string;
@@ -22,7 +22,8 @@ type PricingMeta = Partial<{
   subhead: string;
   description: string;
   cta: string;
-  tiers: Partial<Record<TierSlug, Partial<PricingTier>>>;
+  // On accepte aussi les anciens slugs ("PRO","VIP") via Record<string,...> pour éviter de casser si des traductions traînent.
+  tiers: Partial<Record<string, Partial<PricingTier>>>;
 }>;
 
 function safeLangGuess(): string {
@@ -42,45 +43,59 @@ function safeLangGuess(): string {
 function getDefaults(isFR: boolean): PricingResolved {
   if (!isFR) {
     return {
-      headline: "Replace a fixed hire with a tool + export follow-up",
-      subhead: "Invoice checks + full simulator. Watch is VIP-only.",
+      headline: "Your digital export department for SMEs",
+      subhead: "Costs, documents, compliance watch — without hiring.",
       description:
-        "Instead of hiring an export admin, secure operations with a structured tool and regular expert follow-up.",
-      cta: "Talk to us",
+        "Simulate landed cost, generate document checklists and PDF reports, and monitor regulatory updates. Self-serve or with coaching.",
+      cta: "Contact us",
       tiers: {
         FREE: {
           name: "FREE",
-          price: "€0 (one-time)",
-          description: "Try once: reduced simulator + express invoice check.",
+          price: "€0 / month",
+          description: "Discovery version (company + address required to unlock free access).",
           features: [
-            "1 reduced simulation (single use)",
-            "1 express invoice check (level 1 consistency)",
-            "No history / no PDF report",
-            "No watch (VIP only)",
+            "Company + address required to activate FREE",
+            "Simulator (screen results)",
+            "1 PDF / month",
+            "Watch demo (limited history & scope)",
+            "No email alerts",
           ],
         },
-        PRO: {
-          name: "PRO",
-          price: "€250 / month",
-          description: "Tool + 1 hour/week follow-up (video or on-site).",
+        PRO_ONLINE: {
+          name: "PRO ONLINE",
+          price: "€59 / month",
+          description: "100% self-serve: the full tool + automated watch.",
           features: [
-            "Full simulator (landed cost / cost-to-serve)",
-            "Unlimited invoice verification (consistency alerts)",
-            "Operations tracking (docs, tasks, milestones)",
-            "1h/week follow-up (video or on-site) — action plan & corrections",
-            "Standard support",
+            "Full simulator (Incoterms, transport, fees)",
+            "Standard document checklists",
+            "Unlimited PDF reports (or very high quota)",
+            "Full Watch Center (filters, search, tags)",
+            "Automated weekly email digest",
+            "History & exports",
           ],
         },
-        VIP: {
-          name: "VIP",
-          price: "€480 / month",
-          description: "Full tool + premium watch + 1 day/month export follow-up.",
+        PRO_VISIO: {
+          name: "PRO + VIDEO",
+          price: "€149 / month",
+          description: "Everything in PRO ONLINE + 1 monthly video session.",
           features: [
-            "Everything in PRO",
-            "Premium watch (destination-based) — VIP only",
-            "Advanced invoice checks (rules, thresholds)",
-            "1 day/month export follow-up (workshop + operational setup)",
+            "Everything in PRO ONLINE",
+            "1 video session / month (booking included)",
+            "Pre-call form + document upload",
+            "Meeting summary PDF template",
             "Priority support",
+          ],
+        },
+        PILOTAGE: {
+          name: "WEEKLY PILOTING",
+          price: "€560 / month",
+          description: "Everything in PRO ONLINE + 1 hour per week.",
+          features: [
+            "Everything in PRO ONLINE",
+            "1 hour / week (video)",
+            "Weekly action plan & prioritization",
+            "Risk & compliance review",
+            "Priority support (fast track)",
           ],
         },
       },
@@ -88,45 +103,59 @@ function getDefaults(isFR: boolean): PricingResolved {
   }
 
   return {
-    headline: "Remplacez un recrutement fixe par un outil + du suivi export",
-    subhead: "Vérification facture + simulateur complet. La veille est réservée au VIP.",
+    headline: "Le département export digital des PME",
+    subhead: "Simulation, documents, conformité et veille — sans recruter.",
     description:
-      "Plutôt que recruter une ADV export, sécurisez vos opérations avec un outil structurant et un suivi régulier sur les points critiques.",
+      "Simulez votre coût rendu, générez des checklists et des rapports PDF, et suivez les évolutions réglementaires. En autonome ou avec accompagnement.",
     cta: "Nous contacter",
     tiers: {
       FREE: {
         name: "FREE",
-        price: "0 € (usage unique)",
-        description: "Tester une fois : simulateur réduit + vérification facture express.",
+        price: "0 € / mois",
+        description: "Version découverte (société + adresse obligatoires pour activer le gratuit).",
         features: [
-          "1 simulation réduite (usage unique)",
-          "1 vérification facture “express” (cohérence niveau 1)",
-          "Pas d’historique / pas de rapport PDF",
-          "Pas de veille (réservée VIP)",
+          "Société + adresse obligatoires pour activer le FREE",
+          "Simulateur (résultats à l’écran)",
+          "1 PDF / mois",
+          "Veille démo (historique & périmètre limités)",
+          "Pas d’alertes email",
         ],
       },
-      PRO: {
-        name: "PRO",
-        price: "250 € / mois",
-        description: "Outil + 1h/semaine de suivi (visio ou visite).",
+      PRO_ONLINE: {
+        name: "PRO ONLINE",
+        price: "59 € / mois",
+        description: "100% en ligne : l’outil complet + veille automatisée.",
         features: [
-          "Simulateur complet (coût rendu / landed cost)",
-          "Vérification facture illimitée (alertes de cohérence)",
-          "Suivi d’opérations export (docs, tâches, jalons)",
-          "1h/semaine de suivi (visio ou visite) — corrections & plan d’actions",
-          "Support standard",
+          "Simulateur complet (Incoterms, transport, frais)",
+          "Checklists documentaires standardisées",
+          "PDF illimités (ou quota très élevé)",
+          "Watch Center complet (filtres, recherche, tags)",
+          "Digest email hebdo automatique",
+          "Historique & exports",
         ],
       },
-      VIP: {
-        name: "VIP",
-        price: "480 € / mois",
-        description: "Formule complète + veille premium + 1 journée/mois de suivi export.",
+      PRO_VISIO: {
+        name: "PRO + VISIO",
+        price: "149 € / mois",
+        description: "Tout PRO ONLINE + 1 visio mensuelle.",
         features: [
-          "Tout PRO",
-          "Veille premium par destination (VIP uniquement)",
-          "Contrôles facture avancés (règles, seuils, exceptions)",
-          "1 journée/mois de suivi export (atelier + mise en place opérationnelle)",
+          "Tout PRO ONLINE",
+          "1 visio / mois (réservation incluse)",
+          "Pré-formulaire + dépôt documents",
+          "Compte-rendu PDF (template)",
           "Support prioritaire",
+        ],
+      },
+      PILOTAGE: {
+        name: "PILOTAGE HEBDO",
+        price: "560 € / mois",
+        description: "Tout PRO ONLINE + 1h/semaine.",
+        features: [
+          "Tout PRO ONLINE",
+          "1h / semaine (visio)",
+          "Priorisation + plan d’actions hebdo",
+          "Revue risques & conformité",
+          "Support prioritaire (fast track)",
         ],
       },
     },
@@ -136,18 +165,34 @@ function getDefaults(isFR: boolean): PricingResolved {
 function resolvePricing(meta: PricingMeta | null, defaults: PricingResolved): PricingResolved {
   if (!meta) return defaults;
 
-  const tierKeys: TierSlug[] = ["FREE", "PRO", "VIP"];
+  const tierKeys: TierSlug[] = ["FREE", "PRO_ONLINE", "PRO_VISIO", "PILOTAGE"];
   const tiers = {} as Record<TierSlug, PricingTier>;
 
+  // Compatibilité : si les traductions utilisent encore PRO/VIP
+  const alias: Record<TierSlug, string[]> = {
+    FREE: ["FREE"],
+    PRO_ONLINE: ["PRO_ONLINE", "PRO"],
+    PRO_VISIO: ["PRO_VISIO", "VIP"],
+    PILOTAGE: ["PILOTAGE"],
+  };
+
   for (const k of tierKeys) {
-    const tTier = meta.tiers?.[k];
+    const candidates = alias[k];
+    const tTier =
+      candidates.map((ck) => meta.tiers?.[ck]).find(Boolean) ?? undefined;
+
     const dTier = defaults.tiers[k];
 
     tiers[k] = {
-      name: tTier?.name?.trim() ? tTier.name : dTier.name,
-      price: tTier?.price?.trim() ? tTier.price : dTier.price,
-      description: tTier?.description?.trim() ? tTier.description : dTier.description,
-      features: Array.isArray(tTier?.features) && tTier.features.length > 0 ? tTier.features : dTier.features,
+      name: tTier?.name?.trim() ? (tTier.name as string) : dTier.name,
+      price: tTier?.price?.trim() ? (tTier.price as string) : dTier.price,
+      description: tTier?.description?.trim()
+        ? (tTier.description as string)
+        : dTier.description,
+      features:
+        Array.isArray(tTier?.features) && (tTier.features as string[]).length > 0
+          ? (tTier.features as string[])
+          : dTier.features,
     };
   }
 
@@ -168,7 +213,7 @@ export function useResolvedPricing(t: (key: string) => unknown) {
 
   const resolved = useMemo(() => resolvePricing(pricingMeta, defaults), [pricingMeta, defaults]);
 
-  const tierKeys: TierSlug[] = ["FREE", "PRO", "VIP"];
+  const tierKeys: TierSlug[] = ["FREE", "PRO_ONLINE", "PRO_VISIO", "PILOTAGE"];
 
   return { isFR, defaults, resolved, tierKeys };
 }
