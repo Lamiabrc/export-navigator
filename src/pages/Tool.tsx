@@ -24,17 +24,6 @@ const FALLBACK_AUDIT = [
   "Risque sanctions / exigences documentaires",
 ];
 
-function toText(v: unknown, fallback = ""): string {
-  return typeof v === "string" ? v : fallback;
-}
-
-/**
- * Rend toujours un tableau de strings.
- * - si v est string[] => ok
- * - si v est string => [v] ou split si séparateurs
- * - si v est object => Object.values(...) filtrées
- * - sinon => fallback
- */
 function toStringArray(v: unknown, fallback: string[] = []): string[] {
   if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
 
@@ -42,7 +31,6 @@ function toStringArray(v: unknown, fallback: string[] = []): string[] {
     const s = v.trim();
     if (!s) return fallback;
 
-    // si tes traductions sont stockées en texte multi-lignes ou séparées par |
     const parts = s.includes("\n") ? s.split("\n") : s.includes("|") ? s.split("|") : null;
     if (parts) {
       const cleaned = parts.map((p) => p.trim()).filter(Boolean);
@@ -64,25 +52,39 @@ export default function ToolPage() {
   const { t } = useI18n();
   usePageMeta("meta.tool.title", "meta.tool.description");
 
-  // ✅ Sécurisation des traductions
-  const features = toStringArray(t("toolPage.list"), FALLBACK_FEATURES);
-  const limitations = toStringArray(t("toolPage.toolLimitationsList"), FALLBACK_LIMITATIONS);
+  // ✅ détecte "traduction manquante" quand t() renvoie la clé
+  const isMissing = (key: string, val: unknown) => typeof val === "string" && val.trim() === key;
 
-  const limitationsBody = toText(t("toolPage.toolLimitationsBody"), "");
-  const limitationsTitle = toText(t("toolPage.toolLimitationsTitle"), "");
-  const limitationsCta = toText(t("toolPage.toolLimitationsCta"), "");
-  const humanValidationCta = toText(t("toolPage.humanValidationCta"), "");
+  const tr = (key: string, fallback = ""): string => {
+    const v = t(key);
+    if (isMissing(key, v)) return fallback;
+    return typeof v === "string" ? v : fallback;
+  };
 
-  // Fallbacks (au cas où les clés n'existent pas dans tes traductions)
-  const subhead = toText(t("toolPage.subhead"), "Outil gratuit");
-  const headline = toText(t("toolPage.headline"), "Calcul rapide du coût export (landed cost)");
-  const body = toText(
-    t("toolPage.body"),
+  const trArray = (key: string, fallback: string[]): string[] => {
+    const v = t(key);
+    if (isMissing(key, v)) return fallback;
+    const arr = toStringArray(v, []);
+    return arr.length ? arr : fallback;
+  };
+
+  const features = trArray("toolPage.list", FALLBACK_FEATURES);
+  const limitations = trArray("toolPage.toolLimitationsList", FALLBACK_LIMITATIONS);
+
+  const limitationsBody = tr("toolPage.toolLimitationsBody", "");
+  const limitationsTitle = tr("toolPage.toolLimitationsTitle", "");
+  const limitationsCta = tr("toolPage.toolLimitationsCta", "");
+  const humanValidationCta = tr("toolPage.humanValidationCta", "");
+
+  const subhead = tr("toolPage.subhead", "Outil gratuit");
+  const headline = tr("toolPage.headline", "Calcul rapide du coût export (landed cost)");
+  const body = tr(
+    "toolPage.body",
     "Estimez votre coût rendu (transport, assurance, droits, TVA, frais) et prenez une décision éclairée en quelques minutes."
   );
-  const primaryCta = toText(t("toolPage.primaryCta"), "Lancer une analyse");
-  const reassurance = toText(
-    t("toolPage.reassurance"),
+  const primaryCta = tr("toolPage.primaryCta", "Lancer une analyse");
+  const reassurance = tr(
+    "toolPage.reassurance",
     "Sans inscription • Résultat immédiat • Pensé pour les PME export depuis la France"
   );
 
@@ -90,32 +92,28 @@ export default function ToolPage() {
 
   const steps: { title: string; desc: string; icon: ReactNode }[] = [
     {
-      title: toText(t("toolPage.step1Title"), "Saisissez vos paramètres"),
-      desc: toText(t("toolPage.step1Desc"), "Destination, incoterm, mode de transport, valeur, quantités et frais."),
+      title: tr("toolPage.step1Title", "Saisissez vos paramètres"),
+      desc: tr("toolPage.step1Desc", "Destination, incoterm, mode de transport, valeur, quantités et frais."),
       icon: <Sparkles className="h-5 w-5" aria-hidden />,
     },
     {
-      title: toText(t("toolPage.step2Title"), "Obtenez un coût rendu"),
-      desc: toText(t("toolPage.step2Desc"), "Total + coût unitaire + ventilation détaillée par poste."),
+      title: tr("toolPage.step2Title", "Obtenez un coût rendu"),
+      desc: tr("toolPage.step2Desc", "Total + coût unitaire + ventilation détaillée par poste."),
       icon: <CheckCircle2 className="h-5 w-5" aria-hidden />,
     },
     {
-      title: toText(t("toolPage.step3Title"), "Sécurisez la décision"),
-      desc: toText(
-        t("toolPage.step3Desc"),
-        "En cas de doute : audit / revue humaine (conformité, risques, doc)."
-      ),
+      title: tr("toolPage.step3Title", "Sécurisez la décision"),
+      desc: tr("toolPage.step3Desc", "En cas de doute : audit / revue humaine (conformité, risques, doc)."),
       icon: <ShieldCheck className="h-5 w-5" aria-hidden />,
     },
   ];
 
-  const whenAuditList = toStringArray(t("toolPage.whenAuditList"), FALLBACK_AUDIT);
+  const whenAuditList = trArray("toolPage.whenAuditList", FALLBACK_AUDIT);
 
   return (
     <MarketingLayout>
       {/* HERO */}
       <section className="relative overflow-hidden bg-slate-950 text-white">
-        {/* subtle background */}
         <div
           className="pointer-events-none absolute inset-0 opacity-40"
           style={{
@@ -124,12 +122,9 @@ export default function ToolPage() {
           }}
           aria-hidden
         />
-        {/* tricolor accent line */}
         <div
           className="pointer-events-none absolute left-0 top-0 h-1 w-full"
-          style={{
-            background: "linear-gradient(90deg, #2563eb 0%, #ffffff 50%, #ef4444 100%)",
-          }}
+          style={{ background: "linear-gradient(90deg, #2563eb 0%, #ffffff 50%, #ef4444 100%)" }}
           aria-hidden
         />
 
@@ -152,29 +147,25 @@ export default function ToolPage() {
             <span className="text-xs uppercase tracking-[0.35em] text-white/70">{reassurance}</span>
           </div>
 
-          {/* mini trust row */}
           <div className="mt-10 grid gap-3 md:grid-cols-3">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
               <div className="flex items-center gap-2 text-white">
                 <CheckCircle2 className="h-4 w-4" aria-hidden />
-                <span className="font-semibold">{toText(t("toolPage.trust1"), "Résultat clair & exploitable")}</span>
+                <span className="font-semibold">{tr("toolPage.trust1", "Résultat clair & exploitable")}</span>
               </div>
               <p className="mt-2 text-white/70">
-                {toText(
-                  t("toolPage.trust1Body"),
-                  "Total, coût unitaire, et ventilation des postes pour piloter vos marges."
-                )}
+                {tr("toolPage.trust1Body", "Total, coût unitaire, et ventilation des postes pour piloter vos marges.")}
               </p>
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
               <div className="flex items-center gap-2 text-white">
                 <AlertTriangle className="h-4 w-4" aria-hidden />
-                <span className="font-semibold">{toText(t("toolPage.trust2"), "Alerte sur les points sensibles")}</span>
+                <span className="font-semibold">{tr("toolPage.trust2", "Alerte sur les points sensibles")}</span>
               </div>
               <p className="mt-2 text-white/70">
-                {toText(
-                  t("toolPage.trust2Body"),
+                {tr(
+                  "toolPage.trust2Body",
                   "L’outil signale les zones d’incertitude (données manquantes, hypothèses, risques)."
                 )}
               </p>
@@ -183,11 +174,11 @@ export default function ToolPage() {
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
               <div className="flex items-center gap-2 text-white">
                 <ShieldCheck className="h-4 w-4" aria-hidden />
-                <span className="font-semibold">{toText(t("toolPage.trust3"), "Option validation humaine")}</span>
+                <span className="font-semibold">{tr("toolPage.trust3", "Option validation humaine")}</span>
               </div>
               <p className="mt-2 text-white/70">
-                {toText(
-                  t("toolPage.trust3Body"),
+                {tr(
+                  "toolPage.trust3Body",
                   "Pour sécuriser conformité & documents avant engagement (audit export sur demande)."
                 )}
               </p>
@@ -200,10 +191,10 @@ export default function ToolPage() {
       <section className="bg-white py-16">
         <div className="mx-auto max-w-6xl px-6">
           <div className="mb-8">
-            <h2 className="text-2xl font-semibold text-slate-900">{toText(t("toolPage.howTitle"), "Comment ça marche")}</h2>
+            <h2 className="text-2xl font-semibold text-slate-900">{tr("toolPage.howTitle", "Comment ça marche")}</h2>
             <p className="mt-2 max-w-3xl text-sm text-slate-600">
-              {toText(
-                t("toolPage.howBody"),
+              {tr(
+                "toolPage.howBody",
                 "En 3 étapes : saisie → calcul → décision. Simple, rapide, et utile pour cadrer un prix de vente export."
               )}
             </p>
@@ -229,12 +220,10 @@ export default function ToolPage() {
       <section className="bg-slate-50 py-16">
         <div className="mx-auto max-w-6xl px-6">
           <div className="mb-8">
-            <h2 className="text-2xl font-semibold text-slate-900">
-              {toText(t("toolPage.featuresTitle"), "Ce que l’outil vous apporte")}
-            </h2>
+            <h2 className="text-2xl font-semibold text-slate-900">{tr("toolPage.featuresTitle", "Ce que l’outil vous apporte")}</h2>
             <p className="mt-2 max-w-3xl text-sm text-slate-600">
-              {toText(
-                t("toolPage.featuresBody"),
+              {tr(
+                "toolPage.featuresBody",
                 "Une base solide pour estimer et comparer, avant d’aller plus loin (devis, commissionnaire, conformité)."
               )}
             </p>
@@ -248,10 +237,7 @@ export default function ToolPage() {
                   <div>
                     <p className="text-base font-semibold text-slate-900">{feature}</p>
                     <p className="mt-1 text-sm text-slate-600">
-                      {toText(
-                        t("toolPage.featureHint"),
-                        "Pensé pour être compréhensible, pas un tableur incompréhensible."
-                      )}
+                      {tr("toolPage.featureHint", "Pensé pour être compréhensible, pas un tableur incompréhensible.")}
                     </p>
                   </div>
                 </CardContent>
@@ -288,9 +274,7 @@ export default function ToolPage() {
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
                 <div className="flex items-center gap-2 text-white">
                   <AlertTriangle className="h-5 w-5" aria-hidden />
-                  <span className="text-sm font-semibold">
-                    {toText(t("toolPage.limitationsListTitle"), "À garder en tête")}
-                  </span>
+                  <span className="text-sm font-semibold">{tr("toolPage.limitationsListTitle", "À garder en tête")}</span>
                 </div>
                 <ul className="mt-4 space-y-3 text-sm text-white/90">
                   {limitations.map((item) => (
@@ -305,9 +289,7 @@ export default function ToolPage() {
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
                 <div className="flex items-center gap-2 text-white">
                   <ShieldCheck className="h-5 w-5" aria-hidden />
-                  <span className="text-sm font-semibold">
-                    {toText(t("toolPage.whenAuditTitle"), "Quand demander un audit")}
-                  </span>
+                  <span className="text-sm font-semibold">{tr("toolPage.whenAuditTitle", "Quand demander un audit")}</span>
                 </div>
                 <ul className="mt-4 space-y-3 text-sm text-white/90">
                   {whenAuditList.map((item) => (
@@ -330,8 +312,8 @@ export default function ToolPage() {
             </div>
 
             <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-white/80">
-              {toText(
-                t("toolPage.footerNote"),
+              {tr(
+                "toolPage.footerNote",
                 "Note : l’outil aide à cadrer une décision, il ne remplace pas un conseil réglementaire ou un devis transport / douane."
               )}
             </div>
