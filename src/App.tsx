@@ -47,7 +47,6 @@ import NotFound from "@/pages/NotFound";
 import Solutions from "@/pages/Solutions";
 import Veille from "@/pages/Veille";
 import Resources from "@/pages/Resources";
-import Tarifs from "@/pages/Tarifs";
 import Contact from "@/pages/Contact";
 import InternalResources from "@/pages/InternalResources";
 import ExportToFrance from "@/pages/ExportToFrance";
@@ -104,7 +103,10 @@ export default function App() {
 
                       <Route path="/solutions" element={<Solutions />} />
                       <Route path="/resources" element={<Resources />} />
-                      <Route path="/tarifs" element={<Tarifs />} />
+
+                      {/* ✅ Tarifs supprimée => redirect vers pricing */}
+                      <Route path="/tarifs" element={<Navigate to="/pricing" replace />} />
+
                       <Route path="/contact" element={<Contact />} />
                       <Route path="/export-to-france" element={<ExportToFrance />} />
                       <Route path="/newsletter" element={<Newsletter />} />
