@@ -131,7 +131,7 @@ export default function InvoiceDetailPage() {
           setNotesWarning("");
         }
       })
-      .catch((err) => {
+      .then(() => undefined, (err: any) => {
         if (!mounted) return;
         setNotesAvailable(false);
         setNotesWarning(err?.message || "Notes serveur indisponibles. Stockage local activé.");
@@ -175,7 +175,10 @@ export default function InvoiceDetailPage() {
           setNotes((data as NoteRow[]) || []);
         }
       })
-      .finally(() => {
+      .then(() => {
+        if (!mounted) return;
+        setNotesLoading(false);
+      }, () => {
         if (!mounted) return;
         setNotesLoading(false);
       });

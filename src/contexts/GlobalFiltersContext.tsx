@@ -230,9 +230,16 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
   const clientReqIdRef = React.useRef(0);
   const productReqIdRef = React.useRef(0);
 
+  // Persist to localStorage only when user changes filters (not on mount)
+  const mountedRef = React.useRef(false);
   React.useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
     setStoredFilters({ timeRange, variables, autoRefresh });
-  }, [timeRange, variables, autoRefresh, setStoredFilters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeRange, variables, autoRefresh]);
 
   const resolvedRange = React.useMemo(() => resolveTimeRange(timeRange), [timeRange]);
 

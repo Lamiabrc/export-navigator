@@ -590,14 +590,18 @@ export function calculateCosts(params: CostCalculationParams): CostBreakdown {
 }
 
 function estimateTransportCost(zone: Zone, mode: TransportMode, weight: number): number {
-  const costPerKg: Record<Zone, Record<TransportMode, number>> = {
-    UE: { Routier: 0.15, Maritime: 0.2, Aerien: 2.5, Express: 5, Ferroviaire: 0.12 },
-    "Hors UE": { Routier: 0.25, Maritime: 0.3, Aerien: 4, Express: 8, Ferroviaire: 0.2 },
+  const costPerKg: Partial<Record<Zone, Partial<Record<TransportMode, number>>>> = {
+    UE: { Routier: 0.15, Maritime: 0.2, Aerien: 2.5, Express: 5, Ferroviaire: 0.12, Multimodal: 0.3 },
+    "Hors UE": { Routier: 0.25, Maritime: 0.3, Aerien: 4, Express: 8, Ferroviaire: 0.2, Multimodal: 0.4 },
+    DROM: { Routier: 0.3, Maritime: 0.35, Aerien: 4.5, Express: 9, Ferroviaire: 0.25, Multimodal: 0.45 },
+    FR: { Routier: 0.1, Maritime: 0.15, Aerien: 2, Express: 4, Ferroviaire: 0.1, Multimodal: 0.2 },
   };
 
-  const minCost: Record<Zone, number> = {
+  const minCost: Partial<Record<Zone, number>> = {
     UE: 200,
     "Hors UE": 400,
+    DROM: 350,
+    FR: 100,
   };
 
   return Math.max(weight * (costPerKg[zone]?.[mode] || 0.3), minCost[zone] || 300);

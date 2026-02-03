@@ -25,10 +25,13 @@ const riskConfig: Record<RiskLevel, { label: string; className: string }> = {
   ok: { label: 'OK', className: 'badge-ok' },
   a_surveiller: { label: 'À surveiller', className: 'badge-warning' },
   risque: { label: 'Risque', className: 'badge-risk' },
+  critique: { label: 'Critique', className: 'badge-risk' },
 };
 
 const zoneConfig: Record<Zone, { label: string; className: string }> = {
+  FR: { label: 'France', className: 'badge-neutral' },
   UE: { label: 'UE', className: 'badge-ue' },
+  DROM: { label: 'DROM', className: 'badge-warning' },
   'Hors UE': { label: 'Hors UE', className: 'badge-hors-ue' },
 };
 

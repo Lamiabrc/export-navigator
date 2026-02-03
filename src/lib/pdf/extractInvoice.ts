@@ -514,7 +514,7 @@ async function extractStructuredTextFromPdf(file: File): Promise<{ rawText: stri
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
     const page = await pdf.getPage(pageNum);
-    const txt = await page.getTextContent({ normalizeWhitespace: true });
+    const txt = await page.getTextContent();
 
     const items = txt.items as TextItem[];
     const positioned: PositionedText[] = [];

@@ -300,12 +300,12 @@ export default function TaxesOM() {
 
             const terrFilter = TERRITORIES.map((t) => t.code);
 
-            const res = await supabase
+            const res = await (supabase
               .from(omTable)
               .select("*")
-              .in(hsColOm as any, hsFilter as any)
-              .in(territoryColOm as any, terrFilter as any)
-              .limit(10000);
+              .in(hsColOm, hsFilter)
+              .in(territoryColOm, terrFilter)
+              .limit(10000) as any);
 
             if (res.error) throw res.error;
             if (!alive) return;
@@ -326,11 +326,11 @@ export default function TaxesOM() {
 
           if (terrCol) {
             const terrFilter = TERRITORIES.map((t) => t.code);
-            const res = await supabase
+            const res = await (supabase
               .from(vatTable)
               .select("*")
-              .in(terrCol as any, terrFilter as any)
-              .limit(10000);
+              .in(terrCol, terrFilter)
+              .limit(10000) as any);
 
             if (res.error) throw res.error;
             if (!alive) return;
@@ -360,11 +360,11 @@ export default function TaxesOM() {
 
           if (terrCol) {
             const terrFilter = TERRITORIES.map((t) => t.code);
-            const res = await supabase
+            const res = await (supabase
               .from(taxTable)
               .select("*")
-              .in(terrCol as any, terrFilter as any)
-              .limit(10000);
+              .in(terrCol, terrFilter)
+              .limit(10000) as any);
 
             if (res.error) throw res.error;
             if (!alive) return;

@@ -27,11 +27,11 @@ export const vatRates: VatRate[] = [
 export interface OctroiMerRate {
   destination: Destination;
   category: string;
-  code_nomenclature: string;
+  code_nomenclature?: string;
   om_rate: number;
   omr_rate: number;
-  exoneration_possible: boolean;
-  notes: string;
+  exoneration_possible?: boolean;
+  notes?: string;
 }
 
 export const octroiMerRates: OctroiMerRate[] = [];

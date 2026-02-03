@@ -17,6 +17,8 @@ export type Product = {
   notes?: string;
   ref_code?: string;
   cost?: number;
+  lpp_code?: string;
+  lppCode?: string;
   // Compat legacy
   id?: string;
   name?: string;

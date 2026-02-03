@@ -19,7 +19,10 @@ export default function Home() {
     "Un premier diagnostic clair (TVA, DDP, conformité) pour décider vite — puis un audit expert si nécessaire.";
   const heroPrimary = (t("heroLanding.ctaPrimary") as string) ?? "Lancer l’outil";
   const heroSecondary = (t("heroLanding.ctaSecondary") as string) ?? "Voir les offres";
-  const featureCardsFromI18n = (t("heroLanding.featureCards") as FeatureCard[]) ?? [];
+  const featureCardsRaw = t("heroLanding.featureCards");
+  const featureCardsFromI18n: FeatureCard[] = Array.isArray(featureCardsRaw)
+    ? (featureCardsRaw as unknown as FeatureCard[])
+    : [];
 
   const featureCards: FeatureCard[] =
     featureCardsFromI18n?.length > 0

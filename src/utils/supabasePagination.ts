@@ -1,10 +1,10 @@
-import { PostgrestError, PostgrestFilterBuilder } from "@supabase/supabase-js";
+import type { PostgrestError } from "@supabase/supabase-js";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PostgrestFilterBuilderLike<T> = any;
 
 export async function fetchAllWithPagination<T>(
-  buildQuery: (
-    from: number,
-    to: number
-  ) => PostgrestFilterBuilder<any, any, T[], unknown>,
+  buildQuery: (from: number, to: number) => PostgrestFilterBuilderLike<T>,
   pageSize = 1000
 ): Promise<T[]> {
   const all: T[] = [];

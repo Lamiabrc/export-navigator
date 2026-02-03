@@ -5,19 +5,23 @@ import { useI18n } from "@/contexts/LanguageContext";
 
 export default function VipRentability() {
   const { t } = useI18n();
-  const meta = (t("exportCosting") as {
-    title: string;
-    subtitle: string;
-    profitabilityTitle: string;
-  }) ?? { title: "VIP Rentabilité", subtitle: "", profitabilityTitle: "" };
+  const metaRaw = t("exportCosting");
+  const meta = (typeof metaRaw === "object" && metaRaw !== null ? metaRaw : {}) as {
+    title?: string;
+    subtitle?: string;
+    profitabilityTitle?: string;
+  };
+  const title = meta.title ?? "VIP Rentabilité";
+  const subtitle = meta.subtitle ?? "";
+  const profitabilityTitle = meta.profitabilityTitle ?? "";
 
   return (
     <MarketingLayout>
       <section className="bg-gradient-to-b from-[#1E3A8A] to-[#0B1220] py-20 text-white">
         <div className="mx-auto max-w-5xl px-6 text-center">
           <p className="text-xs uppercase tracking-[0.6em] text-white/70">VIP</p>
-          <h1 className="mt-3 text-4xl font-semibold">{meta.title}</h1>
-          <p className="mt-4 text-sm text-white/80">{meta.subtitle}</p>
+          <h1 className="mt-3 text-4xl font-semibold">{title}</h1>
+          <p className="mt-4 text-sm text-white/80">{subtitle}</p>
           <p className="mt-6 text-sm text-white/70">
             Rentabilité, seuil et sensibilité sont présentés avec des scénarios (variation fret/taux ou droits) et des recommandations.
           </p>
@@ -32,7 +36,7 @@ export default function VipRentability() {
 
       <section className="bg-white py-16">
         <div className="mx-auto max-w-5xl px-6 space-y-6">
-          <h2 className="text-2xl font-semibold text-slate-900">{meta.profitabilityTitle}</h2>
+          <h2 className="text-2xl font-semibold text-slate-900">{profitabilityTitle}</h2>
           <p className="text-sm text-slate-600">
             La version VIP présente la marge brute, les seuils critiques, la sensibilité fret/taux/droits et des recommandations contractuelles.
           </p>

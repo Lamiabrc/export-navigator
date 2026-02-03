@@ -268,7 +268,7 @@ async function generatePdf(payload: SharePayload) {
   });
 
   const bytes = await pdf.save();
-  return new Blob([bytes], { type: "application/pdf" });
+  return new Blob([new Uint8Array(bytes)], { type: "application/pdf" });
 }
 
 export default function Analyse() {

@@ -834,7 +834,7 @@ export default function LeadMagnet() {
                   <Link to={tool.action.href}>{tool.actionLabel}</Link>
                 </Button>
               ) : (
-                <Button variant="outline" className="border-border text-foreground hover:border-primary" onClick={() => scrollToId(tool.action.targetId)}>
+                <Button variant="outline" className="border-border text-foreground hover:border-primary" onClick={() => scrollToId((tool.action as any).targetId)}>
                   {tool.actionLabel}
                 </Button>
               )}

@@ -23,8 +23,8 @@ export default function About() {
   const { t } = useI18n();
   usePageMeta("meta.about.title", "meta.about.description");
 
-  const copy: Copy =
-    (t("aboutPage") as Copy) ?? {
+  const copyRaw = t("aboutPage");
+  const copy: Copy = (typeof copyRaw === "object" && copyRaw !== null ? copyRaw as unknown as Copy : null) ?? {
       headline: "À propos",
       title: "Export Navigator",
       subtitle:
