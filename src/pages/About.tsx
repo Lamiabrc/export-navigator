@@ -26,9 +26,9 @@ export default function About() {
   const copyRaw = t("aboutPage");
   const copy: Copy = (typeof copyRaw === "object" && copyRaw !== null ? copyRaw as unknown as Copy : null) ?? {
       headline: "À propos",
-      title: "Export Navigator",
+      title: "MPL Export Navigator",
       subtitle:
-        "Un outil simple pour estimer vos coûts export, détecter les risques (TVA, douane, DDP, DROM) et décider vite — avec possibilité de validation par une consultante.",
+        "Un outil simple pour estimer vos coûts export, détecter les risques (TVA, douane, DDP, DROM) et décider vite — avec possibilité de validation par un consultant.",
       missionTitle: "Pourquoi cet outil existe",
       missionBody:
         "Parce qu’en export, les erreurs coûtent cher : TVA mal gérée, incoterm incohérent, DDP risqué, documents incomplets, sanctions… Export Navigator vous donne une vue claire et une checklist actionnable, puis MPL Export Conseil peut valider les cas complexes.",
