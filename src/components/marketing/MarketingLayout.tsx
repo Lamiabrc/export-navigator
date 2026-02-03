@@ -4,22 +4,8 @@ import type { ReactNode } from "react";
 import { useI18n } from "@/contexts/LanguageContext";
 import { usePlan } from "@/auth/PlanContext";
 import type { LanguageCode } from "@/i18n/translations";
+import { navLinks } from "@/config/navLinks";
 import { GdprGuarantee } from "@/components/GdprGuarantee";
-
-type NavLink = { key: string; to: string; fallback: string };
-
-const navLinks: NavLink[] = [
-  { key: "header.menu.home", to: "/", fallback: "Accueil" },
-  { key: "header.menu.tool", to: "/tool", fallback: "Outil" },
-  // On garde /services mais on affiche "Offre" pour cohérence business
-  { key: "header.menu.services", to: "/services", fallback: "Offre" },
-  // On garde /watch mais on affiche "Veille"
-  { key: "header.menu.watch", to: "/watch", fallback: "Veille" },
-  // Guides / Méthodologie : si ton routing est /guide ou /guides, adapte ici
-  { key: "header.menu.guides", to: "/guides", fallback: "Guides" },
-  { key: "header.menu.methodologie", to: "/methodologie", fallback: "Méthodologie" },
-  { key: "header.menu.contact", to: "/contact", fallback: "Contact" },
-];
 
 // ✅ Encoding-safe flags (avoid broken emoji bytes)
 const flags: Record<LanguageCode, string> = {

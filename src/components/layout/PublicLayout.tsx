@@ -4,18 +4,8 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
-
-type NavItem = { label: string; to: string };
-
-const NAV_ITEMS: NavItem[] = [
-  { label: "Accueil", to: "/" },
-  { label: "Outil", to: "/tool" },
-  { label: "Offre", to: "/services" },
-  { label: "Veille", to: "/veille" },
-  { label: "Guides", to: "/guides" },
-  { label: "Méthodologie", to: "/methodologie" },
-  { label: "Contact", to: "/contact" },
-];
+import { useI18n } from "@/contexts/LanguageContext";
+import { navLinks } from "@/config/navLinks";
 
 type RssItem = { title: string; link: string; pubDate?: string };
 
@@ -180,6 +170,7 @@ function FooterRss() {
 
 export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
+  const { t } = useI18n();
 
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
@@ -206,15 +197,16 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
           {/* Desktop nav */}
           <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-            {NAV_ITEMS.map((item) => {
-              const active = isActivePath(location.pathname, item.to);
+            {navLinks.map((link) => {
+              const label = (t(link.key) as string) ?? link.fallback;
+              const active = isActivePath(location.pathname, link.to);
               return (
                 <Link
-                  key={item.to}
-                  to={item.to}
+                  key={link.to}
+                  to={link.to}
                   className={cn("transition hover:text-foreground", active && "text-foreground font-semibold")}
                 >
-                  {item.label}
+                  {label}
                 </Link>
               );
             })}
@@ -239,12 +231,13 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         <div className="md:hidden border-t border-border bg-background/70">
           <div className="mx-auto max-w-6xl overflow-x-auto px-4 py-2">
             <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-              {NAV_ITEMS.map((item) => {
-                const active = isActivePath(location.pathname, item.to);
-                return (
-                  <Link
-                    key={`${item.to}-m`}
-                    to={item.to}
+            {navLinks.map((link) => {
+              const active = isActivePath(location.pathname, link.to);
+              const label = (t(link.key) as string) ?? link.fallback;
+              return (
+                <Link
+                    key={`${link.to}-m`}
+                    to={link.to}
                     className={cn(
                       "whitespace-nowrap rounded-full border px-3 py-2 transition",
                       active
