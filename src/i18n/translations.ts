@@ -5,17 +5,17 @@ const fr = {
     home: {
       title: "Export Navigator · France ↔ Monde — Décidez mieux",
       description:
-        "Export Navigator vous donne une première lecture import/export (coût complet, Incoterms, documents, risques) puis vous oriente vers une validation humaine selon votre contexte (TVA, douane, contrats).",
+        "Export Navigator vous donne une première lecture import/export (coût complet, Incoterms, documents, risques) et automatise une grande partie des tâches récurrentes. La décision finale reste humaine selon votre contexte (TVA, douane, contrats).",
     },
     tool: {
       title: "Export Navigator · Outil d'évaluation",
       description:
-        "Outil public France ↔ Monde : estimation du coût complet, checklists et score de risque pour vos opérations import/export.",
+        "Outil France ↔ Monde : estimation du coût complet, checklists et score de risque pour vos opérations import/export.",
     },
     services: {
-      title: "Export Navigator · Offre de conseil",
+      title: "Export Navigator · Offres & plans",
       description:
-        "Packs diagnostic, process import/export et pilotage mensuel pour sécuriser vos flux depuis/vers la France et le monde.",
+        "Des plans clairs : FREE, PRO ONLINE (59€), PRO + VISIO (149€) et PILOTAGE HEBDO (560€) pour sécuriser vos flux France ↔ Monde.",
     },
     watch: {
       title: "Export Navigator · Veille & ressources",
@@ -24,11 +24,13 @@ const fr = {
     },
     about: {
       title: "Export Navigator · À propos",
-      description: "Consultante indépendante en import/export, formalités douanières, TVA et sécurisation opérationnelle (France ↔ Monde).",
+      description:
+        "Plateforme d’aide à la décision import/export : coûts, documents, veille et accompagnement optionnel (France ↔ Monde).",
     },
     contact: {
       title: "Export Navigator · Contact",
-      description: "Réservez un diagnostic de 20 minutes ou posez vos questions import/export (TVA, douane, Incoterms, documents).",
+      description:
+        "Posez vos questions import/export ou choisissez un accompagnement (visio mensuelle ou pilotage hebdo).",
     },
   },
 
@@ -46,10 +48,11 @@ const fr = {
     languageAria: "Changer la langue du site",
   },
 
+  // ✅ Pop-up FREE : profil société obligatoire
   companyProfile: {
     title: "Profil société requis",
     description:
-      "Avant de profiter de la version FREE (simulations, rapports limités, watch demo), confirmez votre société et son adresse. Cette donnée reste confidentielle et sécurise l'accès à l'outil.",
+      "Avant de profiter de la version FREE (quotas et veille démo), confirmez votre société et son adresse. Cette donnée reste confidentielle et sécurise l'accès à l'outil.",
     fields: {
       companyName: "Nom de la société",
       addressLine1: "Adresse (ligne 1)",
@@ -71,7 +74,7 @@ const fr = {
     },
     success: {
       title: "Profil confirmé",
-      description: "Tu peux maintenant utiliser la version FREE (quotas limités) et retrouver ta veille.",
+      description: "Tu peux maintenant utiliser la version FREE (quotas limités) et accéder à la veille démo.",
     },
     errors: {
       missing: "Informations manquantes",
@@ -82,13 +85,14 @@ const fr = {
     },
     friendly: "Merci de confirmer, on s’occupe du reste. 😊",
   },
+
   gdpr: {
     guaranteeTitle: "Garantie RGPD",
     guaranteeBody:
-      "Vos données sont stockées sur des serveurs européens, chiffrées au repos et accessibles uniquement par nos équipes autorisées. Vous gardez le contrôle, demandez la suppression ou la rectification à tout moment.",
+      "Vos données sont stockées sur des serveurs européens, chiffrées au repos et accessibles uniquement par nos équipes autorisées. Vous gardez le contrôle et pouvez demander la suppression ou la rectification à tout moment.",
     consentTitle: "Paramètres de consentement",
     consentBody:
-      "On active les cookies essentiels, analytiques et marketing seulement avec ton consentement. Tu peux ajuster les catégories ci-dessous, et tout est réversible.",
+      "On active les cookies essentiels, analytiques et marketing seulement avec votre consentement. Vous pouvez ajuster les catégories ci-dessous, et tout est réversible.",
     options: {
       analytics: "Statistiques anonymes",
       marketing: "Mises à jour & invitations",
@@ -98,6 +102,7 @@ const fr = {
       save: "Sauvegarder mes choix",
     },
   },
+
   languagePrompt: {
     title: "Choisissez votre langue",
     body: "Souhaitez-vous continuer en français ou en anglais ?",
@@ -107,7 +112,7 @@ const fr = {
     title: "Le département export digital des PME.",
     subtitle: "Simulation, documents, conformité et veille — sans recruter, sans multiplier les outils.",
     paragraph:
-      "Export Navigator agit comme un assistant sur les tâches récurrentes du service export (ADV, responsable, consultant) en automatisant les étapes routinières tout en laissant la décision finale humaine.",
+      "Export Navigator automatise une grande partie du travail récurrent d’un service export (ADV, responsable, consultant sur les basiques) tout en laissant la décision finale à l’humain selon votre contexte.",
     ctaPrimary: "Tester gratuitement",
     ctaSecondary: "Découvrir les plans",
     brandLabel: "Export Navigator",
@@ -118,32 +123,8 @@ const fr = {
       "Veille réglementaire automatisée (flux + filtres + digest)",
     ],
   },
-  automationProof: {
-    title: "What the tool automates instead of hiring",
-    items: [
-      {
-        title: "Export back-office",
-        detail: "Checklists, documents and report-ready PDFs shared across teams.",
-      },
-      {
-        title: "Export manager / ADV lead",
-        detail: "Standardization, quality control and histories for every export lane.",
-      },
-      {
-        title: "Export consultant (recurring basics)",
-        detail: "Scoping, synthesis and templated reporting without dedicating a consultant.",
-      },
-      {
-        title: "Watch & compliance",
-        detail: "RSS feeds, filters and alerts by country/HS tailored to your plan.",
-      },
-    ],
-  },
-  disclaimers: [
-    "Non-contractual indications. Does not replace a licensed customs agent/forwarder.",
-    "Estimates and checklists are indicative; sources provided when available.",
-    "The user remains responsible for the final compliance decision.",
-  ],
+
+  // ✅ UNE seule définition (corrigé)
   automationProof: {
     title: "Ce que l’outil automatise (au lieu d’embaucher)",
     items: [
@@ -165,18 +146,80 @@ const fr = {
       },
     ],
   },
+
+  // ✅ UNE seule définition (corrigé)
   disclaimers: [
     "Indications non contractuelles. Ne remplace pas un agent en douane/commissionnaire.",
     "Estimations et checklists à titre indicatif, avec sources quand disponibles.",
     "L’utilisateur reste responsable de la conformité finale.",
   ],
 
+  // ✅ Utilisé par useResolvedPricing(t) : t('pricing')
+  pricing: {
+    headline: "Des plans clairs, immédiatement activables",
+    subhead: "FREE pour tester · 59€ 100% en ligne · 149€ visio mensuelle · 560€ pilotage hebdo",
+    description:
+      "Choisissez le niveau d’autonomie : self-serve ou accompagnement régulier. La veille et le digest email sont inclus dès PRO ONLINE.",
+    cta: "Nous contacter",
+    tiers: {
+      FREE: {
+        name: "FREE",
+        price: "0 € / mois",
+        description: "Version découverte (profil société requis).",
+        features: [
+          "Profil société + adresse obligatoires",
+          "Simulateur (résultats à l’écran)",
+          "1 PDF / mois",
+          "Veille démo (historique & périmètre limités)",
+          "Pas d’alertes email",
+        ],
+      },
+      PRO_ONLINE: {
+        name: "PRO ONLINE",
+        price: "59 € / mois",
+        description: "100% en ligne : l’outil complet + veille automatisée.",
+        features: [
+          "Simulateur complet (Incoterms, transport, frais)",
+          "Checklists documentaires standardisées",
+          "PDF illimités (ou quota très élevé)",
+          "Watch Center complet (filtres, recherche, tags)",
+          "Digest email hebdo automatique",
+          "Historique & exports",
+        ],
+      },
+      PRO_VISIO: {
+        name: "PRO + VISIO",
+        price: "149 € / mois",
+        description: "Tout PRO ONLINE + 1 visio mensuelle.",
+        features: [
+          "Tout PRO ONLINE",
+          "1 visio / mois (réservation incluse)",
+          "Pré-formulaire + dépôt documents",
+          "Compte-rendu PDF (template)",
+          "Support prioritaire",
+        ],
+      },
+      PILOTAGE: {
+        name: "PILOTAGE HEBDO",
+        price: "560 € / mois",
+        description: "Tout PRO ONLINE + 1h/semaine.",
+        features: [
+          "Tout PRO ONLINE",
+          "1h / semaine (visio)",
+          "Priorisation + plan d’actions hebdo",
+          "Revue risques & conformité",
+          "Support prioritaire (fast track)",
+        ],
+      },
+    },
+  },
+
   sections: {
     whoTitle: "Pour qui ?",
     whoCards: [
       "PME en France qui exportent vers le monde entier",
       "PME en France qui importent depuis le monde entier",
-      "Entreprises internationales qui vendent/expédient vers la France (et doivent cadrer TVA, douane, documents)",
+      "Entreprises internationales qui vendent/expédient vers la France (TVA, douane, documents)",
     ],
 
     toolTitle: "Ce que l'outil fait en 5 minutes",
@@ -196,23 +239,24 @@ const fr = {
       "Clauses contractuelles et responsabilités réelles",
       "Sans pays (origine/destination) et sans HS, l’analyse se limite à des règles générales",
     ],
-    limitationsCta: "Valider mon opération avec une consultante",
+    limitationsCta: "Passer sur un plan avec visio",
 
-    consultingTitle: "Offre de consulting",
+    // Ajusté : plus “packs devis”, mais “accompagnement”
+    consultingTitle: "Accompagnement (optionnel)",
     consultingDescription:
-      "Des packs modulables pour couvrir les premiers diagnostics, industrialiser vos process et piloter vos flux régulièrement.",
+      "Vous pouvez rester 100% autonome (59€) ou ajouter une visio mensuelle (149€) ou un pilotage hebdo (560€).",
     consultingPacks: [
       {
-        name: "Diagnostic Express",
-        detail: "1–2 semaines : audit flux, risques et plan d'actions immédiats.",
+        name: "PRO ONLINE",
+        detail: "59€/mois · 100% self-serve + veille + digest email hebdo.",
       },
       {
-        name: "Process Import/Export",
-        detail: "3–6 semaines : checklists, jalons, documents et formations ciblées.",
+        name: "PRO + VISIO",
+        detail: "149€/mois · 1 visio / mois + pré-formulaire + compte-rendu PDF.",
       },
       {
-        name: "Pilotage Mensuel",
-        detail: "Revue des flux, écarts, support décisionnel et option veille continue.",
+        name: "PILOTAGE HEBDO",
+        detail: "560€/mois · 1h / semaine · priorisation + plan d’actions.",
       },
     ],
 
@@ -220,7 +264,13 @@ const fr = {
     faqItems: [
       {
         question: "L'outil est-il gratuit ?",
-        answer: "Oui, la simulation en ligne est gratuite ; les interventions humaines sont sur devis.",
+        answer:
+          "Oui : une version FREE existe (quotas + veille démo). Pour l’outil complet et la veille automatisée, choisissez PRO ONLINE (59€).",
+      },
+      {
+        question: "La veille est incluse à partir de quel plan ?",
+        answer:
+          "La veille complète et le digest email hebdo sont inclus dès PRO ONLINE (59€). La version FREE propose une veille démo limitée.",
       },
       {
         question: "Dois-je forcément choisir un pays ?",
@@ -230,33 +280,32 @@ const fr = {
       {
         question: "Dois-je saisir un code HS ?",
         answer:
-          "Idéalement oui : le HS permet d’affiner droits, contrôles et contraintes. Sans HS, l’outil applique des règles générales (conditions de base).",
+          "Idéalement oui : le HS permet d’affiner droits, contrôles et contraintes. Sans HS, l’outil applique des règles générales (hypothèses prudentes).",
       },
       {
-        question: "Comment se déroule le diagnostic ?",
-        answer: "Nous échangeons 20 minutes pour confirmer vos risques, puis je vous propose un plan clair.",
-      },
-      {
-        question: "Fournissez-vous des livrables ?",
-        answer: "Oui : rapport synthétique exportable, checklists et plan d'actions validés par mes soins.",
+        question: "Est-ce que ça remplace un agent en douane ?",
+        answer:
+          "Non. Export Navigator fournit des estimations indicatives, des checklists et de la veille. La conformité finale dépend de votre contexte et doit être validée si nécessaire.",
       },
       {
         question: "Quelle est la prochaine étape ?",
-        answer: "Réservez un diagnostic pour valider les chiffres et sécuriser vos documents avant expédition.",
+        answer:
+          "Testez le FREE, puis passez en PRO ONLINE (59€) pour débloquer l’outil complet. Si votre cas est complexe, optez pour la visio mensuelle (149€) ou le pilotage hebdo (560€).",
       },
     ],
 
     finalCtaTitle: "Vous avez un cas complexe ?",
-    finalCtaParagraph: "Passons ensemble à la validation humaine pour sécuriser votre TVA, vos documents et votre marge.",
-    finalCtaButton: "Réserver un appel",
-    consultingPrice: "À partir de 2 200 €",
+    finalCtaParagraph:
+      "Passez du self-serve à un accompagnement régulier : visio mensuelle ou pilotage hebdo pour sécuriser TVA, douane, documents et marge.",
+    finalCtaButton: "Nous contacter",
+    consultingPrice: "À partir de 149 € / mois",
   },
 
   toolPage: {
     headline: "Export Navigator · Outil d'estimation",
     subhead: "Estimez vos coûts, vos responsabilités et vos risques en quelques clics.",
     body:
-      "L'outil public analyse vos routes France ↔ Monde, vos Incoterms et vos documents, puis livre un score avec des actions clés à suivre.",
+      "L'outil analyse vos routes France ↔ Monde, vos Incoterms et vos documents, puis livre un score avec des actions clés à suivre.",
     list: [
       "Estimation coût complet (transport, douane, taxes, frais annexes)",
       "Lecture Incoterm et impacts responsabilités",
@@ -272,10 +321,9 @@ const fr = {
       "Produits réglementés / contrôles spécifiques",
       "Clauses contractuelles et responsabilités réelles",
     ],
-    toolLimitationsCta: "Valider mon opération avec une consultante",
-    humanValidationCta: "Valider mon opération (20 min)",
+    toolLimitationsCta: "Passer sur un plan avec visio",
+    humanValidationCta: "Nous contacter",
 
-    // ✅ Messages prêts à l'emploi (si tu veux les afficher quand champs vides)
     emptyStates: {
       missingCountry:
         "Sans pays (origine/destination), l’analyse reste générale : l’import/export dépend des relations, accords et traités. Indiquez un pays pour une estimation fiable.",
@@ -284,23 +332,46 @@ const fr = {
     },
   },
 
+  // ✅ Services page (ta page Services.tsx utilise ces clés)
   servicesPage: {
-    headline: "Pack consulting Export Navigator",
-    subhead: "Choisissez la durée et le niveau d'accompagnement dont vos équipes ont besoin.",
+    headline: "Des plans clairs pour sécuriser vos exports",
+    subhead: "Self-serve ou accompagnement régulier — selon votre besoin.",
     description:
-      "Diagnostic express, paramétrage de vos processus import/export et pilotage mensuel pour sécuriser chaque expédition (France ↔ Monde).",
-    packs: [
-      "Diagnostic Express · 1–2 semaines · Audit flux, risques et plan d'actions",
-      "Process Import/Export · 3–6 semaines · Checklists, jalons et formation",
-      "Pilotage Mensuel · Revue flux, écarts et support décisionnel (option veille)",
-    ],
-    cta: "Parler à la consultante",
+      "Simulateur, checklists, PDF et veille automatisée : vous choisissez le niveau d’autonomie (FREE, 59€, 149€ ou 560€).",
+    cta: "Nous contacter",
+
+    // ✅ labels simples (évite servicesPage.cta.pricing qui casserait si cta est une string)
+    ctaPricing: "Voir les tarifs",
+    ctaDetails: "Voir le détail",
+    badgeRecommended: "Recommandé",
+
+    disclaimer:
+      "Indications non contractuelles — ne remplace pas un agent en douane/commissionnaire. Vous restez responsable de la conformité finale.",
+
+    proof: {
+      adv: {
+        title: "ADV export",
+        desc: "Checklists documentaires, rapports PDF et préparation standardisée.",
+      },
+      manager: {
+        title: "Responsable export / ADV",
+        desc: "Pilotage, historique, règles communes et partage simple avec l’équipe.",
+      },
+      consultant: {
+        title: "Consultant export (tâches récurrentes)",
+        desc: "Cadrage basique, synthèse et documents prêts à valider et diffuser.",
+      },
+      watch: {
+        title: "Veille & conformité",
+        desc: "Flux RSS, filtres, tags et digest automatique selon votre plan.",
+      },
+    },
   },
 
   watchPage: {
     headline: "Veille & ressources",
     subhead: "Recevez les signaux réglementaires et commerciaux qui impactent vos opérations France ↔ Monde.",
-    body: "Newsletter, fiches pratiques et alertes pour anticiper les risques TVA, douane, sanctions ou exigences documentaires.",
+    body: "Alertes, fiches pratiques et digests pour anticiper risques TVA, douane, sanctions ou exigences documentaires.",
     cta: "Je m'inscris à la veille",
     cards: [
       {
@@ -312,8 +383,8 @@ const fr = {
         detail: "Templates, checklists et retours d'expérience pour décider vite.",
       },
       {
-        title: "Newsletter",
-        detail: "Briefing mensuel sur tarifs, DDP, Incoterms et conformité marketplace.",
+        title: "Digest automatique",
+        detail: "Briefing hebdo par pays/catégories à partir du plan PRO ONLINE.",
       },
     ],
   },
@@ -321,27 +392,27 @@ const fr = {
   aboutPage: {
     headline: "À propos",
     body:
-      "Je suis consultante en import/export, formalités, TVA et douane depuis plus de 10 ans. J'aide les PME à sécuriser leurs flux France ↔ Monde sans se noyer dans la réglementation.",
+      "Export Navigator est une plateforme d’aide à la décision import/export : coût rendu, documents, veille et accompagnement optionnel. L’objectif : réduire les erreurs et standardiser vos flux France ↔ Monde.",
     list: [
-      "Expertise douane, TVA, Incoterms, DDP",
-      "Méthodologie factuelle : diagnostic, plan d'actions, pilotage",
-      "Accompagnement à distance comme sur site",
+      "Coûts, Incoterms, documents, risques",
+      "Veille RSS structurée et filtrable",
+      "Autonome ou avec visio mensuelle / pilotage hebdo",
     ],
   },
 
   contactPage: {
     headline: "Contact",
-    body: "Décrivez votre opération (import ou export), joignez vos documents et réservez un créneau de diagnostic rapide.",
+    body: "Décrivez votre besoin (import ou export) et choisissez votre niveau d’accompagnement.",
     form: {
       name: "Nom / société",
       email: "Email professionnel",
       message: "Votre demande",
-      submit: "Envoyer et réserver",
+      submit: "Envoyer",
     },
     bookBlock: {
-      title: "Réserver un appel 20 min",
-      body: "Je vous rappelle pour valider vos risques TVA, douane et DDP avant toute expédition.",
-      cta: "Choisir un créneau",
+      title: "Accompagnement en visio",
+      body: "Optez pour 1 visio / mois (149€) ou 1h / semaine (560€) selon votre niveau de complexité.",
+      cta: "Découvrir les plans",
     },
   },
 
@@ -356,17 +427,17 @@ const en = {
     home: {
       title: "Export Navigator · France ↔ World — Decide better",
       description:
-        "Export Navigator provides a first look at import/export costs, Incoterms, documents and risks, then guides you to human validation based on your VAT, customs and contractual setup.",
+        "Export Navigator provides a first look at import/export costs, Incoterms, documents and risks, and automates a large part of recurring work. Final decisions remain human and contextual (VAT, customs, contracts).",
     },
     tool: {
       title: "Export Navigator · Estimation tool",
       description:
-        "Public tool France ↔ World: landed cost estimate, document checklists and a risk score for import/export operations.",
+        "France ↔ World tool: landed cost estimate, document checklists and a risk score for import/export operations.",
     },
     services: {
-      title: "Export Navigator · Services",
+      title: "Export Navigator · Plans & pricing",
       description:
-        "Express diagnostic, import/export process setup and monthly reviews to keep shipments compliant (France ↔ World).",
+        "Clear plans: FREE, PRO ONLINE (€59), PRO + VIDEO (€149) and WEEKLY PILOTING (€560) to keep France ↔ World shipments compliant.",
     },
     watch: {
       title: "Export Navigator · Insights & watch",
@@ -375,11 +446,13 @@ const en = {
     },
     about: {
       title: "Export Navigator · About",
-      description: "Independent import/export consultant covering customs, VAT and operational compliance (France ↔ World).",
+      description:
+        "Decision-support platform for import/export: costs, documents, watch and optional coaching (France ↔ World).",
     },
     contact: {
       title: "Export Navigator · Contact",
-      description: "Book a 20-minute diagnostic call or share your import/export request (VAT, customs, Incoterms, docs).",
+      description:
+        "Share your request and choose a coaching level (monthly video or weekly piloting).",
     },
   },
 
@@ -387,7 +460,7 @@ const en = {
     menu: {
       home: "Home",
       tool: "Tool",
-      services: "Services",
+      services: "Plans",
       watch: "Insights",
       about: "About",
       contact: "Contact",
@@ -400,7 +473,7 @@ const en = {
   companyProfile: {
     title: "Company profile required",
     description:
-      "Before unlocking the FREE tier (limited simulations, demo watch), confirm your company and address. This information stays confidential and ensures accountable usage.",
+      "Before unlocking the FREE tier (quotas and demo watch), confirm your company and address. This information stays confidential and ensures accountable usage.",
     fields: {
       companyName: "Company name",
       addressLine1: "Address (line 1)",
@@ -422,7 +495,7 @@ const en = {
     },
     success: {
       title: "Profile saved",
-      description: "You can now use the FREE tier (with its quotas) and access your watch preview.",
+      description: "You can now use the FREE tier (with its quotas) and access the demo watch.",
     },
     errors: {
       missing: "Missing information",
@@ -431,8 +504,9 @@ const en = {
       saveBody: "We could not store the profile. Try again in a few moments.",
       noTable: "The platform is still setting up. Please retry shortly.",
     },
-    friendly: "Thanks for confirming, we’ll take care of the rest. 😊",
+    friendly: "Thanks for confirming — we’ll take care of the rest. 😊",
   },
+
   gdpr: {
     guaranteeTitle: "GDPR guarantee",
     guaranteeBody:
@@ -449,6 +523,7 @@ const en = {
       save: "Save preferences",
     },
   },
+
   languagePrompt: {
     title: "Pick your language",
     body: "Would you like to continue in English or French?",
@@ -458,16 +533,103 @@ const en = {
     title: "Your digital export department for SMEs.",
     subtitle: "Costs, documents, compliance watch — without hiring.",
     paragraph:
-      "Export Navigator automates a large part of your export team's routine work (ADV, export manager, consultant) while ensuring final compliance decisions stay human and contextual.",
+      "Export Navigator automates a large part of recurring export work (ops, export manager, consultant on basics) while keeping final compliance decisions human and contextual.",
     ctaPrimary: "Try for free",
     ctaSecondary: "Explore the plans",
     brandLabel: "Export Navigator",
     bullets: [
-      "Automates a large part of export workflows (ADV, export manager, consultant on recurring tasks)",
+      "Automates a large part of export workflows (ops, export manager, consultant on recurring tasks)",
       "Landed-cost simulator (Incoterms, transport, fees) + one-page PDF reports",
       "Standardized documentation checklists",
       "Automated compliance watch (feeds + filters + digest)",
     ],
+  },
+
+  automationProof: {
+    title: "What the tool automates instead of hiring",
+    items: [
+      {
+        title: "Export ops",
+        detail: "Checklists, documents and share-ready PDFs across teams.",
+      },
+      {
+        title: "Export manager / ADV lead",
+        detail: "Standardization, quality control and histories for every lane.",
+      },
+      {
+        title: "Export consultant (recurring basics)",
+        detail: "Scoping, synthesis and templated reporting without ongoing consulting.",
+      },
+      {
+        title: "Watch & compliance",
+        detail: "RSS feeds, filters and alerts by country/HS based on your plan.",
+      },
+    ],
+  },
+
+  disclaimers: [
+    "Non-binding information. Does not replace a licensed customs broker/forwarder.",
+    "Estimates and checklists are indicative; sources provided when available.",
+    "The user remains responsible for the final compliance decision.",
+  ],
+
+  pricing: {
+    headline: "Clear plans you can activate instantly",
+    subhead: "FREE to test · €59 self-serve · €149 monthly video · €560 weekly piloting",
+    description:
+      "Choose autonomy level: self-serve or regular coaching. Full watch + weekly digest are included from PRO ONLINE.",
+    cta: "Contact us",
+    tiers: {
+      FREE: {
+        name: "FREE",
+        price: "€0 / month",
+        description: "Discovery tier (company profile required).",
+        features: [
+          "Company + address required",
+          "Simulator (screen results)",
+          "1 PDF / month",
+          "Demo watch (limited history & scope)",
+          "No email alerts",
+        ],
+      },
+      PRO_ONLINE: {
+        name: "PRO ONLINE",
+        price: "€59 / month",
+        description: "100% self-serve: full tool + automated watch.",
+        features: [
+          "Full simulator (Incoterms, transport, fees)",
+          "Standard documentation checklists",
+          "Unlimited PDFs (or very high quota)",
+          "Full Watch Center (filters, search, tags)",
+          "Automated weekly email digest",
+          "History & exports",
+        ],
+      },
+      PRO_VISIO: {
+        name: "PRO + VIDEO",
+        price: "€149 / month",
+        description: "Everything in PRO ONLINE + 1 monthly video session.",
+        features: [
+          "Everything in PRO ONLINE",
+          "1 video session / month (booking included)",
+          "Pre-call form + document upload",
+          "Meeting summary PDF template",
+          "Priority support",
+        ],
+      },
+      PILOTAGE: {
+        name: "WEEKLY PILOTING",
+        price: "€560 / month",
+        description: "Everything in PRO ONLINE + 1 hour per week.",
+        features: [
+          "Everything in PRO ONLINE",
+          "1 hour / week (video)",
+          "Weekly prioritization & action plan",
+          "Risk & compliance review",
+          "Priority support (fast track)",
+        ],
+      },
+    },
   },
 
   sections: {
@@ -493,25 +655,25 @@ const en = {
       "E-commerce scenarios (returns, marketplaces, warehouses)",
       "Regulated goods and specific controls",
       "Contract clauses and real responsibilities",
-      "Without country and HS code, the analysis stays at a general-rules level",
+      "Without country and HS code, the analysis stays generic",
     ],
-    limitationsCta: "Validate my shipment with a consultant",
+    limitationsCta: "Upgrade to a plan with coaching",
 
-    consultingTitle: "Consulting offer",
+    consultingTitle: "Coaching (optional)",
     consultingDescription:
-      "Modular packs to secure first diagnostics, industrialize documents and keep a human in the loop.",
+      "Stay self-serve (€59) or add monthly video (€149) or weekly piloting (€560).",
     consultingPacks: [
       {
-        name: "Express Diagnostic",
-        detail: "1–2 weeks · Flow audit, risks, and an immediate action plan.",
+        name: "PRO ONLINE",
+        detail: "€59/month · self-serve + watch + weekly email digest.",
       },
       {
-        name: "Import/Export Process Setup",
-        detail: "3–6 weeks · Checklists, milestones, documentation, and training.",
+        name: "PRO + VIDEO",
+        detail: "€149/month · 1 call/month + intake form + PDF summary.",
       },
       {
-        name: "Monthly Operations Review",
-        detail: "Flow review, gap tracking, and decision support with optional monitoring.",
+        name: "WEEKLY PILOTING",
+        detail: "€560/month · 1h/week · prioritization + action plan.",
       },
     ],
 
@@ -519,43 +681,48 @@ const en = {
     faqItems: [
       {
         question: "Is the tool free?",
-        answer: "Yes, the online simulation is free; human interventions are quoted separately.",
+        answer:
+          "Yes: a FREE tier exists (quotas + demo watch). For the full tool and automated watch, choose PRO ONLINE (€59).",
+      },
+      {
+        question: "When is the full watch included?",
+        answer:
+          "Full Watch Center and weekly email digest are included from PRO ONLINE (€59). FREE offers a limited demo watch.",
       },
       {
         question: "Do I need to select a country?",
         answer:
-          "Yes for reliable results: trade depends on relationships, agreements and treaties. Without a country, only general guidance is possible.",
+          "Yes for reliable results: trade depends on agreements and treaties. Without a country, only general guidance is possible.",
       },
       {
         question: "Do I need an HS code?",
         answer:
-          "Ideally yes: HS refines duties, controls and constraints. Without HS, the tool uses general assumptions (baseline conditions).",
+          "Ideally yes: HS refines duties, controls and constraints. Without HS, the tool uses general assumptions.",
       },
       {
-        question: "What happens during the diagnostic?",
-        answer: "A 20-minute call validates your risks and delivers a clear action list.",
+        question: "Does this replace a customs broker?",
+        answer:
+          "No. Export Navigator provides indicative estimates, checklists and a watch feed. Final compliance depends on your context and may require validation.",
       },
       {
-        question: "Do you deliver documents?",
-        answer: "Yes: reports, checklists and action plans validated with you.",
-      },
-      {
-        question: "What should I do after the report?",
-        answer: "Book a validation call to lock in VAT/customs/documents before you ship.",
+        question: "What should I do next?",
+        answer:
+          "Try FREE, then upgrade to PRO ONLINE (€59). For complex cases, choose monthly coaching (€149) or weekly piloting (€560).",
       },
     ],
 
     finalCtaTitle: "Facing a complex case?",
-    finalCtaParagraph: "Let’s move from automation to human validation to secure VAT, customs, documents and margins.",
-    finalCtaButton: "Schedule a call",
-    consultingPrice: "Starting from €2,200",
+    finalCtaParagraph:
+      "Move from self-serve to regular coaching: monthly video or weekly piloting to secure VAT, customs, documents and margins.",
+    finalCtaButton: "Contact us",
+    consultingPrice: "Starting from €149 / month",
   },
 
   toolPage: {
     headline: "Export Navigator · Estimate tool",
     subhead: "Get a quick landed cost, responsibilities and risk score.",
     body:
-      "The public tool analyzes your France ↔ World routing, Incoterms and documents to produce a score with clear next actions.",
+      "The tool analyzes your France ↔ World routing, Incoterms and documents to produce a score with clear next actions.",
     list: [
       "Landed cost estimate (freight, duties, taxes, fees)",
       "Incoterm guidance (responsibilities and risks)",
@@ -563,42 +730,59 @@ const en = {
       "Risk score with explanations",
     ],
     toolLimitationsTitle: "The tool gives you a first answer but...",
-    toolLimitationsBody: "VAT/DDP validation, contract clauses or complex e-commerce cases still need a human review.",
+    toolLimitationsBody: "VAT/DDP validation, contract clauses or complex e-commerce cases may still need a human review.",
     toolLimitationsList: [
       "VAT/DDP validation based on your real setup",
       "E-commerce scenarios (returns, marketplaces, warehouses)",
       "Regulated goods and specific controls",
       "Contract clauses and real responsibilities",
     ],
-    toolLimitationsCta: "Validate my shipment with a consultant",
-    humanValidationCta: "Validate my operation (20 min)",
+    toolLimitationsCta: "Upgrade to a plan with coaching",
+    humanValidationCta: "Contact us",
 
-    // ✅ Ready-to-use messages (if you want to show them when fields are empty)
     emptyStates: {
       missingCountry:
         "Without a country (origin/destination), results stay generic: trade depends on agreements and treaties. Select a country for a reliable estimate.",
       missingHs:
-        "Without an HS code, the tool applies general assumptions (baseline conditions). Add an HS code to refine duties, controls and constraints.",
+        "Without an HS code, the tool applies general assumptions. Add an HS code to refine duties, controls and constraints.",
     },
   },
 
   servicesPage: {
-    headline: "Consulting packs",
-    subhead: "Select the duration and level of involvement your team needs.",
+    headline: "Clear plans to secure your exports",
+    subhead: "Self-serve or regular coaching — choose your level.",
     description:
-      "Express diagnostic, process industrialization and monthly monitoring to keep every shipment compliant (France ↔ World).",
-    packs: [
-      "Express Diagnostic · 1–2 weeks · Flow audits, risk mapping and action planning",
-      "Import/Export Process Setup · 3–6 weeks · Checklists, milestones, documents and training",
-      "Monthly Operations Review · Flow reviews, gap tracking and decision support (monitoring option)",
-    ],
-    cta: "Talk to the consultant",
+      "Simulator, checklists, PDFs and automated watch: pick the autonomy level (FREE, €59, €149 or €560).",
+    cta: "Contact us",
+    ctaPricing: "See pricing",
+    ctaDetails: "View details",
+    badgeRecommended: "Recommended",
+    disclaimer:
+      "Non-binding information — does not replace a customs broker. You remain responsible for final compliance.",
+    proof: {
+      adv: {
+        title: "Export ops",
+        desc: "Document checklists, PDF reports and standardized preparation.",
+      },
+      manager: {
+        title: "Export manager",
+        desc: "Tracking, history, shared rules and easy team handoff.",
+      },
+      consultant: {
+        title: "Consultant (recurring basics)",
+        desc: "Basic framing, synthesis and ready-to-share documents.",
+      },
+      watch: {
+        title: "Watch & compliance",
+        desc: "RSS feeds, filters, tags and an automated digest based on your plan.",
+      },
+    },
   },
 
   watchPage: {
     headline: "Insights & watch",
     subhead: "Receive regulatory signals and practical resources for France ↔ World operations.",
-    body: "Newsletter, factsheets and alerts to anticipate VAT, customs, sanctions or document requirements.",
+    body: "Alerts, factsheets and digests to anticipate VAT, customs, sanctions or document requirements.",
     cta: "Subscribe to the watch",
     cards: [
       {
@@ -610,8 +794,8 @@ const en = {
         detail: "Templates, checklists and field cases to operationalize decisions.",
       },
       {
-        title: "Newsletter",
-        detail: "A monthly briefing on tariffs, DDP, Incoterms and marketplace compliance.",
+        title: "Automated digest",
+        detail: "Weekly briefings by country/category from PRO ONLINE.",
       },
     ],
   },
@@ -619,27 +803,27 @@ const en = {
   aboutPage: {
     headline: "About",
     body:
-      "I am an import/export and customs/VAT consultant with 10+ years of field experience. I help SMEs secure France ↔ World flows without drowning in rules.",
+      "Export Navigator is a decision-support platform for import/export: landed cost, documents, watch and optional coaching. The goal: reduce errors and standardize France ↔ World flows.",
     list: [
-      "Customs, VAT, Incoterms and DDP expertise",
-      "Fact-based methodology: audit, plan, pilot",
-      "Remote or on-site support",
+      "Costs, Incoterms, documents, risks",
+      "Structured and filterable RSS watch",
+      "Self-serve or monthly/weekly coaching",
     ],
   },
 
   contactPage: {
     headline: "Contact",
-    body: "Describe your shipment (import or export), attach key documents and book a diagnostic slot.",
+    body: "Describe your request (import or export) and pick your coaching level.",
     form: {
       name: "Name / company",
       email: "Work email",
       message: "Your request",
-      submit: "Send and book",
+      submit: "Send",
     },
     bookBlock: {
-      title: "Book a 20-min call",
-      body: "I will confirm your VAT, customs and DDP setup before you ship.",
-      cta: "Pick a slot",
+      title: "Coaching options",
+      body: "Choose 1 monthly video (€149) or 1h/week (€560) depending on complexity.",
+      cta: "Explore the plans",
     },
   },
 
