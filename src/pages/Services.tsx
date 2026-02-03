@@ -33,8 +33,10 @@ export default function ServicesPage() {
       ? tierKeys
       : (Object.keys(resolved?.tiers ?? {}) as TierSlug[]);
 
-  // Plan "primaire" : si PRO existe on le choisit, sinon le premier.
-  const primaryKey = (keys.find((k) => k === "PRO") ?? keys[0]) as TierSlug;
+  // ✅ Plan recommandé : PRO_ONLINE (65€) si présent, sinon 1er plan non-FREE
+  const primaryKey = (keys.find((k) => k === "PRO_ONLINE") ??
+    keys.find((k) => k !== "FREE") ??
+    keys[0]) as TierSlug;
 
   return (
     <MarketingLayout>
@@ -116,7 +118,8 @@ export default function ServicesPage() {
               to="/pricing"
               className="inline-flex items-center justify-center rounded-full bg-slate-950 px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-sm transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
             >
-              {tt("servicesPage.cta.pricing", "Voir les tarifs", "See pricing")}
+              {/* ✅ on privilégie ctaPricing si tu l'as ajouté dans i18n */}
+              {tt("servicesPage.ctaPricing", "Voir les tarifs", "See pricing")}
             </Link>
 
             <Link
@@ -168,7 +171,7 @@ export default function ServicesPage() {
                       {isPrimary && (
                         <span className="rounded-full bg-slate-950 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-white">
                           {tt(
-                            "servicesPage.badge.recommended",
+                            "servicesPage.badgeRecommended",
                             "Recommandé",
                             "Recommended"
                           )}
@@ -203,7 +206,7 @@ export default function ServicesPage() {
                           : "border border-slate-300 bg-white text-slate-900 hover:bg-slate-50",
                       ].join(" ")}
                     >
-                      {tt("servicesPage.cta.details", "Voir le détail", "View details")} →
+                      {tt("servicesPage.ctaDetails", "Voir le détail", "View details")} →
                     </Link>
 
                     <Link
