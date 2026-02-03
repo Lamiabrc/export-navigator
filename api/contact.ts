@@ -228,14 +228,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const insert = await supabaseInsert(row);
     if (!insert.ok) {
       console.error("[api/contact] insert error:", insert);
-    return res.status(500).json({
-      ok: false,
-      error: insert.code,
-      supabase_status: insert.status,
-      detail: insert.detail,
-      version: VERSION,
-    });
-  }
+      return res.status(500).json({
+        ok: false,
+        error: insert.code,
+        supabase_status: insert.status,
+        detail: insert.detail,
+        version: VERSION,
+      });
+    }
 
     const notification = await sendNotificationEmail(row);
     if (!notification.ok) {
