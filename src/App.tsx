@@ -14,6 +14,7 @@ import { PlanProvider } from "@/auth/PlanContext";
 import { RequirePlan } from "@/components/RequirePlan";
 import { CompanyProfileGuard } from "@/components/CompanyProfileGuard";
 import { CookieConsent } from "@/components/CookieConsent";
+import { LanguageChooser } from "@/components/LanguageChooser";
 
 import Home from "@/pages/Home";
 import ToolPage from "@/pages/Tool";
@@ -79,6 +80,7 @@ export default function App() {
               <LanguageProvider persist="none">
                 <CookieConsent />
                 <BrowserRouter>
+                  <LanguageChooser />
                   <CompanyProfileGuard />
                   <GlobalFiltersProvider>
                     <Routes>

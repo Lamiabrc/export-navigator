@@ -73,7 +73,11 @@ export function CompanyProfileModal({ open, initialValues, onSave, loading }: Pr
       await onSave(values);
       toast({ title: t("companyProfile.success.title") as string, description: t("companyProfile.success.description") as string });
     } catch (err: any) {
-      toast({ title: t("companyProfile.errors.saveTitle") as string, description: err?.message || t("companyProfile.errors.saveBody") });
+      const detail =
+        err?.message?.includes("company_profiles") || err?.message?.includes("company-profile")
+          ? (t("companyProfile.errors.noTable") as string)
+          : err?.message || (t("companyProfile.errors.saveBody") as string);
+      toast({ title: t("companyProfile.errors.saveTitle") as string, description: detail });
     }
   };
 

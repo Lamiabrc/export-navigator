@@ -78,6 +78,7 @@ const fr = {
       help: "Complète tous les champs obligatoires pour continuer.",
       saveTitle: "Erreur lors de la sauvegarde",
       saveBody: "Impossible d'enregistrer les informations. Réessaie dans quelques instants.",
+      noTable: "La base n'est pas encore initialisée. Merci de patienter pendant la configuration.",
     },
     friendly: "Merci de confirmer, on s’occupe du reste. 😊",
   },
@@ -96,6 +97,10 @@ const fr = {
       accept: "Tout accepter",
       save: "Sauvegarder mes choix",
     },
+  },
+  languagePrompt: {
+    title: "Choisissez votre langue",
+    body: "Souhaitez-vous continuer en français ou en anglais ?",
   },
 
   hero: {
@@ -366,6 +371,7 @@ const en = {
       help: "Fill every required field to continue.",
       saveTitle: "Could not save",
       saveBody: "We could not store the profile. Try again in a few moments.",
+      noTable: "The platform is still setting up. Please retry shortly.",
     },
     friendly: "Thanks for confirming, we’ll take care of the rest. 😊",
   },
@@ -384,6 +390,10 @@ const en = {
       accept: "Accept all",
       save: "Save preferences",
     },
+  },
+  languagePrompt: {
+    title: "Pick your language",
+    body: "Would you like to continue in English or French?",
   },
 
   hero: {
