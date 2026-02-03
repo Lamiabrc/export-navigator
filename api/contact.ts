@@ -226,7 +226,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     const insert = await supabaseInsert(row);
-    if (!insert.ok) {
+    if (!insert.ok && insert.code !== "missing_env") {
       console.error("[api/contact] insert error:", insert);
       return res.status(500).json({
         ok: false,
@@ -235,6 +235,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         detail: insert.detail,
         version: VERSION,
       });
+    }
+    if (!insert.ok) {
+      console.warn("[api/contact] supabase skipped:", insert.detail || insert.code);
     }
 
     const notification = await sendNotificationEmail(row);
