@@ -116,12 +116,13 @@ export const marketingTranslations = {
     gating: {
       title: "Passez à la vitesse supérieure",
       body:
-        "PRO/VIP débloquent l’historique, la veille ciblée (pays/secteurs) et la validation humaine — indispensable dès qu’il y a TVA, douane, sanctions ou clauses complexes.",
+        "Le département export digital (PRO/VISIO/PILOTAGE) débloque l’historique, la veille ciblée (pays/secteurs) et la validation humaine — indispensable dès qu’il y a TVA, douane, sanctions ou clauses complexes.",
       cta: "Découvrir les plans",
       planLabels: {
         FREE: "Freemium",
-        PRO: "Pro",
-        VIP: "VIP",
+        PRO_ONLINE: "PRO 59€",
+        PRO_VISIO: "PRO + VISIO 149€",
+        PILOTAGE_HEBDO: "Pilotage Hebdo 560€",
       },
     },
 
@@ -253,12 +254,13 @@ export const marketingTranslations = {
     gating: {
       title: "Upgrade for the full decision stack",
       body:
-        "PRO/VIP unlock history, targeted monitoring (country/sector) and expert validation — critical when VAT, customs, sanctions or contract clauses get complex.",
+        "The digital export department (PRO/VISIO/PILOTAGE) unlocks history, targeted watch (country/sector) and human validation — essential when VAT, customs, sanctions or contract clauses get complex.",
       cta: "Review the plans",
       planLabels: {
         FREE: "Freemium",
-        PRO: "Pro",
-        VIP: "VIP",
+        PRO_ONLINE: "PRO 59€",
+        PRO_VISIO: "PRO + VISIO 149€",
+        PILOTAGE_HEBDO: "Pilotage Hebdo 560€",
       },
     },
 

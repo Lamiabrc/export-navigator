@@ -1,26 +1,24 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-export type SubscriptionPlan = "FREE" | "PRO" | "VIP";
+export type SubscriptionPlan = "FREE" | "PRO_ONLINE" | "PRO_VISIO" | "PILOTAGE_HEBDO";
 
 const STORAGE_KEY = "export-navigator-plan";
 const PLAN_QUERY_PARAM = "plan";
 
 const rank: Record<SubscriptionPlan, number> = {
   FREE: 0,
-  PRO: 1,
-  VIP: 2,
+  PRO_ONLINE: 1,
+  PRO_VISIO: 2,
+  PILOTAGE_HEBDO: 3,
 };
 
-const SUPPORTED_PLANS: SubscriptionPlan[] = ["FREE", "PRO", "VIP"];
+const SUPPORTED_PLANS: SubscriptionPlan[] = ["FREE", "PRO_ONLINE", "PRO_VISIO", "PILOTAGE_HEBDO"];
 
 const getPlanFromValue = (value: string | null): SubscriptionPlan | undefined => {
   if (!value) return undefined;
-  const normalized = value.toUpperCase() as SubscriptionPlan;
-  if (SUPPORTED_PLANS.includes(normalized)) {
-    return normalized;
-  }
-  return undefined;
+  const normalized = value.toUpperCase().replace(" ", "_") as SubscriptionPlan;
+  return SUPPORTED_PLANS.includes(normalized) ? normalized : undefined;
 };
 
 type PlanContextValue = {

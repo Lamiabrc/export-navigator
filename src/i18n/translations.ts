@@ -46,6 +46,41 @@ const fr = {
     languageAria: "Changer la langue du site",
   },
 
+  companyProfile: {
+    title: "Profil société requis",
+    description:
+      "Avant de profiter de la version FREE (simulations, rapports limités, watch demo), confirmez votre société et son adresse. Cette donnée reste confidentielle et sécurise l'accès à l'outil.",
+    fields: {
+      companyName: "Nom de la société",
+      addressLine1: "Adresse (ligne 1)",
+      city: "Ville",
+      postalCode: "Code postal",
+      country: "Pays",
+    },
+    placeholders: {
+      companyName: "Ex : MPL Export Conseil",
+      addressLine1: "Ex : 12 rue de la Douane",
+      city: "Ex : Paris",
+      postalCode: "Ex : 75009",
+      country: "Choisir un pays",
+    },
+    actions: {
+      save: "Valider et débloquer",
+      saving: "Enregistrement…",
+      later: "Plus tard",
+    },
+    success: {
+      title: "Profil confirmé",
+      description: "Tu peux maintenant utiliser la version FREE (quotas limités) et retrouver ta veille.",
+    },
+    errors: {
+      missing: "Informations manquantes",
+      help: "Complète tous les champs obligatoires pour continuer.",
+      saveTitle: "Erreur lors de la sauvegarde",
+      saveBody: "Impossible d'enregistrer les informations. Réessaie dans quelques instants.",
+    },
+  },
+
   hero: {
     title: "France ↔ Monde : maîtrisez vos coûts. Décidez mieux.",
     subtitle: "Export Navigator vous donne une première lecture (coût complet, Incoterms, documents, risques).",
@@ -280,6 +315,41 @@ const en = {
     cta: "Book a diagnostic",
     languageLabel: "Language",
     languageAria: "Switch site language",
+  },
+
+  companyProfile: {
+    title: "Company profile required",
+    description:
+      "Before unlocking the FREE tier (limited simulations, demo watch), confirm your company and address. This information stays confidential and ensures accountable usage.",
+    fields: {
+      companyName: "Company name",
+      addressLine1: "Address (line 1)",
+      city: "City",
+      postalCode: "Postal code",
+      country: "Country",
+    },
+    placeholders: {
+      companyName: "e.g. MPL Export Conseil",
+      addressLine1: "e.g. 12 Rue de la Douane",
+      city: "e.g. Paris",
+      postalCode: "e.g. 75009",
+      country: "Select a country",
+    },
+    actions: {
+      save: "Confirm & unlock",
+      saving: "Saving…",
+      later: "Later",
+    },
+    success: {
+      title: "Profile saved",
+      description: "You can now use the FREE tier (with its quotas) and access your watch preview.",
+    },
+    errors: {
+      missing: "Missing information",
+      help: "Fill every required field to continue.",
+      saveTitle: "Could not save",
+      saveBody: "We could not store the profile. Try again in a few moments.",
+    },
   },
 
   hero: {
