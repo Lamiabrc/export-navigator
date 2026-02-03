@@ -12,15 +12,19 @@ type ContactRow = {
   scenario_summary: string | null;
   source: string | null;
   topic: string | null;
+
   ip: string | null;
   user_agent: string | null;
   locale: string | null;
+
   status: "ok" | "spam";
 };
 
+const VERSION = "contact-supabase-v1";
+
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
@@ -44,7 +48,6 @@ function getIp(req: VercelRequest) {
 }
 
 function parseBody(req: VercelRequest): IncomingBody {
-  // Vercel peut fournir req.body déjà parsé, ou string
   const b: any = (req as any).body;
   if (!b) return {};
   if (typeof b === "object") return b as IncomingBody;
@@ -67,7 +70,7 @@ async function supabaseInsert(row: ContactRow) {
       ok: false as const,
       code: "missing_env",
       status: 500,
-      detail: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY on Vercel",
+      detail: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY on Vercel (Production).",
     };
   }
 
@@ -91,7 +94,7 @@ async function supabaseInsert(row: ContactRow) {
     ok: false as const,
     code: "supabase_insert_failed",
     status: r.status,
-    detail: (text || r.statusText || "Unknown error").slice(0, 600),
+    detail: (text || r.statusText || "Unknown error").slice(0, 800),
   };
 }
 
@@ -99,18 +102,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
 
   if (req.method === "OPTIONS") return res.status(200).json({ ok: true });
-  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
+
+  // ✅ Ping simple (pour confirmer que la route utilise bien CE fichier)
+  if (req.method === "GET") {
+    return res.status(200).json({ ok: true, version: VERSION });
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  }
 
   try {
     const body = parseBody(req);
 
-    // Honeypot anti-spam (optionnel côté front : champ caché "website" ou "hp")
+    // Honeypot anti-spam (facultatif côté front)
     const honeypot = safeString((body as any).website || (body as any).hp || "", 200);
     const isSpam = Boolean(honeypot);
 
-    // Compatibilité payloads :
-    // - ancien front : name/topic
-    // - nouveau : firstName/subject
+    // Compat payloads : ancien front (name/topic) + nouveau (firstName/subject)
     const firstName = safeString(body.firstName || body.name || body.fullName, 120);
     const email = normalizeEmail(body.email);
     const message = safeString(body.message, 4000);
@@ -125,15 +134,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!firstName || !email || !message) {
       return res.status(400).json({
         ok: false,
-        error: "Missing required fields",
+        error: "missing_fields",
         required: ["firstName(or name)", "email", "message"],
       });
     }
     if (!isEmailValid(email)) {
-      return res.status(400).json({ ok: false, error: "Invalid email" });
+      return res.status(400).json({ ok: false, error: "invalid_email" });
     }
     if (message.trim().length < 10) {
-      return res.status(400).json({ ok: false, error: "Message too short" });
+      return res.status(400).json({ ok: false, error: "message_too_short" });
     }
 
     const row: ContactRow = {
@@ -155,19 +164,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const insert = await supabaseInsert(row);
     if (!insert.ok) {
       console.error("[api/contact] insert error:", insert);
-      // On renvoie un message exploitable côté browser
       return res.status(500).json({
         ok: false,
         error: insert.code,
         supabase_status: insert.status,
         detail: insert.detail,
+        version: VERSION,
       });
     }
 
-    return res.status(200).json({ ok: true, stored: true });
+    return res.status(200).json({ ok: true, stored: true, version: VERSION });
   } catch (err: any) {
     console.error("[api/contact] fatal:", err?.message || err);
-    return res.status(500).json({ ok: false, error: "server_error", detail: String(err?.message || err).slice(0, 300) });
+    return res.status(500).json({
+      ok: false,
+      error: "server_error",
+      detail: String(err?.message || err).slice(0, 500),
+      version: VERSION,
+    });
   }
 }
 
