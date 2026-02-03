@@ -33,6 +33,7 @@ export default function ServicesPage() {
       ? tierKeys
       : (Object.keys(resolved?.tiers ?? {}) as TierSlug[]);
 
+  // Plan "primaire" : si PRO existe on le choisit, sinon le premier.
   const primaryKey = (keys.find((k) => k === "PRO") ?? keys[0]) as TierSlug;
 
   return (
@@ -52,19 +53,15 @@ export default function ServicesPage() {
             {t("servicesPage.description")}
           </p>
 
-          {/* Proof bullets (département export digital) */}
+          {/* Proof bullets : “département export digital” */}
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             {[
               {
-                title: tt(
-                  "servicesPage.proof.adv.title",
-                  "ADV export",
-                  "Export ops"
-                ),
+                title: tt("servicesPage.proof.adv.title", "ADV export", "Export ops"),
                 desc: tt(
                   "servicesPage.proof.adv.desc",
                   "Checklists documentaires, rapports PDF, préparation standardisée.",
-                  "Document checklists, PDF reports, standardized prep."
+                  "Document checklists, PDF reports, standardized preparation."
                 ),
               },
               {
@@ -88,7 +85,7 @@ export default function ServicesPage() {
                 desc: tt(
                   "servicesPage.proof.consultant.desc",
                   "Cadrage basique, synthèse, documents prêts à valider et diffuser.",
-                  "Basic framing, summaries, ready-to-share documents."
+                  "Basic framing, summaries, and ready-to-share documents."
                 ),
               },
               {
@@ -206,12 +203,7 @@ export default function ServicesPage() {
                           : "border border-slate-300 bg-white text-slate-900 hover:bg-slate-50",
                       ].join(" ")}
                     >
-                      {tt(
-                        "servicesPage.cta.details",
-                        "Voir le détail",
-                        "View details"
-                      )}{" "}
-                      →
+                      {tt("servicesPage.cta.details", "Voir le détail", "View details")} →
                     </Link>
 
                     <Link
