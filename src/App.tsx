@@ -77,9 +77,9 @@ export default function App() {
             <PlanProvider>
               {/* ✅ si tu as appliqué le LanguageContext “no storage” */}
               <LanguageProvider persist="none">
-                <CompanyProfileGuard />
                 <CookieConsent />
                 <BrowserRouter>
+                  <CompanyProfileGuard />
                   <GlobalFiltersProvider>
                     <Routes>
                       {/* ===================== Marketing / Public ===================== */}
