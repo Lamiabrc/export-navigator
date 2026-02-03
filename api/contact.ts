@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import nodemailer from "nodemailer";
 
 type IncomingBody = Record<string, unknown>;
 
@@ -59,6 +60,69 @@ function parseBody(req: VercelRequest): IncomingBody {
     }
   }
   return {};
+}
+
+const TRANSPORT_URL = process.env.EMAIL_TRANSPORT_URL;
+const CONTACT_NOTIFICATION_EMAILS = process.env.CONTACT_NOTIFICATION_EMAILS
+  ? process.env.CONTACT_NOTIFICATION_EMAILS.split(",").map((value) => value.trim()).filter(Boolean)
+  : ["lamia.brechet@outlook.fr"];
+const EMAIL_FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS || "Export Navigator <no-reply@exportfrancefacile.com>";
+
+let transporter: ReturnType<typeof nodemailer.createTransport> | null = null;
+const getTransport = () => {
+  if (!TRANSPORT_URL) return null;
+  if (transporter) return transporter;
+  transporter = nodemailer.createTransport(TRANSPORT_URL);
+  return transporter;
+};
+
+const buildNotificationSubject = (row: ContactRow) => {
+  const parts = ["exportfrancefacile.com", "Nouveau contact"];
+  if (row.topic) parts.push(row.topic);
+  if (row.company) parts.push(row.company);
+  return parts.join(" — ").slice(0, 200);
+};
+
+const buildNotificationBody = (row: ContactRow) => {
+  const lines = [
+    "Nouveau message reçu depuis exportfrancefacile.com",
+    "",
+    `Nom ou société : ${row.first_name}`,
+    `Email : ${row.email}`,
+    row.company ? `Société : ${row.company}` : "",
+    row.offer_type ? `Offre : ${row.offer_type}` : "",
+    row.topic ? `Sujet : ${row.topic}` : "",
+    row.scenario_summary ? `Résumé : ${row.scenario_summary}` : "",
+    "",
+    "Message :",
+    row.message,
+    "",
+    `Origine : ${row.source ?? "contact-page"}`,
+    `Adresse IP : ${row.ip ?? "n/a"}`,
+    `Langue du navigateur : ${row.locale ?? "n/a"}`,
+  ].filter(Boolean);
+  return lines.join("\n");
+};
+
+async function sendNotificationEmail(row: ContactRow) {
+  const transport = getTransport();
+  if (!transport) {
+    return { ok: false as const, detail: "missing_email_transport" };
+  }
+
+  if (!CONTACT_NOTIFICATION_EMAILS.length) {
+    return { ok: false as const, detail: "missing_recipients" };
+  }
+
+  await transport.sendMail({
+    from: EMAIL_FROM_ADDRESS,
+    to: CONTACT_NOTIFICATION_EMAILS,
+    subject: buildNotificationSubject(row),
+    text: buildNotificationBody(row),
+    replyTo: row.email,
+  });
+
+  return { ok: true as const };
 }
 
 async function supabaseInsert(row: ContactRow) {
@@ -161,16 +225,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       status: isSpam ? "spam" : "ok",
     };
 
-    const insert = await supabaseInsert(row);
-    if (!insert.ok) {
-      console.error("[api/contact] insert error:", insert);
-      return res.status(500).json({
-        ok: false,
-        error: insert.code,
-        supabase_status: insert.status,
-        detail: insert.detail,
-        version: VERSION,
-      });
+  const insert = await supabaseInsert(row);
+  if (!insert.ok) {
+    console.error("[api/contact] insert error:", insert);
+    return res.status(500).json({
+      ok: false,
+      error: insert.code,
+      supabase_status: insert.status,
+      detail: insert.detail,
+      version: VERSION,
+    });
+  }
+
+    const notification = await sendNotificationEmail(row);
+    if (!notification.ok) {
+      console.error("[api/contact] notification error:", notification);
     }
 
     return res.status(200).json({ ok: true, stored: true, version: VERSION });
