@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 
+import { BrandLogo } from "@/components/BrandLogo";
 import { useI18n } from "@/contexts/LanguageContext";
 import { usePlan } from "@/auth/PlanContext";
 import type { LanguageCode } from "@/i18n/translations";
@@ -46,14 +47,16 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
           {/* BRAND */}
-          <Link to="/" className="group flex flex-col leading-tight">
-            <span className="text-lg font-semibold tracking-wide text-slate-900">
-              Export Navigator
-            </span>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-500 group-hover:text-slate-700">
-              par MPL Export Conseil
-            </span>
-          </Link>
+          <BrandLogo
+            href="/"
+            size="md"
+            imageClassName="h-10 w-auto"
+            textClassName="text-[13px]"
+            title="Export Navigator"
+            subtitle="par MPL Export Conseil"
+            location="Conseil Export"
+            className="group"
+          />
 
           {/* NAV */}
           <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-semibold text-slate-600 md:flex">
