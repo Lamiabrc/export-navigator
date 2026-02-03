@@ -15,28 +15,34 @@ export default function Contact() {
 
   const [searchParams] = useSearchParams();
 
+  const formCopyRaw = t("contactPage.form");
   const formCopy =
-    (t("contactPage.form") as {
+    (typeof formCopyRaw === "object" && formCopyRaw !== null
+      ? formCopyRaw
+      : {
+          name: "Nom / société",
+          email: "Email professionnel",
+          message: "Votre demande",
+          submit: "Envoyer et réserver",
+        }) as {
       name: string;
       email: string;
       message: string;
       submit: string;
-    }) ?? {
-      name: "Nom / société",
-      email: "Email professionnel",
-      message: "Votre demande",
-      submit: "Envoyer et réserver",
     };
 
+  const blockCopyRaw = t("contactPage.bookBlock");
   const blockCopy =
-    (t("contactPage.bookBlock") as {
+    (typeof blockCopyRaw === "object" && blockCopyRaw !== null
+      ? blockCopyRaw
+      : {
+          title: "Réserver un appel 20 min",
+          body: "Je vous rappelle pour valider vos risques TVA, douane et DDP avant toute expédition.",
+          cta: "Choisir un créneau",
+        }) as {
       title: string;
       body: string;
       cta: string;
-    }) ?? {
-      title: "Réserver un appel 20 min",
-      body: "Je vous rappelle pour valider vos risques TVA, douane et DDP avant toute expédition.",
-      cta: "Choisir un créneau",
     };
 
   // Coordonnées

@@ -52,7 +52,7 @@ export default function Newsletter() {
           setServerWarning("");
         }
       })
-      .catch((err) => {
+      .then(() => undefined, (err: any) => {
         if (!mounted) return;
         setServerAvailable(false);
         setServerWarning(err?.message || "Inscription serveur indisponible. Stockage local activé.");

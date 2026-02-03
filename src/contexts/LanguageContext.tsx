@@ -45,7 +45,7 @@ function safeStorageSet(mode: PersistMode, key: string, value: string) {
   }
 }
 
-const deepMerge = <T extends Record<string, any>>(base: T, extra?: Partial<T>): T => {
+const deepMerge = <T extends Record<string, any>>(base: T, extra?: Record<string, any>): T => {
   if (!extra) return base;
 
   const copy: any = Array.isArray(base) ? [...base] : { ...base };
@@ -72,8 +72,8 @@ const deepMerge = <T extends Record<string, any>>(base: T, extra?: Partial<T>): 
 };
 
 const mergedTranslations: Record<LanguageCode, Record<string, any>> = {
-  fr: deepMerge(baseTranslations.fr, marketingTranslations.fr),
-  en: deepMerge(baseTranslations.en, marketingTranslations.en),
+  fr: deepMerge(baseTranslations.fr as Record<string, any>, marketingTranslations.fr as Record<string, any>),
+  en: deepMerge(baseTranslations.en as Record<string, any>, marketingTranslations.en as Record<string, any>),
 };
 
 function getPreferredLang(persist: PersistMode): LanguageCode {

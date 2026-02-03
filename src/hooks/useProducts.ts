@@ -92,7 +92,7 @@ export function useProducts(options: UseProductsOptions = {}) {
           throw sbError;
         }
 
-        const rows = (data ?? []) as ProductRow[];
+        const rows = ((data ?? []) as unknown as ProductRow[]);
         all.push(...rows);
 
         if (rows.length < pageSize) break;

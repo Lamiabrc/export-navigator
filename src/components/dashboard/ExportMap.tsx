@@ -71,7 +71,7 @@ function scaleStroke(ca: number, max: number) {
   return clamp(1 + ratio * 6, 1.2, 8);
 }
 
-function pickColor() {
+function pickColor(_code?: string) {
   return "#60a5fa";
 }
 

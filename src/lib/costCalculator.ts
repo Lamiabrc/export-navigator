@@ -19,11 +19,12 @@ export type QuoteContext = {
 export const getUnitPriceHT = (p?: ProductRow, mode: PricingMode = "CATALOGUE_2025", manual?: number) => {
   if (mode === "MANUAL") return safeNumber(manual);
   if (!p) return 0;
-  if (mode === "REFERENCE") return safeNumber(p.tarif_ref_eur);
-  return safeNumber(p.tarif_catalogue_2025);
+  // Use unit_price_eur as fallback since tarif_ref_eur / tarif_catalogue_2025 may not exist
+  if (mode === "REFERENCE") return safeNumber((p as any).tarif_ref_eur ?? p.unit_price_eur);
+  return safeNumber((p as any).tarif_catalogue_2025 ?? p.unit_price_eur);
 };
 
-export const getTvaPct = (p?: ProductRow) => safeNumber(p?.tva_percent);
+export const getTvaPct = (p?: ProductRow) => safeNumber(p?.tva ?? (p as any)?.tva_percent);
 
 export const computeLine = (line: QuoteLine, product?: ProductRow) => {
   const qty = Math.max(0, safeNumber(line.qty));

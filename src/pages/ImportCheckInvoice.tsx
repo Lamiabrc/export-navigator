@@ -37,7 +37,22 @@ export default function ImportCheckInvoice() {
   const [taxes, setTaxes] = useState({ dutiesPercent: 5, vatPercent: 20 });
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  const featureTranslations = (t("importWizard") as {
+  const featureTranslationsRaw = t("importWizard");
+  const featureTranslations = (typeof featureTranslationsRaw === "object" && featureTranslationsRaw !== null
+    ? (featureTranslationsRaw as unknown as {
+        title?: string;
+        subtitle?: string;
+        steps?: string[];
+        scoreLabel?: string;
+        resultLabel?: string;
+        warningsTitle?: string;
+        actionsTitle?: string;
+        saveButton?: string;
+        usageLabel?: string;
+        warnings?: Record<string, string>;
+        actions?: Record<string, string>;
+      })
+    : {}) as {
     title: string;
     subtitle: string;
     steps: string[];
@@ -49,18 +64,6 @@ export default function ImportCheckInvoice() {
     usageLabel: string;
     warnings: Record<string, string>;
     actions: Record<string, string>;
-  }) ?? {
-    title: "",
-    subtitle: "",
-    steps: [],
-    scoreLabel: "",
-    resultLabel: "",
-    warningsTitle: "",
-    actionsTitle: "",
-    saveButton: "",
-    usageLabel: "",
-    warnings: {},
-    actions: {},
   };
 
   const goodsTotal = useMemo(

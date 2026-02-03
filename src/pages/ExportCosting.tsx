@@ -12,23 +12,23 @@ export default function ExportCostingPage() {
   const { t } = useI18n();
   const { plan } = usePlan();
 
-  const meta = (t("exportCosting") as {
-    title: string;
-    subtitle: string;
-    summaryLabel: string;
-    profitabilityTitle: string;
-    profitabilitySubtitle: string;
-    sensitivityLabel: string;
-    cta: string;
-  }) ?? {
-    title: "",
-    subtitle: "",
-    summaryLabel: "",
-    profitabilityTitle: "",
-    profitabilitySubtitle: "",
-    sensitivityLabel: "",
-    cta: "Lancer la simulation",
+  const metaRaw = t("exportCosting");
+  const meta = (typeof metaRaw === "object" && metaRaw !== null ? metaRaw : {}) as {
+    title?: string;
+    subtitle?: string;
+    summaryLabel?: string;
+    profitabilityTitle?: string;
+    profitabilitySubtitle?: string;
+    sensitivityLabel?: string;
+    cta?: string;
   };
+  const title = meta.title ?? "";
+  const subtitle = meta.subtitle ?? "";
+  const summaryLabel = meta.summaryLabel ?? "";
+  const profitabilityTitle = meta.profitabilityTitle ?? "";
+  const profitabilitySubtitle = meta.profitabilitySubtitle ?? "";
+  const sensitivityLabel = meta.sensitivityLabel ?? "";
+  const cta = meta.cta ?? "Lancer la simulation";
 
   const [values, setValues] = useState({
     goods: 12000,

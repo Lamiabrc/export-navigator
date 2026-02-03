@@ -74,7 +74,7 @@ export default function InvoiceCheck() {
         incoterm,
         currency,
         score,
-        totalValue,
+        value: totalValue,
         lines,
       });
       const url = URL.createObjectURL(pdfBlob);

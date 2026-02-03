@@ -18,7 +18,7 @@ const downloadJson = (data: ReferenceData, filename: string) => {
 };
 
 export default function Settings() {
-  const { referenceData, saveReferenceData, resetReferenceData } = useReferenceData();
+  const { referenceData, save: saveReferenceData, reset: resetReferenceData } = useReferenceData();
   const [preview, setPreview] = useState(JSON.stringify(referenceData, null, 2));
   const fileInputRef = useRef<HTMLInputElement>(null);
 
