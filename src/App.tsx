@@ -13,6 +13,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { PlanProvider } from "@/auth/PlanContext";
 import { RequirePlan } from "@/components/RequirePlan";
 import { CompanyProfileGuard } from "@/components/CompanyProfileGuard";
+import { CookieConsent } from "@/components/CookieConsent";
 
 import Home from "@/pages/Home";
 import ToolPage from "@/pages/Tool";
@@ -77,6 +78,7 @@ export default function App() {
               {/* ✅ si tu as appliqué le LanguageContext “no storage” */}
               <LanguageProvider persist="none">
                 <CompanyProfileGuard />
+                <CookieConsent />
                 <BrowserRouter>
                   <GlobalFiltersProvider>
                     <Routes>

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useI18n } from "@/contexts/LanguageContext";
 import { usePlan } from "@/auth/PlanContext";
 import type { LanguageCode } from "@/i18n/translations";
+import { GdprGuarantee } from "@/components/GdprGuarantee";
 
 type NavLink = { key: string; to: string; fallback: string };
 
@@ -179,6 +180,11 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
 
       <main className="flex-1">{children}</main>
 
+      <div className="border-t border-slate-200 bg-white/80 px-6 py-8">
+        <div className="mx-auto max-w-6xl">
+          <GdprGuarantee />
+        </div>
+      </div>
       <footer className="border-t border-slate-200 bg-white/80 py-8 text-center text-xs font-medium text-slate-500">
         {t("footer.copy")}
       </footer>

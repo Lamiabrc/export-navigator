@@ -3,6 +3,7 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BrandLogo } from "@/components/BrandLogo";
 import { useI18n } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -87,10 +88,18 @@ export function CompanyProfileModal({ open, initialValues, onSave, loading }: Pr
         className="relative z-10 w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl"
       >
         <header className="space-y-3">
+          <BrandLogo
+            size="sm"
+            className="text-slate-900"
+            textClassName="text-slate-900"
+            subtitleClassName="text-[10px] tracking-[0.2em] uppercase text-slate-500"
+            locationClassName="text-xs text-slate-400"
+          />
           <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
             {t("companyProfile.title")}
           </h2>
           <p className="text-sm text-slate-600">{t("companyProfile.description")}</p>
+          <p className="text-sm text-slate-500">{t("companyProfile.friendly")}</p>
         </header>
 
         <div className="mt-6 space-y-4">

@@ -79,6 +79,23 @@ const fr = {
       saveTitle: "Erreur lors de la sauvegarde",
       saveBody: "Impossible d'enregistrer les informations. Réessaie dans quelques instants.",
     },
+    friendly: "Merci de confirmer, on s’occupe du reste. 😊",
+  },
+  gdpr: {
+    guaranteeTitle: "Garantie RGPD",
+    guaranteeBody:
+      "Vos données sont stockées sur des serveurs européens, chiffrées au repos et accessibles uniquement par nos équipes autorisées. Vous gardez le contrôle, demandez la suppression ou la rectification à tout moment.",
+    consentTitle: "Paramètres de consentement",
+    consentBody:
+      "On active les cookies essentiels, analytiques et marketing seulement avec ton consentement. Tu peux ajuster les catégories ci-dessous, et tout est réversible.",
+    options: {
+      analytics: "Statistiques anonymes",
+      marketing: "Mises à jour & invitations",
+    },
+    actions: {
+      accept: "Tout accepter",
+      save: "Sauvegarder mes choix",
+    },
   },
 
   hero: {
@@ -349,6 +366,23 @@ const en = {
       help: "Fill every required field to continue.",
       saveTitle: "Could not save",
       saveBody: "We could not store the profile. Try again in a few moments.",
+    },
+    friendly: "Thanks for confirming, we’ll take care of the rest. 😊",
+  },
+  gdpr: {
+    guaranteeTitle: "GDPR guarantee",
+    guaranteeBody:
+      "Data is hosted in the EU, encrypted at rest, and accessed only by authorized team members. You remain in control and can request deletion anytime.",
+    consentTitle: "Consent preferences",
+    consentBody:
+      "Essential, analytics and marketing cookies activate only after you agree. You can adjust each category below and revoke consent at any moment.",
+    options: {
+      analytics: "Anonymous analytics",
+      marketing: "Updates & invitations",
+    },
+    actions: {
+      accept: "Accept all",
+      save: "Save preferences",
     },
   },
 
