@@ -14,7 +14,176 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      watch_digest_log: {
+        Row: {
+          error: string | null
+          id: string
+          items_count: number
+          sent_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          error?: string | null
+          id?: string
+          items_count?: number
+          sent_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          error?: string | null
+          id?: string
+          items_count?: number
+          sent_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      watch_items: {
+        Row: {
+          category: Database["public"]["Enums"]["watch_category"] | null
+          country: string | null
+          created_at: string
+          guid: string
+          id: string
+          impact: string | null
+          published_at: string | null
+          raw: Json | null
+          source_id: string
+          summary: string | null
+          tags: string[] | null
+          title: string | null
+          type: string
+          url: string | null
+        }
+        Insert: {
+          category?: Database["public"]["Enums"]["watch_category"] | null
+          country?: string | null
+          created_at?: string
+          guid: string
+          id?: string
+          impact?: string | null
+          published_at?: string | null
+          raw?: Json | null
+          source_id: string
+          summary?: string | null
+          tags?: string[] | null
+          title?: string | null
+          type?: string
+          url?: string | null
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["watch_category"] | null
+          country?: string | null
+          created_at?: string
+          guid?: string
+          id?: string
+          impact?: string | null
+          published_at?: string | null
+          raw?: Json | null
+          source_id?: string
+          summary?: string | null
+          tags?: string[] | null
+          title?: string | null
+          type?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "watch_items_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "watch_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      watch_prefs: {
+        Row: {
+          categories: Database["public"]["Enums"]["watch_category"][] | null
+          countries: string[] | null
+          created_at: string
+          digest_frequency: string | null
+          enabled_digest: boolean
+          id: string
+          keywords: string[] | null
+          last_digest_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          categories?: Database["public"]["Enums"]["watch_category"][] | null
+          countries?: string[] | null
+          created_at?: string
+          digest_frequency?: string | null
+          enabled_digest?: boolean
+          id?: string
+          keywords?: string[] | null
+          last_digest_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          categories?: Database["public"]["Enums"]["watch_category"][] | null
+          countries?: string[] | null
+          created_at?: string
+          digest_frequency?: string | null
+          enabled_digest?: boolean
+          id?: string
+          keywords?: string[] | null
+          last_digest_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      watch_sources: {
+        Row: {
+          category: Database["public"]["Enums"]["watch_category"]
+          country: string | null
+          created_at: string
+          format: string
+          id: string
+          is_enabled: boolean
+          last_checked_at: string | null
+          last_error: string | null
+          name: string
+          type: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          category?: Database["public"]["Enums"]["watch_category"]
+          country?: string | null
+          created_at?: string
+          format?: string
+          id?: string
+          is_enabled?: boolean
+          last_checked_at?: string | null
+          last_error?: string | null
+          name: string
+          type?: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["watch_category"]
+          country?: string | null
+          created_at?: string
+          format?: string
+          id?: string
+          is_enabled?: boolean
+          last_checked_at?: string | null
+          last_error?: string | null
+          name?: string
+          type?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +192,14 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      watch_category:
+        | "customs"
+        | "trade"
+        | "sanctions"
+        | "tax_vat"
+        | "standards"
+        | "logistics"
+        | "general"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +326,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      watch_category: [
+        "customs",
+        "trade",
+        "sanctions",
+        "tax_vat",
+        "standards",
+        "logistics",
+        "general",
+      ],
+    },
   },
 } as const
