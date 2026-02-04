@@ -181,6 +181,8 @@ export function MainLayout({
           <div className="border-t border-border/60 bg-[hsl(var(--background))/0.7] backdrop-blur">
             <VariablesBar />
           </div>
+
+          <div className="h-1 bg-gradient-to-r from-blue-700 via-white to-red-600" />
         </header>
 
         <div className={cn("p-4 md:p-10", contentClassName)}>

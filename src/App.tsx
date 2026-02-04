@@ -1,3 +1,4 @@
+import * as React from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -16,54 +17,56 @@ import { CompanyProfileGuard } from "@/components/CompanyProfileGuard";
 import { CookieConsent } from "@/components/CookieConsent";
 import { LanguageChooser } from "@/components/LanguageChooser";
 
-import Home from "@/pages/Home";
-import ToolPage from "@/pages/Tool";
-import ServicesPage from "@/pages/Services";
-import AboutPage from "@/pages/About";
-import Analyse from "@/pages/Analyse";
-import ShareDecision from "@/pages/ShareDecision";
-import Methodologie from "@/pages/Methodologie";
-import Guide from "@/pages/Guide";
+const Home = React.lazy(() => import("@/pages/Home"));
+const ToolPage = React.lazy(() => import("@/pages/Tool"));
+const ServicesPage = React.lazy(() => import("@/pages/Services"));
+const AboutPage = React.lazy(() => import("@/pages/About"));
+const Analyse = React.lazy(() => import("@/pages/Analyse"));
+const ShareDecision = React.lazy(() => import("@/pages/ShareDecision"));
+const Methodologie = React.lazy(() => import("@/pages/Methodologie"));
+const Guide = React.lazy(() => import("@/pages/Guide"));
 
-import WatchCenter from "@/pages/WatchCenter";
-import WatchRegulatory from "@/pages/WatchRegulatory";
-import WatchCommercial from "@/pages/WatchCommercial";
+const WatchCenter = React.lazy(() => import("@/pages/WatchCenter"));
+const WatchRegulatory = React.lazy(() => import("@/pages/WatchRegulatory"));
+const WatchCommercial = React.lazy(() => import("@/pages/WatchCommercial"));
 
-import InvoiceCheck from "@/pages/InvoiceCheck";
-import Newsletter from "@/pages/Newsletter";
-import Login from "@/pages/Login";
-import Register from "@/pages/Register";
-import ForgotPassword from "@/pages/ForgotPassword";
-import SetPassword from "@/pages/SetPassword";
+const InvoiceCheck = React.lazy(() => import("@/pages/InvoiceCheck"));
+const Newsletter = React.lazy(() => import("@/pages/Newsletter"));
+const Login = React.lazy(() => import("@/pages/Login"));
+const Register = React.lazy(() => import("@/pages/Register"));
+const ForgotPassword = React.lazy(() => import("@/pages/ForgotPassword"));
+const SetPassword = React.lazy(() => import("@/pages/SetPassword"));
 
-import CommandCenter from "@/pages/CommandCenter";
-import Simulator from "@/pages/Simulator";
+const CommandCenter = React.lazy(() => import("@/pages/CommandCenter"));
+const Simulator = React.lazy(() => import("@/pages/Simulator"));
 
-import Products from "@/pages/Products";
-import Sales from "@/pages/Sales";
-import InvoiceDetail from "@/pages/InvoiceDetail";
+const Products = React.lazy(() => import("@/pages/Products"));
+const Sales = React.lazy(() => import("@/pages/Sales"));
+const InvoiceDetail = React.lazy(() => import("@/pages/InvoiceDetail"));
 
-import Admin from "@/pages/Admin";
-import Assistant from "@/pages/Assistant";
-import Settings from "@/pages/Settings";
-import NotFound from "@/pages/NotFound";
-import Solutions from "@/pages/Solutions";
-import Veille from "@/pages/Veille";
-import Resources from "@/pages/Resources";
-import Contact from "@/pages/Contact";
-import InternalResources from "@/pages/InternalResources";
-import ExportToFrance from "@/pages/ExportToFrance";
+const Admin = React.lazy(() => import("@/pages/Admin"));
+const Assistant = React.lazy(() => import("@/pages/Assistant"));
+const Settings = React.lazy(() => import("@/pages/Settings"));
+const NotFound = React.lazy(() => import("@/pages/NotFound"));
+const Solutions = React.lazy(() => import("@/pages/Solutions"));
+const Veille = React.lazy(() => import("@/pages/Veille"));
+const Resources = React.lazy(() => import("@/pages/Resources"));
+const Contact = React.lazy(() => import("@/pages/Contact"));
+const InternalResources = React.lazy(() => import("@/pages/InternalResources"));
+const ExportToFrance = React.lazy(() => import("@/pages/ExportToFrance"));
 
-import Pricing from "@/pages/Pricing";
-import HistoryPage from "@/pages/History";
-import ImportCheckInvoice from "@/pages/ImportCheckInvoice";
-import ExportCostingPage from "@/pages/ExportCosting";
-import VipRentability from "@/pages/VipRentability";
+const Pricing = React.lazy(() => import("@/pages/Pricing"));
+const HistoryPage = React.lazy(() => import("@/pages/History"));
+const ImportCheckInvoice = React.lazy(() => import("@/pages/ImportCheckInvoice"));
+const ExportCostingPage = React.lazy(() => import("@/pages/ExportCosting"));
+const VipRentability = React.lazy(() => import("@/pages/VipRentability"));
 
-// ✅ Legal
-import Legal from "@/pages/Legal";
+const Legal = React.lazy(() => import("@/pages/Legal"));
 
 const queryClient = new QueryClient();
+const LazyFallback = () => (
+  <div className="p-6 text-sm text-muted-foreground">Chargement…</div>
+);
 
 export default function App() {
   return (
@@ -83,7 +86,8 @@ export default function App() {
                   <LanguageChooser />
                   <CompanyProfileGuard />
                   <GlobalFiltersProvider>
-                    <Routes>
+                    <React.Suspense fallback={<LazyFallback />}>
+                      <Routes>
                       {/* ===================== Marketing / Public ===================== */}
                       <Route path="/" element={<Home />} />
                       <Route path="/tool" element={<ToolPage />} />
@@ -334,6 +338,7 @@ export default function App() {
 
                       <Route path="*" element={<NotFound />} />
                     </Routes>
+                    </React.Suspense>
                   </GlobalFiltersProvider>
                 </BrowserRouter>
               </LanguageProvider>

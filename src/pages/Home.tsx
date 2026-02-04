@@ -1,6 +1,5 @@
+import * as React from "react";
 import { Link } from "react-router-dom";
-
-import heroVideo from "@/assets/hero-export.mp4";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { useI18n } from "@/contexts/LanguageContext";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
@@ -11,6 +10,8 @@ type FeatureCard = { title: string; description: string };
 export default function Home() {
   const { t } = useI18n();
   const prefersReducedMotion = usePrefersReducedMotion();
+  const [shouldLoadVideo, setShouldLoadVideo] = React.useState(false);
+  const heroRef = React.useRef<HTMLDivElement | null>(null);
   usePageMeta("meta.home.title", "meta.home.description");
 
   const heroTitle = (t("heroLanding.title") as string) ?? "Analysez vos coûts export en 2 minutes";
@@ -60,24 +61,47 @@ export default function Home() {
   const phonePretty = "06 76 43 55 51";
   const emailMain = "contact@exportfrancefacile.com";
 
+  React.useEffect(() => {
+    if (prefersReducedMotion) return;
+    const node = heroRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setShouldLoadVideo(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px" }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [prefersReducedMotion]);
+
   return (
     <MarketingLayout>
       {/* HERO */}
-      <section className="relative min-h-[88vh] overflow-hidden text-white">
+      <section className="relative min-h-[88vh] overflow-hidden text-white" ref={heroRef}>
         <div className="absolute inset-0">
-          {!prefersReducedMotion ? (
+          {!prefersReducedMotion && shouldLoadVideo ? (
             <video
               className="h-full w-full object-cover"
               autoPlay
               muted
               loop
               playsInline
-              preload="metadata"
-              src={heroVideo}
-            />
+              preload="none"
+              poster="/videos/hero-export.jpg"
+            >
+              <source src="/videos/hero-export.webm" type="video/webm" />
+              <source src="/videos/hero-export.mp4" type="video/mp4" />
+            </video>
           ) : (
             <div
               className="absolute inset-0 bg-gradient-to-br from-[#0B1220] via-[#1E3A8A] to-[#0B1220]"
+              style={{ backgroundImage: "url(/videos/hero-export.jpg)", backgroundSize: "cover", backgroundPosition: "center" }}
               aria-hidden
             />
           )}

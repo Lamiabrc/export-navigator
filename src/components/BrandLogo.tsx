@@ -38,17 +38,21 @@ export function BrandLogo({
   subtitle = "Audit - Reglementation - Veille",
   location = "Conseil Export",
   size = "md",
-  logoSrc = "/mpl-logo.png",
+  logoSrc = "/mpl-logo.svg",
 }: BrandLogoProps) {
   const styles = sizeConfig[size];
+  const sizePx = size === "sm" ? 36 : size === "md" ? 48 : 64;
 
   return (
     <Link to={href} className={cn("inline-flex items-center no-underline", styles.gap, className)} aria-label="Accueil MPL Conseil Export">
       <img
         src={logoSrc}
         alt="Logo MPL Conseil Export"
+        width={sizePx}
+        height={sizePx}
         className={cn(styles.img, "w-auto drop-shadow-lg shrink-0", imageClassName)}
-        loading="lazy"
+        loading="eager"
+        decoding="async"
       />
       {showText && (
         <div className={cn("flex flex-col leading-tight min-w-0", textClassName)}>
