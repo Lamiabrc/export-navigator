@@ -125,7 +125,7 @@ export default function App() {
                         path="/history"
                         element={
                           <ProtectedRoute>
-                            <RequirePlan minPlan="PRO">
+                            <RequirePlan minPlan="PRO_ONLINE">
                               <HistoryPage />
                             </RequirePlan>
                           </ProtectedRoute>
@@ -136,7 +136,7 @@ export default function App() {
                         path="/import/check-invoice"
                         element={
                           <ProtectedRoute>
-                            <RequirePlan minPlan="VIP">
+                            <RequirePlan minPlan="PRO_VISIO">
                               <ImportCheckInvoice />
                             </RequirePlan>
                           </ProtectedRoute>
@@ -147,7 +147,7 @@ export default function App() {
                         path="/vip/rentability"
                         element={
                           <ProtectedRoute>
-                            <RequirePlan minPlan="VIP">
+                            <RequirePlan minPlan="PILOTAGE_HEBDO">
                               <VipRentability />
                             </RequirePlan>
                           </ProtectedRoute>

@@ -179,10 +179,10 @@ export default function Pricing() {
             </Badge>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {tierKeys.map((key: TierSlug) => {
               const tier = resolved.tiers[key];
-              const isPrimary = key === "PRO";
+              const isPrimary = key === "PRO_ONLINE";
 
               return (
                 <article
@@ -204,15 +204,15 @@ export default function Pricing() {
                     <p className="mt-2 text-3xl font-semibold text-slate-900">{tier.price}</p>
                     <p className="mt-3 text-sm text-slate-600">{tier.description}</p>
 
-                    {key === "VIP" && (
+                    {key === "PILOTAGE" && (
                       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
                         {isFR ? (
                           <>
-                            <span className="font-semibold text-slate-900">Veille :</span> accessible uniquement en VIP.
+                            <span className="font-semibold text-slate-900">Formule complète :</span> accompagnement hebdomadaire.
                           </>
                         ) : (
                           <>
-                            <span className="font-semibold text-slate-900">Watch:</span> VIP only.
+                            <span className="font-semibold text-slate-900">Full package:</span> weekly coaching.
                           </>
                         )}
                       </div>

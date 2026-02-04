@@ -178,7 +178,7 @@ export default function ExportCostingPage() {
                 <p className="text-xs">{meta.profitabilitySubtitle}</p>
               </div>
 
-              <RequirePlan minPlan="VIP">
+              <RequirePlan minPlan="PRO_ONLINE">
                 <div className="rounded-2xl border border-white/20 bg-white/5 p-5 text-sm text-white/80">
                   <p className="text-xs uppercase tracking-[0.35em] text-white/40">{meta.sensitivityLabel}</p>
                   <p className="mt-2 text-sm text-white/80">
