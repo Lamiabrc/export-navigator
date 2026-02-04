@@ -28,6 +28,7 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
   const { lang, t, setLang } = useI18n();
   const { plan, setPlan } = usePlan();
   const location = useLocation();
+  const isEN = lang === "en";
 
   const navLabel = (key: string, fallback: string) => {
     const candidate = (t(key) as string) ?? "";
@@ -141,7 +142,7 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
               to="/login"
               className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 transition hover:text-slate-900 md:inline-flex"
             >
-              Connexion
+              {isEN ? "Sign in" : "Connexion"}
             </Link>
           </div>
         </div>

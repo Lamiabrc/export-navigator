@@ -465,7 +465,7 @@ export default function Home() {
           </div>
 
           <div className="mt-6 text-xs text-slate-500">
-            Email direct :{" "}
+            {isEN ? "Direct email:" : "Email direct :"}{" "}
             <a className="underline" href={`mailto:${emailMain}`}>
               {emailMain}
             </a>
