@@ -189,7 +189,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
           <Link to="/" className="flex items-center gap-3">
             <BrandLogo size="lg" showText={false} imageClassName="h-12 md:h-14" className="shrink-0" />
             <div className="hidden sm:block leading-tight">
-              <div className="text-sm font-semibold text-foreground">Export Navigator</div>
+              <div className="text-sm font-semibold text-foreground">MPL Export Navigator</div>
               <div className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">
                 par MPL Export Conseil
               </div>
@@ -265,7 +265,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
       <footer className="relative z-10 border-t border-border bg-background/80">
         <div className="mx-auto grid max-w-7xl gap-6 px-6 py-10 md:px-10 lg:grid-cols-[1fr_0.95fr]">
           <div className="space-y-3">
-            <div className="text-sm font-semibold text-foreground">Export Navigator</div>
+            <div className="text-sm font-semibold text-foreground">MPL Export Navigator</div>
             <div className="text-sm text-muted-foreground">
               Outil d’aide à la décision export — par MPL Export Conseil (audit, conformité, veille personnalisée).
             </div>

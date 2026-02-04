@@ -64,7 +64,7 @@ const navigation: NavSection[] = [
         aliases: ["/app/import/check-invoice"],
       },
       {
-        name: "Taxes & OM (DROM)",
+        name: "Taxes & OM",
         href: "/app/taxes-om",
         icon: Scale,
         aliases: ["/app/taxes", "/app/om", "/app/octroi-mer"],

@@ -54,7 +54,7 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
             size="md"
             imageClassName="h-10 w-auto"
             textClassName="text-[13px]"
-            title="Export Navigator"
+            title="MPL Export Navigator"
             subtitle="par MPL Export Conseil"
             location="Conseil Export"
             className="group"

@@ -148,7 +148,7 @@ const COPY: Record<Lang, Copy> = {
     checklist: [
       "Incoterm choisi cohérent avec le modèle (EXW/FCA/CPT/CIP/DAP/DDP…).",
       "Facture : libellés, quantité, devise, HT/TTC, transport, assurance (si applicable).",
-      "Destination : règles spécifiques (DROM, OM, octroi, particularités fiscales).",
+      "Destination : règles spécifiques (TVA, douane, particularités fiscales).",
       "Conformité : restrictions, sanctions, documents requis, preuve d’export (si besoin).",
     ],
     sources: [

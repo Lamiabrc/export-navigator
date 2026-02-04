@@ -149,7 +149,7 @@ export function MainLayout({
               <Link
                 to="/app/invoice-check"
                 className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 border border-primary/40 hover:shadow-primary/40 hover:-translate-y-0.5 transition shrink-0"
-                title="Contrôle cohérence facture (Incoterm, TVA, OM si DROM, etc.)"
+                title="Contrôle cohérence facture (Incoterm, TVA, OM si applicable, etc.)"
               >
                 <FileCheck2 className="h-4 w-4" />
                 Contrôler une facture

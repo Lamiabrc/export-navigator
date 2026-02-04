@@ -413,9 +413,9 @@ export default function Contact() {
                   </details>
 
                   <details className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                    <summary className="cursor-pointer text-sm font-semibold text-slate-900">
-                      Est-ce que tu traites aussi les DROM ?
-                    </summary>
+                      <summary className="cursor-pointer text-sm font-semibold text-slate-900">
+                        Est-ce que tu traites l’import/export France ?
+                      </summary>
                     <p className="mt-2 text-sm text-slate-700">
                       Oui. Précise le territoire (ex: Martinique, Réunion) et ton Incoterm.
                     </p>

@@ -99,9 +99,9 @@ export default function Home() {
 
           <div className="relative z-10 mx-auto flex min-h-[88vh] max-w-5xl flex-col items-center justify-center gap-6 px-6 text-center">
           <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.6em] text-white/70">
-            Export Navigator
+            MPL Export Navigator
             <span className="hidden rounded-full bg-white/10 px-2 py-1 text-[10px] tracking-[0.3em] text-white/70 sm:inline">
-              France • DROM • International
+              France • International
             </span>
           </p>
 
@@ -143,9 +143,9 @@ export default function Home() {
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-              <p className="text-xs uppercase tracking-[0.35em] text-white/60">DROM & OM</p>
+              <p className="text-xs uppercase tracking-[0.35em] text-white/60">Expert import/export France</p>
               <p className="mt-1 text-sm text-white/85">
-                OM / octroi / règles locales selon le territoire.
+                TVA, douane, incoterms et règles d’entrée.
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
@@ -266,7 +266,7 @@ export default function Home() {
             <div className="rounded-3xl border border-slate-200 bg-white p-6">
               <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Étape 1</p>
               <p className="mt-2 text-lg font-semibold text-slate-900">Choisir destination & contexte</p>
-              <p className="mt-2 text-sm text-slate-600">Pays/territoire (DROM inclus) + type d’opération.</p>
+              <p className="mt-2 text-sm text-slate-600">Pays/territoire + type d’opération.</p>
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-6">

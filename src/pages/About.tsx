@@ -28,14 +28,14 @@ export default function About() {
       headline: "À propos",
       title: "MPL Export Navigator",
       subtitle:
-        "Un outil simple pour estimer vos coûts export, détecter les risques (TVA, douane, DDP, DROM) et décider vite — avec possibilité de validation par un consultant.",
+        "Un outil simple pour estimer vos coûts export, détecter les risques (TVA, douane, DDP) et décider vite — avec possibilité de validation par un consultant.",
       missionTitle: "Pourquoi cet outil existe",
       missionBody:
         "Parce qu’en export, les erreurs coûtent cher : TVA mal gérée, incoterm incohérent, DDP risqué, documents incomplets, sanctions… Export Navigator vous donne une vue claire et une checklist actionnable, puis MPL Export Conseil peut valider les cas complexes.",
       blocksTitle: "Ce que vous obtenez",
       ctaTitle: "Besoin d’une validation express ?",
       ctaBody:
-        "Si votre expédition engage du DDP, un territoire DROM, ou un produit sensible, je vous aide à sécuriser la décision.",
+        "Si votre expédition engage du DDP ou un produit sensible, je vous aide à sécuriser la décision.",
       ctaButton: "Demander un diagnostic",
       transparencyTitle: "Transparence & limites",
       contactTitle: "Contact direct",
@@ -65,7 +65,7 @@ export default function About() {
                   DDP / Incoterms
                 </span>
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700">
-                  DROM / DOM
+                  France / international
                 </span>
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700">
                   TVA / Douane
@@ -139,7 +139,7 @@ export default function About() {
                 <h3 className="text-lg font-semibold text-slate-900">Contexte pays / territoire</h3>
               </div>
               <p className="mt-3 text-sm text-slate-600">
-                Comprendre les implications selon destination (y compris DROM), incoterm et transit.
+                Comprendre les implications selon destination, incoterm et transit.
               </p>
             </article>
 
