@@ -32,9 +32,9 @@ export default function Home() {
   const proofTitle = (t("heroLanding.proofTitle") as string) ?? "Ce que l’outil automatise (au lieu d’embaucher)";
   const proofDescription = (t("heroLanding.proofDescription") as string) ?? "";
   const proofItemsRaw = t("heroLanding.proofItems");
-  const proofItems =
-    Array.isArray(proofItemsRaw) && proofItemsRaw.length
-      ? (proofItemsRaw as Array<{ title: string; description: string }>)
+  const proofItems: Array<{ title: string; description: string }> =
+    Array.isArray(proofItemsRaw) && proofItemsRaw.length > 0 && typeof proofItemsRaw[0] === "object"
+      ? (proofItemsRaw as unknown as Array<{ title: string; description: string }>)
       : [];
 
   const featureCards: FeatureCard[] =

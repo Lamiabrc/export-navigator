@@ -102,9 +102,9 @@ export default function ServicesPage() {
                   "RSS feeds, filters, tags, and automated digest (plan-based)."
                 ),
               },
-            ].map((item) => (
+            ].map((item, idx) => (
               <div
-                key={item.title}
+                key={`proof-${idx}`}
                 className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
               >
                 <p className="text-sm font-semibold text-slate-950">{item.title}</p>

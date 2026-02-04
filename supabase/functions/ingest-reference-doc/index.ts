@@ -60,8 +60,13 @@ function titleFromObjectPath(path: string) {
 }
 
 async function extractTextFromPdfBytes(bytes: Uint8Array) {
-  // Edge/Deno: pas de worker → disableWorker
-  const loadingTask = pdfjs.getDocument({ data: bytes, disableWorker: true });
+  // Edge/Deno: pas de worker → useWorkerFetch=false + isEvalSupported=false
+  const loadingTask = pdfjs.getDocument({
+    data: bytes,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  } as any);
   const pdf = await loadingTask.promise;
 
   const parts: string[] = [];

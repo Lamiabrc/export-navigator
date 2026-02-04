@@ -108,42 +108,42 @@ export function CompanyProfileModal({ open, initialValues, onSave, loading }: Pr
 
         <div className="mt-6 space-y-4">
           <div className="space-y-1">
-            <Label htmlFor="companyName">{t("companyProfile.fields.companyName")}</Label>
+            <Label htmlFor="companyName">{String(t("companyProfile.fields.companyName") ?? "")}</Label>
             <Input
               id="companyName"
               value={values.companyName}
               onChange={(event) => handleChange("companyName", event.target.value)}
-              placeholder={t("companyProfile.placeholders.companyName")}
+              placeholder={String(t("companyProfile.placeholders.companyName") ?? "")}
             />
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="addressLine1">{t("companyProfile.fields.addressLine1")}</Label>
+            <Label htmlFor="addressLine1">{String(t("companyProfile.fields.addressLine1") ?? "")}</Label>
             <Input
               id="addressLine1"
               value={values.addressLine1}
               onChange={(event) => handleChange("addressLine1", event.target.value)}
-              placeholder={t("companyProfile.placeholders.addressLine1")}
+              placeholder={String(t("companyProfile.placeholders.addressLine1") ?? "")}
             />
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="space-y-1">
-              <Label htmlFor="city">{t("companyProfile.fields.city")}</Label>
+              <Label htmlFor="city">{String(t("companyProfile.fields.city") ?? "")}</Label>
               <Input
                 id="city"
                 value={values.city}
                 onChange={(event) => handleChange("city", event.target.value)}
-                placeholder={t("companyProfile.placeholders.city")}
+                placeholder={String(t("companyProfile.placeholders.city") ?? "")}
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="postalCode">{t("companyProfile.fields.postalCode")}</Label>
+              <Label htmlFor="postalCode">{String(t("companyProfile.fields.postalCode") ?? "")}</Label>
               <Input
                 id="postalCode"
                 value={values.postalCode}
                 onChange={(event) => handleChange("postalCode", event.target.value)}
-                placeholder={t("companyProfile.placeholders.postalCode")}
+                placeholder={String(t("companyProfile.placeholders.postalCode") ?? "")}
               />
             </div>
           </div>
