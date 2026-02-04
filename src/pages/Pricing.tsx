@@ -90,9 +90,9 @@ export default function Pricing() {
                     <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
                       {isFR ? "Flexible" : "Flexible"}
                     </p>
-                    <p className="mt-2 font-semibold text-slate-900">
-                      {isFR ? "Outil + suivi (PRO/VIP)" : "Tool + follow-up (PRO/VIP)"}
-                    </p>
+                      <p className="mt-2 font-semibold text-slate-900">
+                      {isFR ? "Outil + suivi (en ligne, visio, audit)" : "Tool + follow-up (online, video, audit)"}
+                      </p>
                     <ul className="mt-3 space-y-2">
                       <li>
                         •{" "}
@@ -103,10 +103,10 @@ export default function Pricing() {
                       <li>
                         •{" "}
                         {isFR
-                          ? "Suivi hebdo / journée VIP = sécurisation des points critiques"
-                          : "Weekly follow-up / VIP day = critical-point security"}
+                          ? "Visio mensuelle / audit complet = sécurisation des points critiques"
+                          : "Monthly video / on-site audit = critical-point security"}
                       </li>
-                      <li>• {isFR ? "Veille destination réservée VIP = moins de surprises" : "VIP watch = fewer surprises"}</li>
+                      <li>• {isFR ? "Veille incluse dès l’offre en ligne = moins de surprises" : "Watch included from the online plan = fewer surprises"}</li>
                     </ul>
                   </div>
                 </div>
@@ -170,8 +170,8 @@ export default function Pricing() {
               </h2>
               <p className="mt-1 text-sm text-slate-600">
                 {isFR
-                  ? "PRO = suivi hebdo. VIP = formule complète + veille + journée de pilotage."
-                  : "PRO = weekly follow-up. VIP = full tool + watch + a monthly pilot day."}
+                  ? "En ligne = outils + veille. Visio = 1 rendez-vous/mois. Audit = audit physique + 1h/sem."
+                  : "Online = tools + watch. Video = 1 call/month. Audit = on-site audit + 1h/week."}
               </p>
             </div>
             <Badge variant="outline" className="rounded-full">
@@ -256,8 +256,8 @@ export default function Pricing() {
                 <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">{isFR ? "Important" : "Important"}</p>
                 <p className="mt-2 text-base font-semibold text-slate-900">
                   {isFR
-                    ? "La veille est réservée au VIP. PRO se concentre sur le calcul + la vérification facture + le suivi hebdo."
-                    : "Watch is VIP-only. PRO focuses on calculation + invoice verification + weekly follow-up."}
+                    ? "La veille est incluse dès l’offre en ligne. L’offre gratuite reste limitée au simulateur + newsletter."
+                    : "Watch is included from the online plan. The free plan stays limited to the simulator + newsletter."}
                 </p>
                 <p className="mt-1 text-sm text-slate-600">
                   {isFR
