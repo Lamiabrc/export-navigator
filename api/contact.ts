@@ -63,6 +63,7 @@ function parseBody(req: VercelRequest): IncomingBody {
 }
 
 const TRANSPORT_URL = process.env.EMAIL_TRANSPORT_URL;
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const CONTACT_NOTIFICATION_EMAILS = process.env.CONTACT_NOTIFICATION_EMAILS
   ? process.env.CONTACT_NOTIFICATION_EMAILS.split(",").map((value) => value.trim()).filter(Boolean)
   : ["lamia.brechet@outlook.fr"];
@@ -105,6 +106,32 @@ const buildNotificationBody = (row: ContactRow) => {
 };
 
 async function sendNotificationEmail(row: ContactRow) {
+  if (RESEND_API_KEY) {
+    const payload = {
+      from: EMAIL_FROM_ADDRESS,
+      to: CONTACT_NOTIFICATION_EMAILS,
+      subject: buildNotificationSubject(row),
+      text: buildNotificationBody(row),
+      reply_to: row.email,
+    };
+
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return { ok: false as const, detail: detail || "resend_failed" };
+    }
+
+    return { ok: true as const };
+  }
+
   const transport = getTransport();
   if (!transport) {
     return { ok: false as const, detail: "missing_email_transport" };
@@ -244,7 +271,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error("[api/contact] notification error:", notification);
     }
 
-    return res.status(200).json({ ok: true, stored: insert.ok, version: VERSION });
+    return res.status(200).json({
+      ok: true,
+      stored: insert.ok,
+      emailSent: notification.ok,
+      emailDetail: notification.ok ? undefined : notification.detail,
+      version: VERSION,
+    });
   } catch (err: any) {
     console.error("[api/contact] fatal:", err?.message || err);
     return res.status(500).json({
