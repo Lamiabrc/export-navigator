@@ -823,7 +823,8 @@ create policy "watch_prefs_owner" on watch_prefs
 create policy "watch_digests_owner" on watch_digests
   for select using (auth.role() = 'service_role' OR auth.uid() = user_id);
 create policy "watch_digests_service_role" on watch_digests
-  for insert, update, delete using (auth.role() = 'service_role');
+  for all
+  using (auth.role() = 'service_role');
 
 -- Trigger helpers
 create or replace function watch_sources_updated_at() returns trigger as $$
