@@ -54,6 +54,8 @@ const Resources = React.lazy(() => import("@/pages/Resources"));
 const Contact = React.lazy(() => import("@/pages/Contact"));
 const InternalResources = React.lazy(() => import("@/pages/InternalResources"));
 const ExportToFrance = React.lazy(() => import("@/pages/ExportToFrance"));
+const BillingSuccess = React.lazy(() => import("@/pages/BillingSuccess"));
+const Account = React.lazy(() => import("@/pages/Account"));
 
 const Pricing = React.lazy(() => import("@/pages/Pricing"));
 const HistoryPage = React.lazy(() => import("@/pages/History"));
@@ -118,6 +120,7 @@ export default function App() {
                       <Route path="/tarifs" element={<Navigate to="/pricing" replace />} />
 
                       <Route path="/contact" element={<Contact />} />
+                      <Route path="/billing/success" element={<BillingSuccess />} />
                       <Route path="/export-to-france" element={<ExportToFrance />} />
                       <Route path="/newsletter" element={<Newsletter />} />
 
@@ -171,6 +174,15 @@ export default function App() {
                       <Route path="/register" element={<Register />} />
                       <Route path="/forgot-password" element={<ForgotPassword />} />
                       <Route path="/set-password" element={<SetPassword />} />
+
+                      <Route
+                        path="/account"
+                        element={
+                          <ProtectedRoute>
+                            <Account />
+                          </ProtectedRoute>
+                        }
+                      />
 
                       {/* ===================== App (privé) ===================== */}
                       <Route

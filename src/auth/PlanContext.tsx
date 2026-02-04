@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -28,6 +36,7 @@ type PlanContextValue = {
   error?: string;
   setPlan: (value: SubscriptionPlan) => void;
   canAccess: (requiredPlan: SubscriptionPlan) => boolean;
+  refreshPlan: () => Promise<void>;
 };
 
 const PlanContext = createContext<PlanContextValue | undefined>(undefined);
@@ -54,6 +63,14 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
   const [billingPlan, setBillingPlan] = useState<SubscriptionPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -73,63 +90,64 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
     setManualPlan(next);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  const resolvePlan = useCallback(async (userId: string) => {
+    if (!mountedRef.current) return;
+    setLoading(true);
+    setError(undefined);
+    const { data, error: queryError } = await supabase
+      .from("billing_subscriptions")
+      .select("plan,status,updated_at")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    const resolvePlan = async (userId: string) => {
-      setLoading(true);
-      setError(undefined);
-      const { data, error: queryError } = await supabase
-        .from("billing_subscriptions")
-        .select("plan,status,updated_at")
-        .eq("user_id", userId)
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (cancelled) return;
-      if (queryError) {
-        setError(queryError.message);
-        setBillingPlan(null);
-        setLoading(false);
-        return;
-      }
-
-      if (data && (data.status === "active" || data.status === "trialing") && data.plan === "online") {
-        setBillingPlan("PRO_ONLINE");
-      } else {
-        setBillingPlan(null);
-      }
+    if (!mountedRef.current) return;
+    if (queryError) {
+      setError(queryError.message);
+      setBillingPlan(null);
       setLoading(false);
-    };
+      return;
+    }
 
-    const init = async () => {
-      const { data } = await supabase.auth.getSession();
-      const userId = data.session?.user?.id;
-      if (userId) {
-        await resolvePlan(userId);
-      } else {
-        setBillingPlan(null);
-      }
-    };
+    if (data && (data.status === "active" || data.status === "trialing") && data.plan === "online") {
+      setBillingPlan("PRO_ONLINE");
+    } else {
+      setBillingPlan(null);
+    }
+    setLoading(false);
+  }, []);
 
-    init();
+  const refreshPlan = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    const userId = data.session?.user?.id;
+    if (userId) {
+      await resolvePlan(userId);
+    } else {
+      if (!mountedRef.current) return;
+      setBillingPlan(null);
+      setLoading(false);
+    }
+  }, [resolvePlan]);
+
+  useEffect(() => {
+    void refreshPlan();
 
     const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
       const userId = session?.user?.id;
       if (!userId) {
+        if (!mountedRef.current) return;
         setBillingPlan(null);
         setLoading(false);
         return;
       }
-      resolvePlan(userId);
+      void resolvePlan(userId);
     });
 
     return () => {
-      cancelled = true;
       authSub.subscription.unsubscribe();
     };
-  }, []);
+  }, [refreshPlan, resolvePlan]);
 
   const effectivePlan = billingPlan ?? manualPlan;
 
@@ -145,8 +163,9 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
       error,
       setPlan,
       canAccess,
+      refreshPlan,
     }),
-    [effectivePlan, loading, error, setPlan, canAccess],
+    [effectivePlan, loading, error, setPlan, canAccess, refreshPlan],
   );
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;

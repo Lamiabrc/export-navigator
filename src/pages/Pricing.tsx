@@ -1,18 +1,48 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { useI18n } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePlan } from "@/auth/PlanContext";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
 
 import { useResolvedPricing, TierSlug } from "@/hooks/useResolvedPricing";
+import { startOnlineCheckout } from "@/lib/billing";
 
 export default function Pricing() {
   const { t } = useI18n();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
+  const { plan } = usePlan();
   const { isFR, resolved, tierKeys } = useResolvedPricing(t);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  const handleOnlineCheckout = async () => {
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    try {
+      setCheckoutLoading(true);
+      await startOnlineCheckout();
+    } catch (err: any) {
+      toast({
+        title: isFR ? "Paiement indisponible" : "Checkout unavailable",
+        description:
+          err?.message ?? (isFR ? "Impossible de démarrer le paiement." : "Unable to start checkout."),
+      });
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
 
   return (
     <MarketingLayout>
@@ -183,6 +213,8 @@ export default function Pricing() {
             {tierKeys.map((key: TierSlug) => {
               const tier = resolved.tiers[key];
               const isPrimary = key === "PRO_ONLINE";
+              const isOnlinePlan = key === "PRO_ONLINE";
+              const isActiveOnline = plan === "PRO_ONLINE";
 
               return (
                 <article
@@ -229,15 +261,40 @@ export default function Pricing() {
                   </ul>
 
                   <div className="space-y-2">
-                    <Link
-                      to="/contact"
-                      className={[
-                        "inline-flex w-full items-center justify-center rounded-full px-4 py-3 text-xs font-semibold uppercase tracking-[0.4em] transition",
-                        isPrimary ? "bg-[#1E3A8A] text-white hover:bg-[#162864]" : "bg-slate-900 text-white hover:bg-slate-800",
-                      ].join(" ")}
-                    >
-                      {resolved.cta}
-                    </Link>
+                    {isOnlinePlan ? (
+                      isActiveOnline ? (
+                        <Button
+                          asChild
+                          className="w-full rounded-full bg-[#1E3A8A] text-xs font-semibold uppercase tracking-[0.4em] hover:bg-[#162864]"
+                        >
+                          <Link to="/account">{isFR ? "Gérer mon abonnement" : "Manage subscription"}</Link>
+                        </Button>
+                      ) : (
+                        <Button
+                          className="w-full rounded-full bg-[#1E3A8A] text-xs font-semibold uppercase tracking-[0.4em] hover:bg-[#162864]"
+                          onClick={handleOnlineCheckout}
+                          disabled={checkoutLoading}
+                        >
+                          {checkoutLoading
+                            ? isFR
+                              ? "Ouverture..."
+                              : "Opening..."
+                            : isFR
+                              ? "S'abonner"
+                              : "Subscribe"}
+                        </Button>
+                      )
+                    ) : (
+                      <Link
+                        to="/contact"
+                        className={[
+                          "inline-flex w-full items-center justify-center rounded-full px-4 py-3 text-xs font-semibold uppercase tracking-[0.4em] transition",
+                          isPrimary ? "bg-[#1E3A8A] text-white hover:bg-[#162864]" : "bg-slate-900 text-white hover:bg-slate-800",
+                        ].join(" ")}
+                      >
+                        {resolved.cta}
+                      </Link>
+                    )}
 
                     <p className="text-center text-xs text-slate-500">
                       {isFR

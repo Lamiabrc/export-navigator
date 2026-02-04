@@ -50,6 +50,10 @@ create policy "billing_customers_owner_read"
   on public.billing_customers for select
   using (auth.uid() = user_id);
 
+create policy "billing_customers_owner_insert"
+  on public.billing_customers for insert
+  with check (auth.uid() = user_id);
+
 create policy "billing_customers_owner_update"
   on public.billing_customers for update
   using (auth.uid() = user_id);
