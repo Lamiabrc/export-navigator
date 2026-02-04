@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { supabase } from "@/lib/supabase";
 
 export type SubscriptionPlan = "FREE" | "PRO_ONLINE" | "PRO_VISIO" | "PILOTAGE_HEBDO";
 
@@ -23,6 +24,8 @@ const getPlanFromValue = (value: string | null): SubscriptionPlan | undefined =>
 
 type PlanContextValue = {
   plan: SubscriptionPlan;
+  loading: boolean;
+  error?: string;
   setPlan: (value: SubscriptionPlan) => void;
   canAccess: (requiredPlan: SubscriptionPlan) => boolean;
 };
@@ -30,7 +33,7 @@ type PlanContextValue = {
 const PlanContext = createContext<PlanContextValue | undefined>(undefined);
 
 export const PlanProvider = ({ children }: { children: ReactNode }) => {
-  const [plan, setPlanState] = useState<SubscriptionPlan>(() => {
+  const [manualPlan, setManualPlan] = useState<SubscriptionPlan>(() => {
     if (typeof window === "undefined") {
       return "FREE";
     }
@@ -48,37 +51,102 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
 
     return "FREE";
   });
+  const [billingPlan, setBillingPlan] = useState<SubscriptionPlan | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, plan);
-  }, [plan]);
+    window.localStorage.setItem(STORAGE_KEY, manualPlan);
+  }, [manualPlan]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const fromParam = getPlanFromValue(params.get(PLAN_QUERY_PARAM));
     if (fromParam) {
-      setPlanState(fromParam);
+      setManualPlan(fromParam);
     }
   }, []);
 
   const setPlan = useCallback((next: SubscriptionPlan) => {
-    setPlanState(next);
+    setManualPlan(next);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolvePlan = async (userId: string) => {
+      setLoading(true);
+      setError(undefined);
+      const { data, error: queryError } = await supabase
+        .from("billing_subscriptions")
+        .select("plan,status,updated_at")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (queryError) {
+        setError(queryError.message);
+        setBillingPlan(null);
+        setLoading(false);
+        return;
+      }
+
+      if (data && (data.status === "active" || data.status === "trialing") && data.plan === "online") {
+        setBillingPlan("PRO_ONLINE");
+      } else {
+        setBillingPlan(null);
+      }
+      setLoading(false);
+    };
+
+    const init = async () => {
+      const { data } = await supabase.auth.getSession();
+      const userId = data.session?.user?.id;
+      if (userId) {
+        await resolvePlan(userId);
+      } else {
+        setBillingPlan(null);
+      }
+    };
+
+    init();
+
+    const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
+      const userId = session?.user?.id;
+      if (!userId) {
+        setBillingPlan(null);
+        setLoading(false);
+        return;
+      }
+      resolvePlan(userId);
+    });
+
+    return () => {
+      cancelled = true;
+      authSub.subscription.unsubscribe();
+    };
+  }, []);
+
+  const effectivePlan = billingPlan ?? manualPlan;
+
   const canAccess = useCallback(
-    (requiredPlan: SubscriptionPlan) => rank[plan] >= rank[requiredPlan],
-    [plan],
+    (requiredPlan: SubscriptionPlan) => rank[effectivePlan] >= rank[requiredPlan],
+    [effectivePlan],
   );
 
   const value = useMemo(
     () => ({
-      plan,
+      plan: effectivePlan,
+      loading,
+      error,
       setPlan,
       canAccess,
     }),
-    [plan, setPlan, canAccess],
+    [effectivePlan, loading, error, setPlan, canAccess],
   );
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;

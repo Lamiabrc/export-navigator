@@ -1,128 +1,113 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Stripe from "stripe";
-import { createClient } from "@supabase/supabase-js";
+
+import { json, supabaseAdmin } from "../_supabase.js";
 
 export const config = {
-  api: { bodyParser: false },
+  api: {
+    bodyParser: false,
+  },
 };
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: "2023-10-16",
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
+  apiVersion: "2024-04-10",
 });
 
-function buffer(req: VercelRequest): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: any[] = [];
-    req.on("data", (chunk) => chunks.push(chunk));
-    req.on("end", () => resolve(Buffer.concat(chunks)));
-    req.on("error", reject);
-  });
+async function readRawBody(req: VercelRequest): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req as any) chunks.push(Buffer.from(chunk));
+  return Buffer.concat(chunks);
 }
 
-function planFromPrice(priceId: string | null) {
-  const online = process.env.STRIPE_PRICE_ONLINE;
-  if (priceId && online && priceId === online) return "online";
-  return "free";
+function resolvePlan(status: string | null, priceId: string | null) {
+  if (!status || !priceId) return "free";
+  const active = status === "active" || status === "trialing";
+  return active && priceId === process.env.STRIPE_PRICE_ONLINE ? "online" : "free";
+}
+
+async function upsertSubscription(subscription: Stripe.Subscription) {
+  const customerId = subscription.customer as string;
+  const priceId = subscription.items.data[0]?.price?.id ?? null;
+  const status = subscription.status ?? null;
+  const currentPeriodEnd = subscription.current_period_end
+    ? new Date(subscription.current_period_end * 1000).toISOString()
+    : null;
+  const plan = resolvePlan(status, priceId);
+
+  const admin = supabaseAdmin();
+  const { data: customer, error: customerError } = await admin
+    .from("billing_customers")
+    .select("user_id")
+    .eq("stripe_customer_id", customerId)
+    .maybeSingle();
+
+  if (customerError || !customer?.user_id) {
+    return;
+  }
+
+  await admin.from("billing_subscriptions").upsert(
+    {
+      user_id: customer.user_id,
+      stripe_subscription_id: subscription.id,
+      stripe_price_id: priceId,
+      status,
+      plan,
+      current_period_end: currentPeriodEnd,
+    },
+    { onConflict: "stripe_subscription_id" },
+  );
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  try {
-    if (req.method !== "POST") {
-      res.status(405).send("Method not allowed");
-      return;
-    }
-
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !webhookSecret) {
-      res.status(500).send("missing_env");
-      return;
-    }
-
-    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    });
-
-    const sig = req.headers["stripe-signature"] as string;
-    const rawBody = await buffer(req);
-
-    let event: Stripe.Event;
-    try {
-      event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
-    } catch (err: any) {
-      res.status(400).send(`Webhook Error: ${err?.message || "invalid_signature"}`);
-      return;
-    }
-
-    // helpers
-    async function updateByUserId(userId: string, payload: any) {
-      await supabaseAdmin.from("profiles").update(payload).eq("id", userId);
-    }
-    async function findUserIdByCustomer(customerId: string) {
-      const { data } = await supabaseAdmin
-        .from("profiles")
-        .select("id")
-        .eq("stripe_customer_id", customerId)
-        .maybeSingle();
-      return data?.id || null;
-    }
-
-    // handle events
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const userId =
-        (session.client_reference_id as string) ||
-        (session.metadata?.supabase_user_id as string) ||
-        null;
-
-      const customerId = (session.customer as string) || null;
-      const subscriptionId = (session.subscription as string) || null;
-
-      if (userId) {
-        await updateByUserId(userId, {
-          stripe_customer_id: customerId,
-          stripe_subscription_id: subscriptionId,
-          subscription_status: "active",
-          plan: "online",
-        });
-      }
-    }
-
-    if (
-      event.type === "customer.subscription.created" ||
-      event.type === "customer.subscription.updated" ||
-      event.type === "customer.subscription.deleted"
-    ) {
-      const sub = event.data.object as Stripe.Subscription;
-      const customerId = (sub.customer as string) || null;
-      const userId = customerId ? await findUserIdByCustomer(customerId) : null;
-
-      const priceId =
-        sub.items?.data?.[0]?.price?.id ? String(sub.items.data[0].price.id) : null;
-
-      const status = String(sub.status || "");
-      const currentPeriodEnd = sub.current_period_end
-        ? new Date(sub.current_period_end * 1000).toISOString()
-        : null;
-
-      const plan = status === "active" || status === "trialing" ? planFromPrice(priceId) : "free";
-
-      if (userId) {
-        await updateByUserId(userId, {
-          stripe_customer_id: customerId,
-          stripe_subscription_id: sub.id,
-          stripe_price_id: priceId,
-          subscription_status: status,
-          plan,
-          current_period_end: currentPeriodEnd,
-        });
-      }
-    }
-
-    res.status(200).json({ received: true });
-  } catch (e: any) {
-    res.status(200).json({ received: true, degraded: true, error: e?.message || "unknown_error" });
+  if (req.method !== "POST") {
+    json(res, 405, { error: "Method not allowed" });
+    return;
   }
+
+  if (!process.env.STRIPE_WEBHOOK_SECRET || !process.env.STRIPE_SECRET_KEY) {
+    json(res, 500, { error: "Missing Stripe webhook env vars" });
+    return;
+  }
+
+  const rawBody = await readRawBody(req);
+  const signature = req.headers["stripe-signature"] as string | undefined;
+  if (!signature) {
+    json(res, 400, { error: "Missing Stripe signature" });
+    return;
+  }
+
+  let event: Stripe.Event;
+  try {
+    event = stripe.webhooks.constructEvent(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err: any) {
+    json(res, 400, { error: `Webhook signature verification failed: ${err.message}` });
+    return;
+  }
+
+  try {
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.subscription) {
+          const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+          await upsertSubscription(subscription);
+        }
+        break;
+      }
+      case "customer.subscription.created":
+      case "customer.subscription.updated":
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription;
+        await upsertSubscription(subscription);
+        break;
+      }
+      default:
+        break;
+    }
+  } catch (err: any) {
+    json(res, 500, { error: err.message || "Webhook handler failed" });
+    return;
+  }
+
+  json(res, 200, { received: true });
 }

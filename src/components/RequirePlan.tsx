@@ -11,8 +11,16 @@ export const RequirePlan = ({
   minPlan: SubscriptionPlan;
   children: ReactNode;
 }) => {
-  const { canAccess } = usePlan();
+  const { canAccess, loading } = usePlan();
   const { t } = useI18n();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center px-6 py-16 text-center text-sm text-slate-500">
+        Chargement du plan...
+      </div>
+    );
+  }
 
   if (canAccess(minPlan)) {
     return <>{children}</>;

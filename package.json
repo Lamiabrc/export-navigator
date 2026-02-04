@@ -69,6 +69,7 @@
     "react-router-dom": "^6.30.1",
     "recharts": "^2.15.4",
     "sonner": "^1.7.4",
+    "stripe": "^15.12.0",
     "svg-pan-zoom": "^3.6.2",
     "svgmap": "^2.18.1",
     "tailwind-merge": "^2.6.0",

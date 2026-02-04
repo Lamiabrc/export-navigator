@@ -1,87 +1,98 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Stripe from "stripe";
-import { createClient } from "@supabase/supabase-js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: "2023-10-16",
+import { allowCors, json, readJson, supabaseAdmin } from "../_supabase.js";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
+  apiVersion: "2024-04-10",
 });
 
-function json(res: VercelResponse, status: number, body: any) {
-  res.setHeader("content-type", "application/json; charset=utf-8");
-  res.status(status).send(JSON.stringify(body));
-}
+type CheckoutPayload = {
+  priceId?: string;
+};
 
 function getBearerToken(req: VercelRequest) {
-  const h = req.headers.authorization || "";
-  const m = h.match(/^Bearer\s+(.+)$/i);
-  return m?.[1] || "";
+  const header = String(req.headers.authorization || "");
+  if (!header.startsWith("Bearer ")) return null;
+  return header.slice("Bearer ".length).trim();
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  try {
-    if (req.method !== "POST") return json(res, 405, { ok: false, error: "Method not allowed" });
+export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
+  if (req.method !== "POST") {
+    json(res, 405, { error: "Method not allowed" });
+    return;
+  }
 
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const APP_URL = process.env.APP_URL;
-    const PRICE_ONLINE = process.env.STRIPE_PRICE_ONLINE;
+  const token = getBearerToken(req);
+  if (!token) {
+    json(res, 401, { error: "Missing Authorization bearer token" });
+    return;
+  }
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !APP_URL || !PRICE_ONLINE) {
-      return json(res, 500, { ok: false, error: "missing_env" });
-    }
+  if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_PRICE_ONLINE || !process.env.APP_URL) {
+    json(res, 500, { error: "Missing Stripe or APP_URL env vars" });
+    return;
+  }
 
-    const token = getBearerToken(req);
-    if (!token) return json(res, 401, { ok: false, error: "missing_auth" });
+  const admin = supabaseAdmin();
+  const { data: userData, error: userError } = await admin.auth.getUser(token);
+  if (userError || !userData?.user) {
+    json(res, 401, { error: "Invalid auth token" });
+    return;
+  }
 
-    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    });
+  const user = userData.user;
+  const { priceId } = await readJson<CheckoutPayload>(req);
+  const stripePriceId = (priceId || process.env.STRIPE_PRICE_ONLINE).trim();
 
-    const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(token);
-    if (userErr || !userData?.user) return json(res, 401, { ok: false, error: "invalid_auth" });
+  const { data: existingCustomer, error: customerError } = await admin
+    .from("billing_customers")
+    .select("stripe_customer_id,email")
+    .eq("user_id", user.id)
+    .maybeSingle();
 
-    const user = userData.user;
-    const email = (user.email || "").toLowerCase();
-    const userId = user.id;
+  if (customerError) {
+    json(res, 500, { error: "Failed to read billing customer" });
+    return;
+  }
 
-    // récupérer stripe_customer_id si déjà existant
-    const { data: prof } = await supabaseAdmin
-      .from("profiles")
-      .select("stripe_customer_id")
-      .eq("id", userId)
-      .maybeSingle();
-
-    let customerId = prof?.stripe_customer_id || null;
-
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: email || undefined,
-        metadata: { supabase_user_id: userId },
-      });
-      customerId = customer.id;
-
-      await supabaseAdmin
-        .from("profiles")
-        .update({ stripe_customer_id: customerId })
-        .eq("id", userId);
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      customer: customerId,
-      client_reference_id: userId,
-      line_items: [{ price: PRICE_ONLINE, quantity: 1 }],
-      allow_promotion_codes: true,
-      success_url: `${APP_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${APP_URL}/offre?canceled=1`,
-      metadata: { supabase_user_id: userId, plan: "online" },
-      subscription_data: {
-        metadata: { supabase_user_id: userId, plan: "online" },
+  let stripeCustomerId = existingCustomer?.stripe_customer_id || "";
+  if (!stripeCustomerId) {
+    const customer = await stripe.customers.create({
+      email: user.email || undefined,
+      metadata: {
+        supabase_user_id: user.id,
       },
     });
+    stripeCustomerId = customer.id;
 
-    return json(res, 200, { ok: true, url: session.url });
-  } catch (e: any) {
-    return json(res, 500, { ok: false, error: e?.message || "unknown_error" });
+    const { error: upsertError } = await admin.from("billing_customers").upsert(
+      {
+        user_id: user.id,
+        stripe_customer_id: stripeCustomerId,
+        email: user.email,
+      },
+      { onConflict: "user_id" },
+    );
+
+    if (upsertError) {
+      json(res, 500, { error: "Failed to store billing customer" });
+      return;
+    }
   }
-}
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    customer: stripeCustomerId,
+    client_reference_id: user.id,
+    line_items: [{ price: stripePriceId, quantity: 1 }],
+    success_url: `${process.env.APP_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.APP_URL}/offre?canceled=1`,
+    metadata: {
+      supabase_user_id: user.id,
+      plan: "online",
+    },
+  });
+
+  json(res, 200, { url: session.url });
+});
