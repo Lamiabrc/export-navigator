@@ -8,18 +8,23 @@ import { usePageMeta } from "@/hooks/usePageMeta";
 type FeatureCard = { title: string; description: string };
 
 export default function Home() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const isEN = lang === "en";
   const prefersReducedMotion = usePrefersReducedMotion();
   const [shouldLoadVideo, setShouldLoadVideo] = React.useState(false);
   const heroRef = React.useRef<HTMLDivElement | null>(null);
   usePageMeta("meta.home.title", "meta.home.description");
 
-  const heroTitle = (t("heroLanding.title") as string) ?? "Analysez vos coûts export en 2 minutes";
+  const heroTitle =
+    (t("heroLanding.title") as string) ??
+    (isEN ? "Your digital export department for SMEs." : "Analysez vos coûts export en 2 minutes");
   const heroSubtitle =
     (t("heroLanding.subtitle") as string) ??
-    "Un premier diagnostic clair (TVA, DDP, conformité) pour décider vite — puis un audit expert si nécessaire.";
-  const heroPrimary = (t("heroLanding.ctaPrimary") as string) ?? "Lancer l’outil";
-  const heroSecondary = (t("heroLanding.ctaSecondary") as string) ?? "Voir les offres";
+    (isEN
+      ? "Costs, documents, compliance watch - without hiring."
+      : "Un premier diagnostic clair (TVA, DDP, conformité) pour décider vite — puis un audit expert si nécessaire.");
+  const heroPrimary = (t("heroLanding.ctaPrimary") as string) ?? (isEN ? "Try for free" : "Lancer l’outil");
+  const heroSecondary = (t("heroLanding.ctaSecondary") as string) ?? (isEN ? "See the plans" : "Voir les offres");
   const featureCardsRaw = t("heroLanding.featureCards");
   const featureCardsFromI18n: FeatureCard[] = Array.isArray(featureCardsRaw)
     ? (featureCardsRaw as unknown as FeatureCard[])
@@ -41,20 +46,35 @@ export default function Home() {
   const featureCards: FeatureCard[] =
     featureCardsFromI18n?.length > 0
       ? featureCardsFromI18n
-      : [
-          {
-            title: "Coûts & marges",
-            description: "Visualisez l’impact OM / octroi / TVA / règles locales sur vos marges, en quelques clics.",
-          },
-          {
-            title: "Facture & contrôle",
-            description: "Vérifiez une facture : incohérences, risques fiscaux, éléments manquants, points à corriger.",
-          },
-          {
-            title: "Décision & action",
-            description: "Obtenez une recommandation claire : GO / NO GO, et quelles actions faire avant d’expédier.",
-          },
-        ];
+      : isEN
+        ? [
+            {
+              title: "Costs & margins",
+              description: "See the impact of OM / octroi / VAT / local rules on your margins in seconds.",
+            },
+            {
+              title: "Invoice checks",
+              description: "Validate an invoice: inconsistencies, tax risks, missing items, fixes to apply.",
+            },
+            {
+              title: "Decision & action",
+              description: "Get a clear recommendation: GO / NO GO, and what to fix before shipping.",
+            },
+          ]
+        : [
+            {
+              title: "Coûts & marges",
+              description: "Visualisez l’impact OM / octroi / TVA / règles locales sur vos marges, en quelques clics.",
+            },
+            {
+              title: "Facture & contrôle",
+              description: "Vérifiez une facture : incohérences, risques fiscaux, éléments manquants, points à corriger.",
+            },
+            {
+              title: "Décision & action",
+              description: "Obtenez une recommandation claire : GO / NO GO, et quelles actions faire avant d’expédier.",
+            },
+          ];
 
   // Contact direct (utile partout)
   const phoneRaw = "0676435551";
@@ -161,21 +181,25 @@ export default function Home() {
           {/* PROOF BAR */}
           <div className="mt-6 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-              <p className="text-xs uppercase tracking-[0.35em] text-white/60">TVA / DDP</p>
+              <p className="text-xs uppercase tracking-[0.35em] text-white/60">VAT / DDP</p>
               <p className="mt-1 text-sm text-white/85">
-                Risques fiscaux + points d’attention avant expédition.
+                {isEN ? "Tax risks + key watch points before shipment." : "Risques fiscaux + points d’attention avant expédition."}
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-              <p className="text-xs uppercase tracking-[0.35em] text-white/60">Expert import/export France</p>
+              <p className="text-xs uppercase tracking-[0.35em] text-white/60">
+                {isEN ? "France import/export expert" : "Expert import/export France"}
+              </p>
               <p className="mt-1 text-sm text-white/85">
-                TVA, douane, incoterms et règles d’entrée.
+                {isEN ? "VAT, customs, Incoterms and entry rules." : "TVA, douane, incoterms et règles d’entrée."}
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-              <p className="text-xs uppercase tracking-[0.35em] text-white/60">Décision rapide</p>
+              <p className="text-xs uppercase tracking-[0.35em] text-white/60">
+                {isEN ? "Fast decisions" : "Décision rapide"}
+              </p>
               <p className="mt-1 text-sm text-white/85">
-                Diagnostic + action recommandée en sortie.
+                {isEN ? "Clear diagnosis + recommended next action." : "Diagnostic + action recommandée en sortie."}
               </p>
             </div>
           </div>
@@ -186,7 +210,7 @@ export default function Home() {
               href={`tel:${phoneRaw}`}
               className="rounded-full border border-white/15 bg-white/5 px-4 py-2 transition hover:bg-white/10"
             >
-              Appeler {phonePretty}
+              {isEN ? "Call" : "Appeler"} {phonePretty}
             </a>
             <a
               href={`mailto:${emailMain}`}
@@ -198,7 +222,7 @@ export default function Home() {
               to="/contact"
               className="rounded-full border border-white/20 px-4 py-2 text-white/80 transition hover:border-white/60"
             >
-              Audit express
+              {isEN ? "Express audit" : "Audit express"}
             </Link>
           </div>
         </div>
@@ -235,9 +259,13 @@ export default function Home() {
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
               <h2 className="text-sm uppercase tracking-[0.6em] text-[#1E3A8A]">Focus</h2>
-              <p className="mt-2 text-3xl font-semibold text-[#0B1220]">Vue claire, décisions rapides</p>
+              <p className="mt-2 text-3xl font-semibold text-[#0B1220]">
+                {isEN ? "Clear view, fast decisions" : "Vue claire, décisions rapides"}
+              </p>
               <p className="mt-2 max-w-2xl text-sm text-slate-600">
-                Une lecture “opérationnelle” : coûts, risques, et ce qu’il faut corriger avant l’expédition.
+                {isEN
+                  ? "An operational view: costs, risks, and what to fix before shipping."
+                  : "Une lecture “opérationnelle” : coûts, risques, et ce qu’il faut corriger avant l’expédition."}
               </p>
             </div>
 
@@ -246,13 +274,13 @@ export default function Home() {
                 to="/import/check-invoice"
                 className="rounded-full bg-[#1E3A8A] px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-[#162864]"
               >
-                Vérifier une facture
+                {isEN ? "Check an invoice" : "Vérifier une facture"}
               </Link>
               <Link
                 to="/tool"
                 className="rounded-full border border-[#1E3A8A]/30 px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
               >
-                Lancer l’analyse
+                {isEN ? "Run the analysis" : "Lancer l’analyse"}
               </Link>
             </div>
           </div>
@@ -271,7 +299,7 @@ export default function Home() {
                     to="/tool"
                     className="text-xs font-semibold uppercase tracking-[0.35em] text-[#0B1220]/70 transition group-hover:text-[#0B1220]"
                   >
-                    Essayer →
+                    {isEN ? "Try →" : "Essayer →"}
                   </Link>
                 </div>
               </article>
@@ -283,26 +311,48 @@ export default function Home() {
       {/* HOW IT WORKS */}
       <section className="bg-slate-50 py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <h3 className="text-sm uppercase tracking-[0.6em] text-slate-500">Comment ça marche</h3>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">3 étapes, sans prise de tête</p>
+          <h3 className="text-sm uppercase tracking-[0.6em] text-slate-500">
+            {isEN ? "How it works" : "Comment ça marche"}
+          </h3>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">
+            {isEN ? "3 steps, no hassle" : "3 étapes, sans prise de tête"}
+          </p>
 
           <div className="mt-10 grid gap-6 md:grid-cols-3">
             <div className="rounded-3xl border border-slate-200 bg-white p-6">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Étape 1</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">Choisir destination & contexte</p>
-              <p className="mt-2 text-sm text-slate-600">Pays/territoire + type d’opération.</p>
+              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">
+                {isEN ? "Step 1" : "Étape 1"}
+              </p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {isEN ? "Choose destination & context" : "Choisir destination & contexte"}
+              </p>
+              <p className="mt-2 text-sm text-slate-600">
+                {isEN ? "Country/territory + operation type." : "Pays/territoire + type d’opération."}
+              </p>
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-6">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Étape 2</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">Importer / vérifier une facture</p>
-              <p className="mt-2 text-sm text-slate-600">Contrôles rapides + alertes si incohérences.</p>
+              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">
+                {isEN ? "Step 2" : "Étape 2"}
+              </p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {isEN ? "Import / check an invoice" : "Importer / vérifier une facture"}
+              </p>
+              <p className="mt-2 text-sm text-slate-600">
+                {isEN ? "Quick checks + alerts on inconsistencies." : "Contrôles rapides + alertes si incohérences."}
+              </p>
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-6">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Étape 3</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">Décider & passer à l’action</p>
-              <p className="mt-2 text-sm text-slate-600">GO / NO GO + recommandations concrètes.</p>
+              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">
+                {isEN ? "Step 3" : "Étape 3"}
+              </p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {isEN ? "Decide & act" : "Décider & passer à l’action"}
+              </p>
+              <p className="mt-2 text-sm text-slate-600">
+                {isEN ? "GO / NO GO + clear next actions." : "GO / NO GO + recommandations concrètes."}
+              </p>
             </div>
           </div>
 
@@ -311,13 +361,13 @@ export default function Home() {
               to="/tool"
               className="rounded-full bg-[#DC2626] px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-[#b0231d]"
             >
-              Démarrer maintenant
+              {isEN ? "Start now" : "Démarrer maintenant"}
             </Link>
             <Link
               to="/pricing"
               className="rounded-full border border-slate-300 bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-slate-800 transition hover:border-slate-500"
             >
-              Offres & limites
+              {isEN ? "Plans & limits" : "Offres & limites"}
             </Link>
           </div>
         </div>
@@ -326,32 +376,52 @@ export default function Home() {
       {/* SOURCES / TRUST */}
       <section className="bg-white py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <h3 className="text-sm uppercase tracking-[0.6em] text-[#1E3A8A]">Confiance</h3>
-          <p className="mt-2 text-3xl font-semibold text-[#0B1220]">Veille & règles, au bon endroit</p>
+          <h3 className="text-sm uppercase tracking-[0.6em] text-[#1E3A8A]">
+            {isEN ? "Trust" : "Confiance"}
+          </h3>
+          <p className="mt-2 text-3xl font-semibold text-[#0B1220]">
+            {isEN ? "Compliance & rules, at the right place" : "Veille & règles, au bon endroit"}
+          </p>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            L’objectif : te donner des repères fiables et actionnables. Pour les cas complexes, une consultante valide.
+            {isEN
+              ? "Goal: give you reliable, actionable references. A consultant validates complex cases."
+              : "L’objectif : te donner des repères fiables et actionnables. Pour les cas complexes, une consultante valide."}
           </p>
 
           <div className="mt-10 grid gap-6 md:grid-cols-3">
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Douanes / TVA</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">Règles & obligations</p>
+              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">
+                {isEN ? "Customs / VAT" : "Douanes / TVA"}
+              </p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {isEN ? "Rules & obligations" : "Règles & obligations"}
+              </p>
               <p className="mt-2 text-sm text-slate-600">
-                Aide à repérer les zones à risque (TVA, exonérations, mentions, justificatifs).
+                {isEN
+                  ? "Spot risk areas (VAT, exemptions, statements, proof)."
+                  : "Aide à repérer les zones à risque (TVA, exonérations, mentions, justificatifs)."}
               </p>
             </div>
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
               <p className="text-xs uppercase tracking-[0.35em] text-slate-500">DDP / Incoterms</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">Responsabilités & coûts</p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {isEN ? "Responsibilities & costs" : "Responsabilités & coûts"}
+              </p>
               <p className="mt-2 text-sm text-slate-600">
-                Clarifie qui paie quoi, et où se cachent les coûts (et litiges) classiques.
+                {isEN
+                  ? "Clarifies who pays what and where hidden costs (and disputes) appear."
+                  : "Clarifie qui paie quoi, et où se cachent les coûts (et litiges) classiques."}
               </p>
             </div>
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">Conformité</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">Sanctions / vigilance</p>
+              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">
+                {isEN ? "Compliance" : "Conformité"}
+              </p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {isEN ? "Sanctions / vigilance" : "Sanctions / vigilance"}
+              </p>
               <p className="mt-2 text-sm text-slate-600">
-                Signaux faibles & points de contrôle avant expédition.
+                {isEN ? "Signals & control points before shipment." : "Signaux faibles & points de contrôle avant expédition."}
               </p>
             </div>
           </div>
@@ -361,10 +431,16 @@ export default function Home() {
       {/* FINAL CTA */}
       <section className="py-16">
         <div className="mx-auto max-w-5xl px-6 text-center">
-          <p className="text-sm uppercase tracking-[0.5em] text-slate-500">Étapes suivantes</p>
-          <h3 className="mt-3 text-3xl font-semibold text-slate-900">Besoin d’un expert ?</h3>
+          <p className="text-sm uppercase tracking-[0.5em] text-slate-500">
+            {isEN ? "Next steps" : "Étapes suivantes"}
+          </p>
+          <h3 className="mt-3 text-3xl font-semibold text-slate-900">
+            {isEN ? "Need an expert?" : "Besoin d’un expert ?"}
+          </h3>
           <p className="mt-2 text-slate-600">
-            L’outil vous donne un premier aperçu. La consultante confirme les cas complexes (TVA, DDP, conformité).
+            {isEN
+              ? "The tool gives a first view. A consultant validates complex cases (VAT, DDP, compliance)."
+              : "L’outil vous donne un premier aperçu. La consultante confirme les cas complexes (TVA, DDP, conformité)."}
           </p>
 
           <div className="mt-6 flex flex-wrap justify-center gap-4">
@@ -372,19 +448,19 @@ export default function Home() {
               to="/import/check-invoice"
               className="rounded-full bg-[#1E3A8A] px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-[#162864]"
             >
-              Vérifier une facture
+              {isEN ? "Check an invoice" : "Vérifier une facture"}
             </Link>
             <Link
               to="/contact"
               className="rounded-full border border-[#1E3A8A]/60 px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
             >
-              Parler à la consultante
+              {isEN ? "Talk to a consultant" : "Parler à la consultante"}
             </Link>
             <a
               href={`tel:0676435551`}
               className="rounded-full border border-slate-300 bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-slate-800 transition hover:border-slate-500"
             >
-              Appeler {phonePretty}
+              {isEN ? "Call" : "Appeler"} {phonePretty}
             </a>
           </div>
 
