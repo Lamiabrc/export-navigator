@@ -67,7 +67,7 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const CONTACT_NOTIFICATION_EMAILS = process.env.CONTACT_NOTIFICATION_EMAILS
   ? process.env.CONTACT_NOTIFICATION_EMAILS.split(",").map((value) => value.trim()).filter(Boolean)
   : ["lamia.brechet@outlook.fr"];
-const EMAIL_FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS || "Export Navigator <no-reply@exportfrancefacile.com>";
+const EMAIL_FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS || "Export Navigator <contact@exportfrancefacile.com>";
 
 let transporter: ReturnType<typeof nodemailer.createTransport> | null = null;
 const getTransport = () => {
