@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { allowCors } from "./_supabase";
+import { allowCors } from "./_supabase.js";
 
 function toText(v: any) {
   return String(v ?? "").trim();

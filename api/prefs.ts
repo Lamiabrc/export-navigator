@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { allowCors, json, readJson, supabaseAdmin } from "./_supabase";
+import { allowCors, json, readJson, supabaseAdmin } from "./_supabase.js";
 
 type PrefsPayload = {
   email?: string;
