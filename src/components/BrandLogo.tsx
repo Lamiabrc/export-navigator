@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import mplLogo from "@/assets/mpl-logo.png";
 
 type BrandSize = "sm" | "md" | "lg";
 
@@ -38,7 +39,7 @@ export function BrandLogo({
   subtitle = "Audit - Reglementation - Veille",
   location = "Conseil Export",
   size = "md",
-  logoSrc = "/mpl-logo.svg",
+  logoSrc = mplLogo,
 }: BrandLogoProps) {
   const styles = sizeConfig[size];
   const sizePx = size === "sm" ? 36 : size === "md" ? 48 : 64;
