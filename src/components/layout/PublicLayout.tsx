@@ -5,9 +5,27 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
 import { useI18n } from "@/contexts/LanguageContext";
+import { usePlan } from "@/auth/PlanContext";
+import type { LanguageCode } from "@/i18n/translations";
 import { navLinks } from "@/config/navLinks";
 
 type RssItem = { title: string; link: string; pubDate?: string };
+
+// Encoding-safe flags (avoid broken emoji bytes)
+const flags: Record<LanguageCode, string> = {
+  fr: String.fromCodePoint(0x1f1eb, 0x1f1f7),
+  en: String.fromCodePoint(0x1f1ec, 0x1f1e7),
+};
+
+const planOptions = [
+  { label: "FREE", value: "FREE" },
+  { label: "PRO", value: "PRO" },
+  { label: "VIP", value: "VIP" },
+];
+
+function cx(...classes: Array<string | false | undefined | null>) {
+  return classes.filter(Boolean).join(" ");
+}
 
 function formatDate(value?: string) {
   if (!value) return "";
@@ -170,8 +188,21 @@ function FooterRss() {
 
 export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
-  const { t } = useI18n();
+  const { t, lang, setLang } = useI18n();
+  const { plan, setPlan } = usePlan();
   const siteDisclaimers = (t("disclaimers") as string[]) ?? [];
+
+  const navLabel = (key: string, fallback: string) => {
+    const candidate = (t(key) as string) ?? "";
+    if (!candidate || candidate === key) return fallback;
+    return candidate;
+  };
+
+  const ctaLabel = (() => {
+    const candidate = (t("header.cta") as string) ?? "";
+    if (!candidate || candidate === "header.cta") return "Demander un diagnostic";
+    return candidate;
+  })();
 
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
@@ -184,47 +215,102 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
       <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-background/80 via-background/85 to-background" />
 
       <header className="relative z-10 border-b border-border bg-background/85 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
-          {/* Brand */}
-          <Link to="/" className="flex items-center gap-3">
-            <BrandLogo size="lg" showText={false} imageClassName="h-12 md:h-14" className="shrink-0" />
-            <div className="hidden sm:block leading-tight">
-              <div className="text-sm font-semibold text-foreground">MPL Export Navigator</div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-                par MPL Export Conseil
-              </div>
-            </div>
-          </Link>
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
+          {/* BRAND */}
+          <BrandLogo
+            href="/"
+            size="md"
+            imageClassName="h-10 w-auto"
+            textClassName="text-[13px]"
+            title="MPL Export Navigator"
+            subtitle="par MPL Export Conseil"
+            location="Conseil Export"
+            className="group"
+          />
 
-          {/* Desktop nav */}
-          <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
+          {/* NAV */}
+          <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-semibold text-slate-600 md:flex">
             {navLinks.map((link) => {
-              const label = (t(link.key) as string) ?? link.fallback;
-              const active = isActivePath(location.pathname, link.to);
+              const label = navLabel(link.key, link.fallback);
+              const isActive =
+                link.to === "/"
+                  ? location.pathname === "/"
+                  : location.pathname === link.to || location.pathname.startsWith(`${link.to}/`);
+
               return (
                 <Link
-                  key={link.to}
+                  key={link.key}
                   to={link.to}
-                  className={cn("transition hover:text-foreground", active && "text-foreground font-semibold")}
+                  className={cx(
+                    "transition-colors hover:text-slate-900",
+                    isActive && "text-slate-900"
+                  )}
+                  aria-label={label}
                 >
-                  {label}
+                  <span className={cx(isActive && "border-b-2 border-slate-900 pb-1")}>
+                    {label}
+                  </span>
                 </Link>
               );
             })}
           </nav>
 
-          {/* Actions */}
+          {/* RIGHT */}
           <div className="flex items-center gap-3">
-            <Button
-              asChild
-              className="bg-[#DC2626] text-white hover:bg-[#B0231D]"
+            {/* Language */}
+            <div
+              role="group"
+              aria-label={navLabel("header.languageAria", "Langue")}
+              className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm"
             >
-              <Link to="/contact?offer=diagnostic">Demander un diagnostic</Link>
-            </Button>
+              {(["fr", "en"] as LanguageCode[]).map((code) => (
+                <button
+                  type="button"
+                  key={code}
+                  onClick={() => setLang(code)}
+                  className={cx(
+                    "flex items-center gap-1 rounded-full px-2 py-1 transition",
+                    lang === code ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+                  )}
+                  aria-label={navLabel("header.languageLabel", "Changer la langue")}
+                >
+                  <span aria-hidden="true">{flags[code]}</span>
+                  <span>{code.toUpperCase()}</span>
+                </button>
+              ))}
+            </div>
 
-            <Button asChild variant="ghost" className="hidden md:inline-flex">
-              <Link to="/login">Connexion</Link>
-            </Button>
+            {/* Plan */}
+            <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.35em] text-slate-600 shadow-sm md:flex">
+              <span>Plan</span>
+              <select
+                value={plan}
+                onChange={(event) => setPlan(event.target.value as typeof plan)}
+                className="bg-transparent text-[11px] font-bold uppercase tracking-[0.35em] outline-none"
+                aria-label="Select plan"
+              >
+                {planOptions.map((option) => (
+                  <option key={option.value} value={option.value} className="text-slate-900">
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* CTA */}
+            <Link
+              to="/contact?offer=diagnostic"
+              className="inline-flex rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#B0231D]"
+            >
+              {ctaLabel}
+            </Link>
+
+            <Link
+              to="/login"
+              className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 transition hover:text-slate-900 md:inline-flex"
+            >
+              Connexion
+            </Link>
           </div>
         </div>
 
@@ -234,10 +320,10 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
               {navLinks.map((link) => {
                 const active = isActivePath(location.pathname, link.to);
-                const label = (t(link.key) as string) ?? link.fallback;
+                const label = navLabel(link.key, link.fallback);
                 return (
                   <Link
-                    key={`${link.to}-m`}
+                    key={`${link.key}-m`}
                     to={link.to}
                     className={cn(
                       "whitespace-nowrap rounded-full border px-3 py-2 transition",

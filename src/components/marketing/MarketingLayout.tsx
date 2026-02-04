@@ -136,6 +136,13 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
             >
               {ctaLabel}
             </Link>
+
+            <Link
+              to="/login"
+              className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 transition hover:text-slate-900 md:inline-flex"
+            >
+              Connexion
+            </Link>
           </div>
         </div>
 
@@ -167,6 +174,9 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
             </div>
           </div>
         </div>
+
+        {/* Tricolore */}
+        <div className="h-1 bg-gradient-to-r from-blue-700 via-white to-red-600" />
       </header>
 
       <main className="flex-1">{children}</main>
