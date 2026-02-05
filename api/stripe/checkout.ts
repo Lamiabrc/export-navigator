@@ -183,27 +183,12 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
       return;
     }
 
-    let customerId = existingCustomer?.stripe_customer_id || "";
-
-    if (!customerId) {
-      let created: Stripe.Customer;
-      try {
-        created = await stripe.customers.create({
-          email: user.email || undefined,
-          metadata: { supabase_user_id: user.id },
-        });
-      } catch (e: any) {
-        json(res, 500, { ok: false, error: "stripe_customer_create_failed", detail: stripeErr(e) });
-        return;
-      }
-
-      customerId = created.id;
-
+    const upsertCustomer = async (stripeCustomerId: string) => {
       const { error: upsertError } = await admin.from("billing_customers").upsert(
         {
           user_id: user.id,
           email: user.email,
-          stripe_customer_id: customerId,
+          stripe_customer_id: stripeCustomerId,
         },
         { onConflict: "user_id" }
       );
@@ -214,16 +199,39 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
           error: "db_error_upsert_billing_customers",
           detail: upsertError.message,
         });
-        return;
+        return false;
       }
+      return true;
+    };
+
+    const createCustomer = async () => {
+      try {
+        const created = await stripe.customers.create({
+          email: user.email || undefined,
+          metadata: { supabase_user_id: user.id },
+        });
+        const ok = await upsertCustomer(created.id);
+        return ok ? created.id : null;
+      } catch (e: any) {
+        json(res, 500, { ok: false, error: "stripe_customer_create_failed", detail: stripeErr(e) });
+        return null;
+      }
+    };
+
+    let customerId = existingCustomer?.stripe_customer_id || "";
+
+    if (!customerId) {
+      const createdId = await createCustomer();
+      if (!createdId) return;
+      customerId = createdId;
     }
 
     // Checkout session
     let session: Stripe.Checkout.Session;
-    try {
-      session = await stripe.checkout.sessions.create({
+    const createSession = async (cid: string) =>
+      stripe.checkout.sessions.create({
         mode: "subscription",
-        customer: customerId,
+        customer: cid,
         client_reference_id: user.id,
         line_items: [{ price: priceId, quantity: 1 }],
         allow_promotion_codes: true,
@@ -232,9 +240,25 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
         metadata: { supabase_user_id: user.id, plan: "online" },
         subscription_data: { metadata: { supabase_user_id: user.id, plan: "online" } },
       });
+
+    try {
+      session = await createSession(customerId);
     } catch (e: any) {
-      json(res, 500, { ok: false, error: "stripe_checkout_create_failed", detail: stripeErr(e) });
-      return;
+      const err = stripeErr(e);
+      // Auto-heal if stored customer is missing (often after TEST/LIVE switch)
+      if (err.code === "resource_missing" && err.param === "customer") {
+        const freshId = await createCustomer();
+        if (!freshId) return;
+        try {
+          session = await createSession(freshId);
+        } catch (e2: any) {
+          json(res, 500, { ok: false, error: "stripe_checkout_create_failed", detail: stripeErr(e2) });
+          return;
+        }
+      } else {
+        json(res, 500, { ok: false, error: "stripe_checkout_create_failed", detail: err });
+        return;
+      }
     }
 
     json(res, 200, { ok: true, url: session.url });
