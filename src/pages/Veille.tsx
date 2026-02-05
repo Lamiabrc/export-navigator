@@ -1,3 +1,4 @@
+// src/pages/Veille.tsx
 import * as React from "react";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
@@ -33,11 +34,17 @@ type RssItem = {
   source?: string | null;
   publishedAt?: string | null;
   summary?: string | null;
-  zone?: string | null;        // compat front
-  territory?: string | null;   // compat API
+  zone?: string | null;
   category?: string | null;
   imageUrl?: string | null;
   image?: string | null;
+};
+
+type LinkPreview = {
+  title?: string | null;
+  description?: string | null;
+  imageUrl?: string | null;
+  siteName?: string | null;
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -61,6 +68,7 @@ const COUNTRIES_FALLBACK = [
 
 const TOP_COUNTRY_ISO2 = ["DE", "ES", "IT", "NL", "BE", "CH", "GB", "US", "CA", "MA", "AE", "CN", "JP", "IN"];
 
+// Presets “conversion” (rapides, orientés usage)
 const PRESETS: Array<{ label: string; countries: string[]; hint: string }> = [
   { label: "Europe (DE/ES/IT/NL/BE)", countries: ["DE", "ES", "IT", "NL", "BE"], hint: "Flux UE, douane & conformité." },
   { label: "USA", countries: ["US"], hint: "Sanctions, contrôles export, OFAC/CBP." },
@@ -95,8 +103,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   sanctions: "Sanctions",
   customs: "Douane",
   trade: "Commerce",
-  trade_policy: "Politique commerciale",
-  export_control: "Contrôles export",
   tax_vat: "Taxes / TVA",
   taxes: "Taxes",
   regulation: "Réglementation",
@@ -205,9 +211,6 @@ const EXPERT_WATCH = [
   { title: "Mesures commerciales", desc: "Anti-dumping, quotas, restrictions, nouvelles formalités/contrôles." },
 ];
 
-const TEASER_FREE = 6;
-const TEASER_TOTAL = 12;
-
 export default function Veille() {
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
@@ -229,6 +232,7 @@ export default function Veille() {
   const [rssLoading, setRssLoading] = React.useState(false);
   const [rssItems, setRssItems] = React.useState<RssItem[]>([]);
   const [rssUpdatedAt, setRssUpdatedAt] = React.useState<string | null>(null);
+
   const [rssQuery, setRssQuery] = React.useState("");
   const [zoneFilter, setZoneFilter] = React.useState("ALL");
   const [categoryFilter, setCategoryFilter] = React.useState("ALL");
@@ -295,32 +299,57 @@ export default function Veille() {
     [toast]
   );
 
+  // ✅ loadRss enrichit maintenant avec des PREVIEWS OG/Twitter via /api/link-preview
   const loadRss = React.useCallback(async () => {
     setRssLoading(true);
     try {
       const res = await fetch("/api/rss?limit=30");
       const raw = await res.json().catch(() => ({}));
-      const items = Array.isArray(raw?.items)
-        ? raw.items
-        : Array.isArray(raw?.data?.items)
-          ? raw.data.items
-          : [];
+      const items = Array.isArray(raw?.items) ? raw.items : Array.isArray(raw?.data?.items) ? raw.data.items : [];
 
       const normalized: RssItem[] = items.map((it: any) => ({
         title: it?.title,
         link: it?.link || it?.url,
-        source: it?.source || it?.feed || it?.sourceName || it?.source_name,
+        source: it?.source || it?.feed || it?.sourceName || it?.siteName || null,
         publishedAt: it?.publishedAt || it?.published_at || it?.pubDate || null,
         summary: it?.summary || it?.description || null,
-        // ✅ zone + territory
         zone: it?.zone || it?.country || it?.territory || null,
-        territory: it?.territory || null,
         category: it?.category || null,
         imageUrl: it?.imageUrl || it?.image_url || null,
         image: it?.image || null,
       }));
 
-      setRssItems(normalized.slice(0, 30));
+      // 🔥 PREVIEWS : titre/desc/image/site_name depuis la page cible
+      const urls = Array.from(new Set(normalized.map((x) => x.link).filter(Boolean))) as string[];
+      let previews: Record<string, LinkPreview> = {};
+
+      if (urls.length) {
+        try {
+          const pRes = await fetch("/api/link-preview", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ urls: urls.slice(0, 30) }),
+          });
+          const pJson = await pRes.json().catch(() => ({}));
+          previews = (pJson?.items || {}) as Record<string, LinkPreview>;
+        } catch {
+          previews = {};
+        }
+      }
+
+      const enriched = normalized.map((it) => {
+        const p = it.link ? previews[it.link] : null;
+        return {
+          ...it,
+          // Remplace uniquement si on a mieux
+          title: (p?.title || it.title) ?? it.title,
+          summary: (p?.description || it.summary) ?? it.summary,
+          source: (p?.siteName || it.source) ?? it.source,
+          imageUrl: (p?.imageUrl || it.imageUrl) ?? it.imageUrl,
+        };
+      });
+
+      setRssItems(enriched.slice(0, 30));
       setRssUpdatedAt(raw?.updatedAt || null);
     } catch {
       setRssItems([]);
@@ -434,8 +463,8 @@ export default function Veille() {
 
   const filteredNews = React.useMemo(() => {
     return sortedRss.filter((it) => {
-      const z = normalizeZone(it.zone || it.territory || null);
-      const zoneOk = zoneFilter === "ALL" || z === zoneFilter || (zoneFilter === "INTL" && !z);
+      const zoneOk =
+        zoneFilter === "ALL" || normalizeZone(it.zone) === zoneFilter || (zoneFilter === "INTL" && !it.zone);
       const cat = normalizeCategory(it.category);
       const categoryOk = categoryFilter === "ALL" || cat === categoryFilter;
       const sourceOk = sourceFilter === "ALL" || (it.source || "").trim() === sourceFilter;
@@ -453,6 +482,7 @@ export default function Veille() {
   }, [sortedRss, rssQuery]);
 
   const isTeaser = !isAuthenticated || !emailOk;
+  const visibleNews = isTeaser ? filteredNews.slice(0, 6) : filteredNews;
 
   const handleUnlock = async () => {
     if (!isAuthenticated) {
@@ -499,14 +529,12 @@ export default function Veille() {
 
   const effectiveAlerts = emailOk ? alerts : demoAlerts;
 
-  const newsForGrid = isTeaser ? filteredNews.slice(0, TEASER_TOTAL) : filteredNews;
-  const fluxForGrid = isTeaser ? filteredFlux.slice(0, TEASER_TOTAL) : filteredFlux.slice(0, 12);
-
   return (
     <PublicLayout>
       <div className="space-y-10">
         {/* HERO WAOW + TICKER */}
         <section className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 text-white shadow-xl md:p-10">
+          {/* blobs */}
           <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-blue-500/25 blur-3xl" />
           <div className="pointer-events-none absolute -right-24 -bottom-24 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(56,189,248,0.20),transparent_40%),radial-gradient(circle_at_80%_40%,rgba(59,130,246,0.18),transparent_45%),radial-gradient(circle_at_55%_90%,rgba(14,165,233,0.12),transparent_40%)]" />
@@ -517,7 +545,11 @@ export default function Veille() {
           <div className="relative">
             <p className="text-xs uppercase tracking-[0.35em] text-blue-200">Veille export — sanctions & conformité</p>
             <h1 className="mt-2 text-4xl font-semibold md:text-5xl">
-              Ta tour de contrôle <span className="inline-flex items-center gap-2"><Sparkles className="h-5 w-5" /> anti-surprise</span>.
+              Ta tour de contrôle{" "}
+              <span className="inline-flex items-center gap-2">
+                <Sparkles className="h-5 w-5" /> anti-surprise
+              </span>
+              .
             </h1>
             <p className="mt-3 max-w-2xl text-lg text-slate-200">
               Configure tes <strong>pays</strong> et tes <strong>préfixes HS</strong>. On te remonte uniquement l’essentiel : alertes
@@ -596,6 +628,7 @@ export default function Veille() {
             </CardContent>
           </Card>
 
+          {/* MAIN: prefs + live content */}
           <div className="lg:col-span-3 space-y-6">
             {/* NOUVEAUTÉS */}
             <Card className="card-hover">
@@ -606,7 +639,9 @@ export default function Veille() {
                       <Sparkles className="h-5 w-5" />
                       Nouveautés
                     </CardTitle>
-                    <CardDescription>Sélection récente issue des sources officielles. Filtres rapides.</CardDescription>
+                    <CardDescription>
+                      Sélection récente issue des sources officielles. Filtres rapides par zone, catégorie et source.
+                    </CardDescription>
                   </div>
                   <Button variant="outline" onClick={loadRss} disabled={rssLoading}>
                     <RefreshCcw className="mr-2 h-4 w-4" />
@@ -686,32 +721,28 @@ export default function Veille() {
                       <div key={i} className="h-36 rounded-2xl border border-border bg-muted animate-pulse" />
                     ))}
                   </div>
-                ) : newsForGrid.length === 0 ? (
+                ) : visibleNews.length === 0 ? (
                   <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
                     Aucun item disponible pour ces filtres.
                   </div>
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2">
-                    {newsForGrid.map((it, idx) => {
-                      const locked = isTeaser && idx >= TEASER_FREE;
+                    {visibleNews.map((it, idx) => {
                       const domain = getDomain(it.link) || it.source || "rss";
                       const cover = it.imageUrl || it.image || seededCover(`${domain}-${it.title || idx}`);
                       const favicon = faviconUrlFromLink(it.link);
                       const isFresh = it.publishedAt
                         ? new Date(it.publishedAt).getTime() > Date.now() - 72 * 60 * 60 * 1000
                         : false;
-                      const zone = normalizeZone(it.zone || it.territory || null);
-                      const catLabel = categoryLabel(it.category);
+                      const zone = normalizeZone(it.zone);
+                      const category = categoryLabel(it.category);
 
                       return (
                         <article
                           key={`${it.link || it.title || "item"}_${idx}`}
-                          className={cn(
-                            "group relative flex gap-4 rounded-2xl border border-border bg-card p-4 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-500/10",
-                            locked && "overflow-hidden"
-                          )}
+                          className="group flex gap-4 rounded-2xl border border-border bg-card p-4 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-500/10"
                         >
-                          <div className={cn("relative h-24 w-32 flex-shrink-0 overflow-hidden rounded-xl border border-border bg-muted", locked && "blur-sm")}>
+                          <div className="relative h-24 w-32 flex-shrink-0 overflow-hidden rounded-xl border border-border bg-muted">
                             <img src={cover} alt="" className="h-full w-full object-cover" loading="lazy" />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
                             {favicon ? (
@@ -722,16 +753,16 @@ export default function Veille() {
                                 loading="lazy"
                                 onError={(e) => {
                                   e.currentTarget.onerror = null;
-                                  e.currentTarget.src = "/mpl-logo.svg";
+                                  e.currentTarget.src = "/favicon.ico";
                                 }}
                               />
                             ) : null}
                           </div>
 
-                          <div className={cn("flex min-w-0 flex-1 flex-col", locked && "blur-[2px] opacity-70")}>
+                          <div className="flex min-w-0 flex-1 flex-col">
                             <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                               {zone ? <span className="rounded-full border border-border bg-muted px-2 py-1">Zone {zone}</span> : null}
-                              {catLabel ? <span className="rounded-full border border-border bg-muted px-2 py-1">{catLabel}</span> : null}
+                              {category ? <span className="rounded-full border border-border bg-muted px-2 py-1">{category}</span> : null}
                               {it.source ? <span className="rounded-full border border-border bg-muted px-2 py-1">{it.source}</span> : null}
                               {isFresh ? (
                                 <span className="rounded-full border border-emerald-300/60 bg-emerald-50 px-2 py-1 text-emerald-700">
@@ -745,21 +776,13 @@ export default function Veille() {
 
                             <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                               <span>{it.publishedAt ? formatDateTimeFr(it.publishedAt) : "Date inconnue"}</span>
-                              {!locked && it.link ? (
+                              {it.link ? (
                                 <a className="inline-flex items-center gap-1 text-primary hover:underline" href={it.link} target="_blank" rel="noreferrer">
                                   Lire <ExternalLink className="h-3 w-3" />
                                 </a>
                               ) : null}
                             </div>
                           </div>
-
-                          {locked ? (
-                            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-r from-white/70 to-white/40 backdrop-blur-[6px]">
-                              <Button onClick={handleUnlock} className="shadow-lg">
-                                <Lock className="mr-2 h-4 w-4" /> Débloquer la veille complète
-                              </Button>
-                            </div>
-                          ) : null}
                         </article>
                       );
                     })}
@@ -770,8 +793,8 @@ export default function Veille() {
                   <div className="rounded-2xl border border-border bg-gradient-to-r from-slate-950 to-blue-950 p-4 text-white">
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <div className="text-sm font-semibold">Accès illimité + alertes personnalisées</div>
-                        <div className="text-xs text-blue-100/80">Nouveautés complètes + alertes ciblées. 65€/mois.</div>
+                        <div className="text-sm font-semibold">Débloquer la veille complète + alertes personnalisées</div>
+                        <div className="text-xs text-blue-100/80">Accès illimité aux nouveautés + alertes ciblées. 65€/mois.</div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button onClick={handleUnlock} className="bg-white text-slate-950 hover:bg-slate-100">
@@ -791,7 +814,7 @@ export default function Veille() {
               </CardContent>
             </Card>
 
-            {/* PREFS */}
+            {/* PREFS (waow UX) */}
             <div ref={prefsRef}>
               <Card className="card-hover">
                 <CardHeader>
@@ -803,6 +826,7 @@ export default function Veille() {
                 </CardHeader>
 
                 <CardContent className="space-y-5">
+                  {/* Email */}
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
                       <Mail className="h-4 w-4" /> Email
@@ -825,6 +849,7 @@ export default function Veille() {
 
                   <Separator />
 
+                  {/* Presets */}
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
                       <Sparkles className="h-4 w-4" /> Démarrage rapide
@@ -853,6 +878,7 @@ export default function Veille() {
 
                   <Separator />
 
+                  {/* Countries */}
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
                       <MapPin className="h-4 w-4" /> Pays suivis
@@ -906,6 +932,7 @@ export default function Veille() {
 
                   <Separator />
 
+                  {/* HS */}
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
                       <Hash className="h-4 w-4" /> Préfixes HS suivis
@@ -957,7 +984,9 @@ export default function Veille() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground">Ajoute 1–3 préfixes HS (2–6 chiffres) pour filtrer au plus près.</p>
+                      <p className="text-xs text-muted-foreground">
+                        Ajoute 1–3 préfixes HS (2–6 chiffres) pour filtrer au plus près de tes produits.
+                      </p>
                     )}
                   </div>
 
@@ -982,7 +1011,7 @@ export default function Veille() {
                   Alertes personnalisées
                 </CardTitle>
                 <CardDescription>
-                  {alertsUpdatedAt ? `Dernière mise à jour : ${formatDateTimeFr(alertsUpdatedAt)}` : "Aperçu disponible — connecte ton email."}
+                  {alertsUpdatedAt ? `Dernière mise à jour : ${formatDateTimeFr(alertsUpdatedAt)}` : "Aperçu disponible — connecte ton email pour les vraies alertes."}
                 </CardDescription>
               </CardHeader>
 
@@ -1023,17 +1052,13 @@ export default function Veille() {
                       <div key={a.id} className="rounded-2xl border border-border bg-card p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="font-semibold">{a.title}</div>
-                          <span className={cn("rounded-full px-2 py-1 text-xs", badgeClass(a.severity))}>
-                            {severityLabel(a.severity)}
-                          </span>
+                          <span className={cn("rounded-full px-2 py-1 text-xs", badgeClass(a.severity))}>{severityLabel(a.severity)}</span>
                         </div>
                         <p className="mt-2 text-sm text-muted-foreground">{a.message}</p>
                         <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
                           {a.country ? <span className="rounded-full border border-border bg-muted px-2 py-1">Pays: {a.country}</span> : null}
                           {a.hsPrefix ? <span className="rounded-full border border-border bg-muted px-2 py-1">HS: {a.hsPrefix}</span> : null}
-                          {a.detectedAt ? (
-                            <span className="rounded-full border border-border bg-muted px-2 py-1">{formatDateTimeFr(a.detectedAt)}</span>
-                          ) : null}
+                          {a.detectedAt ? <span className="rounded-full border border-border bg-muted px-2 py-1">{formatDateTimeFr(a.detectedAt)}</span> : null}
                           {a.source ? <span className="rounded-full border border-border bg-muted px-2 py-1">Source: {a.source}</span> : null}
                         </div>
                         <div className="mt-4 rounded-xl border border-border bg-muted p-3 text-xs text-muted-foreground">
@@ -1041,8 +1066,7 @@ export default function Veille() {
                             <Info className="h-4 w-4" /> Action recommandée
                           </span>
                           <div className="mt-1">
-                            1) Vérifier la source officielle • 2) Confirmer classification (HS / usage) • 3) Adapter documents / screening • 4)
-                            Décider (OK / blocage / escalade).
+                            1) Vérifier la source officielle • 2) Confirmer classification (HS / usage) • 3) Adapter documents / screening • 4) Décider (OK / blocage / escalade).
                           </div>
                         </div>
                       </div>
@@ -1059,7 +1083,7 @@ export default function Veille() {
                   <Search className="h-5 w-5" />
                   Flux & sources
                 </CardTitle>
-                <CardDescription>Recherche rapide dans le flux.</CardDescription>
+                <CardDescription>Recherche rapide dans le flux complet.</CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-4">
@@ -1069,7 +1093,7 @@ export default function Veille() {
                     <Input
                       value={rssQuery}
                       onChange={(e) => setRssQuery(e.target.value)}
-                      placeholder="Rechercher (ex : sanctions, embargo, douane, Russie, Iran, dual-use...)"
+                      placeholder="Rechercher dans le flux (ex : sanctions, embargo, douane, Russie, Iran, dual-use...)"
                       className="pl-9"
                     />
                   </div>
@@ -1087,12 +1111,11 @@ export default function Veille() {
                       <div key={i} className="h-56 rounded-2xl border border-border bg-muted animate-pulse" />
                     ))}
                   </div>
-                ) : fluxForGrid.length === 0 ? (
-                  <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">Aucun item trouvé.</div>
+                ) : filteredFlux.length === 0 ? (
+                  <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">Aucun item trouvé (ou /api/rss en erreur).</div>
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2">
-                    {fluxForGrid.map((it, idx) => {
-                      const locked = isTeaser && idx >= TEASER_FREE;
+                    {filteredFlux.slice(0, 12).map((it, idx) => {
                       const domain = getDomain(it.link) || it.source || "rss";
                       const cover = it.imageUrl || it.image || seededCover(`${domain}-${it.title || idx}`);
                       const favicon = faviconUrlFromLink(it.link);
@@ -1100,12 +1123,9 @@ export default function Veille() {
                       return (
                         <div
                           key={`${it.link || it.title || "item"}_${idx}`}
-                          className={cn(
-                            "group relative overflow-hidden rounded-2xl border border-border bg-card transition hover:-translate-y-0.5 hover:shadow-lg",
-                            locked && "border-dashed"
-                          )}
+                          className="group overflow-hidden rounded-2xl border border-border bg-card transition hover:-translate-y-0.5 hover:shadow-lg"
                         >
-                          <div className={cn("relative h-32", locked && "blur-sm")}>
+                          <div className="relative h-32">
                             <img
                               src={cover}
                               alt=""
@@ -1123,7 +1143,7 @@ export default function Veille() {
                                     loading="lazy"
                                     onError={(e) => {
                                       e.currentTarget.onerror = null;
-                                      e.currentTarget.src = "/mpl-logo.svg";
+                                      e.currentTarget.src = "/favicon.ico";
                                     }}
                                   />
                                 ) : null}
@@ -1136,37 +1156,29 @@ export default function Veille() {
                             </div>
                           </div>
 
-                          <div className={cn("p-4", locked && "blur-[2px] opacity-70")}>
+                          <div className="p-4">
                             <div className="text-sm font-semibold line-clamp-2">{it.title || "Sans titre"}</div>
                             {it.summary ? <p className="mt-2 text-sm text-muted-foreground line-clamp-3">{it.summary}</p> : null}
 
                             <div className="mt-4 flex items-center justify-between gap-3">
-                              {!locked && it.link ? (
+                              {it.link ? (
                                 <a className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline" href={it.link} target="_blank" rel="noreferrer">
                                   Lire la source <ExternalLink className="h-4 w-4" />
                                 </a>
                               ) : (
-                                <span className="text-sm text-muted-foreground">{locked ? "Débloquer pour lire" : "Lien indisponible"}</span>
+                                <span className="text-sm text-muted-foreground">Lien indisponible</span>
                               )}
 
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => (locked ? handleUnlock() : (window.location.href = "/contact?offer=express"))}
+                                onClick={() => (window.location.href = "/contact?offer=express")}
                                 className="text-xs"
                               >
-                                {locked ? "Débloquer" : "Interpréter pour moi"}
+                                Interpréter pour moi
                               </Button>
                             </div>
                           </div>
-
-                          {locked ? (
-                            <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-[6px]">
-                              <Button onClick={handleUnlock}>
-                                <Lock className="mr-2 h-4 w-4" /> Débloquer
-                              </Button>
-                            </div>
-                          ) : null}
                         </div>
                       );
                     })}
@@ -1178,6 +1190,7 @@ export default function Veille() {
         </section>
       </div>
 
+      {/* Tailwind marquee animation (local) */}
       <style>
         {`
           @keyframes marquee {
