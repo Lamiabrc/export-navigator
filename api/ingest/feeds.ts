@@ -1,4 +1,4 @@
-﻿import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
 import { supabaseAdmin } from "../_supabase.js";
 
@@ -6,19 +6,15 @@ type ParsedItem = {
   title: string;
   link: string;
   summary: string | null;
-  publishedAt: string | null;
+  publishedAt: string | null; // ISO
   imageUrl: string | null;
 };
 
 function toIso(value?: string | null) {
   if (!value) return null;
-  try {
-    const dt = new Date(value);
-    if (isNaN(dt.getTime())) return null;
-    return dt.toISOString();
-  } catch {
-    return null;
-  }
+  const dt = new Date(value);
+  if (isNaN(dt.getTime())) return null;
+  return dt.toISOString();
 }
 
 function stripHtml(html: string) {
@@ -86,21 +82,6 @@ async function fetchTextWithTimeout(url: string, ms: number) {
   }
 }
 
-async function fetchJsonWithTimeout(url: string, ms: number) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
-  try {
-    const res = await fetch(url, {
-      signal: ctrl.signal,
-      headers: { "user-agent": "exportfrancefacile-ingest/1.0" },
-    });
-    const json = await res.json().catch(() => null);
-    return { ok: res.ok, status: res.status, json };
-  } finally {
-    clearTimeout(t);
-  }
-}
-
 function parseRssItems(xml: string): ParsedItem[] {
   const items: ParsedItem[] = [];
   const blocks = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
@@ -133,6 +114,7 @@ function parseRssItems(xml: string): ParsedItem[] {
       imageUrl: mediaImg || imgFromDesc || null,
     });
   }
+
   return items;
 }
 
@@ -172,49 +154,8 @@ function parseAtomItems(xml: string): ParsedItem[] {
   return items;
 }
 
-function parseJsonItems(payload: any): ParsedItem[] {
-  if (!payload) return [];
-  const list = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload.items)
-      ? payload.items
-      : Array.isArray(payload.data)
-        ? payload.data
-        : Array.isArray(payload.results)
-          ? payload.results
-          : [];
-
-  return list
-    .map((it: any) => {
-      const title = String(it?.title || it?.name || "").trim();
-      const link = String(it?.link || it?.url || it?.href || "").trim();
-      if (!title || !link) return null;
-
-      return {
-        title,
-        link,
-        summary: it?.summary || it?.description || null,
-        publishedAt: toIso(it?.published_at || it?.publishedAt || it?.date || it?.updated_at) || null,
-        imageUrl: it?.image || it?.image_url || it?.imageUrl || null,
-      } as ParsedItem;
-    })
-    .filter(Boolean) as ParsedItem[];
-}
-
-async function getColumns(tableName: string) {
-  try {
-    const admin = supabaseAdmin();
-    const { data, error } = await admin
-      .from("information_schema.columns")
-      .select("column_name")
-      .eq("table_schema", "public")
-      .eq("table_name", tableName);
-
-    if (error || !data) return new Set<string>();
-    return new Set<string>(data.map((d: any) => d.column_name));
-  } catch {
-    return new Set<string>();
-  }
+function isAtom(xml: string) {
+  return /<feed[\s>]/i.test(xml) && /xmlns=["']http:\/\/www\.w3\.org\/2005\/Atom["']/i.test(xml);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -237,152 +178,96 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const admin = supabaseAdmin();
-    const feedColumns = await getColumns("regulatory_feeds");
-    const itemColumns = await getColumns("regulatory_items");
 
-    const feedUrlKey = feedColumns.size
-      ? feedColumns.has("source_url")
-        ? "source_url"
-        : "url"
-      : "source_url";
-    const feedKindKey = feedColumns.has("kind")
-      ? "kind"
-      : feedColumns.has("format")
-        ? "format"
-        : feedColumns.has("type")
-          ? "type"
-          : "kind";
-    const feedEnabledKey = feedColumns.size
-      ? feedColumns.has("enabled")
-        ? "enabled"
-        : feedColumns.has("is_enabled")
-          ? "is_enabled"
-          : "enabled"
-      : "enabled";
+    // ✅ On ne sélectionne que les champs standardisés (no schema guessing)
+    const { data: feeds, error: feedError } = await admin
+      .from("regulatory_feeds")
+      .select("id, source_name, source_url, kind, enabled, logo_url")
+      .eq("enabled", true);
 
-    const itemFeedKey = itemColumns.has("feed_id") ? "feed_id" : itemColumns.has("source_id") ? "source_id" : "feed_id";
-    const itemUrlKey = itemColumns.has("url") ? "url" : itemColumns.has("link") ? "link" : "url";
-    const itemImageKey = itemColumns.has("image_url") ? "image_url" : itemColumns.has("image") ? "image" : null;
-    const itemFingerprintKey = itemColumns.has("fingerprint") ? "fingerprint" : itemColumns.has("hash") ? "hash" : null;
-
-    const { data: feeds, error: feedError } = await admin.from("regulatory_feeds").select("*");
     if (feedError) {
       res.status(500).json({ ok: false, error: "supabase_error", detail: feedError.message });
       return;
     }
 
-    const enabledFeeds = (feeds || []).filter((f: any) => {
-      const enabled = f?.[feedEnabledKey];
-      return enabled !== false;
-    });
-
-    const results: Array<{ feedId: string; name: string; status: string; inserted: number; skipped: number; error?: string }> = [];
+    const enabledFeeds = feeds || [];
+    const results: Array<{
+      feedId: string;
+      name: string;
+      status: "ok" | "skipped" | "failed";
+      inserted: number;
+      error?: string;
+    }> = [];
 
     for (const feed of enabledFeeds) {
-      const feedId = feed.id as string;
-      const feedName = String(feed.name || feed.source_name || feedId);
-      const feedUrl = String(feed?.[feedUrlKey] || "").trim();
+      const feedId = String(feed.id);
+      const feedName = String(feed.source_name || feedId);
+      const feedUrl = String(feed.source_url || "").trim();
+      const kindRaw = String(feed.kind || "rss").toLowerCase();
+      const kind = kindRaw.includes("atom") ? "atom" : kindRaw.includes("rss") ? "rss" : kindRaw.includes("api") ? "api" : "web";
+      const feedLogo = feed.logo_url || null;
 
       if (!feedUrl) {
-        results.push({ feedId, name: feedName, status: "skipped", inserted: 0, skipped: 0, error: "missing_url" });
-        console.log(`[ingest] skip ${feedName}: missing_url`);
+        results.push({ feedId, name: feedName, status: "skipped", inserted: 0, error: "missing_source_url" });
         continue;
       }
 
-      const kindRaw = String(feed?.[feedKindKey] || "rss").toLowerCase();
-      const kind = kindRaw.includes("api") ? "api" : kindRaw.includes("web") ? "web" : "rss";
-      const feedLogo = feed?.logo_url || null;
-
-      if (kind === "web") {
-        results.push({ feedId, name: feedName, status: "skipped", inserted: 0, skipped: 0, error: "kind_web_not_supported" });
-        console.log(`[ingest] skip ${feedName}: kind=web`);
+      if (kind === "web" || kind === "api") {
+        results.push({ feedId, name: feedName, status: "skipped", inserted: 0, error: `kind_${kind}_not_supported` });
         continue;
       }
 
       try {
-        let parsed: ParsedItem[] = [];
-        if (kind === "api") {
-          const r = await fetchJsonWithTimeout(feedUrl, 10000);
-          if (!r.ok || !r.json) {
-            results.push({ feedId, name: feedName, status: "failed", inserted: 0, skipped: 0, error: `fetch_json_${r.status}` });
-            console.log(`[ingest] fail ${feedName}: fetch_json_${r.status}`);
-            continue;
-          }
-          parsed = parseJsonItems(r.json);
-        } else {
-          const r = await fetchTextWithTimeout(feedUrl, 10000);
-          if (!r.ok || !r.text) {
-            results.push({ feedId, name: feedName, status: "failed", inserted: 0, skipped: 0, error: `fetch_xml_${r.status}` });
-            console.log(`[ingest] fail ${feedName}: fetch_xml_${r.status}`);
-            continue;
-          }
-          const isAtom = /<feed[\s>]/i.test(r.text) && /xmlns=["']http:\/\/www\.w3\.org\/2005\/Atom["']/i.test(r.text);
-          parsed = isAtom ? parseAtomItems(r.text) : parseRssItems(r.text);
-        }
-
-        if (!parsed.length) {
-          results.push({ feedId, name: feedName, status: "ok", inserted: 0, skipped: 0 });
-          console.log(`[ingest] ok ${feedName}: 0 item`);
+        const r = await fetchTextWithTimeout(feedUrl, 12000);
+        if (!r.ok || !r.text) {
+          results.push({ feedId, name: feedName, status: "failed", inserted: 0, error: `fetch_${r.status}` });
           continue;
         }
 
+        const parsed = isAtom(r.text) ? parseAtomItems(r.text) : parseRssItems(r.text);
+        if (!parsed.length) {
+          results.push({ feedId, name: feedName, status: "ok", inserted: 0 });
+          continue;
+        }
+
+        // ✅ Schéma standard regulatory_items
         const rows = parsed.map((it) => {
           const fingerprint = crypto.createHash("md5").update(`${it.link}|${it.title}`).digest("hex");
-          const row: Record<string, any> = {
+          return {
+            source_id: feedId,
             title: it.title,
+            link: it.link,
             summary: it.summary,
             published_at: it.publishedAt,
-            category: feed.category || null,
-            zone: feed.zone || null,
+            image_url: it.imageUrl || feedLogo,
+            fingerprint,
           };
-          row[itemFeedKey] = feedId;
-          row[itemUrlKey] = it.link;
-
-          if (itemImageKey) {
-            row[itemImageKey] = it.imageUrl || feedLogo || null;
-          }
-          if (itemFingerprintKey) {
-            row[itemFingerprintKey] = fingerprint;
-          }
-          return row;
         });
 
-        const onConflict = itemFingerprintKey ? `${itemFeedKey},${itemFingerprintKey}` : undefined;
-        const insertResult = onConflict
-          ? await admin.from("regulatory_items").upsert(rows, { onConflict, ignoreDuplicates: true })
-          : await admin.from("regulatory_items").insert(rows);
+        // ✅ nécessite contrainte unique (source_id, fingerprint)
+        const { error: upsertError } = await admin
+          .from("regulatory_items")
+          .upsert(rows, { onConflict: "source_id,fingerprint" });
 
-        if (insertResult.error) {
-          results.push({ feedId, name: feedName, status: "failed", inserted: 0, skipped: rows.length, error: insertResult.error.message });
-          console.log(`[ingest] fail ${feedName}: ${insertResult.error.message}`);
-        } else {
-          results.push({ feedId, name: feedName, status: "ok", inserted: rows.length, skipped: 0 });
-          console.log(`[ingest] ok ${feedName}: inserted ${rows.length}`);
+        if (upsertError) {
+          results.push({ feedId, name: feedName, status: "failed", inserted: 0, error: upsertError.message });
+          continue;
         }
 
-        const updatePayload: Record<string, any> = {};
-        if (feedColumns.has("last_fetched_at")) updatePayload.last_fetched_at = new Date().toISOString();
-        else if (feedColumns.has("last_checked_at")) updatePayload.last_checked_at = new Date().toISOString();
+        // Update last_fetched_at si la colonne existe (si tu l’as dans le SQL)
+        await admin.from("regulatory_feeds").update({ last_fetched_at: new Date().toISOString() }).eq("id", feedId);
 
-        if (Object.keys(updatePayload).length) {
-          await admin.from("regulatory_feeds").update(updatePayload).eq("id", feedId);
-        }
+        results.push({ feedId, name: feedName, status: "ok", inserted: rows.length });
       } catch (err: any) {
-        results.push({ feedId, name: feedName, status: "failed", inserted: 0, skipped: 0, error: err?.message || String(err) });
-        console.log(`[ingest] fail ${feedName}: ${err?.message || String(err)}`);
+        results.push({ feedId, name: feedName, status: "failed", inserted: 0, error: err?.message || String(err) });
       }
     }
 
-    res.status(200).json({
-      ok: true,
-      feeds: results.length,
-      results,
-    });
+    res.status(200).json({ ok: true, feeds: enabledFeeds.length, results });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: "server_error", detail: err?.message || String(err) });
   }
 }
 
-export const config = {
-  runtime: "nodejs",
-};
+// ✅ Node runtime (crypto + fetch)
+export const config = { runtime: "nodejs" };
