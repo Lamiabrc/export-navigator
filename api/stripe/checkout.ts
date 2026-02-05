@@ -1,34 +1,56 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Stripe from "stripe";
+import { createClient } from "@supabase/supabase-js";
 
-import { allowCors, json, readJson, supabaseAdmin } from "../_supabase.js";
+type CheckoutPayload = { priceId?: string };
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2023-10-16",
-});
+function allowCors(handler: (req: VercelRequest, res: VercelResponse) => Promise<void>) {
+  return async (req: VercelRequest, res: VercelResponse) => {
+    const origin = (req.headers.origin as string) || "*";
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Max-Age", "86400");
+    if (req.method === "OPTIONS") {
+      res.status(200).end();
+      return;
+    }
+    await handler(req, res);
+  };
+}
 
-type CheckoutPayload = {
-  priceId?: string;
-};
+function json(res: VercelResponse, status: number, body: any) {
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.status(status).send(JSON.stringify(body));
+}
 
 function getBearerToken(req: VercelRequest) {
   const header = String(req.headers.authorization || "");
-  if (!header.toLowerCase().startsWith("bearer ")) return null;
-  return header.slice("Bearer ".length).trim();
+  const m = header.match(/^Bearer\s+(.+)$/i);
+  return m?.[1]?.trim() || null;
 }
 
 async function safeReadJson<T>(req: VercelRequest): Promise<T> {
   try {
     const ct = String(req.headers["content-type"] || "").toLowerCase();
     if (!ct.includes("application/json")) return {} as T;
-    return await readJson<T>(req);
+
+    const raw = await new Promise<string>((resolve, reject) => {
+      let data = "";
+      req.on("data", (c) => (data += c));
+      req.on("end", () => resolve(data));
+      req.on("error", reject);
+    });
+
+    if (!raw || !raw.trim()) return {} as T;
+    return JSON.parse(raw) as T;
   } catch {
     return {} as T;
   }
 }
 
 function stripeErr(e: any) {
-  // StripeError a souvent: type, code, message, raw, statusCode
   return {
     type: e?.type || null,
     code: e?.code || null,
@@ -46,13 +68,19 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
       return;
     }
 
-    // ✅ ENV check (inclut Supabase env)
+    // ENV
     const missing: string[] = [];
-    if (!process.env.STRIPE_SECRET_KEY) missing.push("STRIPE_SECRET_KEY");
-    if (!process.env.STRIPE_PRICE_ONLINE) missing.push("STRIPE_PRICE_ONLINE");
-    if (!process.env.APP_URL) missing.push("APP_URL");
-    if (!process.env.SUPABASE_URL) missing.push("SUPABASE_URL");
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+    const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
+    const STRIPE_PRICE_ONLINE = process.env.STRIPE_PRICE_ONLINE || "";
+    const SUPABASE_URL = process.env.SUPABASE_URL || "";
+    const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+    const APP_URL = process.env.APP_URL || "";
+
+    if (!STRIPE_SECRET_KEY) missing.push("STRIPE_SECRET_KEY");
+    if (!STRIPE_PRICE_ONLINE) missing.push("STRIPE_PRICE_ONLINE");
+    if (!SUPABASE_URL) missing.push("SUPABASE_URL");
+    if (!SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+    if (!APP_URL) missing.push("APP_URL");
 
     if (missing.length) {
       json(res, 500, { ok: false, error: "missing_env", missing });
@@ -61,13 +89,17 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
 
     const token = getBearerToken(req);
     if (!token) {
-      json(res, 401, { ok: false, error: "Missing Authorization bearer token" });
+      json(res, 401, { ok: false, error: "missing_auth_bearer" });
       return;
     }
 
-    const admin = supabaseAdmin();
+    const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" });
 
-    // ✅ Auth user
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
+
+    // Auth Supabase
     const { data: userData, error: userError } = await admin.auth.getUser(token);
     if (userError || !userData?.user) {
       json(res, 401, { ok: false, error: "invalid_auth", detail: userError?.message || null });
@@ -76,33 +108,45 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
 
     const user = userData.user;
 
-    // ✅ Body tolérant
+    // Body tolérant
     const payload = await safeReadJson<CheckoutPayload>(req);
-    const stripePriceId = String(payload?.priceId || process.env.STRIPE_PRICE_ONLINE).trim();
+    const priceId = String(payload?.priceId || STRIPE_PRICE_ONLINE).trim();
 
-    if (!stripePriceId.startsWith("price_")) {
-      json(res, 400, { ok: false, error: "invalid_price_id", detail: stripePriceId });
+    if (!priceId.startsWith("price_")) {
+      json(res, 400, { ok: false, error: "invalid_price_id", detail: priceId });
       return;
     }
 
-    // ✅ Vérifie que le price existe (et donc que TEST/LIVE match)
+    // ✅ Vérif price + mismatch TEST/LIVE
+    let priceObj: Stripe.Price;
     try {
-      await stripe.prices.retrieve(stripePriceId);
+      priceObj = await stripe.prices.retrieve(priceId);
     } catch (e: any) {
       json(res, 500, {
         ok: false,
         error: "stripe_price_retrieve_failed",
         detail: stripeErr(e),
-        hint: "Mismatch TEST/LIVE ou priceId invalide.",
-        stripePriceId,
+        hint: "Souvent: mauvais priceId ou mismatch TEST/LIVE.",
       });
       return;
     }
 
-    // ✅ lire customer existant
+    const keyMode = STRIPE_SECRET_KEY.startsWith("sk_live_") ? "live" : "test";
+    const priceMode = priceObj.livemode ? "live" : "test";
+    if (keyMode !== priceMode) {
+      json(res, 500, {
+        ok: false,
+        error: "stripe_test_live_mismatch",
+        detail: { keyMode, priceMode, priceId },
+        hint: "Ta clé Stripe et ton priceId ne sont pas du même mode (TEST vs LIVE).",
+      });
+      return;
+    }
+
+    // Lire / créer billing customer
     const { data: existingCustomer, error: customerError } = await admin
       .from("billing_customers")
-      .select("stripe_customer_id,email")
+      .select("stripe_customer_id")
       .eq("user_id", user.id)
       .maybeSingle();
 
@@ -111,17 +155,17 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
         ok: false,
         error: "db_error_read_billing_customers",
         detail: customerError.message,
+        hint: "Vérifie que la table public.billing_customers existe bien.",
       });
       return;
     }
 
-    let stripeCustomerId = existingCustomer?.stripe_customer_id || "";
+    let customerId = existingCustomer?.stripe_customer_id || "";
 
-    // ✅ créer customer si absent
-    if (!stripeCustomerId) {
-      let customer;
+    if (!customerId) {
+      let created: Stripe.Customer;
       try {
-        customer = await stripe.customers.create({
+        created = await stripe.customers.create({
           email: user.email || undefined,
           metadata: { supabase_user_id: user.id },
         });
@@ -130,10 +174,14 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
         return;
       }
 
-      stripeCustomerId = customer.id;
+      customerId = created.id;
 
       const { error: upsertError } = await admin.from("billing_customers").upsert(
-        { user_id: user.id, stripe_customer_id: stripeCustomerId, email: user.email },
+        {
+          user_id: user.id,
+          email: user.email,
+          stripe_customer_id: customerId,
+        },
         { onConflict: "user_id" }
       );
 
@@ -147,17 +195,17 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
       }
     }
 
-    // ✅ créer checkout session
-    let session;
+    // Checkout session
+    let session: Stripe.Checkout.Session;
     try {
       session = await stripe.checkout.sessions.create({
         mode: "subscription",
-        customer: stripeCustomerId,
+        customer: customerId,
         client_reference_id: user.id,
-        line_items: [{ price: stripePriceId, quantity: 1 }],
+        line_items: [{ price: priceId, quantity: 1 }],
         allow_promotion_codes: true,
-        success_url: `${process.env.APP_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.APP_URL}/offre?canceled=1`,
+        success_url: `${APP_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${APP_URL}/offre?canceled=1`,
         metadata: { supabase_user_id: user.id, plan: "online" },
         subscription_data: { metadata: { supabase_user_id: user.id, plan: "online" } },
       });
