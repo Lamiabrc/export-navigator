@@ -1,4 +1,4 @@
-﻿import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { supabaseAdmin } from "./_supabase.js";
 
 type ApiItem = {
@@ -7,7 +7,7 @@ type ApiItem = {
   summary: string | null;
   publishedAt: string | null;
   source: string | null;
-  zone: string | null;
+  zone: string | null;        // sortie API (compat)
   category: string | null;
   imageUrl: string | null;
 };
@@ -113,32 +113,28 @@ function buildRssXml(params: { title: string; link: string; description: string;
 
 function mapRowToItem(row: any): ApiItem | null {
   if (!row) return null;
+
   const feed = Array.isArray(row.regulatory_feeds) ? row.regulatory_feeds[0] : row.regulatory_feeds;
   const feedEnabled = feed?.enabled ?? feed?.is_enabled;
   const feedPublic = feed?.is_public;
   if (feedEnabled === false || feedPublic === false) return null;
 
-  const link = String(row.url || row.link || "").trim();
+  const link = String(row.link || row.url || "").trim();
   if (!link) return null;
 
   const title = String(row.title || "").trim() || "Sans titre";
   const summary = row.summary ? truncate(String(row.summary), 320) : null;
   const publishedAt = toIsoDate(row.published_at) || toIsoDate(row.created_at);
-  const source = (feed?.name || feed?.source_name || row.source || null) as string | null;
-  const zone = (row.zone || feed?.zone || null) as string | null;
+
+  const source = (feed?.source_name || feed?.name || row.source || null) as string | null;
+
+  // ✅ ton schéma: territory (pas zone)
+  const zone = (row.territory || feed?.territory || row.zone || feed?.zone || null) as string | null;
   const category = (row.category || feed?.category || null) as string | null;
+
   const imageUrl = (row.image_url || row.imageUrl || feed?.logo_url || null) as string | null;
 
-  return {
-    title,
-    link,
-    summary,
-    publishedAt,
-    source,
-    zone,
-    category,
-    imageUrl,
-  };
+  return { title, link, summary, publishedAt, source, zone, category, imageUrl };
 }
 
 function parseLimit(req: VercelRequest) {
@@ -160,8 +156,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const format = String(req.query?.format || "").toLowerCase();
     const accept = String(req.headers.accept || "").toLowerCase();
     const wantsXml = format === "xml" || accept.includes("application/rss+xml") || accept.includes("application/xml");
+
     const limit = parseLimit(req);
     const queryLimit = Math.min(limit * 2, 60);
+
+    // filtres (optionnels)
+    const categoryQ = String(req.query?.category || "").trim();
+    const zoneQ = String(req.query?.zone || req.query?.territory || "").trim(); // compat
 
     const fallbackItems: ApiItem[] = [
       {
@@ -197,22 +198,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ];
 
     const admin = supabaseAdmin();
-    const { data, error } = await admin
+
+    let q = admin
       .from("regulatory_items")
-      .select("*, regulatory_feeds(*)")
+      .select("id,title,summary,link,published_at,category,territory,image_url,created_at, regulatory_feeds(source_name,source_url,logo_url,enabled,is_public,territory,category)")
       .order("published_at", { ascending: false, nullsLast: true })
       .order("created_at", { ascending: false })
       .limit(queryLimit);
+
+    if (categoryQ) q = q.eq("category", categoryQ);
+    if (zoneQ) q = q.eq("territory", zoneQ);
+
+    const { data, error } = await q;
 
     if (error) {
       console.error("[api/rss] supabase error:", error.message);
     }
 
     const mapped = (data || []).map(mapRowToItem).filter(Boolean) as ApiItem[];
+
     const dedup = new Map<string, ApiItem>();
-    for (const it of mapped) {
-      if (!dedup.has(it.link)) dedup.set(it.link, it);
-    }
+    for (const it of mapped) if (!dedup.has(it.link)) dedup.set(it.link, it);
 
     const items = Array.from(dedup.values()).slice(0, limit);
     const finalItems = items.length ? items : fallbackItems;
@@ -241,11 +247,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.status(200).json({
-      ok: true,
-      updatedAt,
-      items: finalItems,
-    });
+    res.status(200).json({ ok: true, updatedAt, items: finalItems });
   } catch (err: any) {
     const baseUrl = buildBaseUrl(req);
     res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -256,7 +258,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       updatedAt: new Date().toISOString(),
       items: [
         {
-          title: "Flux RSS indisponible temporairement",
+          title: "Flux indisponible temporairement",
           link: `${baseUrl}/veille`,
           summary: "Erreur côté serveur. Réessayez dans quelques minutes.",
           publishedAt: new Date().toISOString(),
@@ -270,6 +272,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-export const config = {
-  runtime: "nodejs",
-};
+export const config = { runtime: "nodejs" };
