@@ -31,6 +31,21 @@ function getBearerToken(req: VercelRequest) {
   return m?.[1]?.trim() || null;
 }
 
+function getAppUrl(req: VercelRequest) {
+  const envUrl = String(process.env.APP_URL || "").trim();
+  if (envUrl) return envUrl.replace(/\/+$/, "");
+
+  const origin = String(req.headers.origin || "").trim();
+  if (origin) return origin.replace(/\/+$/, "");
+
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").trim();
+  if (!host) return "";
+
+  const protoRaw = String(req.headers["x-forwarded-proto"] || "https");
+  const proto = protoRaw.split(",")[0].trim() || "https";
+  return `${proto}://${host}`.replace(/\/+$/, "");
+}
+
 async function safeReadJson<T>(req: VercelRequest): Promise<T> {
   try {
     const ct = String(req.headers["content-type"] || "").toLowerCase();
@@ -74,16 +89,24 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
     const STRIPE_PRICE_ONLINE = process.env.STRIPE_PRICE_ONLINE || "";
     const SUPABASE_URL = process.env.SUPABASE_URL || "";
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-    const APP_URL = process.env.APP_URL || "";
 
     if (!STRIPE_SECRET_KEY) missing.push("STRIPE_SECRET_KEY");
     if (!STRIPE_PRICE_ONLINE) missing.push("STRIPE_PRICE_ONLINE");
     if (!SUPABASE_URL) missing.push("SUPABASE_URL");
     if (!SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
-    if (!APP_URL) missing.push("APP_URL");
 
     if (missing.length) {
       json(res, 500, { ok: false, error: "missing_env", missing });
+      return;
+    }
+
+    const appUrl = getAppUrl(req);
+    if (!appUrl) {
+      json(res, 500, {
+        ok: false,
+        error: "missing_app_url",
+        detail: "Set APP_URL or call checkout from a browser origin.",
+      });
       return;
     }
 
@@ -204,8 +227,8 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
         client_reference_id: user.id,
         line_items: [{ price: priceId, quantity: 1 }],
         allow_promotion_codes: true,
-        success_url: `${APP_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${APP_URL}/offre?canceled=1`,
+        success_url: `${appUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${appUrl}/offre?canceled=1`,
         metadata: { supabase_user_id: user.id, plan: "online" },
         subscription_data: { metadata: { supabase_user_id: user.id, plan: "online" } },
       });
@@ -219,3 +242,7 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
     json(res, 500, { ok: false, error: "server_error", detail: e?.message || String(e) });
   }
 });
+
+export const config = {
+  runtime: "nodejs",
+};

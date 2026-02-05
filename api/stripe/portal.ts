@@ -13,6 +13,21 @@ function getBearerToken(req: VercelRequest) {
   return header.slice("Bearer ".length).trim();
 }
 
+function getAppUrl(req: VercelRequest) {
+  const envUrl = String(process.env.APP_URL || "").trim();
+  if (envUrl) return envUrl.replace(/\/+$/, "");
+
+  const origin = String(req.headers.origin || "").trim();
+  if (origin) return origin.replace(/\/+$/, "");
+
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").trim();
+  if (!host) return "";
+
+  const protoRaw = String(req.headers["x-forwarded-proto"] || "https");
+  const proto = protoRaw.split(",")[0].trim() || "https";
+  return `${proto}://${host}`.replace(/\/+$/, "");
+}
+
 export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
   try {
     if (req.method !== "POST") {
@@ -28,9 +43,18 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
 
     const missing: string[] = [];
     if (!process.env.STRIPE_SECRET_KEY) missing.push("STRIPE_SECRET_KEY");
-    if (!process.env.APP_URL) missing.push("APP_URL");
     if (missing.length) {
       json(res, 500, { ok: false, error: "missing_env", missing });
+      return;
+    }
+
+    const appUrl = getAppUrl(req);
+    if (!appUrl) {
+      json(res, 500, {
+        ok: false,
+        error: "missing_app_url",
+        detail: "Set APP_URL or call portal from a browser origin.",
+      });
       return;
     }
 
@@ -74,7 +98,7 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
 
     const session = await stripe.billingPortal.sessions.create({
       customer: billingCustomer.stripe_customer_id,
-      return_url: `${process.env.APP_URL}/account`,
+      return_url: `${appUrl}/account`,
     });
 
     json(res, 200, { ok: true, url: session.url });
@@ -86,3 +110,7 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
     });
   }
 });
+
+export const config = {
+  runtime: "nodejs",
+};

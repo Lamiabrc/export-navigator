@@ -5,6 +5,7 @@ import { json, supabaseAdmin } from "../_supabase.js";
 
 export const config = {
   api: { bodyParser: false },
+  runtime: "nodejs",
 };
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
