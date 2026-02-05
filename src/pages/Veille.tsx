@@ -143,6 +143,7 @@ function getDomain(url?: string) {
 function faviconUrlFromLink(link?: string) {
   const domain = getDomain(link);
   if (!domain) return "";
+  if (domain.endsWith("exportfrancefacile.com")) return "/favicon.ico";
   // favicon stable & rapide
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
 }
@@ -729,6 +730,10 @@ export default function Veille() {
                                 alt=""
                                 className="absolute left-2 top-2 h-7 w-7 rounded-full border border-white/30 bg-white/10"
                                 loading="lazy"
+                                onError={(e) => {
+                                  e.currentTarget.onerror = null;
+                                  e.currentTarget.src = "/mpl-logo.svg";
+                                }}
                               />
                             ) : null}
                           </div>
@@ -1157,6 +1162,10 @@ export default function Veille() {
                                     alt=""
                                     className="h-7 w-7 rounded-full border border-white/30 bg-white/10"
                                     loading="lazy"
+                                    onError={(e) => {
+                                      e.currentTarget.onerror = null;
+                                      e.currentTarget.src = "/mpl-logo.svg";
+                                    }}
                                   />
                                 ) : null}
                                 <div className="text-xs text-white/90">
