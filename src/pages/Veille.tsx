@@ -33,7 +33,8 @@ type RssItem = {
   source?: string | null;
   publishedAt?: string | null;
   summary?: string | null;
-  zone?: string | null;
+  zone?: string | null;        // compat front
+  territory?: string | null;   // compat API
   category?: string | null;
   imageUrl?: string | null;
   image?: string | null;
@@ -60,7 +61,6 @@ const COUNTRIES_FALLBACK = [
 
 const TOP_COUNTRY_ISO2 = ["DE", "ES", "IT", "NL", "BE", "CH", "GB", "US", "CA", "MA", "AE", "CN", "JP", "IN"];
 
-// Presets “conversion” (rapides, orientés usage)
 const PRESETS: Array<{ label: string; countries: string[]; hint: string }> = [
   { label: "Europe (DE/ES/IT/NL/BE)", countries: ["DE", "ES", "IT", "NL", "BE"], hint: "Flux UE, douane & conformité." },
   { label: "USA", countries: ["US"], hint: "Sanctions, contrôles export, OFAC/CBP." },
@@ -95,6 +95,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   sanctions: "Sanctions",
   customs: "Douane",
   trade: "Commerce",
+  trade_policy: "Politique commerciale",
+  export_control: "Contrôles export",
   tax_vat: "Taxes / TVA",
   taxes: "Taxes",
   regulation: "Réglementation",
@@ -108,7 +110,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 function normalizeHsPrefix(v: string) {
   const digits = (v || "").replace(/[^0-9]/g, "");
   if (!digits) return "";
-  // on autorise 2 à 6 chiffres (préfixe HS)
   if (digits.length < 2) return "";
   return digits.slice(0, 6);
 }
@@ -144,13 +145,10 @@ function faviconUrlFromLink(link?: string) {
   const domain = getDomain(link);
   if (!domain) return "";
   if (domain.endsWith("exportfrancefacile.com")) return "/favicon.ico";
-  // favicon stable & rapide
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
 }
 
 function seededCover(seed: string) {
-  // image “wow” sans back à modifier : stable via seed (picsum)
-  // si tu préfères 100% interne : on pourra remplacer par des assets locaux plus tard
   return `https://picsum.photos/seed/${encodeURIComponent(seed)}/960/540`;
 }
 
@@ -200,27 +198,15 @@ function badgeClass(severity: string) {
 }
 
 const EXPERT_WATCH = [
-  {
-    title: "Sanctions & embargos",
-    desc: "Listes UE/ONU/US, gels d’avoirs, interdictions sectorielles, pays sensibles.",
-  },
-  {
-    title: "Contrôles export / dual-use",
-    desc: "Biens à double usage, licences, restrictions sur technologies & composants.",
-  },
-  {
-    title: "Règles d’origine & préférences",
-    desc: "Accords, preuves d’origine, impacts sur droits & accès au marché.",
-  },
-  {
-    title: "Douane & conformité documentaire",
-    desc: "Facture, packing list, déclarations, certificats, exigences spécifiques.",
-  },
-  {
-    title: "Mesures commerciales",
-    desc: "Anti-dumping, quotas, restrictions, nouvelles formalités/contrôles.",
-  },
+  { title: "Sanctions & embargos", desc: "Listes UE/ONU/US, gels d’avoirs, interdictions sectorielles, pays sensibles." },
+  { title: "Contrôles export / dual-use", desc: "Biens à double usage, licences, restrictions sur technologies & composants." },
+  { title: "Règles d’origine & préférences", desc: "Accords, preuves d’origine, impacts sur droits & accès au marché." },
+  { title: "Douane & conformité documentaire", desc: "Facture, packing list, déclarations, certificats, exigences spécifiques." },
+  { title: "Mesures commerciales", desc: "Anti-dumping, quotas, restrictions, nouvelles formalités/contrôles." },
 ];
+
+const TEASER_FREE = 6;
+const TEASER_TOTAL = 12;
 
 export default function Veille() {
   const { toast } = useToast();
@@ -319,17 +305,21 @@ export default function Veille() {
         : Array.isArray(raw?.data?.items)
           ? raw.data.items
           : [];
+
       const normalized: RssItem[] = items.map((it: any) => ({
         title: it?.title,
         link: it?.link || it?.url,
-        source: it?.source || it?.feed || it?.sourceName,
+        source: it?.source || it?.feed || it?.sourceName || it?.source_name,
         publishedAt: it?.publishedAt || it?.published_at || it?.pubDate || null,
         summary: it?.summary || it?.description || null,
-        zone: it?.zone || it?.country || null,
+        // ✅ zone + territory
+        zone: it?.zone || it?.country || it?.territory || null,
+        territory: it?.territory || null,
         category: it?.category || null,
         imageUrl: it?.imageUrl || it?.image_url || null,
         image: it?.image || null,
       }));
+
       setRssItems(normalized.slice(0, 30));
       setRssUpdatedAt(raw?.updatedAt || null);
     } catch {
@@ -444,8 +434,8 @@ export default function Veille() {
 
   const filteredNews = React.useMemo(() => {
     return sortedRss.filter((it) => {
-      const zoneOk =
-        zoneFilter === "ALL" || normalizeZone(it.zone) === zoneFilter || (zoneFilter === "INTL" && !it.zone);
+      const z = normalizeZone(it.zone || it.territory || null);
+      const zoneOk = zoneFilter === "ALL" || z === zoneFilter || (zoneFilter === "INTL" && !z);
       const cat = normalizeCategory(it.category);
       const categoryOk = categoryFilter === "ALL" || cat === categoryFilter;
       const sourceOk = sourceFilter === "ALL" || (it.source || "").trim() === sourceFilter;
@@ -463,7 +453,6 @@ export default function Veille() {
   }, [sortedRss, rssQuery]);
 
   const isTeaser = !isAuthenticated || !emailOk;
-  const visibleNews = isTeaser ? filteredNews.slice(0, 6) : filteredNews;
 
   const handleUnlock = async () => {
     if (!isAuthenticated) {
@@ -510,12 +499,14 @@ export default function Veille() {
 
   const effectiveAlerts = emailOk ? alerts : demoAlerts;
 
+  const newsForGrid = isTeaser ? filteredNews.slice(0, TEASER_TOTAL) : filteredNews;
+  const fluxForGrid = isTeaser ? filteredFlux.slice(0, TEASER_TOTAL) : filteredFlux.slice(0, 12);
+
   return (
     <PublicLayout>
       <div className="space-y-10">
         {/* HERO WAOW + TICKER */}
         <section className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-slate-950 via-blue-950 to-slate-950 p-6 text-white shadow-xl md:p-10">
-          {/* blobs */}
           <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-blue-500/25 blur-3xl" />
           <div className="pointer-events-none absolute -right-24 -bottom-24 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(56,189,248,0.20),transparent_40%),radial-gradient(circle_at_80%_40%,rgba(59,130,246,0.18),transparent_45%),radial-gradient(circle_at_55%_90%,rgba(14,165,233,0.12),transparent_40%)]" />
@@ -533,9 +524,7 @@ export default function Veille() {
               actionnables + sources.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-blue-100/80">
-              <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1">
-                {recentCount} nouveautés / 7 jours
-              </span>
+              <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1">{recentCount} nouveautés / 7 jours</span>
               <span className="rounded-full border border-white/20 bg-white/5 px-3 py-1">
                 {rssUpdatedAt ? `Mise à jour ${formatDateTimeFr(rssUpdatedAt)}` : "Mise à jour en cours"}
               </span>
@@ -607,7 +596,6 @@ export default function Veille() {
             </CardContent>
           </Card>
 
-          {/* MAIN: prefs + live content */}
           <div className="lg:col-span-3 space-y-6">
             {/* NOUVEAUTÉS */}
             <Card className="card-hover">
@@ -618,9 +606,7 @@ export default function Veille() {
                       <Sparkles className="h-5 w-5" />
                       Nouveautés
                     </CardTitle>
-                    <CardDescription>
-                      Sélection récente issue des sources officielles. Filtres rapides par zone, catégorie et source.
-                    </CardDescription>
+                    <CardDescription>Sélection récente issue des sources officielles. Filtres rapides.</CardDescription>
                   </div>
                   <Button variant="outline" onClick={loadRss} disabled={rssLoading}>
                     <RefreshCcw className="mr-2 h-4 w-4" />
@@ -700,28 +686,32 @@ export default function Veille() {
                       <div key={i} className="h-36 rounded-2xl border border-border bg-muted animate-pulse" />
                     ))}
                   </div>
-                ) : visibleNews.length === 0 ? (
+                ) : newsForGrid.length === 0 ? (
                   <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
                     Aucun item disponible pour ces filtres.
                   </div>
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2">
-                    {visibleNews.map((it, idx) => {
+                    {newsForGrid.map((it, idx) => {
+                      const locked = isTeaser && idx >= TEASER_FREE;
                       const domain = getDomain(it.link) || it.source || "rss";
                       const cover = it.imageUrl || it.image || seededCover(`${domain}-${it.title || idx}`);
                       const favicon = faviconUrlFromLink(it.link);
                       const isFresh = it.publishedAt
                         ? new Date(it.publishedAt).getTime() > Date.now() - 72 * 60 * 60 * 1000
                         : false;
-                      const zone = normalizeZone(it.zone);
-                      const category = categoryLabel(it.category);
+                      const zone = normalizeZone(it.zone || it.territory || null);
+                      const catLabel = categoryLabel(it.category);
 
                       return (
                         <article
                           key={`${it.link || it.title || "item"}_${idx}`}
-                          className="group flex gap-4 rounded-2xl border border-border bg-card p-4 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-500/10"
+                          className={cn(
+                            "group relative flex gap-4 rounded-2xl border border-border bg-card p-4 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-500/10",
+                            locked && "overflow-hidden"
+                          )}
                         >
-                          <div className="relative h-24 w-32 flex-shrink-0 overflow-hidden rounded-xl border border-border bg-muted">
+                          <div className={cn("relative h-24 w-32 flex-shrink-0 overflow-hidden rounded-xl border border-border bg-muted", locked && "blur-sm")}>
                             <img src={cover} alt="" className="h-full w-full object-cover" loading="lazy" />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
                             {favicon ? (
@@ -738,17 +728,11 @@ export default function Veille() {
                             ) : null}
                           </div>
 
-                          <div className="flex min-w-0 flex-1 flex-col">
+                          <div className={cn("flex min-w-0 flex-1 flex-col", locked && "blur-[2px] opacity-70")}>
                             <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                              {zone ? (
-                                <span className="rounded-full border border-border bg-muted px-2 py-1">Zone {zone}</span>
-                              ) : null}
-                              {category ? (
-                                <span className="rounded-full border border-border bg-muted px-2 py-1">{category}</span>
-                              ) : null}
-                              {it.source ? (
-                                <span className="rounded-full border border-border bg-muted px-2 py-1">{it.source}</span>
-                              ) : null}
+                              {zone ? <span className="rounded-full border border-border bg-muted px-2 py-1">Zone {zone}</span> : null}
+                              {catLabel ? <span className="rounded-full border border-border bg-muted px-2 py-1">{catLabel}</span> : null}
+                              {it.source ? <span className="rounded-full border border-border bg-muted px-2 py-1">{it.source}</span> : null}
                               {isFresh ? (
                                 <span className="rounded-full border border-emerald-300/60 bg-emerald-50 px-2 py-1 text-emerald-700">
                                   Nouveau
@@ -757,24 +741,25 @@ export default function Veille() {
                             </div>
 
                             <div className="mt-1 text-sm font-semibold line-clamp-2">{it.title || "Sans titre"}</div>
-                            {it.summary ? (
-                              <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{it.summary}</p>
-                            ) : null}
+                            {it.summary ? <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{it.summary}</p> : null}
 
                             <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                               <span>{it.publishedAt ? formatDateTimeFr(it.publishedAt) : "Date inconnue"}</span>
-                              {it.link ? (
-                                <a
-                                  className="inline-flex items-center gap-1 text-primary hover:underline"
-                                  href={it.link}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
+                              {!locked && it.link ? (
+                                <a className="inline-flex items-center gap-1 text-primary hover:underline" href={it.link} target="_blank" rel="noreferrer">
                                   Lire <ExternalLink className="h-3 w-3" />
                                 </a>
                               ) : null}
                             </div>
                           </div>
+
+                          {locked ? (
+                            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-r from-white/70 to-white/40 backdrop-blur-[6px]">
+                              <Button onClick={handleUnlock} className="shadow-lg">
+                                <Lock className="mr-2 h-4 w-4" /> Débloquer la veille complète
+                              </Button>
+                            </div>
+                          ) : null}
                         </article>
                       );
                     })}
@@ -785,8 +770,8 @@ export default function Veille() {
                   <div className="rounded-2xl border border-border bg-gradient-to-r from-slate-950 to-blue-950 p-4 text-white">
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <div className="text-sm font-semibold">Débloquer la veille complète + alertes personnalisées</div>
-                        <div className="text-xs text-blue-100/80">Accès illimité aux nouveautés + alertes ciblées. 65€/mois.</div>
+                        <div className="text-sm font-semibold">Accès illimité + alertes personnalisées</div>
+                        <div className="text-xs text-blue-100/80">Nouveautés complètes + alertes ciblées. 65€/mois.</div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button onClick={handleUnlock} className="bg-white text-slate-950 hover:bg-slate-100">
@@ -806,195 +791,187 @@ export default function Veille() {
               </CardContent>
             </Card>
 
-            {/* PREFS (waow UX) */}
+            {/* PREFS */}
             <div ref={prefsRef}>
-            <Card className="card-hover">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Globe2 className="h-5 w-5" />
-                  Ma veille personnalisée
-                </CardTitle>
-                <CardDescription>Email + pays + préfixes HS. Tu peux commencer en 30 secondes.</CardDescription>
-              </CardHeader>
+              <Card className="card-hover">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Globe2 className="h-5 w-5" />
+                    Ma veille personnalisée
+                  </CardTitle>
+                  <CardDescription>Email + pays + préfixes HS. Tu peux commencer en 30 secondes.</CardDescription>
+                </CardHeader>
 
-              <CardContent className="space-y-5">
-                {/* Email */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Mail className="h-4 w-4" /> Email
-                  </Label>
-                  <Input
-                    value={email}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setEmail(v);
-                      setEmailOk(EMAIL_RE.test(v.trim().toLowerCase()));
-                    }}
-                    placeholder="email@entreprise.com"
-                  />
-                  {!emailOk && email.length > 0 ? (
-                    <p className="text-xs text-muted-foreground">Format email non valide.</p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      On s’en sert pour te livrer des alertes utiles (pas du spam).
-                    </p>
-                  )}
-                </div>
-
-                <Separator />
-
-                {/* Presets */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" /> Démarrage rapide
-                  </Label>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    {PRESETS.map((p) => (
-                      <button
-                        key={p.label}
-                        type="button"
-                        onClick={() => applyPreset(p.countries)}
-                        className="group rounded-2xl border border-border bg-card p-4 text-left transition hover:-translate-y-0.5 hover:shadow-lg"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="font-semibold">{p.label}</div>
-                            <div className="mt-1 text-xs text-muted-foreground">{p.hint}</div>
-                          </div>
-                          <span className="rounded-full border border-border bg-muted px-2 py-1 text-xs text-muted-foreground group-hover:text-foreground">
-                            + ajouter
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Countries */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4" /> Pays suivis
-                  </Label>
-
-                  <div className="flex flex-wrap gap-2">
-                    {topCountries.map((c) => (
-                      <button
-                        key={c.iso2}
-                        type="button"
-                        onClick={() => setCountries((prev) => (prev.includes(c.iso2) ? prev : [...prev, c.iso2]))}
-                        className="rounded-full border border-border bg-card px-3 py-1 text-xs hover:bg-muted"
-                      >
-                        + {c.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <Input
-                    value={countryText}
-                    onChange={(e) => setCountryText(e.target.value)}
-                    onBlur={(e) => addCountryFromText(e.target.value)}
-                    placeholder='Recherche : "Suisse (CH)"'
-                    list="countries-list"
-                  />
-
-                  <datalist id="countries-list">
-                    {allCountries.map((c) => (
-                      <option key={c.iso2} value={`${c.label} (${c.iso2})`} />
-                    ))}
-                  </datalist>
-
-                  {countries.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {countries.map((iso2) => (
-                        <button
-                          key={iso2}
-                          type="button"
-                          onClick={() => setCountries((prev) => prev.filter((x) => x !== iso2))}
-                          className="rounded-full border border-border bg-muted px-3 py-1 text-xs text-foreground hover:opacity-80"
-                          title="Cliquer pour retirer"
-                        >
-                          {iso2} ✕
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">Ajoute 1–3 pays : plus de signal, moins de bruit.</p>
-                  )}
-                </div>
-
-                <Separator />
-
-                {/* HS */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Hash className="h-4 w-4" /> Préfixes HS suivis
-                  </Label>
-
-                  <div className="flex flex-wrap gap-2">
-                    {HS_SUGGESTIONS.map((x) => (
-                      <button
-                        key={x.hs}
-                        type="button"
-                        onClick={() => setHsCodes((prev) => (prev.includes(x.hs) ? prev : [...prev, x.hs]))}
-                        className="rounded-full border border-border bg-card px-3 py-1 text-xs hover:bg-muted"
-                        title={x.note}
-                      >
-                        + HS {x.hs} <span className="opacity-70">({x.label})</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex gap-2">
+                <CardContent className="space-y-5">
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Mail className="h-4 w-4" /> Email
+                    </Label>
                     <Input
-                      value={hsInput}
-                      onChange={(e) => setHsInput(e.target.value)}
-                      placeholder="Ex : 30, 3004, 8517"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addHs();
-                        }
+                      value={email}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setEmail(v);
+                        setEmailOk(EMAIL_RE.test(v.trim().toLowerCase()));
                       }}
+                      placeholder="email@entreprise.com"
                     />
-                    <Button type="button" onClick={addHs} variant="outline">
-                      Ajouter
-                    </Button>
+                    {!emailOk && email.length > 0 ? (
+                      <p className="text-xs text-muted-foreground">Format email non valide.</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">On s’en sert pour te livrer des alertes utiles (pas du spam).</p>
+                    )}
                   </div>
 
-                  {hsCodes.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {hsCodes.map((hs) => (
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4" /> Démarrage rapide
+                    </Label>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {PRESETS.map((p) => (
                         <button
-                          key={hs}
+                          key={p.label}
                           type="button"
-                          onClick={() => setHsCodes((prev) => prev.filter((x) => x !== hs))}
-                          className="rounded-full border border-border bg-muted px-3 py-1 text-xs text-foreground hover:opacity-80"
-                          title="Cliquer pour retirer"
+                          onClick={() => applyPreset(p.countries)}
+                          className="group rounded-2xl border border-border bg-card p-4 text-left transition hover:-translate-y-0.5 hover:shadow-lg"
                         >
-                          HS {hs} ✕
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="font-semibold">{p.label}</div>
+                              <div className="mt-1 text-xs text-muted-foreground">{p.hint}</div>
+                            </div>
+                            <span className="rounded-full border border-border bg-muted px-2 py-1 text-xs text-muted-foreground group-hover:text-foreground">
+                              + ajouter
+                            </span>
+                          </div>
                         </button>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Ajoute 1–3 préfixes HS (2–6 chiffres) pour filtrer au plus près de tes produits.
-                    </p>
-                  )}
-                </div>
+                  </div>
 
-                <Button onClick={handleSavePrefs} disabled={alertsLoading} className="w-full">
-                  {alertsLoading ? "Activation..." : "Activer / mettre à jour ma veille"}
-                </Button>
+                  <Separator />
 
-                <div className="rounded-xl border border-border bg-muted p-4 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">💡 Tip :</span> commence par 1 pays + 1 HS. Tu élargiras ensuite.
-                  <br />
-                  <span className="font-medium text-foreground">⚠️ Disclaimer :</span> info indicative, ne remplace pas conseil juridique/douanier.
-                </div>
-              </CardContent>
-            </Card>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4" /> Pays suivis
+                    </Label>
+
+                    <div className="flex flex-wrap gap-2">
+                      {topCountries.map((c) => (
+                        <button
+                          key={c.iso2}
+                          type="button"
+                          onClick={() => setCountries((prev) => (prev.includes(c.iso2) ? prev : [...prev, c.iso2]))}
+                          className="rounded-full border border-border bg-card px-3 py-1 text-xs hover:bg-muted"
+                        >
+                          + {c.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <Input
+                      value={countryText}
+                      onChange={(e) => setCountryText(e.target.value)}
+                      onBlur={(e) => addCountryFromText(e.target.value)}
+                      placeholder='Recherche : "Suisse (CH)"'
+                      list="countries-list"
+                    />
+
+                    <datalist id="countries-list">
+                      {allCountries.map((c) => (
+                        <option key={c.iso2} value={`${c.label} (${c.iso2})`} />
+                      ))}
+                    </datalist>
+
+                    {countries.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {countries.map((iso2) => (
+                          <button
+                            key={iso2}
+                            type="button"
+                            onClick={() => setCountries((prev) => prev.filter((x) => x !== iso2))}
+                            className="rounded-full border border-border bg-muted px-3 py-1 text-xs text-foreground hover:opacity-80"
+                            title="Cliquer pour retirer"
+                          >
+                            {iso2} ✕
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Ajoute 1–3 pays : plus de signal, moins de bruit.</p>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Hash className="h-4 w-4" /> Préfixes HS suivis
+                    </Label>
+
+                    <div className="flex flex-wrap gap-2">
+                      {HS_SUGGESTIONS.map((x) => (
+                        <button
+                          key={x.hs}
+                          type="button"
+                          onClick={() => setHsCodes((prev) => (prev.includes(x.hs) ? prev : [...prev, x.hs]))}
+                          className="rounded-full border border-border bg-card px-3 py-1 text-xs hover:bg-muted"
+                          title={x.note}
+                        >
+                          + HS {x.hs} <span className="opacity-70">({x.label})</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Input
+                        value={hsInput}
+                        onChange={(e) => setHsInput(e.target.value)}
+                        placeholder="Ex : 30, 3004, 8517"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addHs();
+                          }
+                        }}
+                      />
+                      <Button type="button" onClick={addHs} variant="outline">
+                        Ajouter
+                      </Button>
+                    </div>
+
+                    {hsCodes.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {hsCodes.map((hs) => (
+                          <button
+                            key={hs}
+                            type="button"
+                            onClick={() => setHsCodes((prev) => prev.filter((x) => x !== hs))}
+                            className="rounded-full border border-border bg-muted px-3 py-1 text-xs text-foreground hover:opacity-80"
+                            title="Cliquer pour retirer"
+                          >
+                            HS {hs} ✕
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Ajoute 1–3 préfixes HS (2–6 chiffres) pour filtrer au plus près.</p>
+                    )}
+                  </div>
+
+                  <Button onClick={handleSavePrefs} disabled={alertsLoading} className="w-full">
+                    {alertsLoading ? "Activation..." : "Activer / mettre à jour ma veille"}
+                  </Button>
+
+                  <div className="rounded-xl border border-border bg-muted p-4 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">💡 Tip :</span> commence par 1 pays + 1 HS. Tu élargiras ensuite.
+                    <br />
+                    <span className="font-medium text-foreground">⚠️ Disclaimer :</span> info indicative, ne remplace pas conseil juridique/douanier.
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             {/* ALERTES */}
@@ -1005,26 +982,18 @@ export default function Veille() {
                   Alertes personnalisées
                 </CardTitle>
                 <CardDescription>
-                  {alertsUpdatedAt
-                    ? `Dernière mise à jour : ${formatDateTimeFr(alertsUpdatedAt)}`
-                    : "Aperçu disponible — connecte ton email pour les vraies alertes."}
+                  {alertsUpdatedAt ? `Dernière mise à jour : ${formatDateTimeFr(alertsUpdatedAt)}` : "Aperçu disponible — connecte ton email."}
                 </CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-xs text-muted-foreground">
-                    {emailOk
-                      ? "Alertes liées à tes préférences (pays + HS)."
-                      : "Mode démo : exemple d’alertes (entre ton email pour activer)."}
+                    {emailOk ? "Alertes liées à tes préférences (pays + HS)." : "Mode démo : exemple d’alertes (entre ton email pour activer)."}
                   </div>
                   <div className="flex gap-2">
                     {emailOk ? (
-                      <Button
-                        variant="outline"
-                        onClick={() => loadAlerts(email.trim().toLowerCase())}
-                        disabled={alertsLoading}
-                      >
+                      <Button variant="outline" onClick={() => loadAlerts(email.trim().toLowerCase())} disabled={alertsLoading}>
                         <RefreshCcw className="mr-2 h-4 w-4" />
                         {alertsLoading ? "Chargement..." : "Recharger"}
                       </Button>
@@ -1034,9 +1003,7 @@ export default function Veille() {
                         Activer avec mon email
                       </Button>
                     )}
-                    <Button onClick={() => (window.location.href = "/contact?offer=express")}>
-                      Transformer en action
-                    </Button>
+                    <Button onClick={() => (window.location.href = "/contact?offer=express")}>Transformer en action</Button>
                   </div>
                 </div>
 
@@ -1049,9 +1016,7 @@ export default function Veille() {
                     ))}
                   </div>
                 ) : effectiveAlerts.length === 0 ? (
-                  <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-                    Aucune alerte pour l’instant.
-                  </div>
+                  <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">Aucune alerte pour l’instant.</div>
                 ) : (
                   <div className="space-y-3">
                     {effectiveAlerts.slice(0, 10).map((a) => (
@@ -1064,20 +1029,12 @@ export default function Veille() {
                         </div>
                         <p className="mt-2 text-sm text-muted-foreground">{a.message}</p>
                         <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                          {a.country ? (
-                            <span className="rounded-full border border-border bg-muted px-2 py-1">Pays: {a.country}</span>
-                          ) : null}
-                          {a.hsPrefix ? (
-                            <span className="rounded-full border border-border bg-muted px-2 py-1">HS: {a.hsPrefix}</span>
-                          ) : null}
+                          {a.country ? <span className="rounded-full border border-border bg-muted px-2 py-1">Pays: {a.country}</span> : null}
+                          {a.hsPrefix ? <span className="rounded-full border border-border bg-muted px-2 py-1">HS: {a.hsPrefix}</span> : null}
                           {a.detectedAt ? (
-                            <span className="rounded-full border border-border bg-muted px-2 py-1">
-                              {formatDateTimeFr(a.detectedAt)}
-                            </span>
+                            <span className="rounded-full border border-border bg-muted px-2 py-1">{formatDateTimeFr(a.detectedAt)}</span>
                           ) : null}
-                          {a.source ? (
-                            <span className="rounded-full border border-border bg-muted px-2 py-1">Source: {a.source}</span>
-                          ) : null}
+                          {a.source ? <span className="rounded-full border border-border bg-muted px-2 py-1">Source: {a.source}</span> : null}
                         </div>
                         <div className="mt-4 rounded-xl border border-border bg-muted p-3 text-xs text-muted-foreground">
                           <span className="inline-flex items-center gap-2 font-medium text-foreground">
@@ -1102,7 +1059,7 @@ export default function Veille() {
                   <Search className="h-5 w-5" />
                   Flux & sources
                 </CardTitle>
-                <CardDescription>Recherche rapide dans le flux complet.</CardDescription>
+                <CardDescription>Recherche rapide dans le flux.</CardDescription>
               </CardHeader>
 
               <CardContent className="space-y-4">
@@ -1112,7 +1069,7 @@ export default function Veille() {
                     <Input
                       value={rssQuery}
                       onChange={(e) => setRssQuery(e.target.value)}
-                      placeholder="Rechercher dans le flux (ex : sanctions, embargo, douane, Russie, Iran, dual-use...)"
+                      placeholder="Rechercher (ex : sanctions, embargo, douane, Russie, Iran, dual-use...)"
                       className="pl-9"
                     />
                   </div>
@@ -1130,13 +1087,12 @@ export default function Veille() {
                       <div key={i} className="h-56 rounded-2xl border border-border bg-muted animate-pulse" />
                     ))}
                   </div>
-                ) : filteredFlux.length === 0 ? (
-                  <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-                    Aucun item RSS trouvé (ou /api/rss en erreur).
-                  </div>
+                ) : fluxForGrid.length === 0 ? (
+                  <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">Aucun item trouvé.</div>
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2">
-                    {filteredFlux.slice(0, 12).map((it, idx) => {
+                    {fluxForGrid.map((it, idx) => {
+                      const locked = isTeaser && idx >= TEASER_FREE;
                       const domain = getDomain(it.link) || it.source || "rss";
                       const cover = it.imageUrl || it.image || seededCover(`${domain}-${it.title || idx}`);
                       const favicon = faviconUrlFromLink(it.link);
@@ -1144,9 +1100,12 @@ export default function Veille() {
                       return (
                         <div
                           key={`${it.link || it.title || "item"}_${idx}`}
-                          className="group overflow-hidden rounded-2xl border border-border bg-card transition hover:-translate-y-0.5 hover:shadow-lg"
+                          className={cn(
+                            "group relative overflow-hidden rounded-2xl border border-border bg-card transition hover:-translate-y-0.5 hover:shadow-lg",
+                            locked && "border-dashed"
+                          )}
                         >
-                          <div className="relative h-32">
+                          <div className={cn("relative h-32", locked && "blur-sm")}>
                             <img
                               src={cover}
                               alt=""
@@ -1173,42 +1132,41 @@ export default function Veille() {
                                   <div className="opacity-75">{it.publishedAt ? formatDateTimeFr(it.publishedAt) : ""}</div>
                                 </div>
                               </div>
-                              <span className="rounded-full border border-white/20 bg-white/10 px-2 py-1 text-[11px] text-white/90">
-                                Signal
-                              </span>
+                              <span className="rounded-full border border-white/20 bg-white/10 px-2 py-1 text-[11px] text-white/90">Signal</span>
                             </div>
                           </div>
 
-                          <div className="p-4">
+                          <div className={cn("p-4", locked && "blur-[2px] opacity-70")}>
                             <div className="text-sm font-semibold line-clamp-2">{it.title || "Sans titre"}</div>
-                            {it.summary ? (
-                              <p className="mt-2 text-sm text-muted-foreground line-clamp-3">{it.summary}</p>
-                            ) : null}
+                            {it.summary ? <p className="mt-2 text-sm text-muted-foreground line-clamp-3">{it.summary}</p> : null}
 
                             <div className="mt-4 flex items-center justify-between gap-3">
-                              {it.link ? (
-                                <a
-                                  className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-                                  href={it.link}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
+                              {!locked && it.link ? (
+                                <a className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline" href={it.link} target="_blank" rel="noreferrer">
                                   Lire la source <ExternalLink className="h-4 w-4" />
                                 </a>
                               ) : (
-                                <span className="text-sm text-muted-foreground">Lien indisponible</span>
+                                <span className="text-sm text-muted-foreground">{locked ? "Débloquer pour lire" : "Lien indisponible"}</span>
                               )}
 
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => (window.location.href = "/contact?offer=express")}
+                                onClick={() => (locked ? handleUnlock() : (window.location.href = "/contact?offer=express"))}
                                 className="text-xs"
                               >
-                                Interpréter pour moi
+                                {locked ? "Débloquer" : "Interpréter pour moi"}
                               </Button>
                             </div>
                           </div>
+
+                          {locked ? (
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-[6px]">
+                              <Button onClick={handleUnlock}>
+                                <Lock className="mr-2 h-4 w-4" /> Débloquer
+                              </Button>
+                            </div>
+                          ) : null}
                         </div>
                       );
                     })}
@@ -1220,7 +1178,6 @@ export default function Veille() {
         </section>
       </div>
 
-      {/* Tailwind marquee animation (local) */}
       <style>
         {`
           @keyframes marquee {
