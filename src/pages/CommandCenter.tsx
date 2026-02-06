@@ -106,9 +106,10 @@ function readPrefs(): UserPrefs {
     if (!raw) return null;
     try {
       const parsed = JSON.parse(raw) as any;
-      const countries = Array.isArray(parsed?.countries)
-        ? Array.from(new Set(parsed.countries.map(normalizeCountryCode))).filter(Boolean)
-        : [];
+      const rawCountries = Array.isArray(parsed?.countries) ? parsed.countries : [];
+      const countries: string[] = Array.from(
+        new Set(rawCountries.map(normalizeCountryCode).filter((c): c is string => Boolean(c)))
+      );
       const hsCodes = normalizeHsList(parsed?.hsCodes);
       const direction = parsed?.direction as UserPrefs["direction"];
       const hsMode = parsed?.hsMode ?? null;

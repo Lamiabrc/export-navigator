@@ -124,18 +124,19 @@ export function computeLandedCost(input: SimulationInput): SimulationResult {
   const vatBaseEur = round2(customsValueEur + dutyEur + importClearance + handling + otherFees);
   const vatEur = round2((vatBaseEur * vatRate) / 100);
 
-  const lines: CostLine[] = [
-    { key: "goods", label: labelMap.goods, amountEur: goodsValueEur },
-    { key: "preCarriage", label: labelMap.preCarriage, amountEur: preCarriage },
-    { key: "mainCarriage", label: labelMap.mainCarriage, amountEur: mainCarriage },
-    { key: "insurance", label: labelMap.insurance, amountEur: insurance },
-    { key: "exportClearance", label: labelMap.exportClearance, amountEur: exportClearance },
-    { key: "importClearance", label: labelMap.importClearance, amountEur: importClearance },
-    { key: "handling", label: labelMap.handling, amountEur: handling },
-    { key: "otherFees", label: labelMap.otherFees, amountEur: otherFees },
-    { key: "duty", label: labelMap.duty, amountEur: dutyEur },
-    { key: "vat", label: labelMap.vat, amountEur: vatEur },
-  ].filter((l) => l.amountEur > 0.001);
+  const allLines: CostLine[] = [
+    { key: "goods" as const, label: labelMap.goods, amountEur: goodsValueEur },
+    { key: "preCarriage" as const, label: labelMap.preCarriage, amountEur: preCarriage },
+    { key: "mainCarriage" as const, label: labelMap.mainCarriage, amountEur: mainCarriage },
+    { key: "insurance" as const, label: labelMap.insurance, amountEur: insurance },
+    { key: "exportClearance" as const, label: labelMap.exportClearance, amountEur: exportClearance },
+    { key: "importClearance" as const, label: labelMap.importClearance, amountEur: importClearance },
+    { key: "handling" as const, label: labelMap.handling, amountEur: handling },
+    { key: "otherFees" as const, label: labelMap.otherFees, amountEur: otherFees },
+    { key: "duty" as const, label: labelMap.duty, amountEur: dutyEur },
+    { key: "vat" as const, label: labelMap.vat, amountEur: vatEur },
+  ];
+  const lines = allLines.filter((l) => l.amountEur > 0.001);
 
   const totalLandedCostEur = round2(lines.reduce((s, l) => s + l.amountEur, 0));
   const unitLandedCostEur = round2(totalLandedCostEur / qty);
