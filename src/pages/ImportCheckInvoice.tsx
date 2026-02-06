@@ -1,391 +1,534 @@
-import { useMemo, useState } from "react";
+import * as React from "react";
+import { Link } from "react-router-dom";
 
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { useI18n } from "@/contexts/LanguageContext";
-import { usePlan } from "@/auth/PlanContext";
-import { recordSimulation, getQuotaUsage, getQuotaLimit } from "@/lib/quota";
-import { saveHistory } from "@/lib/history";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
-type LineItem = {
-  description: string;
-  quantity: number;
-  unitPrice: number;
-};
+type FeatureCard = { title: string; description: string };
 
-const defaultLines: LineItem[] = [
-  { description: "Produit modèle", quantity: 1, unitPrice: 0 },
-];
+export default function Home() {
+  const { t, lang } = useI18n();
+  const isEN = lang === "en";
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const [shouldLoadVideo, setShouldLoadVideo] = React.useState(false);
+  const heroRef = React.useRef<HTMLDivElement | null>(null);
 
-export default function ImportCheckInvoice() {
-  const { t } = useI18n();
-  const { plan } = usePlan();
+  usePageMeta("meta.home.title", "meta.home.description");
 
-  const [invoice, setInvoice] = useState({
-    currency: "EUR",
-    supplierCountry: "",
-    incoterm: "EXW",
-    invoiceTotal: "",
-  });
-  const [lines, setLines] = useState<LineItem[]>(defaultLines);
-  const [ancillaries, setAncillaries] = useState({
-    freight: 0,
-    insurance: 0,
-    handling: 0,
-    storage: 0,
-    other: 0,
-  });
-  const [taxes, setTaxes] = useState({ dutiesPercent: 5, vatPercent: 20 });
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-
-  const featureTranslationsRaw = t("importWizard");
-  const featureTranslations = (typeof featureTranslationsRaw === "object" && featureTranslationsRaw !== null
-    ? (featureTranslationsRaw as unknown as {
-        title?: string;
-        subtitle?: string;
-        steps?: string[];
-        scoreLabel?: string;
-        resultLabel?: string;
-        warningsTitle?: string;
-        actionsTitle?: string;
-        saveButton?: string;
-        usageLabel?: string;
-        warnings?: Record<string, string>;
-        actions?: Record<string, string>;
-      })
-    : {}) as {
-    title: string;
-    subtitle: string;
-    steps: string[];
-    scoreLabel: string;
-    resultLabel: string;
-    warningsTitle: string;
-    actionsTitle: string;
-    saveButton: string;
-    usageLabel: string;
-    warnings: Record<string, string>;
-    actions: Record<string, string>;
+  // ✅ Robust i18n fallback (si la clé renvoie "heroLanding.title", on prend le fallback)
+  const tt = (key: string, frFallback: string, enFallback: string) => {
+    try {
+      const v = t(key as any) as any;
+      if (!v || typeof v !== "string" || v === key) return isEN ? enFallback : frFallback;
+      return v;
+    } catch {
+      return isEN ? enFallback : frFallback;
+    }
   };
 
-  const goodsTotal = useMemo(
-    () => lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0),
-    [lines],
+  // ✅ Positionnement plus général (import/export / commerce international)
+  const heroTitle = tt(
+    "heroLanding.title",
+    "Votre cockpit import / export, prêt en 24 h.",
+    "Your import/export cockpit, ready in 24 hours."
   );
-  const declaredTotal = Number(invoice.invoiceTotal) || goodsTotal;
-  const ancillaryTotal = Object.values(ancillaries).reduce((sum, value) => sum + Number(value || 0), 0);
-  const duties = (goodsTotal * (taxes.dutiesPercent || 0)) / 100;
-  const vat = (goodsTotal + ancillaryTotal + duties) * ((taxes.vatPercent || 0) / 100);
-  const landedCost = goodsTotal + ancillaryTotal + duties + vat;
-  const rangeMin = landedCost * 0.92;
-  const rangeMax = landedCost * 1.08;
 
-  const warnings = useMemo<string[]>(() => {
-    const list: string[] = [];
-    if (!invoice.supplierCountry) {
-      list.push((t("importWizard.warnings.missingSupplier") as string) ?? "Fournisseur manquant");
-    }
-    if (!invoice.incoterm) {
-      list.push((t("importWizard.warnings.missingIncoterm") as string) ?? "Incoterm absent");
-    }
-    if (lines.some((line) => line.quantity <= 0 || line.unitPrice <= 0)) {
-      list.push((t("importWizard.warnings.lowUnitPrice") as string) ?? "Prix unitaire bas");
-    }
-    if (Math.abs(declaredTotal - goodsTotal) > goodsTotal * 0.05) {
-      list.push((t("importWizard.warnings.mismatchTotals") as string) ?? "Totaux incohérents");
-    }
-    if (
-      ["EXW", "FCA"].includes(invoice.incoterm.toUpperCase()) &&
-      Number(ancillaries.freight || 0) > 0
-    ) {
-      list.push((t("importWizard.warnings.unexpectedFreight") as string) ?? "Frais logistiques déjà inclus");
-    }
-    return list;
-  }, [invoice, lines, ancillaries, declaredTotal, goodsTotal, t]);
+  const heroSubtitle = tt(
+    "heroLanding.subtitle",
+    "Cockpit réglé sur vos produits et marchés : coûts, taxes, documents, risques. Vous décidez vite.",
+    "Cockpit tuned to your products and markets: costs, taxes, documents, risks. Decide faster."
+  );
 
-  const score = useMemo(() => {
-    let value = 100;
-    value -= warnings.length * 10;
-    value -= invoice.currency ? 0 : 5;
-    return Math.max(0, Math.min(100, Math.round(value)));
-  }, [warnings, invoice.currency]);
+  const heroPrimary = tt("heroLanding.ctaPrimary", "Voir le cockpit", "View the cockpit");
+  const heroSecondary = tt("heroLanding.ctaSecondary", "Offre en ligne 65 €/mois", "Online plan €65/mo");
 
-  const formatQuotaMessage = () => {
-    const template = (t("quotas.usage") as string) ?? "";
-    const usage = getQuotaUsage(plan);
-    const limit = getQuotaLimit(plan);
-    return template.replace("%s", String(usage)).replace("%s", String(limit));
-  };
+  // Bullets (fallback si i18n vide)
+  const heroBulletsRaw = t("heroLanding.bullets");
+  const heroBullets: string[] =
+    Array.isArray(heroBulletsRaw) && heroBulletsRaw.length
+      ? (heroBulletsRaw as string[])
+      : isEN
+        ? [
+            "Profile set by market & HS",
+            "Landed cost + Incoterms alerts",
+            "Clear document checklist",
+            "Targeted compliance watch",
+          ]
+        : [
+            "Profil réglé par marché & HS",
+            "Coût rendu + alertes Incoterms",
+            "Checklist documents claire",
+            "Veille conformité ciblée",
+          ];
 
-  const handleSave = () => {
-    const usage = getQuotaUsage(plan);
-    const limit = getQuotaLimit(plan);
-    if (usage >= limit) {
-      setStatusMessage(t("quotas.limitReached") as string);
-      return;
-    }
+  // Feature cards (fallback si i18n vide)
+  const featureCardsRaw = t("heroLanding.featureCards");
+  const featureCardsFromI18n: FeatureCard[] = Array.isArray(featureCardsRaw)
+    ? (featureCardsRaw as unknown as FeatureCard[])
+    : [];
 
-    const result = recordSimulation(plan);
-    saveHistory(plan, {
-      title: `Facture ${invoice.incoterm}`,
-      summary: `Fournisseur ${invoice.supplierCountry || "à renseigner"}, ${lines.length} lignes`,
-      score,
-      landedCost,
-    });
+  const featureCards: FeatureCard[] =
+    featureCardsFromI18n.length > 0
+      ? featureCardsFromI18n
+      : isEN
+        ? [
+            { title: "Costs & margins", description: "Fast scenarios: taxes, duties, transport, margin impact." },
+            { title: "Documents & compliance", description: "Clear checklist, required docs, anomalies to fix." },
+            { title: "Market steering", description: "Read by market/HS, obligations and risk flags per flow." },
+          ]
+        : [
+            { title: "Coûts & marges", description: "Scénarios rapides : taxes, droits, transport, impact marge." },
+            { title: "Documents & conformité", description: "Checklist claire, pièces à fournir, anomalies à corriger." },
+            { title: "Pilotage par marché", description: "Lecture par marché/HS, obligations et alertes risques." },
+          ];
 
-    setStatusMessage(`Simulation enregistrée (${result.usage}/${result.limit})`);
-  };
+  const proofTitle = tt("heroLanding.proofTitle", "Ce que le cockpit automatise", "What the cockpit automates");
 
-  const addLine = () => setLines((prev) => [...prev, { description: "", quantity: 1, unitPrice: 0 }]);
-  const updateLine = (index: number, field: keyof LineItem, value: string | number) => {
-    setLines((prev) =>
-      prev.map((line, i) =>
-        i === index ? { ...line, [field]: field === "description" ? value : Number(value) } : line,
-      ),
+  const proofDescriptionRaw = t("heroLanding.proofDescription");
+  const proofDescription =
+    typeof proofDescriptionRaw === "string" && proofDescriptionRaw && proofDescriptionRaw !== "heroLanding.proofDescription"
+      ? proofDescriptionRaw
+      : isEN
+        ? "A cockpit that removes manual routines: costs, compliance, documents, watch."
+        : "Un cockpit qui remplace les routines manuelles : coûts, conformité, documents, veille.";
+
+  const proofItemsRaw = t("heroLanding.proofItems");
+  const proofItemsFromI18n: Array<{ title: string; description: string }> =
+    Array.isArray(proofItemsRaw) && proofItemsRaw.length > 0 && typeof proofItemsRaw[0] === "object"
+      ? (proofItemsRaw as unknown as Array<{ title: string; description: string }>)
+      : [];
+
+  const proofItems: Array<{ title: string; description: string }> =
+    proofItemsFromI18n.length > 0
+      ? proofItemsFromI18n
+      : isEN
+        ? [
+            { title: "Landed cost", description: "Quick scenarios: market, value, transport, fees & duties." },
+            { title: "Incoterms", description: "Flags hidden costs + responsibilities that create disputes." },
+            { title: "Document checklist", description: "Invoice, packing list, origin, transport docs — what’s needed." },
+            { title: "Watch signals", description: "Sanctions & regulatory signals to avoid last-minute surprises." },
+          ]
+        : [
+            { title: "Coût rendu", description: "Scénarios rapides : marché, valeur, transport, frais & droits." },
+            { title: "Incoterms", description: "Alerte sur coûts cachés + responsabilités à risque." },
+            { title: "Checklist documents", description: "Facture, packing list, origine, transport — indispensables." },
+            { title: "Veille & signaux", description: "Sanctions & signaux réglementaires pour éviter la surprise." },
+          ];
+
+  // Contact direct
+  const phoneRaw = "0676435551";
+  const phonePretty = "06 76 43 55 51";
+  const emailMain = "contact@exportfrancefacile.com";
+
+  React.useEffect(() => {
+    if (prefersReducedMotion) return;
+
+    const node = heroRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setShouldLoadVideo(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px" }
     );
-  };
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [prefersReducedMotion]);
 
   return (
     <MarketingLayout>
-      <section className="bg-white py-16">
-        <div className="mx-auto max-w-5xl px-6 text-center">
-          <p className="text-xs uppercase tracking-[0.6em] text-[#1E3A8A]">Import Checker</p>
-          <h1 className="mt-3 text-4xl font-semibold text-[#0B1220]">{featureTranslations.title}</h1>
-          <p className="mt-4 text-sm text-slate-600">{featureTranslations.subtitle}</p>
+      {/* HERO */}
+      <section className="relative min-h-[88vh] overflow-hidden text-white" ref={heroRef}>
+        <div className="absolute inset-0">
+          {!prefersReducedMotion && shouldLoadVideo ? (
+            <video
+              className="h-full w-full object-cover"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="none"
+              poster="/videos/hero-export.jpg"
+            >
+              <source src="/videos/hero-export.webm" type="video/webm" />
+              <source src="/videos/hero-export.mp4" type="video/mp4" />
+            </video>
+          ) : (
+            <div
+              className="absolute inset-0 bg-gradient-to-br from-[#0B1220] via-[#1E3A8A] to-[#0B1220]"
+              style={{
+                backgroundImage: "url(/videos/hero-export.jpg)",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }}
+              aria-hidden
+            />
+          )}
+
+          {/* overlays */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0B1220]/85 via-[#0B1220]/70 to-[#0B1220]/90" aria-hidden />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.10),transparent_55%)]" aria-hidden />
+          <div
+            className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:64px_64px] opacity-20"
+            aria-hidden
+          />
         </div>
 
-        <div className="mx-auto mt-10 max-w-6xl px-6">
-          <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="space-y-6 rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-lg">
-              <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2">
-                <label className="space-y-2 text-sm text-slate-500">
-                  Devise
-                  <input
-                    value={invoice.currency}
-                    onChange={(event) =>
-                      setInvoice((prev) => ({ ...prev, currency: event.target.value.toUpperCase() }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                  />
-                </label>
-                <label className="space-y-2 text-sm text-slate-500">
-                  Pays fournisseur
-                  <input
-                    value={invoice.supplierCountry}
-                    onChange={(event) =>
-                      setInvoice((prev) => ({ ...prev, supplierCountry: event.target.value }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                  />
-                </label>
-              </div>
+        <div className="relative z-10 mx-auto flex min-h-[88vh] max-w-5xl flex-col items-center justify-center gap-6 px-6 text-center">
+          <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold tracking-[0.2em] text-white/70">
+            MPL Export Navigator
+            <span className="hidden rounded-full bg-white/10 px-2 py-1 text-[10px] tracking-[0.3em] text-white/70 sm:inline">
+              {heroSecondary}
+            </span>
+          </p>
 
-              <div className="space-y-2 text-sm text-slate-500">
-                <label className="block text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
-                  Incoterm
-                </label>
-                <select
-                  value={invoice.incoterm}
-                  onChange={(event) => setInvoice((prev) => ({ ...prev, incoterm: event.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                >
-                  {["EXW", "FCA", "CPT", "DAP", "DDP"].map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <h1 className="text-4xl font-semibold font-display leading-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
+            {heroTitle}
+          </h1>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs uppercase tracking-[0.4em] text-slate-500">
-                  <span>Lignes de facture</span>
-                  <button
-                    type="button"
-                    onClick={addLine}
-                    className="rounded-full border border-slate-200 px-3 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-slate-600"
-                  >
-                    Ajouter
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  {lines.map((line, index) => (
-                    <div key={index} className="grid gap-3 md:grid-cols-3">
-                      <input
-                        placeholder="Description"
-                        value={line.description}
-                        onChange={(event) => updateLine(index, "description", event.target.value)}
-                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        value={line.quantity}
-                        onChange={(event) => updateLine(index, "quantity", Number(event.target.value))}
-                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                      />
-                      <input
-                        type="number"
-                        min={0}
-                        value={line.unitPrice}
-                        onChange={(event) => updateLine(index, "unitPrice", Number(event.target.value))}
-                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
+          <p className="max-w-3xl text-lg leading-relaxed text-white/80 md:text-xl">{heroSubtitle}</p>
 
-              <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 md:grid-cols-2">
-                <label className="space-y-2">
-                  Fret estimé
-                  <input
-                    type="number"
-                    min={0}
-                    value={ancillaries.freight}
-                    onChange={(event) =>
-                      setAncillaries((prev) => ({ ...prev, freight: Number(event.target.value) }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="space-y-2">
-                  Assurance
-                  <input
-                    type="number"
-                    min={0}
-                    value={ancillaries.insurance}
-                    onChange={(event) =>
-                      setAncillaries((prev) => ({ ...prev, insurance: Number(event.target.value) }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="space-y-2">
-                  Manutention
-                  <input
-                    type="number"
-                    min={0}
-                    value={ancillaries.handling}
-                    onChange={(event) =>
-                      setAncillaries((prev) => ({ ...prev, handling: Number(event.target.value) }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="space-y-2">
-                  Stockage & autres
-                  <input
-                    type="number"
-                    min={0}
-                    value={ancillaries.storage}
-                    onChange={(event) =>
-                      setAncillaries((prev) => ({ ...prev, storage: Number(event.target.value) }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                  />
-                </label>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="space-y-2 text-sm text-slate-500">
-                  Droits (%){" "}
-                  <input
-                    type="number"
-                    min={0}
-                    max={50}
-                    value={taxes.dutiesPercent}
-                    onChange={(event) =>
-                      setTaxes((prev) => ({ ...prev, dutiesPercent: Number(event.target.value) }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                  />
-                </label>
-                <label className="space-y-2 text-sm text-slate-500">
-                  TVA (%){" "}
-                  <input
-                    type="number"
-                    min={0}
-                    max={50}
-                    value={taxes.vatPercent}
-                    onChange={(event) =>
-                      setTaxes((prev) => ({ ...prev, vatPercent: Number(event.target.value) }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                  />
-                </label>
-              </div>
-
-              <label className="space-y-2 text-sm text-slate-500">
-                Total déclaré
-                <input
-                  type="number"
-                  min={0}
-                  value={invoice.invoiceTotal}
-                  onChange={(event) =>
-                    setInvoice((prev) => ({ ...prev, invoiceTotal: event.target.value }))
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
-                />
-              </label>
+          <div className="mt-2 max-w-3xl">
+            <div className="rounded-3xl border border-white/15 bg-white/5 p-4 text-left">
+              <p className="text-xs font-semibold tracking-[0.2em] text-white/60">
+                {isEN ? "Simple promise" : "Promesse simple"}
+              </p>
+              <p className="mt-2 text-sm text-white/85">
+                {isEN
+                  ? "Less stress before you commit: a clear GO/NO GO and the exact fixes to apply."
+                  : "Moins de stress avant de vous engager : un GO/NO GO clair + les corrections à appliquer."}
+              </p>
             </div>
+          </div>
 
-            <div className="space-y-6 rounded-3xl border border-slate-200 bg-slate-900/95 p-6 text-white shadow-2xl">
-              <div className="space-y-4">
-                <p className="text-xs uppercase tracking-[0.7em] text-white/60">{featureTranslations.scoreLabel}</p>
-                <div className="flex items-center justify-center">
-                  <span className="text-5xl font-bold">{score}</span>
-                  <span className="ml-3 text-sm text-white/70">/100</span>
-                </div>
+          <div className="mt-4 grid w-full max-w-3xl grid-cols-1 gap-2 text-xs font-semibold tracking-[0.2em] text-white/80 md:grid-cols-2">
+            {heroBullets.map((bullet) => (
+              <div key={bullet} className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2">
+                {bullet}
               </div>
+            ))}
+          </div>
 
-              <div className="rounded-2xl border border-white/20 bg-white/5 p-4 text-sm text-white/80">
-                <p className="text-xs uppercase tracking-[0.5em] text-white/50">{featureTranslations.resultLabel}</p>
-                <p className="mt-2 text-3xl font-semibold">{landedCost.toFixed(0)} €</p>
-                <p className="text-xs text-white/60">
-                  {rangeMin.toFixed(0)} € — {rangeMax.toFixed(0)} €
-                </p>
-                <ul className="mt-4 space-y-1 text-xs text-white/70">
-                  <li>Marchandises : {goodsTotal.toFixed(0)} €</li>
-                  <li>Annexes : {ancillaryTotal.toFixed(0)} €</li>
-                  <li>Droits : {duties.toFixed(0)} € · TVA : {vat.toFixed(0)} €</li>
-                </ul>
-              </div>
+          <div className="flex flex-wrap justify-center gap-4 text-xs font-semibold tracking-[0.2em] md:text-sm">
+            <Link to="/tool" className="rounded-full bg-[#DC2626] px-7 py-3 text-white transition hover:bg-[#b0231d]">
+              {heroPrimary}
+            </Link>
+            <Link
+              to="/pricing"
+              className="rounded-full border border-white/80 px-7 py-3 text-white transition hover:border-white"
+            >
+              {heroSecondary}
+            </Link>
+          </div>
 
-              <div className="space-y-3 rounded-2xl border border-white/20 bg-white/5 p-4 text-left text-sm text-white/80">
-                <p className="text-xs uppercase tracking-[0.5em] text-white/50">{featureTranslations.warningsTitle}</p>
-                <ul className="space-y-2">
-                  {warnings.length === 0 ? (
-                    <li className="text-white/70">Aucune alerte détectée.</li>
-                  ) : (
-                    warnings.map((warning) => (
-                      <li key={warning} className="text-white/80">
-                        • {warning}
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </div>
+          {/* PROOF BAR */}
+          <div className="mt-6 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
+              <p className="text-xs font-semibold tracking-[0.2em] text-white/60">{isEN ? "Costs" : "Coûts"}</p>
+              <p className="mt-1 text-sm text-white/85">
+                {isEN ? "Landed cost scenarios in minutes." : "Scénarios de coût rendu en quelques minutes."}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
+              <p className="text-xs font-semibold tracking-[0.2em] text-white/60">{isEN ? "Risks" : "Risques"}</p>
+              <p className="mt-1 text-sm text-white/85">
+                {isEN ? "Incoterms / taxes / compliance traps flagged." : "Pièges Incoterms / taxes / conformité détectés."}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
+              <p className="text-xs font-semibold tracking-[0.2em] text-white/60">{isEN ? "Action" : "Action"}</p>
+              <p className="mt-1 text-sm text-white/85">
+                {isEN ? "Checklist + GO/NO GO output." : "Checklist + sortie GO/NO GO."}
+              </p>
+            </div>
+          </div>
 
-              <div className="space-y-3 rounded-2xl border border-white/20 bg-white/5 p-4 text-left text-sm text-white/80">
-                <p className="text-xs uppercase tracking-[0.5em] text-white/50">{featureTranslations.actionsTitle}</p>
-                <ul className="space-y-2">
-                  {(Object.values(featureTranslations.actions) as string[]).map((action) => (
-                    <li key={action}>{action}</li>
-                  ))}
-                </ul>
-              </div>
+          {/* CONTACT STRIP */}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-xs font-semibold tracking-[0.2em] text-white/70">
+            <a
+              href={`tel:${phoneRaw}`}
+              className="rounded-full border border-white/15 bg-white/5 px-4 py-2 transition hover:bg-white/10"
+            >
+              {isEN ? "Call" : "Appeler"} {phonePretty}
+            </a>
+            <a
+              href={`mailto:${emailMain}`}
+              className="rounded-full border border-white/15 bg-white/5 px-4 py-2 transition hover:bg-white/10"
+            >
+              {emailMain}
+            </a>
+            <Link
+              to="/contact?offer=diagnostic"
+              className="rounded-full border border-white/20 px-4 py-2 text-white/80 transition hover:border-white/60"
+            >
+              {isEN ? "Express audit" : "Audit express"}
+            </Link>
+          </div>
+        </div>
+      </section>
 
-              <p className="text-xs uppercase tracking-[0.3em] text-white/60">{formatQuotaMessage()}</p>
-              <button
-                type="button"
-                onClick={handleSave}
-                className="w-full rounded-full bg-[#DC2626] px-4 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-[#b0231d]"
+      {/* AUTOMATION PROOF */}
+      <section className="bg-white py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs font-semibold tracking-[0.2em] text-[#1E3A8A]">{proofTitle}</p>
+              <p className="mt-2 text-sm text-slate-600">{proofDescription}</p>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-3 md:mt-0">
+              <Link
+                to="/pricing"
+                className="rounded-full bg-[#1E3A8A] px-6 py-3 text-xs font-semibold tracking-[0.2em] text-white transition hover:bg-[#162864]"
               >
-                {featureTranslations.saveButton}
-              </button>
-              {statusMessage && (
-                <p className="text-center text-xs text-white/70">{statusMessage}</p>
-              )}
+                {isEN ? "See €65 plan" : "Voir l’offre 65€"}
+              </Link>
+              <Link
+                to="/veille"
+                className="rounded-full border border-[#1E3A8A]/30 px-6 py-3 text-xs font-semibold tracking-[0.2em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
+              >
+                {isEN ? "View watch" : "Voir la veille"}
+              </Link>
             </div>
+          </div>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            {proofItems.map((item) => (
+              <article
+                key={item.title}
+                className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm"
+              >
+                <h3 className="text-lg font-semibold text-[#1E3A8A]">{item.title}</h3>
+                <p className="text-sm text-slate-600">{item.description}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FOCUS */}
+      <section className="bg-white py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-xs font-semibold tracking-[0.2em] text-[#1E3A8A]">Focus</h2>
+              <p className="mt-2 text-3xl font-semibold font-display text-[#0B1220]">
+                {isEN ? "Clear view, fast decisions" : "Vue claire, décisions rapides"}
+              </p>
+              <p className="mt-2 max-w-2xl text-sm text-slate-600">
+                {isEN
+                  ? "Operational view: costs, risk flags, and what to fix before you commit."
+                  : "Une lecture opérationnelle : coûts, alertes risques, et ce qu’il faut corriger avant de vous engager."}
+              </p>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3 md:mt-0">
+              <Link
+                to="/import/check-invoice"
+                className="rounded-full bg-[#1E3A8A] px-6 py-3 text-xs font-semibold tracking-[0.2em] text-white transition hover:bg-[#162864]"
+              >
+                {isEN ? "Check an invoice" : "Vérifier une facture"}
+              </Link>
+              <Link
+                to="/tool"
+                className="rounded-full border border-[#1E3A8A]/30 px-6 py-3 text-xs font-semibold tracking-[0.2em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
+              >
+                {isEN ? "Run the analysis" : "Lancer l’analyse"}
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-3">
+            {featureCards.map((card) => (
+              <article
+                key={card.title}
+                className="group flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
+              >
+                <div className="h-1 w-12 rounded-full bg-[#1E3A8A]/80" />
+                <h3 className="text-xl font-semibold text-[#1E3A8A]">{card.title}</h3>
+                <p className="text-sm text-slate-600">{card.description}</p>
+                <div className="mt-3 flex items-center gap-3">
+                  <Link
+                    to="/tool"
+                    className="text-xs font-semibold tracking-[0.2em] text-[#0B1220]/70 transition group-hover:text-[#0B1220]"
+                  >
+                    {isEN ? "Try →" : "Essayer →"}
+                  </Link>
+                  <span className="text-xs text-slate-400">•</span>
+                  <Link
+                    to="/pricing"
+                    className="text-xs font-semibold tracking-[0.2em] text-[#1E3A8A]/80 transition hover:text-[#1E3A8A]"
+                  >
+                    {isEN ? "€65/mo" : "65€/mois"}
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* HOW IT WORKS */}
+      <section className="bg-slate-50 py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <h3 className="text-xs font-semibold tracking-[0.2em] text-slate-500">
+            {isEN ? "How it works" : "Comment ça marche"}
+          </h3>
+          <p className="mt-2 text-3xl font-semibold font-display text-slate-900">
+            {isEN ? "3 steps, no hassle" : "3 étapes, sans prise de tête"}
+          </p>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-3">
+            <div className="rounded-3xl border border-slate-200 bg-white p-6">
+              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">{isEN ? "Step 1" : "Étape 1"}</p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {isEN ? "Choose market & context" : "Choisir marché & contexte"}
+              </p>
+              <p className="mt-2 text-sm text-slate-600">
+                {isEN ? "Destination + operation type (import/export)." : "Destination + type d’opération (import/export)."}
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-6">
+              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">{isEN ? "Step 2" : "Étape 2"}</p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {isEN ? "Import / check an invoice" : "Importer / vérifier une facture"}
+              </p>
+              <p className="mt-2 text-sm text-slate-600">
+                {isEN ? "Quick checks + alerts on inconsistencies." : "Contrôles rapides + alertes si incohérences."}
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-6">
+              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">{isEN ? "Step 3" : "Étape 3"}</p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">{isEN ? "Decide & act" : "Décider & agir"}</p>
+              <p className="mt-2 text-sm text-slate-600">
+                {isEN ? "GO / NO GO + clear next actions." : "GO / NO GO + recommandations concrètes."}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              to="/tool"
+              className="rounded-full bg-[#DC2626] px-6 py-3 text-xs font-semibold tracking-[0.2em] text-white transition hover:bg-[#b0231d]"
+            >
+              {isEN ? "Start now" : "Démarrer maintenant"}
+            </Link>
+            <Link
+              to="/pricing"
+              className="rounded-full border border-slate-300 bg-white px-6 py-3 text-xs font-semibold tracking-[0.2em] text-slate-800 transition hover:border-slate-500"
+            >
+              {isEN ? "Plans & limits" : "Offres & limites"}
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* SOURCES / TRUST */}
+      <section className="bg-white py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <h3 className="text-xs font-semibold tracking-[0.2em] text-[#1E3A8A]">{isEN ? "Trust" : "Confiance"}</h3>
+          <p className="mt-2 text-3xl font-semibold font-display text-[#0B1220]">
+            {isEN ? "Compliance & watch, at the right place" : "Conformité & veille, au bon endroit"}
+          </p>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            {isEN
+              ? "Goal: reliable, actionable references. For sensitive cases, an expert can validate."
+              : "Objectif : des repères fiables et actionnables. Pour les cas sensibles, une experte peut valider."}
+          </p>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-3">
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">
+                {isEN ? "Customs / Taxes" : "Douanes / Taxes"}
+              </p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {isEN ? "Rules & obligations" : "Règles & obligations"}
+              </p>
+              <p className="mt-2 text-sm text-slate-600">
+                {isEN
+                  ? "Spot risk areas (taxes, statements, proof, local rules)."
+                  : "Repérez les zones à risque (taxes, mentions, justificatifs, règles locales)."}
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">Incoterms</p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {isEN ? "Responsibilities & costs" : "Responsabilités & coûts"}
+              </p>
+              <p className="mt-2 text-sm text-slate-600">
+                {isEN
+                  ? "Clarifies who pays what and where hidden costs appear."
+                  : "Clarifie qui paie quoi, et où se cachent les coûts classiques."}
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">
+                {isEN ? "Compliance" : "Conformité"}
+              </p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {isEN ? "Sanctions / vigilance" : "Sanctions / vigilance"}
+              </p>
+              <p className="mt-2 text-sm text-slate-600">
+                {isEN ? "Signals & control points before you commit." : "Signaux & points de contrôle avant de vous engager."}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FINAL CTA */}
+      <section className="py-16">
+        <div className="mx-auto max-w-5xl px-6 text-center">
+          <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">{isEN ? "Next steps" : "Étapes suivantes"}</p>
+          <h3 className="mt-3 text-3xl font-semibold font-display text-slate-900">
+            {isEN ? "Need an expert?" : "Besoin d’un expert ?"}
+          </h3>
+          <p className="mt-2 text-slate-600">
+            {isEN
+              ? "The tool gives a first view. For higher-risk operations (DDP, sanctions, sensitive goods), get an express validation."
+              : "L’outil donne une première vue. Pour une opération à risque (DDP, sanctions, produit sensible), demandez une validation express."}
+          </p>
+
+          <div className="mt-6 flex flex-wrap justify-center gap-4">
+            <Link
+              to="/tool"
+              className="rounded-full bg-[#DC2626] px-6 py-3 text-xs font-semibold tracking-[0.2em] text-white transition hover:bg-[#b0231d]"
+            >
+              {isEN ? "Run the tool" : "Lancer l’outil"}
+            </Link>
+            <Link
+              to="/pricing"
+              className="rounded-full border border-[#1E3A8A]/60 px-6 py-3 text-xs font-semibold tracking-[0.2em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
+            >
+              {isEN ? "Online plan €65/mo" : "Offre en ligne 65€/mois"}
+            </Link>
+            <Link
+              to="/contact?offer=diagnostic"
+              className="rounded-full border border-slate-300 bg-white px-6 py-3 text-xs font-semibold tracking-[0.2em] text-slate-800 transition hover:border-slate-500"
+            >
+              {isEN ? "Express validation" : "Validation express"}
+            </Link>
+          </div>
+
+          <div className="mt-6 text-xs text-slate-500">
+            {isEN ? "Direct email:" : "Email direct :"}{" "}
+            <a className="underline" href={`mailto:${emailMain}`}>
+              {emailMain}
+            </a>
+            {" • "}
+            <a className="underline" href={`tel:${phoneRaw}`}>
+              {phonePretty}
+            </a>
           </div>
         </div>
       </section>
