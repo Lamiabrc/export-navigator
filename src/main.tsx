@@ -23,8 +23,8 @@ const applyTheme = () => {
       localStorage.setItem(THEME_STORAGE_KEY, theme);
     }
   } catch {
-    // si localStorage indisponible, on reste sur le thème par défaut
-    document.documentElement.classList.toggle("dark", DEFAULT_THEME === "dark");
+    // si localStorage indisponible, on reste sur le thème par défaut (light)
+    document.documentElement.classList.remove("dark");
   }
 };
 

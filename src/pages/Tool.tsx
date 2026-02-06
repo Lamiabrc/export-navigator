@@ -1,323 +1,330 @@
 import { Link } from "react-router-dom";
-import type { ReactNode } from "react";
-import { CheckCircle2, AlertTriangle, Sparkles, ShieldCheck } from "lucide-react";
+import {
+  CheckCircle2,
+  AlertTriangle,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  FileCheck2,
+  BellRing,
+} from "lucide-react";
 
-import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { PremiumMarketingLayout } from "@/components/marketing/PremiumMarketingLayout";
+import { SectionPremium } from "@/components/marketing/SectionPremium";
+import { FeatureGridPremium } from "@/components/marketing/FeatureGridPremium";
+import { StepsPremium } from "@/components/marketing/StepsPremium";
+import { CTAStripPremium } from "@/components/marketing/CTAStripPremium";
 import { useI18n } from "@/contexts/LanguageContext";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-
-const FALLBACK_FEATURES = ["Calcul rapide", "Ventilation détaillée", "Avertissements", "Décision facilitée"];
-
-const FALLBACK_LIMITATIONS = [
-  "Les tarifs réels varient selon devis et saison (fret, assurances).",
-  "Les droits/TVA dépendent du classement (HS), origine, accords, régimes.",
-  "Certains pays/produits nécessitent licences, contrôles, docs spécifiques.",
-  "Les sanctions/embargos et règles de conformité doivent être vérifiés.",
-];
-
-const FALLBACK_AUDIT = [
-  "Montants importants / marge serrée",
-  "Nouveau pays ou nouveau produit",
-  "Doute HS code / origine / accords préférentiels",
-  "Risque sanctions / exigences documentaires",
-];
-
-function toStringArray(v: unknown, fallback: string[] = []): string[] {
-  if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
-
-  if (typeof v === "string") {
-    const s = v.trim();
-    if (!s) return fallback;
-
-    const parts = s.includes("\n") ? s.split("\n") : s.includes("|") ? s.split("|") : null;
-    if (parts) {
-      const cleaned = parts.map((p) => p.trim()).filter(Boolean);
-      return cleaned.length ? cleaned : fallback;
-    }
-
-    return [s];
-  }
-
-  if (v && typeof v === "object") {
-    const vals = Object.values(v).filter((x): x is string => typeof x === "string");
-    return vals.length ? vals : fallback;
-  }
-
-  return fallback;
-}
 
 export default function ToolPage() {
-  const { t } = useI18n();
+  const { lang } = useI18n();
+  const isFr = lang === "fr";
+
   usePageMeta("meta.tool.title", "meta.tool.description");
 
-  // ✅ détecte "traduction manquante" quand t() renvoie la clé
-  const isMissing = (key: string, val: unknown) => typeof val === "string" && val.trim() === key;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // COPY
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  const tr = (key: string, fallback = ""): string => {
-    const v = t(key);
-    if (isMissing(key, v)) return fallback;
-    return typeof v === "string" ? v : fallback;
+  const heroCopy = {
+    eyebrow: isFr ? "Outil gratuit" : "Free tool",
+    title: isFr
+      ? "Calcul rapide du coût export (landed cost)"
+      : "Quick export cost calculation (landed cost)",
+    subtitle: isFr
+      ? "Estimez votre coût rendu (transport, assurance, droits, TVA, frais) et prenez une décision éclairée en quelques minutes."
+      : "Estimate your landed cost (transport, insurance, duties, VAT, fees) and make an informed decision in minutes.",
+    reassurance: isFr
+      ? "Sans inscription • Résultat immédiat • Pensé pour les PME qui exportent"
+      : "No registration • Instant result • Designed for exporting SMEs",
   };
 
-  const trArray = (key: string, fallback: string[]): string[] => {
-    const v = t(key);
-    if (isMissing(key, v)) return fallback;
-    const arr = toStringArray(v, []);
-    return arr.length ? arr : fallback;
-  };
-
-  const features = trArray("toolPage.list", FALLBACK_FEATURES);
-  const limitations = trArray("toolPage.toolLimitationsList", FALLBACK_LIMITATIONS);
-
-  const limitationsBody = tr("toolPage.toolLimitationsBody", "");
-  const limitationsTitle = tr("toolPage.toolLimitationsTitle", "");
-  const limitationsCta = tr("toolPage.toolLimitationsCta", "");
-  const humanValidationCta = tr("toolPage.humanValidationCta", "");
-
-  const subhead = tr("toolPage.subhead", "Outil gratuit");
-  const headline = tr("toolPage.headline", "Calcul rapide du coût export (landed cost)");
-  const body = tr(
-    "toolPage.body",
-    "Estimez votre coût rendu (transport, assurance, droits, TVA, frais) et prenez une décision éclairée en quelques minutes."
-  );
-  const primaryCta = tr("toolPage.primaryCta", "Lancer une analyse");
-  const reassurance = tr(
-    "toolPage.reassurance",
-    "Sans inscription • Résultat immédiat • Pensé pour les PME qui exportent"
-  );
-
-  const safeHumanCta = humanValidationCta || "Demander une validation humaine";
-
-  const steps: { title: string; desc: string; icon: ReactNode }[] = [
+  const trustItems = [
     {
-      title: tr("toolPage.step1Title", "Saisissez vos paramètres"),
-      desc: tr("toolPage.step1Desc", "Destination, incoterm, mode de transport, valeur, quantités et frais."),
-      icon: <Sparkles className="h-5 w-5" aria-hidden />,
+      title: isFr ? "Résultat clair & exploitable" : "Clear & actionable result",
+      description: isFr
+        ? "Total, coût unitaire, et ventilation des postes pour piloter vos marges."
+        : "Total, unit cost, and breakdown by line to manage your margins.",
+      icon: CheckCircle2,
     },
     {
-      title: tr("toolPage.step2Title", "Obtenez un coût rendu"),
-      desc: tr("toolPage.step2Desc", "Total + coût unitaire + ventilation détaillée par poste."),
-      icon: <CheckCircle2 className="h-5 w-5" aria-hidden />,
+      title: isFr ? "Alerte sur les points sensibles" : "Alerts on sensitive points",
+      description: isFr
+        ? "L'outil signale les zones d'incertitude (données manquantes, hypothèses, risques)."
+        : "The tool flags uncertainty areas (missing data, assumptions, risks).",
+      icon: AlertTriangle,
     },
     {
-      title: tr("toolPage.step3Title", "Sécurisez la décision"),
-      desc: tr("toolPage.step3Desc", "En cas de doute : audit / revue humaine (conformité, risques, doc)."),
-      icon: <ShieldCheck className="h-5 w-5" aria-hidden />,
+      title: isFr ? "Option validation humaine" : "Human validation option",
+      description: isFr
+        ? "Pour sécuriser conformité & documents avant engagement (audit export sur demande)."
+        : "To secure compliance & documents before commitment (export audit on request).",
+      icon: ShieldCheck,
     },
   ];
 
-  const whenAuditList = trArray("toolPage.whenAuditList", FALLBACK_AUDIT);
+  const steps = [
+    {
+      title: isFr ? "Saisissez vos paramètres" : "Enter your parameters",
+      description: isFr
+        ? "Destination, Incoterm, mode de transport, valeur, quantités et frais."
+        : "Destination, Incoterm, transport mode, value, quantities, and fees.",
+    },
+    {
+      title: isFr ? "Obtenez un coût rendu" : "Get a landed cost",
+      description: isFr
+        ? "Total + coût unitaire + ventilation détaillée par poste."
+        : "Total + unit cost + detailed breakdown by line.",
+    },
+    {
+      title: isFr ? "Sécurisez la décision" : "Secure the decision",
+      description: isFr
+        ? "En cas de doute : audit / revue humaine (conformité, risques, doc)."
+        : "When in doubt: audit / human review (compliance, risks, doc).",
+    },
+  ];
+
+  const features = [
+    {
+      title: isFr ? "Calcul rapide" : "Quick calculation",
+      description: isFr
+        ? "Résultat en quelques secondes, sans inscription ni complexité."
+        : "Result in seconds, no registration or complexity.",
+      icon: Sparkles,
+    },
+    {
+      title: isFr ? "Ventilation détaillée" : "Detailed breakdown",
+      description: isFr
+        ? "Chaque poste visible : transport, droits, taxes, frais annexes."
+        : "Each line visible: transport, duties, taxes, ancillary fees.",
+      icon: Target,
+    },
+    {
+      title: isFr ? "Avertissements intégrés" : "Built-in warnings",
+      description: isFr
+        ? "Alertes sur les points de vigilance (DDP, sanctions, licences)."
+        : "Alerts on watch points (DDP, sanctions, licenses).",
+      icon: AlertTriangle,
+    },
+    {
+      title: isFr ? "Décision facilitée" : "Easier decision",
+      description: isFr
+        ? "Un récapitulatif clair pour négocier ou valider votre prix export."
+        : "A clear summary to negotiate or validate your export price.",
+      icon: FileCheck2,
+    },
+  ];
+
+  const limitations = isFr
+    ? [
+        "Les tarifs réels varient selon devis et saison (fret, assurances).",
+        "Les droits/TVA dépendent du classement (HS), origine, accords, régimes.",
+        "Certains pays/produits nécessitent licences, contrôles, docs spécifiques.",
+        "Les sanctions/embargos et règles de conformité doivent être vérifiés.",
+      ]
+    : [
+        "Actual rates vary by quote and season (freight, insurance).",
+        "Duties/VAT depend on classification (HS), origin, agreements, regimes.",
+        "Some countries/products require licenses, controls, specific docs.",
+        "Sanctions/embargoes and compliance rules must be verified.",
+      ];
+
+  const auditCases = isFr
+    ? [
+        "Montants importants / marge serrée",
+        "Nouveau pays ou nouveau produit",
+        "Doute HS code / origine / accords préférentiels",
+        "Risque sanctions / exigences documentaires",
+      ]
+    : [
+        "Large amounts / tight margin",
+        "New country or new product",
+        "HS code / origin / preferential agreements uncertainty",
+        "Sanctions risk / document requirements",
+      ];
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════════════════════
 
   return (
-    <MarketingLayout>
-      {/* HERO */}
-      <section className="relative overflow-hidden bg-slate-950 text-white">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-40"
-          style={{
-            background:
-              "radial-gradient(900px 500px at 20% 10%, rgba(59,130,246,0.25), transparent 60%), radial-gradient(900px 500px at 80% 0%, rgba(14,165,233,0.18), transparent 55%)",
-          }}
-          aria-hidden
-        />
-        {/* ✅ barre neutre (plus de référence FR) */}
-        <div
-          className="pointer-events-none absolute left-0 top-0 h-1 w-full"
-          style={{
-            background:
-              "linear-gradient(90deg, rgba(59,130,246,1) 0%, rgba(255,255,255,0.85) 50%, rgba(14,165,233,1) 100%)",
-          }}
-          aria-hidden
-        />
+    <PremiumMarketingLayout>
+      {/* Hero */}
+      <section className="mkt-section-dark mkt-section-hero mkt-radial-glow relative overflow-hidden">
+        <div className="mkt-container relative z-10">
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="mkt-eyebrow" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
+              {heroCopy.eyebrow}
+            </p>
 
-        <div className="relative mx-auto max-w-6xl px-6 py-16">
-          <p className="text-xs uppercase tracking-[0.45em] text-white/70">{subhead}</p>
+            <h1 className="mkt-display mkt-display-xl mt-4 text-white">
+              {heroCopy.title}
+            </h1>
 
-          <h1 className="mt-4 text-4xl font-semibold leading-tight text-white md:text-5xl">{headline}</h1>
+            <p className="mt-6 text-lg leading-relaxed" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
+              {heroCopy.subtitle}
+            </p>
 
-          <p className="mt-5 max-w-3xl text-base leading-relaxed text-white/80">{body}</p>
-
-          <div className="mt-7 flex flex-wrap items-center gap-3">
-            <Button asChild className="rounded-full">
-              <Link to="/analyse">{primaryCta}</Link>
-            </Button>
-
-            <Button asChild variant="secondary" className="rounded-full">
-              <Link to="/contact">{safeHumanCta}</Link>
-            </Button>
-
-            <span className="text-xs uppercase tracking-[0.35em] text-white/70">{reassurance}</span>
-          </div>
-
-          <div className="mt-10 grid gap-3 md:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
-              <div className="flex items-center gap-2 text-white">
-                <CheckCircle2 className="h-4 w-4" aria-hidden />
-                <span className="font-semibold">{tr("toolPage.trust1", "Résultat clair & exploitable")}</span>
-              </div>
-              <p className="mt-2 text-white/70">
-                {tr("toolPage.trust1Body", "Total, coût unitaire, et ventilation des postes pour piloter vos marges.")}
-              </p>
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+              <Link to="/analyse" className="mkt-btn mkt-btn-primary">
+                {isFr ? "Lancer une analyse" : "Start an analysis"}
+              </Link>
+              <Link to="/contact" className="mkt-btn mkt-btn-light">
+                {isFr ? "Demander une validation humaine" : "Request human validation"}
+              </Link>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
-              <div className="flex items-center gap-2 text-white">
-                <AlertTriangle className="h-4 w-4" aria-hidden />
-                <span className="font-semibold">{tr("toolPage.trust2", "Alerte sur les points sensibles")}</span>
-              </div>
-              <p className="mt-2 text-white/70">
-                {tr("toolPage.trust2Body", "L’outil signale les zones d’incertitude (données manquantes, hypothèses, risques).")}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/80">
-              <div className="flex items-center gap-2 text-white">
-                <ShieldCheck className="h-4 w-4" aria-hidden />
-                <span className="font-semibold">{tr("toolPage.trust3", "Option validation humaine")}</span>
-              </div>
-              <p className="mt-2 text-white/70">
-                {tr("toolPage.trust3Body", "Pour sécuriser conformité & documents avant engagement (audit export sur demande).")}
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* HOW IT WORKS */}
-      <section className="bg-white py-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="mb-8">
-            <h2 className="text-2xl font-semibold text-slate-900">{tr("toolPage.howTitle", "Comment ça marche")}</h2>
-            <p className="mt-2 max-w-3xl text-sm text-slate-600">
-              {tr(
-                "toolPage.howBody",
-                "En 3 étapes : saisie → calcul → décision. Simple, rapide, et utile pour cadrer un prix de vente à l’international."
-              )}
+            <p className="mt-6 text-sm" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
+              {heroCopy.reassurance}
             </p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            {steps.map((s) => (
-              <Card key={s.title} className="rounded-3xl border-slate-200 shadow-sm">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-3 text-slate-900">
-                    <div className="rounded-xl border border-slate-200 bg-white p-2">{s.icon}</div>
-                    <div className="font-semibold">{s.title}</div>
-                  </div>
-                  <p className="mt-3 text-sm leading-relaxed text-slate-600">{s.desc}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FEATURES */}
-      <section className="bg-slate-50 py-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="mb-8">
-            <h2 className="text-2xl font-semibold text-slate-900">{tr("toolPage.featuresTitle", "Ce que l’outil vous apporte")}</h2>
-            <p className="mt-2 max-w-3xl text-sm text-slate-600">
-              {tr(
-                "toolPage.featuresBody",
-                "Une base solide pour estimer et comparer, avant d’aller plus loin (devis, commissionnaire, conformité)."
-              )}
-            </p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            {features.map((feature) => (
-              <Card key={feature} className="rounded-3xl border-slate-200 bg-white shadow-sm transition hover:shadow-md">
-                <CardContent className="flex gap-3 p-6">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-slate-900" aria-hidden />
-                  <div>
-                    <p className="text-base font-semibold text-slate-900">{feature}</p>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {tr("toolPage.featureHint", "Pensé pour être compréhensible, pas un tableur incompréhensible.")}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <div className="mt-10 flex flex-wrap gap-3">
-            <Button asChild className="rounded-full">
-              <Link to="/analyse">{primaryCta}</Link>
-            </Button>
-            <Button asChild variant="outline" className="rounded-full">
-              <Link to="/contact">{safeHumanCta}</Link>
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* LIMITATIONS */}
-      <section className="bg-white pb-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="rounded-3xl border border-slate-900/10 bg-slate-950 p-8 text-white shadow-lg md:p-12">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="text-3xl font-semibold">{limitationsTitle || "Limites & hypothèses"}</h2>
-                <p className="mt-3 max-w-3xl text-sm leading-relaxed text-white/80">
-                  {limitationsBody ||
-                    "Cet outil est une estimation. Pour une décision engageante, une revue humaine reste recommandée selon les cas (HS code, conformité, sanctions, licences, exigences documentaires)."}
+          {/* Trust cards */}
+          <div className="mt-16 grid gap-6 md:grid-cols-3">
+            {trustItems.map((item) => (
+              <div
+                key={item.title}
+                className="mkt-card-dark rounded-2xl border border-white/10 p-6"
+              >
+                <div className="flex items-center gap-3 text-white">
+                  <item.icon className="h-5 w-5" />
+                  <span className="font-semibold">{item.title}</span>
+                </div>
+                <p className="mt-3 text-sm" style={{ color: "rgba(255, 255, 255, 0.7)" }}>
+                  {item.description}
                 </p>
               </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Steps */}
+      <SectionPremium
+        eyebrow={isFr ? "Comment ça marche" : "How it works"}
+        title={isFr ? "En 3 étapes : saisie → calcul → décision" : "3 steps: input → calculation → decision"}
+        description={
+          isFr
+            ? "Simple, rapide, et utile pour cadrer un prix de vente à l'international."
+            : "Simple, fast, and useful for framing an international selling price."
+        }
+      >
+        <StepsPremium items={steps} label={isFr ? "Étape" : "Step"} />
+      </SectionPremium>
+
+      {/* Features */}
+      <SectionPremium
+        eyebrow={isFr ? "Fonctionnalités" : "Features"}
+        title={isFr ? "Ce que l'outil vous apporte" : "What the tool gives you"}
+        description={
+          isFr
+            ? "Une base solide pour estimer et comparer, avant d'aller plus loin."
+            : "A solid base to estimate and compare, before going further."
+        }
+        variant="muted"
+      >
+        <FeatureGridPremium items={features} columns={4} />
+
+        <div className="mt-10 flex flex-wrap gap-4">
+          <Link to="/analyse" className="mkt-btn mkt-btn-secondary">
+            {isFr ? "Lancer une analyse" : "Start an analysis"}
+          </Link>
+          <Link to="/contact" className="mkt-btn mkt-btn-outline">
+            {isFr ? "Demander une validation humaine" : "Request human validation"}
+          </Link>
+        </div>
+      </SectionPremium>
+
+      {/* Limitations */}
+      <section className="mkt-section">
+        <div className="mkt-container">
+          <div className="mkt-section-dark rounded-3xl p-8 md:p-12">
+            <div className="mb-8">
+              <p className="mkt-eyebrow" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
+                {isFr ? "Limites & hypothèses" : "Limits & assumptions"}
+              </p>
+              <h2 className="mkt-display mkt-display-md mt-2 text-white">
+                {isFr ? "Ce que l'outil ne fait pas" : "What the tool doesn't do"}
+              </h2>
+              <p className="mt-4 max-w-2xl text-lg" style={{ color: "rgba(255, 255, 255, 0.7)" }}>
+                {isFr
+                  ? "Cet outil est une estimation. Pour une décision engageante, une revue humaine reste recommandée."
+                  : "This tool is an estimate. For binding decisions, human review is still recommended."}
+              </p>
             </div>
 
-            <div className="mt-8 grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-                <div className="flex items-center gap-2 text-white">
-                  <AlertTriangle className="h-5 w-5" aria-hidden />
-                  <span className="text-sm font-semibold">{tr("toolPage.limitationsListTitle", "À garder en tête")}</span>
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Limitations */}
+              <div className="mkt-card-dark rounded-2xl border border-white/10 p-6">
+                <div className="flex items-center gap-3 text-white">
+                  <AlertTriangle className="h-5 w-5" />
+                  <span className="font-semibold">{isFr ? "À garder en tête" : "Keep in mind"}</span>
                 </div>
-                <ul className="mt-4 space-y-3 text-sm text-white/90">
+                <ul className="mt-4 space-y-3">
                   {limitations.map((item) => (
-                    <li key={item} className="flex items-start gap-3">
-                      <span className="mt-2 h-2 w-2 rounded-full bg-white" aria-hidden />
-                      <span>{item}</span>
+                    <li key={item} className="flex items-start gap-3 text-sm" style={{ color: "rgba(255, 255, 255, 0.8)" }}>
+                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-white/50 shrink-0" />
+                      {item}
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-                <div className="flex items-center gap-2 text-white">
-                  <ShieldCheck className="h-5 w-5" aria-hidden />
-                  <span className="text-sm font-semibold">{tr("toolPage.whenAuditTitle", "Quand demander un audit")}</span>
+              {/* When to audit */}
+              <div className="mkt-card-dark rounded-2xl border border-white/10 p-6">
+                <div className="flex items-center gap-3 text-white">
+                  <ShieldCheck className="h-5 w-5" />
+                  <span className="font-semibold">{isFr ? "Quand demander un audit" : "When to request an audit"}</span>
                 </div>
-                <ul className="mt-4 space-y-3 text-sm text-white/90">
-                  {whenAuditList.map((item) => (
-                    <li key={item} className="flex items-start gap-3">
-                      <span className="mt-2 h-2 w-2 rounded-full bg-white" aria-hidden />
-                      <span>{item}</span>
+                <ul className="mt-4 space-y-3">
+                  {auditCases.map((item) => (
+                    <li key={item} className="flex items-start gap-3 text-sm" style={{ color: "rgba(255, 255, 255, 0.8)" }}>
+                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-white/50 shrink-0" />
+                      {item}
                     </li>
                   ))}
                 </ul>
 
                 <div className="mt-6 flex flex-wrap items-center gap-3">
-                  <Button asChild className="rounded-full">
-                    <Link to="/contact">{safeHumanCta}</Link>
-                  </Button>
-                  <span className="text-xs uppercase tracking-[0.35em] text-white/70">
-                    {limitationsCta || "Réponse sous 24–48h"}
+                  <Link to="/contact" className="mkt-btn mkt-btn-primary text-xs">
+                    {isFr ? "Demander une validation" : "Request validation"}
+                  </Link>
+                  <span className="text-xs" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
+                    {isFr ? "Réponse sous 24-48h" : "Response within 24-48h"}
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-white/80">
-              {tr(
-                "toolPage.footerNote",
-                "Note : l’outil aide à cadrer une décision, il ne remplace pas un conseil réglementaire ni un devis transport / douane."
-              )}
+            <div className="mt-8 rounded-xl border border-white/10 bg-white/5 p-5 text-sm" style={{ color: "rgba(255, 255, 255, 0.7)" }}>
+              {isFr
+                ? "Note : l'outil aide à cadrer une décision, il ne remplace pas un conseil réglementaire ni un devis transport / douane."
+                : "Note: the tool helps frame a decision, it does not replace regulatory advice or a transport/customs quote."}
             </div>
           </div>
         </div>
       </section>
-    </MarketingLayout>
+
+      {/* CTA */}
+      <CTAStripPremium
+        eyebrow={isFr ? "Prêt à estimer ?" : "Ready to estimate?"}
+        title={isFr ? "Lancez votre première analyse export" : "Start your first export analysis"}
+        description={
+          isFr
+            ? "Gratuit, sans inscription, résultat immédiat."
+            : "Free, no registration, instant result."
+        }
+        primaryCta={{
+          label: isFr ? "Lancer l'analyse" : "Start analysis",
+          to: "/analyse",
+        }}
+        secondaryCta={{
+          label: isFr ? "Voir les tarifs" : "See pricing",
+          to: "/pricing",
+        }}
+        note="contact@exportfrancefacile.com | 06 76 43 55 51"
+      />
+    </PremiumMarketingLayout>
   );
 }
