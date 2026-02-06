@@ -11,8 +11,13 @@
       content="Plateforme d'audit, veille et pilotage import/export pour entreprises françaises."
     />
     <meta name="author" content="MPL" />
+    <meta name="application-name" content="MPL Export Navigator" />
     <meta name="theme-color" content="#1E3A8A" />
+    <meta name="color-scheme" content="light" />
     <meta name="robots" content="index,follow" />
+
+    <!-- Canonical (ajuste si tu as un autre domaine) -->
+    <link rel="canonical" href="https://www.exportfrancefacile.com/" />
 
     <!-- Favicons -->
     <link rel="icon" type="image/png" href="/mpl-logo.png" />
@@ -26,28 +31,50 @@
     />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="fr_FR" />
+    <meta property="og:site_name" content="MPL Export Navigator" />
+    <meta property="og:url" content="https://www.exportfrancefacile.com/" />
     <meta property="og:image" content="/mpl-logo.png" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="MPL Conseil Export - Export Navigator" />
+    <meta
+      name="twitter:description"
+      content="Plateforme d'audit, veille et pilotage import/export pour entreprises françaises."
+    />
     <meta name="twitter:image" content="/mpl-logo.png" />
 
-    <!-- Perf hints (GTM) -->
+    <!-- i18n hint: set <html lang> from localStorage (mpl_lang = fr|en) -->
+    <script>
+      (function () {
+        try {
+          var lang = localStorage.getItem("mpl_lang");
+          if (lang === "fr" || lang === "en") {
+            document.documentElement.lang = lang;
+            document.documentElement.setAttribute("data-lang", lang);
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- Perf hints (GTM/GA) -->
     <link rel="preconnect" href="https://www.googletagmanager.com" />
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+    <link rel="preconnect" href="https://www.google-analytics.com" />
+    <link rel="dns-prefetch" href="https://www.google-analytics.com" />
 
     <!-- Google Tag Manager -->
     <script>
       (function (w, d, s, l, i) {
         w[l] = w[l] || [];
-        w[l].push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+        w[l].push({ "gtm.start": new Date().getTime(), event: "gtm.js" });
         var f = d.getElementsByTagName(s)[0],
           j = d.createElement(s),
-          dl = l != 'dataLayer' ? '&l=' + l : '';
+          dl = l != "dataLayer" ? "&l=" + l : "";
         j.async = true;
-        j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+        j.src = "https://www.googletagmanager.com/gtm.js?id=" + i + dl;
         f.parentNode.insertBefore(j, f);
-      })(window, document, 'script', 'dataLayer', 'GTM-MT2J2J2J');
+      })(window, document, "script", "dataLayer", "GTM-MT2J2J2J");
     </script>
     <!-- End Google Tag Manager -->
 
@@ -58,8 +85,8 @@
       function gtag() {
         dataLayer.push(arguments);
       }
-      gtag('js', new Date());
-      gtag('config', 'G-22S8TFP6SH');
+      gtag("js", new Date());
+      gtag("config", "G-22S8TFP6SH");
     </script>
   </head>
 
@@ -72,6 +99,9 @@
         width="0"
         style="display: none; visibility: hidden"
       ></iframe>
+      <div style="padding: 12px; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+        JavaScript est désactivé. L'application nécessite JavaScript pour fonctionner.
+      </div>
     </noscript>
     <!-- End Google Tag Manager (noscript) -->
 
