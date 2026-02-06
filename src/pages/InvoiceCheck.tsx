@@ -68,7 +68,7 @@ export default function InvoiceCheck() {
   const issues = getIssues(lines, incoterm, destination);
 
   const updateLine = (idx: number, patch: Partial<Line>) => {
-    setLines((prev) => prev.map((l, i) => (i === idx - { ...l, ...patch } : l)));
+    setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
   };
 
   const addLine = () => {
