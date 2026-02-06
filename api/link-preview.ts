@@ -34,6 +34,8 @@ function isBlockedHost(host: string) {
     h.startsWith("127.") ||
     h.startsWith("10.") ||
     h.startsWith("192.168.") ||
+    h.startsWith("169.254.") ||
+    h.startsWith("100.64.") ||
     /^172\.(1[6-9]|2\d|3[0-1])\./.test(h) ||
     h === "0.0.0.0" ||
     h === "::1"
@@ -75,6 +77,7 @@ async function fetchHtml(url: string, ms = 9000) {
         accept: "text/html,application/xhtml+xml",
       },
     });
+    if (!res.ok) return null;
     const ct = String(res.headers.get("content-type") || "");
     if (!ct.toLowerCase().includes("text/html")) return null;
     // limite soft (évite pages énormes)
@@ -144,7 +147,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // TTL cache: 7 jours
     const ttlMs = 7 * 24 * 60 * 60 * 1000;
-    const cutoff = new Date(Date.now() - ttlMs).toISOString();
+    const cutoffMs = Date.now() - ttlMs;
 
     const { data: cached } = await admin
       .from("link_previews")
@@ -158,28 +161,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     for (let i = 0; i < clean.length; i++) {
       const h = hashes[i];
       const c = cachedMap.get(h);
-      if (!c || !c.updated_at || c.updated_at < cutoff) need.push(clean[i]);
+      const updatedMs = c?.updated_at ? Date.parse(c.updated_at) : 0;
+      if (!c || !updatedMs || updatedMs < cutoffMs) need.push(clean[i]);
     }
 
-    const fetched: Preview[] = [];
-    for (const u of need) {
-      const p = await buildPreview(u);
-      fetched.push(p);
-    }
+    const fetched = await Promise.all(need.map((u) => buildPreview(u)));
 
     if (fetched.length) {
-      await admin.from("link_previews").upsert(
-        fetched.map((p) => ({
+      const upserts = fetched.map((p) => {
+        const cachedRow = cachedMap.get(sha256(p.url));
+        return {
           url: p.url,
           url_hash: sha256(p.url),
-          title: p.title,
-          description: p.description,
-          image_url: p.imageUrl,
-          site_name: p.siteName,
+          title: p.title ?? cachedRow?.title ?? null,
+          description: p.description ?? cachedRow?.description ?? null,
+          image_url: p.imageUrl ?? cachedRow?.image_url ?? null,
+          site_name: p.siteName ?? cachedRow?.site_name ?? null,
           fetched_at: new Date().toISOString(),
-        })),
-        { onConflict: "url_hash" }
-      );
+        };
+      });
+
+      await admin.from("link_previews").upsert(upserts, { onConflict: "url_hash" });
     }
 
     // réponse finale
