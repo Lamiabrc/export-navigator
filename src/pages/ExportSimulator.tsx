@@ -1,4 +1,3 @@
-// src/pages/ExportSimulator.tsx
 import * as React from "react";
 import { computeLandedCost, type Currency, type Incoterm } from "@/lib/exportSimulator";
 import { CostBreakdownBar, CostSharePie } from "@/components/charts/CostCharts";
@@ -60,7 +59,7 @@ export default function ExportSimulator() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8">
-      {/* HERO (inspi structure AYOCIN: titre clair + bénéfice + CTA) */}
+      {/* HERO (structure claire + bénéfice + CTA) */}
       <div className="mb-8 rounded-2xl border bg-background p-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -69,12 +68,11 @@ export default function ExportSimulator() {
               Calcule ton coût complet export (Incoterm, transport, droits, TVA)
             </h1>
             <p className="mt-2 max-w-2xl text-muted-foreground">
-              Objectif : décider vite, sans approximations — coût complet, coût unitaire, marge, et une lecture visuelle.
+              Décide vite, sans approximations — coût complet, coût unitaire, marge, et lecture visuelle.
             </p>
           </div>
           <Button
             onClick={() => {
-              // “reset” vers une config EXW simple
               setForm((s) => ({ ...s, incoterm: "EXW", productCurrency: "EUR", fxToEur: 1 }));
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
@@ -136,7 +134,7 @@ export default function ExportSimulator() {
                 <Label>Taux de change → EUR (1 devise = X EUR)</Label>
                 <Input type="number" value={form.fxToEur} onChange={onNum("fxToEur")} min={0} step="0.0001" />
                 <div className="text-xs text-muted-foreground">
-                  Si devise = EUR, tu peux laisser 1. (Sinon, saisis ton taux du jour)
+                  Si devise = EUR, tu peux laisser 1.
                 </div>
               </div>
             </div>
@@ -173,35 +171,17 @@ export default function ExportSimulator() {
               ) : (
                 <div className="space-y-2">
                   <Label>Assurance forfait (€)</Label>
-                  <Input
-                    type="number"
-                    value={form.insuranceFixedEur}
-                    onChange={onNum("insuranceFixedEur")}
-                    min={0}
-                    step="0.01"
-                  />
+                  <Input type="number" value={form.insuranceFixedEur} onChange={onNum("insuranceFixedEur")} min={0} step="0.01" />
                 </div>
               )}
 
               <div className="space-y-2">
                 <Label>Formalités export (€)</Label>
-                <Input
-                  type="number"
-                  value={form.exportClearanceEur}
-                  onChange={onNum("exportClearanceEur")}
-                  min={0}
-                  step="0.01"
-                />
+                <Input type="number" value={form.exportClearanceEur} onChange={onNum("exportClearanceEur")} min={0} step="0.01" />
               </div>
               <div className="space-y-2">
                 <Label>Dédouanement import (€)</Label>
-                <Input
-                  type="number"
-                  value={form.importClearanceEur}
-                  onChange={onNum("importClearanceEur")}
-                  min={0}
-                  step="0.01"
-                />
+                <Input type="number" value={form.importClearanceEur} onChange={onNum("importClearanceEur")} min={0} step="0.01" />
               </div>
               <div className="space-y-2">
                 <Label>Manutention / terminal (€)</Label>
@@ -337,7 +317,6 @@ export default function ExportSimulator() {
       <div className="mt-10 rounded-2xl border p-6 text-sm text-muted-foreground">
         Hypothèses simplifiées (mais opérationnelles) : valeur en douane ~ marchandise + transport principal + assurance
         (et pré-acheminement selon incoterm). Base TVA import ~ valeur douane + droits + frais import.
-        On pourra ensuite brancher des règles plus fines (par pays, par HS code, par Incoterm exact).
       </div>
     </div>
   );
