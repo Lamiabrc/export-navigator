@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useAuth } from "@/contexts/AuthContext";
 
 import { Database, FileText, Package, Truck, Wrench } from "lucide-react";
 
@@ -39,43 +40,44 @@ async function fetchTableCount(table: string): Promise<number | null> {
 }
 
 export default function Admin() {
+  const { user } = useAuth();
   const sections: Section[] = useMemo(
     () => [
       {
         key: "products",
-        title: "Produits & coûts",
-        description: "products • product_costs • export_hs_catalog",
-        hint: "HS code, coûts de revient, OM/OMR par destination + HS.",
+        title: "Produits & couts",
+        description: "products ? product_costs ? export_hs_catalog",
+        hint: "HS code, couts de revient, OM/OMR par destination + HS.",
         icon: Package,
         tables: ["products", "product_costs", "export_hs_catalog"],
-        href: "/admin/products",
+        href: "/app/produits",
       },
       {
         key: "transport",
-        title: "Transport & règles",
-        description: "transport_rates • export_destinations • export_incoterms",
-        hint: "Tarifs transport par destination/mode, minimums, fuel surcharge.",
+        title: "Transport & regles",
+        description: "transport_rates ? export_destinations ? export_incoterms",
+        hint: "Tarifs transport par destination/mode, minimums, surcharge carburant.",
         icon: Truck,
         tables: ["transport_rates", "export_destinations", "export_incoterms"],
-        href: "/admin/transport",
+        href: "/app/simulator",
       },
       {
         key: "watch",
         title: "Veille & documents",
-        description: "watch_sources • watch_items • documents • reg_events",
-        hint: "Sources, items, documents et événements réglementaires.",
+        description: "watch_sources ? watch_items ? documents ? reg_events",
+        hint: "Sources, items, documents et evenements reglementaires.",
         icon: FileText,
         tables: ["watch_sources", "watch_items", "documents", "reg_events"],
-        href: "/admin/watch",
+        href: "/app/centre-veille/reglementation",
       },
       {
         key: "playbooks",
         title: "Playbooks & contenus",
-        description: "playbooks • playbook_sections • guide export",
-        hint: "Contenus versionnés pour l’IA, le Guide et les playbooks.",
+        description: "playbooks ? playbook_sections",
+        hint: "Contenus versionnes pour l'IA, le guide et les playbooks.",
         icon: Wrench,
         tables: ["playbooks", "playbook_sections"],
-        href: "/admin/playbooks",
+        href: "/guides/incoterms-ddp",
       },
     ],
     []
@@ -86,6 +88,10 @@ export default function Admin() {
   const [counts, setCounts] = useState<TableCount>({});
   const [state, setState] = useState<LoadState>("idle");
   const [lastError, setLastError] = useState<string | null>(null);
+
+  const isAdmin =
+    user?.email?.toLowerCase() === "lamia.brechet@outlook.fr" ||
+    user?.role === "admin";
 
   const totalKnown = useMemo(() => {
     // somme des tables connues (null => non comptée)
@@ -138,27 +144,48 @@ export default function Admin() {
     };
   }, [allTables]);
 
+  if (!isAdmin) {
+    return (
+      <AppLayout>
+        <Card>
+          <CardHeader>
+            <CardTitle>Acces reserve</CardTitle>
+            <CardDescription>Cette page est reservee aux administrateurs.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button asChild variant="secondary">
+              <Link to="/app/control-tower">Retour au cockpit</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/contact?offer=diagnostic">Demander un acces</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm text-muted-foreground">Administration</p>
-            <h1 className="text-2xl font-bold">Référentiels & veille (Supabase)</h1>
+            <h1 className="text-2xl font-bold">Referentiels & veille (Supabase)</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Centralise les tables clés pour le calcul export, la veille et les contenus IA.
+              Centralise les tables cles pour le calcul export, la veille et les contenus IA.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="secondary">
-              <Link to="/admin/watch">Ajouter une source</Link>
+              <Link to="/app/centre-veille/reglementation">Ajouter une source</Link>
             </Button>
             <Button asChild variant="secondary">
-              <Link to="/admin/products">Créer un produit</Link>
+              <Link to="/app/produits">Creer un produit</Link>
             </Button>
             <Button asChild>
-              <Link to="/admin/documents">Importer un document</Link>
+              <Link to="/resources">Importer un document</Link>
             </Button>
           </div>
         </div>
@@ -172,16 +199,16 @@ export default function Admin() {
               </div>
               <div className="flex items-center gap-2">
                 {state === "loading" ? (
-                  <Badge variant="outline">Chargement…</Badge>
+                  <Badge variant="outline">Chargement...</Badge>
                 ) : anyCountOk ? (
-                  <Badge variant="outline">Connecté</Badge>
+                  <Badge variant="outline">Connecte</Badge>
                 ) : (
-                  <Badge variant="destructive">À corriger</Badge>
+                  <Badge variant="destructive">A corriger</Badge>
                 )}
               </div>
             </div>
             <CardDescription>
-              Compteurs par table (lecture “head+count”). Utile pour voir si tes référentiels se remplissent.
+              Compteurs par table (lecture head+count). Utile pour voir si les referentiels se remplissent.
             </CardDescription>
           </CardHeader>
 
@@ -190,13 +217,13 @@ export default function Admin() {
               <Alert>
                 <AlertTitle>Compteurs indisponibles</AlertTitle>
                 <AlertDescription>
-                  {lastError ?? "Vérifie la configuration Supabase et les policies RLS (read) sur ces tables."}
+                  {lastError ?? "Verifie la configuration Supabase et les policies RLS (read) sur ces tables."}
                 </AlertDescription>
               </Alert>
             )}
 
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Total (tables comptées) :</span>
+              <span className="text-muted-foreground">Total (tables comptees) :</span>
               {state === "loading" ? (
                 <Skeleton className="h-5 w-16" />
               ) : (
@@ -244,7 +271,7 @@ export default function Admin() {
                     </div>
 
                     <div className="flex flex-col items-end gap-2">
-                      <Badge variant="outline">CRUD à implémenter</Badge>
+                      <Badge variant="outline">Ecrans admin a venir</Badge>
                       {hasRoute ? (
                         <Button asChild size="sm" variant="secondary" className="opacity-90 group-hover:opacity-100">
                           <Link to={s.href!}>Ouvrir</Link>
@@ -279,10 +306,10 @@ export default function Admin() {
 
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-xs text-muted-foreground">
-                      Astuce : commence par “watch_sources” + “watch_items” pour rendre la Veille vivante.
+                      Astuce : commence par "watch_sources" + "watch_items" pour rendre la veille vivante.
                     </p>
                     <Button asChild size="sm" variant="outline">
-                      <Link to="/admin/schema">Voir le schéma</Link>
+                      <Link to="/resources">Voir le schema</Link>
                     </Button>
                   </div>
                 </CardContent>

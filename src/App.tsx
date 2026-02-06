@@ -52,6 +52,7 @@ const Solutions = React.lazy(() => import("@/pages/Solutions"));
 const Veille = React.lazy(() => import("@/pages/Veille"));
 const Resources = React.lazy(() => import("@/pages/Resources"));
 const Contact = React.lazy(() => import("@/pages/Contact"));
+const Compliance = React.lazy(() => import("@/pages/Compliance"));
 const InternalResources = React.lazy(() => import("@/pages/InternalResources"));
 const ExportToFrance = React.lazy(() => import("@/pages/ExportToFrance"));
 const BillingSuccess = React.lazy(() => import("@/pages/BillingSuccess"));
@@ -295,6 +296,15 @@ export default function App() {
                       />
 
                       <Route
+                        path="/app/compliance"
+                        element={
+                          <ProtectedRoute>
+                            <Compliance />
+                          </ProtectedRoute>
+                        }
+                      />
+
+                      <Route
                         path="/app/admin"
                         element={
                           <ProtectedRoute>
@@ -347,6 +357,9 @@ export default function App() {
                       <Route path="/invoice-check" element={<Navigate to="/app/invoice-check" replace />} />
                       <Route path="/assistant" element={<Navigate to="/app/assistant" replace />} />
                       <Route path="/admin" element={<Navigate to="/app/admin" replace />} />
+                      <Route path="/app/centre-conformite" element={<Navigate to="/app/compliance" replace />} />
+                      <Route path="/app/controls" element={<Navigate to="/app/compliance" replace />} />
+                      <Route path="/app/sanctions" element={<Navigate to="/app/compliance" replace />} />
                       <Route path="/settings" element={<Navigate to="/app/settings" replace />} />
 
                       <Route path="*" element={<NotFound />} />

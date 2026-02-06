@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { postPdf } from "@/lib/leadMagnetApi";
+import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 
 type Line = {
   description: string;
@@ -37,6 +39,7 @@ function getIssues(lines: Line[], incoterm: string, destination: string) {
 
 export default function InvoiceCheck() {
   const { toast } = useToast();
+  const { labels, variables } = useGlobalFilters();
   const [destination, setDestination] = React.useState("");
   const [incoterm, setIncoterm] = React.useState("DAP");
   const [currency, setCurrency] = React.useState("EUR");
@@ -48,13 +51,24 @@ export default function InvoiceCheck() {
   const [contactEmail, setContactEmail] = React.useState("");
   const [company, setCompany] = React.useState("");
   const [notes, setNotes] = React.useState("");
+  const prefillRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (prefillRef.current) return;
+    if (destination) return;
+    const fallback = labels.territory_label || variables.territory_code || "";
+    if (fallback) {
+      setDestination(String(fallback));
+      prefillRef.current = true;
+    }
+  }, [destination, labels.territory_label, variables.territory_code]);
 
   const totalValue = lines.reduce((sum, l) => sum + l.qty * l.price, 0);
   const score = calcScore(lines, incoterm, destination);
   const issues = getIssues(lines, incoterm, destination);
 
   const updateLine = (idx: number, patch: Partial<Line>) => {
-    setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+    setLines((prev) => prev.map((l, i) => (i === idx - { ...l, ...patch } : l)));
   };
 
   const addLine = () => {
@@ -69,7 +83,7 @@ export default function InvoiceCheck() {
     try {
       setReporting(true);
       const pdfBlob = await postPdf({
-        title: "Rapport contrôle facture",
+        title: "Rapport controle facture",
         destination,
         incoterm,
         currency,
@@ -125,13 +139,21 @@ export default function InvoiceCheck() {
     <AppLayout>
       <div className="space-y-8">
         <div>
-          <p className="text-sm text-muted-foreground">Contrôle facture</p>
-          <h1 className="text-3xl font-semibold">Verifier une facture export</h1>
+          <p className="text-sm text-muted-foreground">Controle facture</p>
+          <h1 className="text-3xl font-semibold font-display">Verifier une facture export</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Saisie rapide pour reperer les incoherences, les zones a risque et generer un PDF.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Badge variant="secondary">Destination: {destination || "a definir"}</Badge>
+            <Badge variant="outline">Incoterm: {incoterm || "a definir"}</Badge>
+            <Badge variant="outline">Devise: {currency}</Badge>
+          </div>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Saisie manuelle (MVP)</CardTitle>
+            <CardTitle>Saisie rapide</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-3">
@@ -192,7 +214,7 @@ export default function InvoiceCheck() {
               </div>
               <div className="flex items-center gap-3">
                 <Button onClick={generateReport} disabled={reporting}>
-                  {reporting ? "Generation..." : "Generer le rapport PDF"}
+                  {reporting - "Generation..." : "Generer le rapport PDF"}
                 </Button>
                 <Button variant="outline" onClick={openAudit}>Demander un audit complet</Button>
               </div>
@@ -200,11 +222,14 @@ export default function InvoiceCheck() {
 
             <div className="rounded-xl border border-border bg-white p-4">
               <div className="text-xs text-muted-foreground">Explications</div>
-              <ul className="mt-2 space-y-1 text-sm text-slate-600">
+              <div className="mt-2 space-y-1 text-sm text-slate-600">
                 {issues.map((issue) => (
-                  <li key={issue}>• {issue}</li>
+                  <div key={issue} className="flex gap-2">
+                    <span className="text-muted-foreground">-</span>
+                    <span>{issue}</span>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
           </CardContent>
         </Card>
