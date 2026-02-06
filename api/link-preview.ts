@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
-import { supabaseAdmin } from "./_supabase.js";
+import { readJson, supabaseAdmin } from "./_supabase.js";
 
 type Preview = {
   url: string;
@@ -119,6 +119,10 @@ async function buildPreview(url: string): Promise<Preview> {
   };
 }
 
+type LinkPreviewRequest = {
+  urls?: unknown;
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method !== "POST") {
@@ -126,16 +130,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const body = (req.body && typeof req.body === "object") ? req.body : await new Promise<any>((resolve) => {
-      let raw = "";
-      req.on("data", (c) => (raw += c));
-      req.on("end", () => {
-        try { resolve(JSON.parse(raw || "{}")); } catch { resolve({}); }
-      });
-    });
-
-    const urls = Array.isArray(body?.urls) ? body.urls.map((x: any) => String(x || "").trim()).filter(Boolean) : [];
-    const clean = Array.from(new Set(urls)).filter(isHttpUrl).slice(0, 30);
+    const body = await readJson<LinkPreviewRequest>(req);
+    const rawUrls = Array.isArray(body?.urls) ? body.urls : [];
+    const urls = rawUrls.map((x) => String(x ?? "").trim()).filter((x) => x.length > 0);
+    const clean: string[] = Array.from(new Set(urls)).filter(isHttpUrl).slice(0, 30);
 
     if (!clean.length) {
       res.status(200).json({ ok: true, items: {} });
