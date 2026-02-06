@@ -12,61 +12,84 @@ export default function Guide() {
   const content = getGuideBySlug(slug);
   const suggestions = getFeaturedGuides(3, slug);
 
+  // ✅ Route cible (on évite /analyse et on reste cohérent avec le reste du site)
+  const toolBase = "/tool";
+
   if (!content) {
     return (
       <PublicLayout>
-        <div className="mx-auto max-w-2xl rounded-2xl border border-border bg-card/70 p-8 text-foreground shadow-lg shadow-foreground/20">
-          <CardHeader>
-            <CardTitle>Guide introuvable</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-foreground/70">Le guide demandé n'existe pas encore.</p>
-            <Button asChild className="mt-4">
-              <Link to="/analyse">Analyser un export</Link>
-            </Button>
-          </CardContent>
+        <div className="mx-auto max-w-2xl p-6">
+          <Card className="rounded-2xl border border-border bg-card/70 text-foreground shadow-lg shadow-foreground/10">
+            <CardHeader>
+              <CardTitle>Guide introuvable</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-foreground/70">
+                Le guide demandé n’existe pas (encore) ou a été déplacé.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button asChild>
+                  <Link to={toolBase}>Lancer l’analyse</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to="/guides">Voir les guides</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </PublicLayout>
     );
   }
 
-  const ctaUrl = content.incoterm ? `/analyse?incoterm=${content.incoterm}` : "/analyse";
+  const mistakes = Array.isArray(content.mistakes) ? content.mistakes : [];
+  const ctaUrl = content.incoterm
+    ? `${toolBase}?incoterm=${encodeURIComponent(content.incoterm)}`
+    : toolBase;
 
   return (
     <PublicLayout>
       <div className="space-y-10 text-foreground">
         <section className="space-y-3">
-          <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">Guide export</p>
+          <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">Guide pratique</p>
           <h1 className="text-4xl font-semibold">{content.title}</h1>
           <p className="text-lg text-foreground/80">{content.intro}</p>
         </section>
 
         <Card className="border border-border bg-card/80 text-foreground shadow-sm backdrop-blur">
           <CardHeader>
-            <CardTitle>Erreurs frequentes</CardTitle>
+            <CardTitle>Erreurs fréquentes</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {content.mistakes.map((mistake) => (
-              <div key={mistake} className="flex items-start gap-3 text-foreground/80">
-                <Badge className="rounded-full border border-border bg-muted text-muted-foreground">Risque</Badge>
-                <span>{mistake}</span>
-              </div>
-            ))}
+            {mistakes.length ? (
+              mistakes.map((mistake) => (
+                <div key={mistake} className="flex items-start gap-3 text-foreground/80">
+                  <Badge className="rounded-full border border-border bg-muted text-muted-foreground">
+                    Point de vigilance
+                  </Badge>
+                  <span>{mistake}</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-foreground/70">
+                Aucun point listé pour le moment — ce guide sera enrichi.
+              </p>
+            )}
           </CardContent>
         </Card>
 
         <section className="force-white rounded-2xl border border-border bg-gradient-to-r from-primary/90 via-secondary to-primary/50 p-6 text-white shadow-lg">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="text-xs uppercase tracking-[0.25em] text-white/80">Passez a l'action</div>
+              <div className="text-xs uppercase tracking-[0.25em] text-white/80">Passez à l’action</div>
               <div className="text-2xl font-semibold">{content.ctaLabel}</div>
             </div>
             <div className="flex flex-wrap gap-3">
               <Button asChild variant="secondary">
-                <Link to={ctaUrl}>Analyser un export</Link>
+                <Link to={ctaUrl}>Lancer l’analyse</Link>
               </Button>
               <Button asChild variant="outline" className="border-white text-white hover:bg-white/20">
-                <Link to="/contact">Demander un audit</Link>
+                <Link to="/contact">Demander une revue</Link>
               </Button>
             </div>
           </div>
@@ -76,13 +99,14 @@ export default function Guide() {
           <section className="space-y-4 rounded-2xl border border-border bg-white/80 p-6 shadow-sm text-foreground">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">Explorez d'autres guides</p>
+                <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">Explorez d’autres guides</p>
                 <h2 className="text-2xl font-semibold">Guides conseils</h2>
               </div>
-              <Link to="/solutions" className="text-sm font-medium text-primary hover:underline">
+              <Link to="/guides" className="text-sm font-medium text-primary hover:underline">
                 Voir tous les guides
               </Link>
             </div>
+
             <div className="grid gap-4 md:grid-cols-3">
               {suggestions.map((suggestion) => (
                 <Link
