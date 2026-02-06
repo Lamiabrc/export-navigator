@@ -5,12 +5,34 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RefreshCw, Scale, Search, Sparkles, MapPin, Hash, Target } from "lucide-react";
+import {
+  RefreshCw,
+  Scale,
+  Search,
+  Sparkles,
+  MapPin,
+  Hash,
+  Target,
+  Download,
+  BarChart3,
+} from "lucide-react";
 import { OnboardingPrefsModal } from "@/components/OnboardingPrefsModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { isMissingTableError } from "@/domain/calc";
+
+// ✅ Graphiques (Recharts)
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+} from "recharts";
 
 type Territory = { code: string; name: string };
 
@@ -193,13 +215,11 @@ function percentFormat(raw: any) {
   // Heuristique : si stocké en décimal (0.025) => 2.5%
   const v = n > 0 && n <= 1 ? n * 100 : n;
 
-  // affichage “propre”
   const rounded = Math.round(v * 100) / 100;
   return `${rounded}%`;
 }
 
 function extractRateFromRow(row: any) {
-  // On tente les noms les plus fréquents
   const v =
     row?.om_rate ??
     row?.taux_om ??
@@ -220,6 +240,27 @@ function vatFallbackForTerritory(code: string) {
   if (code === "GB") return "TVA 20% (indicatif)";
   return "TVA locale (indicatif)";
 }
+
+function hslVar(v: string) {
+  return `hsl(var(--${v}))`;
+}
+
+function downloadTextFile(filename: string, content: string) {
+  try {
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch {
+    // noop
+  }
+}
+
 export default function ControlTower() {
   const { user } = useAuth();
   const { variables, setVariable, refreshNow } = useGlobalFilters();
@@ -236,8 +277,8 @@ export default function ControlTower() {
   }, []);
 
   const directionLabel: Record<NonNullable<UserPrefs["direction"]>, string> = {
-    export_fr: "Export France \u2192 Monde",
-    import_fr: "Import Monde \u2192 France",
+    export_fr: "Export France → Monde",
+    import_fr: "Import Monde → France",
     both: "Import & Export",
   };
 
@@ -301,7 +342,6 @@ export default function ControlTower() {
     const map = new Map<string, Map<string, any[]>>();
     for (const t of effectiveTerritories) map.set(t.code, new Map());
 
-    // si table HS = hs4 ou hs6, on va matcher par préfixe
     const hsCol = omMeta?.hsCol || "";
     const hsLen =
       hsCol.toLowerCase().includes("hs4") ? 4 :
@@ -366,14 +406,79 @@ export default function ControlTower() {
     if (!selected) return null;
     const { territory, hs } = selected;
 
-    const hsKey = omMap.hsLen ? normalizeHS(hs).slice(0, omMap.hsLen) : normalizeHS(hs);
+    const hsKeyLocal = omMap.hsLen ? normalizeHS(hs).slice(0, omMap.hsLen) : normalizeHS(hs);
     const terrMap = omMap.map.get(territory);
-    const om = terrMap?.get(hsKey) || [];
+    const om = terrMap?.get(hsKeyLocal) || [];
     const vat = vatByTerritory.get(territory) || [];
     const extra = taxRows.filter((r) => String(r?.[taxMeta?.territoryCol as any] ?? "").trim() === territory);
 
     return { om, vat, extra };
   }, [selected, omMap, vatByTerritory, taxRows, taxMeta]);
+
+  // ✅ Aperçu cockpit (stats + data chart)
+  const cockpit = React.useMemo(() => {
+    const byTerr = effectiveTerritories.map((t) => {
+      let omHits = 0;
+
+      for (const hs of filteredHs) {
+        const hsKeyLocal = omMap.hsLen ? normalizeHS(hs).slice(0, omMap.hsLen) : normalizeHS(hs);
+        const omList = omMap.map.get(t.code)?.get(hsKeyLocal) || [];
+        if (omList.length) omHits += 1;
+      }
+
+      const vatRowsCount = (vatByTerritory.get(t.code) || []).length;
+      const extraRules = extraCountByTerritory.get(t.code) || 0;
+
+      return {
+        code: t.code,
+        name: t.name,
+        omHits,
+        vatRows: vatRowsCount,
+        extraRules,
+      };
+    });
+
+    const totalCells = filteredHs.length * effectiveTerritories.length;
+    const omCells = byTerr.reduce((s, r) => s + r.omHits, 0);
+    const omCoveragePct = totalCells > 0 ? Math.round((omCells / totalCells) * 1000) / 10 : 0;
+
+    const territoriesWithVat = byTerr.filter((r) => r.vatRows > 0).length;
+    const extraRulesTotal = byTerr.reduce((s, r) => s + r.extraRules, 0);
+
+    return { byTerr, totalCells, omCells, omCoveragePct, territoriesWithVat, extraRulesTotal };
+  }, [effectiveTerritories, filteredHs, omMap, vatByTerritory, extraCountByTerritory]);
+
+  const exportMatrixCsv = React.useCallback(() => {
+    const terrs = effectiveTerritories.map((t) => t.code);
+    const head = ["HS", ...terrs.flatMap((t) => [`${t} OM`, `${t} TVA`, `${t} Extra`])];
+
+    const rows: string[] = [];
+    rows.push(head.join(";"));
+
+    for (const hs of filteredHs) {
+      const line: string[] = [hs];
+
+      for (const t of terrs) {
+        const hsKeyLocal = omMap.hsLen ? normalizeHS(hs).slice(0, omMap.hsLen) : normalizeHS(hs);
+        const omList = omMap.map.get(t)?.get(hsKeyLocal) || [];
+        const omRate = omList.length ? extractRateFromRow(omList[0]) : null;
+
+        const vatList = vatByTerritory.get(t) || [];
+        const vatDisplay = vatList.length ? "voir table" : vatFallbackForTerritory(t);
+
+        const extraCount = extraCountByTerritory.get(t) || 0;
+
+        line.push(omRate || "—");
+        line.push(vatDisplay);
+        line.push(String(extraCount));
+      }
+
+      rows.push(line.join(";"));
+    }
+
+    const filename = `mpl_control_tower_${new Date().toISOString().slice(0, 10)}.csv`;
+    downloadTextFile(filename, rows.join("\n"));
+  }, [effectiveTerritories, filteredHs, omMap, vatByTerritory, extraCountByTerritory]);
 
   React.useEffect(() => {
     let alive = true;
@@ -417,7 +522,6 @@ export default function ControlTower() {
                 : `Structure OM incomplete (champs requis manquants).`
             );
           } else {
-            // Adapter les HS selon hs4/hs6/hs8/hs10 pour filtrer efficacement
             const hsColLower = hsColOm.toLowerCase();
             const hsLen =
               hsColLower.includes("hs4") ? 4 :
@@ -540,13 +644,21 @@ export default function ControlTower() {
                 Votre cockpit export, regle sur vos marches prioritaires.
               </h1>
               <p className="text-sm text-muted-foreground">
-                Produits et destinations preconfigures pour decider vite : couts, taxes, documents et alertes utiles.
+                Produits et destinations preconfigures pour decider vite : taxes, regles, et signaux utiles.
               </p>
               {activeTerritory ? (
                 <div className="mt-2">
                   <Badge variant="secondary">Focus : {territoryLabel(activeTerritory)} ({activeTerritory})</Badge>
                 </div>
               ) : null}
+
+              {/* ✅ micro-KPI */}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Badge variant="outline">Couverture OM : <b className="ml-1">{cockpit.omCoveragePct}%</b></Badge>
+                <Badge variant="outline">Cellules OM : <b className="ml-1">{cockpit.omCells}/{cockpit.totalCells}</b></Badge>
+                <Badge variant="outline">Territoires VAT : <b className="ml-1">{cockpit.territoriesWithVat}/{effectiveTerritories.length}</b></Badge>
+                <Badge variant="outline">Regles extra : <b className="ml-1">{cockpit.extraRulesTotal}</b></Badge>
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -554,12 +666,14 @@ export default function ControlTower() {
                 <Sparkles className="h-4 w-4" />
                 {hasPrefs ? "Ajuster mon profil" : "Configurer mon profil"}
               </Button>
+
               <Link to="/app/simulator">
                 <Button variant="secondary" className="gap-2">
                   <Scale className="h-4 w-4" />
                   Simuler un cout
                 </Button>
               </Link>
+
               <Link to="/app/centre-veille/reglementation">
                 <Button variant="outline" className="gap-2">
                   <Search className="h-4 w-4" />
@@ -626,35 +740,6 @@ export default function ControlTower() {
           ) : null}
         </section>
 
-        {/* Ops header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">Tableau operationnel</p>
-            <h2 className="text-2xl font-semibold flex items-center gap-2">
-              <Scale className="h-6 w-6" />
-              Taxes & OM - recapitulatif par destination / HS
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Vue synthese des taxes et obligations selon les territoires et vos produits.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                refreshNonceRef.current += 1;
-                setRefreshNonce(refreshNonceRef.current);
-              }}
-              disabled={isLoading}
-              className="gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-              Actualiser
-            </Button>
-          </div>
-        </div>
-
         {/* Messages */}
         {error ? (
           <Card className="border-red-200">
@@ -670,7 +755,84 @@ export default function ControlTower() {
           </Card>
         ) : null}
 
-        {/* Meta */}
+        {/* ✅ Aperçu cockpit (AYOCIN-like: insights avant l’opérationnel) */}
+        <Card className="border-muted">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5" />
+              Apercu cockpit
+            </CardTitle>
+            <CardDescription>
+              Lecture rapide par territoire : couverture OM (nb HS couverts), volume VAT (rows), regles extra.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="rounded-2xl border bg-background p-4">
+                <div className="text-xs text-muted-foreground">HS consideres</div>
+                <div className="mt-1 text-2xl font-semibold">{filteredHs.length}</div>
+                <div className="text-xs text-muted-foreground">sur {baseHsCodes.length} (filtre actif)</div>
+              </div>
+
+              <div className="rounded-2xl border bg-background p-4">
+                <div className="text-xs text-muted-foreground">Territoires</div>
+                <div className="mt-1 text-2xl font-semibold">{effectiveTerritories.length}</div>
+                <div className="text-xs text-muted-foreground">profil / focus</div>
+              </div>
+
+              <div className="rounded-2xl border bg-background p-4">
+                <div className="text-xs text-muted-foreground">Couverture OM</div>
+                <div className="mt-1 text-2xl font-semibold">{cockpit.omCoveragePct}%</div>
+                <div className="mt-2 h-2 w-full rounded-full bg-muted">
+                  <div
+                    className="h-2 rounded-full"
+                    style={{
+                      width: `${Math.max(0, Math.min(100, cockpit.omCoveragePct))}%`,
+                      background: hslVar("primary"),
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border bg-background p-4">
+                <div className="text-xs text-muted-foreground">Regles extra</div>
+                <div className="mt-1 text-2xl font-semibold">{cockpit.extraRulesTotal}</div>
+                <div className="text-xs text-muted-foreground">total (tous territoires)</div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border bg-background p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-sm font-medium">Vue comparee par territoire</div>
+                <div className="text-xs text-muted-foreground">
+                  {isLoading ? "Chargement des donnees…" : "OK"}
+                </div>
+              </div>
+
+              <div className="h-[320px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={cockpit.byTerr} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="code" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar name="OM (HS couverts)" dataKey="omHits" fill={hslVar("primary")} radius={[8, 8, 0, 0]} />
+                    <Bar name="VAT (rows)" dataKey="vatRows" fill={hslVar("secondary")} radius={[8, 8, 0, 0]} />
+                    <Bar name="Extra (regles)" dataKey="extraRules" fill={hslVar("accent")} radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="mt-2 text-xs text-muted-foreground">
+                Astuce : si VAT est vide, on affiche un repere indicatif (ex: FR 20%). Les OM matchent par prefixe (hs4/hs6/hs8/hs10) si besoin.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Meta (tech/debug utile) */}
         <div className="flex flex-wrap gap-2 items-center">
           <Badge variant="secondary">HS: {baseHsCodes.length}</Badge>
           <Badge variant="secondary">Territoires: {effectiveTerritories.length}</Badge>
@@ -694,6 +856,46 @@ export default function ControlTower() {
           </Badge>
         </div>
 
+        {/* Ops header */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Tableau operationnel</p>
+            <h2 className="text-2xl font-semibold flex items-center gap-2">
+              <Scale className="h-6 w-6" />
+              Taxes & OM — recapitulatif par destination / HS
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Vue synthese des taxes et obligations selon les territoires et vos produits.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                refreshNonceRef.current += 1;
+                setRefreshNonce(refreshNonceRef.current);
+              }}
+              disabled={isLoading}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+              Actualiser
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={exportMatrixCsv}
+              className="gap-2"
+              disabled={filteredHs.length === 0 || effectiveTerritories.length === 0}
+              title="Exporter la matrice (HS x Territoires) en CSV"
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
+            </Button>
+          </div>
+        </div>
+
         {/* Search */}
         <Card>
           <CardHeader>
@@ -712,7 +914,7 @@ export default function ControlTower() {
             </div>
             <Badge variant="secondary">{filteredHs.length} / {baseHsCodes.length}</Badge>
             <div className="text-xs text-muted-foreground sm:ml-auto">
-              Clique une case pour voir les détails (OM/VAT/Extra).
+              Clique une case pour voir les details (OM/VAT/Extra).
             </div>
           </CardContent>
         </Card>
@@ -723,7 +925,7 @@ export default function ControlTower() {
             <CardTitle>Matrice OM & Taxes</CardTitle>
             <CardDescription>
               Lignes = HS codes. Colonnes = territoires. <br />
-              Chaque cellule : OM (si trouvé) • TVA (table ou repère) • Extra (nb règles).
+              Chaque cellule : OM (si trouve) • TVA (table ou repere) • Extra (nb regles).
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -742,7 +944,7 @@ export default function ControlTower() {
                 </thead>
                 <tbody>
                   {filteredHs.map((hs) => {
-                    const hsKey = omMap.hsLen ? normalizeHS(hs).slice(0, omMap.hsLen) : normalizeHS(hs);
+                    const hsKeyLocal = omMap.hsLen ? normalizeHS(hs).slice(0, omMap.hsLen) : normalizeHS(hs);
 
                     return (
                       <tr key={hs} className="border-t">
@@ -752,18 +954,15 @@ export default function ControlTower() {
 
                         {effectiveTerritories.map((t) => {
                           const terrMap = omMap.map.get(t.code);
-                          const omList = terrMap?.get(hsKey) || [];
+                          const omList = terrMap?.get(hsKeyLocal) || [];
                           const omRate = omList.length ? extractRateFromRow(omList[0]) : null;
 
-                          // VAT : si table => on affiche juste “présent” + fallback repère
                           const vatList = vatByTerritory.get(t.code) || [];
-                          const vatDisplay =
-                            vatList.length ? "voir table" : vatFallbackForTerritory(t.code);
+                          const vatDisplay = vatList.length ? "voir table" : vatFallbackForTerritory(t.code);
 
                           const extraCount = extraCountByTerritory.get(t.code) || 0;
 
-                          const isSelected =
-                            selected?.territory === t.code && selected?.hs === hs;
+                          const isSelected = selected?.territory === t.code && selected?.hs === hs;
 
                           return (
                             <td
@@ -782,11 +981,11 @@ export default function ControlTower() {
                               </div>
                               {omList.length ? (
                                 <div className="text-xs text-muted-foreground mt-2">
-                                  {omList.length} règle(s) OM
+                                  {omList.length} regle(s) OM
                                 </div>
                               ) : (
                                 <div className="text-xs text-muted-foreground mt-2">
-                                  aucune règle OM
+                                  aucune regle OM
                                 </div>
                               )}
                             </td>
@@ -798,8 +997,9 @@ export default function ControlTower() {
                 </tbody>
               </table>
             </div>
+
             <div className="text-xs text-muted-foreground mt-2">
-              NB : si ta table OM est en <b>hs4/hs6</b>, la page match automatiquement par préfixe.
+              NB : si ta table OM est en <b>hs4/hs6</b>, la page match automatiquement par prefixe.
             </div>
           </CardContent>
         </Card>
@@ -808,10 +1008,10 @@ export default function ControlTower() {
         <Card className="border-muted">
           <CardHeader>
             <CardTitle className="text-base">
-              Détails — {selected ? `${selected.territory} - HS ${selected.hs}` : "clique une cellule"}
+              Details — {selected ? `${selected.territory} - HS ${selected.hs}` : "clique une cellule"}
             </CardTitle>
             <CardDescription>
-              Détails bruts des tables (utile pour valider les champs exacts).
+              Details bruts des tables (utile pour valider les champs exacts).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -831,7 +1031,7 @@ export default function ControlTower() {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {!selectedDetails?.om?.length ? (
-                      <div className="text-sm text-muted-foreground">Aucune ligne OM trouvée.</div>
+                      <div className="text-sm text-muted-foreground">Aucune ligne OM trouvee.</div>
                     ) : (
                       selectedDetails.om.slice(0, 20).map((row: any, idx: number) => (
                         <Card key={row.id ?? `${idx}`} className="border-muted">
@@ -842,7 +1042,7 @@ export default function ControlTower() {
                       ))
                     )}
                     {selectedDetails?.om?.length > 20 ? (
-                      <div className="text-xs text-muted-foreground">Affichage limité à 20 lignes.</div>
+                      <div className="text-xs text-muted-foreground">Affichage limite a 20 lignes.</div>
                     ) : null}
                   </CardContent>
                 </Card>
@@ -852,13 +1052,13 @@ export default function ControlTower() {
                   <CardHeader>
                     <CardTitle className="text-base">TVA</CardTitle>
                     <CardDescription>
-                      Source: <code className="text-xs">{vatMeta?.table || "fallback repère"}</code>
+                      Source: <code className="text-xs">{vatMeta?.table || "fallback repere"}</code>
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {!selectedDetails?.vat?.length ? (
                       <div className="text-sm text-muted-foreground">
-                        Aucune ligne VAT trouvée dans la table. Repère : <b>{vatFallbackForTerritory(selected.territory)}</b>
+                        Aucune ligne VAT trouvee dans la table. Repere : <b>{vatFallbackForTerritory(selected.territory)}</b>
                       </div>
                     ) : (
                       selectedDetails.vat.slice(0, 10).map((row: any, idx: number) => (
@@ -870,7 +1070,7 @@ export default function ControlTower() {
                       ))
                     )}
                     {selectedDetails?.vat?.length > 10 ? (
-                      <div className="text-xs text-muted-foreground">Affichage limité à 10 lignes.</div>
+                      <div className="text-xs text-muted-foreground">Affichage limite a 10 lignes.</div>
                     ) : null}
                   </CardContent>
                 </Card>
@@ -885,7 +1085,7 @@ export default function ControlTower() {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {!selectedDetails?.extra?.length ? (
-                      <div className="text-sm text-muted-foreground">Aucune taxe extra trouvée.</div>
+                      <div className="text-sm text-muted-foreground">Aucune taxe extra trouvee.</div>
                     ) : (
                       selectedDetails.extra.slice(0, 10).map((row: any, idx: number) => (
                         <Card key={row.id ?? `${idx}`} className="border-muted">
@@ -896,7 +1096,7 @@ export default function ControlTower() {
                       ))
                     )}
                     {selectedDetails?.extra?.length > 10 ? (
-                      <div className="text-xs text-muted-foreground">Affichage limité à 10 lignes.</div>
+                      <div className="text-xs text-muted-foreground">Affichage limite a 10 lignes.</div>
                     ) : null}
                   </CardContent>
                 </Card>
@@ -915,6 +1115,3 @@ export default function ControlTower() {
     </AppLayout>
   );
 }
-
-
-
