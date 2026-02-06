@@ -2,6 +2,9 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
 import { supabaseAdmin } from "../_supabase.js";
 
+// Manual test (replace placeholders):
+// curl -X POST "<BASE_URL>/api/ingest/feeds" -H "x-cron-secret: <CRON_SECRET>"
+
 type ParsedItem = {
   title: string;
   link: string;
@@ -65,6 +68,16 @@ function normalizeLink(link: string) {
   const l = (link || "").trim();
   if (!l) return "";
   return l.replace(/\s+/g, "");
+}
+
+function normalizeTags(value: any): string[] | null {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    const items = value.map((v) => String(v || "").trim()).filter(Boolean);
+    return items.length ? items : null;
+  }
+  const s = String(value || "").trim();
+  return s ? [s] : null;
 }
 
 async function fetchTextWithTimeout(url: string, ms: number) {
@@ -182,7 +195,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ✅ On ne sélectionne que les champs standardisés (no schema guessing)
     const { data: feeds, error: feedError } = await admin
       .from("regulatory_feeds")
-      .select("id, source_name, source_url, kind, enabled, logo_url")
+      .select("id, name, source_name, source_url, kind, enabled, logo_url, category, territory, tags")
       .eq("enabled", true);
 
     if (feedError) {
@@ -195,38 +208,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       feedId: string;
       name: string;
       status: "ok" | "skipped" | "failed";
+      httpStatus: number | null;
       inserted: number;
       error?: string;
     }> = [];
 
     for (const feed of enabledFeeds) {
       const feedId = String(feed.id);
-      const feedName = String(feed.source_name || feedId);
+      const feedName = String(feed.name || feed.source_name || feedId);
       const feedUrl = String(feed.source_url || "").trim();
       const kindRaw = String(feed.kind || "rss").toLowerCase();
       const kind = kindRaw.includes("atom") ? "atom" : kindRaw.includes("rss") ? "rss" : kindRaw.includes("api") ? "api" : "web";
       const feedLogo = feed.logo_url || null;
+      const feedCategory = feed.category ? String(feed.category) : null;
+      const feedTerritory = feed.territory ? String(feed.territory) : null;
+      const feedTags = normalizeTags(feed.tags);
 
       if (!feedUrl) {
-        results.push({ feedId, name: feedName, status: "skipped", inserted: 0, error: "missing_source_url" });
+        results.push({ feedId, name: feedName, status: "skipped", httpStatus: null, inserted: 0, error: "missing_source_url" });
         continue;
       }
 
       if (kind === "web" || kind === "api") {
-        results.push({ feedId, name: feedName, status: "skipped", inserted: 0, error: `kind_${kind}_not_supported` });
+        results.push({ feedId, name: feedName, status: "skipped", httpStatus: null, inserted: 0, error: `kind_${kind}_not_supported` });
         continue;
       }
 
       try {
         const r = await fetchTextWithTimeout(feedUrl, 12000);
+        const httpStatus = r.status;
         if (!r.ok || !r.text) {
-          results.push({ feedId, name: feedName, status: "failed", inserted: 0, error: `fetch_${r.status}` });
+          results.push({ feedId, name: feedName, status: "failed", httpStatus, inserted: 0, error: `fetch_${r.status}` });
+          console.error(`[ingest] ${feedName} failed status=${httpStatus}`);
           continue;
         }
 
         const parsed = isAtom(r.text) ? parseAtomItems(r.text) : parseRssItems(r.text);
         if (!parsed.length) {
-          results.push({ feedId, name: feedName, status: "ok", inserted: 0 });
+          await admin.from("regulatory_feeds").update({ last_fetched_at: new Date().toISOString() }).eq("id", feedId);
+          results.push({ feedId, name: feedName, status: "ok", httpStatus, inserted: 0 });
+          console.log(`[ingest] ${feedName} ok status=${httpStatus} inserted=0`);
           continue;
         }
 
@@ -239,27 +260,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             link: it.link,
             summary: it.summary,
             published_at: it.publishedAt,
+            category: feedCategory,
+            territory: feedTerritory,
+            tags: feedTags,
             image_url: it.imageUrl || feedLogo,
             fingerprint,
           };
         });
 
         // ✅ nécessite contrainte unique (source_id, fingerprint)
-        const { error: upsertError } = await admin
+        const { data: insertedRows, error: upsertError } = await admin
           .from("regulatory_items")
-          .upsert(rows, { onConflict: "source_id,fingerprint" });
+          .upsert(rows, { onConflict: "source_id,fingerprint", ignoreDuplicates: true })
+          .select("id");
 
         if (upsertError) {
-          results.push({ feedId, name: feedName, status: "failed", inserted: 0, error: upsertError.message });
+          results.push({ feedId, name: feedName, status: "failed", httpStatus, inserted: 0, error: upsertError.message });
+          console.error(`[ingest] ${feedName} failed status=${httpStatus} error=${upsertError.message}`);
           continue;
         }
 
         // Update last_fetched_at si la colonne existe (si tu l’as dans le SQL)
         await admin.from("regulatory_feeds").update({ last_fetched_at: new Date().toISOString() }).eq("id", feedId);
 
-        results.push({ feedId, name: feedName, status: "ok", inserted: rows.length });
+        const insertedCount = Array.isArray(insertedRows) ? insertedRows.length : 0;
+        results.push({ feedId, name: feedName, status: "ok", httpStatus, inserted: insertedCount });
+        console.log(`[ingest] ${feedName} ok status=${httpStatus} inserted=${insertedCount}`);
       } catch (err: any) {
-        results.push({ feedId, name: feedName, status: "failed", inserted: 0, error: err?.message || String(err) });
+        results.push({ feedId, name: feedName, status: "failed", httpStatus: null, inserted: 0, error: err?.message || String(err) });
+        console.error(`[ingest] ${feedName} failed error=${err?.message || String(err)}`);
       }
     }
 

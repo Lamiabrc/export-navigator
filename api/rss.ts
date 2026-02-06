@@ -119,7 +119,7 @@ function mapRowToItem(row: any): ApiItem | null {
   const feedPublic = feed?.is_public;
   if (feedEnabled === false || feedPublic === false) return null;
 
-  const link = String(row.link || row.url || "").trim();
+  const link = String(row.link || "").trim();
   if (!link) return null;
 
   const title = String(row.title || "").trim() || "Sans titre";
@@ -129,7 +129,7 @@ function mapRowToItem(row: any): ApiItem | null {
   const source = (feed?.source_name || feed?.name || row.source || null) as string | null;
 
   // ✅ ton schéma: territory (pas zone)
-  const zone = (row.territory || feed?.territory || row.zone || feed?.zone || null) as string | null;
+  const zone = (row.territory || feed?.territory || null) as string | null;
   const category = (row.category || feed?.category || null) as string | null;
 
   const imageUrl = (row.image_url || row.imageUrl || feed?.logo_url || null) as string | null;
@@ -164,44 +164,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const categoryQ = String(req.query?.category || "").trim();
     const zoneQ = String(req.query?.zone || req.query?.territory || "").trim(); // compat
 
-    const fallbackItems: ApiItem[] = [
-      {
-        title: "Veille export : sanctions & conformité — check rapide",
-        link: `${baseUrl}/veille`,
-        summary: "Surveillez sanctions, documents et points de vigilance.",
-        publishedAt: new Date().toISOString(),
-        source: "ExportFranceFacile",
-        zone: "FR",
-        category: "general",
-        imageUrl: `${baseUrl}/og/veille.png`,
-      },
-      {
-        title: "Checklist documents export (invoice, PL, CO, transport…)",
-        link: `${baseUrl}/methodologie`,
-        summary: "Les indispensables pour éviter les blocages.",
-        publishedAt: new Date(Date.now() - 86400000).toISOString(),
-        source: "ExportFranceFacile",
-        zone: "EU",
-        category: "customs",
-        imageUrl: `${baseUrl}/og/methodologie.png`,
-      },
-      {
-        title: "Incoterms : focus DDP (risques & bonnes pratiques)",
-        link: `${baseUrl}/guides/incoterms-ddp`,
-        summary: "Comprendre qui paye quoi, et où ça peut casser.",
-        publishedAt: new Date(Date.now() - 2 * 86400000).toISOString(),
-        source: "ExportFranceFacile",
-        zone: "INTL",
-        category: "trade",
-        imageUrl: `${baseUrl}/og/incoterms.png`,
-      },
-    ];
-
     const admin = supabaseAdmin();
 
     let q = admin
       .from("regulatory_items")
-      .select("id,title,summary,link,published_at,category,territory,image_url,created_at, regulatory_feeds(source_name,source_url,logo_url,enabled,is_public,territory,category)")
+      .select("id,title,summary,link,published_at,category,territory,image_url,created_at, regulatory_feeds(name,source_name,source_url,logo_url,enabled,is_public,territory,category)")
       .order("published_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(queryLimit);
@@ -221,8 +188,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     for (const it of mapped) if (!dedup.has(it.link)) dedup.set(it.link, it);
 
     const items = Array.from(dedup.values()).slice(0, limit);
-    const finalItems = items.length ? items : fallbackItems;
-    const updatedAt = finalItems[0]?.publishedAt || new Date().toISOString();
+    const updatedAt = items[0]?.publishedAt || null;
 
     res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
 
@@ -231,7 +197,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         title: "ExportFranceFacile — Veille Export (RSS)",
         link: `${baseUrl}/veille`,
         description: "Mises à jour, signaux faibles, conformité et points de vigilance export.",
-        items: finalItems.map((it) => ({
+        items: items.map((it) => ({
           title: it.title,
           link: it.link,
           description: it.summary,
@@ -247,27 +213,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.status(200).json({ ok: true, updatedAt, items: finalItems });
+    res.status(200).json({ ok: true, degraded: false, updatedAt, items });
   } catch (err: any) {
-    const baseUrl = buildBaseUrl(req);
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
     res.status(200).json({
       ok: true,
       degraded: true,
-      updatedAt: new Date().toISOString(),
-      items: [
-        {
-          title: "Flux indisponible temporairement",
-          link: `${baseUrl}/veille`,
-          summary: "Erreur côté serveur. Réessayez dans quelques minutes.",
-          publishedAt: new Date().toISOString(),
-          source: "ExportFranceFacile",
-          zone: "FR",
-          category: "general",
-          imageUrl: `${baseUrl}/og/veille.png`,
-        },
-      ],
+      updatedAt: null,
+      items: [],
     });
   }
 }
