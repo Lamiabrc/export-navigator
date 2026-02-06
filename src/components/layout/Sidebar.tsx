@@ -38,12 +38,12 @@ const navigation: NavSection[] = [
     items: [
       { name: "Vitrine", href: "/", icon: Home },
       {
-        name: "Command Center",
-        href: "/app/command-center",
+        name: "Tour de controle",
+        href: "/app/control-tower",
         icon: Activity,
         badge: "Live",
         featured: true,
-        aliases: ["/dashboard", "/command-center", "/hub", "/app"],
+        aliases: ["/dashboard", "/command-center", "/hub", "/app", "/app/command-center", "/app/control-tower"],
       },
     ],
   },

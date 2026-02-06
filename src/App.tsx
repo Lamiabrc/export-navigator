@@ -186,14 +186,15 @@ export default function App() {
 
                       {/* ===================== App (privé) ===================== */}
                       <Route
-                        path="/app/command-center"
+                        path="/app/control-tower"
                         element={
                           <ProtectedRoute>
                             <CommandCenter />
                           </ProtectedRoute>
                         }
                       />
-                      <Route path="/app" element={<Navigate to="/app/command-center" replace />} />
+                      <Route path="/app/command-center" element={<Navigate to="/app/control-tower" replace />} />
+                      <Route path="/app" element={<Navigate to="/app/control-tower" replace />} />
 
                       <Route
                         path="/app/explore"
@@ -213,12 +214,12 @@ export default function App() {
                         }
                       />
 
-                      {/* ✅ Taxes OM supprimée => on garde l'URL mais redirection vers Command Center */}
+                      {/* ✅ Taxes OM supprimée => on garde l'URL mais redirection vers Control Tower */}
                       <Route
                         path="/app/droits-taxes"
                         element={
                           <ProtectedRoute>
-                            <Navigate to="/app/command-center" replace />
+                            <Navigate to="/app/control-tower" replace />
                           </ProtectedRoute>
                         }
                       />
@@ -324,9 +325,9 @@ export default function App() {
                       <Route path="/welcome" element={<Navigate to="/solutions" replace />} />
                       <Route path="/ressources" element={<Navigate to="/resources" replace />} />
 
-                      <Route path="/hub" element={<Navigate to="/app/command-center" replace />} />
-                      <Route path="/command-center" element={<Navigate to="/app/command-center" replace />} />
-                      <Route path="/dashboard" element={<Navigate to="/app/command-center" replace />} />
+                      <Route path="/hub" element={<Navigate to="/app/control-tower" replace />} />
+                      <Route path="/command-center" element={<Navigate to="/app/control-tower" replace />} />
+                      <Route path="/dashboard" element={<Navigate to="/app/control-tower" replace />} />
                       <Route path="/explore" element={<Navigate to="/app/explore" replace />} />
                       <Route path="/sales" element={<Navigate to="/app/explore" replace />} />
 

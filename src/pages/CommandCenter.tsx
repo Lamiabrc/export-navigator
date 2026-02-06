@@ -1,16 +1,28 @@
 import * as React from "react";
+import { Link } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RefreshCw, Scale, Search } from "lucide-react";
+import { RefreshCw, Scale, Search, Sparkles, MapPin, Hash, Target } from "lucide-react";
+import { OnboardingPrefsModal } from "@/components/OnboardingPrefsModal";
+import { useAuth } from "@/contexts/AuthContext";
+import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { isMissingTableError } from "@/domain/calc";
 
 type Territory = { code: string; name: string };
 
-const TERRITORIES: Territory[] = [
+type UserPrefs = {
+  countries: string[];
+  hsCodes: string[];
+  direction?: "export_fr" | "import_fr" | "both";
+  hsMode?: string | null;
+  source: "mpl_user_prefs" | "mpl_watch_prefs" | "default";
+};
+
+const DEFAULT_TERRITORIES: Territory[] = [
   { code: "FR", name: "France" },
   { code: "DE", name: "Allemagne" },
   { code: "ES", name: "Espagne" },
@@ -20,7 +32,7 @@ const TERRITORIES: Territory[] = [
   { code: "CH", name: "Suisse" },
 ];
 
-const HS_CODES = [
+const DEFAULT_HS_CODES = [
   "61151010",
   "62129000",
   "63079010",
@@ -38,6 +50,75 @@ const HS_CODES = [
 ];
 
 type SelectedCell = { territory: string; hs: string } | null;
+
+const PREF_SOURCE_LABEL: Record<UserPrefs["source"], string> = {
+  mpl_user_prefs: "Profil export",
+  mpl_watch_prefs: "Veille",
+  default: "Par defaut",
+};
+
+function safeLocalStorageGet(key: string) {
+  try {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeCountryCode(code: string) {
+  return (code || "").trim().toUpperCase();
+}
+
+function normalizeHsList(list: unknown) {
+  if (!Array.isArray(list)) return [];
+  const cleaned = list
+    .map((v) => String(v || "").replace(/[^0-9]/g, ""))
+    .filter(Boolean);
+  return Array.from(new Set(cleaned)).slice(0, 20);
+}
+
+function readPrefs(): UserPrefs {
+  const parse = (key: "mpl_user_prefs" | "mpl_watch_prefs"): UserPrefs | null => {
+    const raw = safeLocalStorageGet(key);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as any;
+      const countries = Array.isArray(parsed?.countries)
+        ? Array.from(new Set(parsed.countries.map(normalizeCountryCode))).filter(Boolean)
+        : [];
+      const hsCodes = normalizeHsList(parsed?.hsCodes);
+      const direction = parsed?.direction as UserPrefs["direction"];
+      const hsMode = parsed?.hsMode ?? null;
+      return { countries, hsCodes, direction, hsMode, source: key };
+    } catch {
+      return null;
+    }
+  };
+
+  const fromUser = parse("mpl_user_prefs");
+  if (fromUser) return fromUser;
+  const fromWatch = parse("mpl_watch_prefs");
+  if (fromWatch) return fromWatch;
+  return { countries: [], hsCodes: [], direction: "both", hsMode: null, source: "default" };
+}
+
+function territoryLabel(code: string) {
+  const upper = normalizeCountryCode(code);
+  const known = DEFAULT_TERRITORIES.find((t) => t.code === upper)?.name;
+  if (known) return known;
+  try {
+    const dn = new Intl.DisplayNames(["fr"], { type: "region" });
+    return dn.of(upper) || upper;
+  } catch {
+    return upper;
+  }
+}
+
+function buildTerritory(code: string): Territory {
+  const upper = normalizeCountryCode(code);
+  return { code: upper, name: territoryLabel(upper) };
+}
 
 function normalizeHS(v: any) {
   return String(v ?? "").trim().replace(/[^\d]/g, "");
@@ -137,9 +218,59 @@ function vatFallbackForTerritory(code: string) {
   if (code === "ES") return "TVA 21% (indicatif)";
   if (code === "US") return "Sales tax selon Etat (indicatif)";
   if (code === "GB") return "TVA 20% (indicatif)";
-  return "-";
+  return "TVA locale (indicatif)";
 }
-export default function TaxesOM() {
+export default function ControlTower() {
+  const { user } = useAuth();
+  const { variables, setVariable, refreshNow } = useGlobalFilters();
+
+  const [prefs, setPrefs] = React.useState<UserPrefs>(() => readPrefs());
+  const [prefsOpen, setPrefsOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    setPrefs(readPrefs());
+  }, []);
+
+  const refreshPrefs = React.useCallback(() => {
+    setPrefs(readPrefs());
+  }, []);
+
+  const directionLabel: Record<NonNullable<UserPrefs["direction"]>, string> = {
+    export_fr: "Export France \u2192 Monde",
+    import_fr: "Import Monde \u2192 France",
+    both: "Import & Export",
+  };
+
+  const hasPrefs = prefs.countries.length > 0 || prefs.hsCodes.length > 0;
+  const activeTerritory = variables.territory_code ? normalizeCountryCode(String(variables.territory_code)) : null;
+
+  const effectiveTerritories = React.useMemo(() => {
+    if (activeTerritory) return [buildTerritory(activeTerritory)];
+    if (prefs.countries.length) return prefs.countries.map(buildTerritory);
+    return DEFAULT_TERRITORIES;
+  }, [activeTerritory, prefs.countries]);
+
+  const baseHsCodes = React.useMemo(() => {
+    const list = prefs.hsCodes.length ? prefs.hsCodes : DEFAULT_HS_CODES;
+    return Array.from(new Set(list.map((v) => String(v || "").trim()).filter(Boolean)));
+  }, [prefs.hsCodes]);
+
+  const territoryCodes = React.useMemo(() => effectiveTerritories.map((t) => t.code), [effectiveTerritories]);
+  const territoryKey = territoryCodes.join("|");
+  const hsKey = baseHsCodes.join("|");
+
+  const lastAppliedPrefsKey = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!prefs.countries.length) return;
+    if (variables.territory_code) return;
+    if (lastAppliedPrefsKey.current === territoryKey) return;
+
+    setVariable("territory_code", prefs.countries[0]);
+    refreshNow();
+    lastAppliedPrefsKey.current = territoryKey;
+  }, [prefs.countries, refreshNow, setVariable, territoryKey, variables.territory_code]);
+
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [warning, setWarning] = React.useState<string | null>(null);
@@ -161,14 +292,14 @@ export default function TaxesOM() {
 
   const filteredHs = React.useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return HS_CODES;
-    return HS_CODES.filter((h) => h.toLowerCase().includes(q));
-  }, [search]);
+    if (!q) return baseHsCodes;
+    return baseHsCodes.filter((h) => h.toLowerCase().includes(q));
+  }, [baseHsCodes, search]);
 
   const omMap = React.useMemo(() => {
     // omMap[territory][hsKey] = rows[]
     const map = new Map<string, Map<string, any[]>>();
-    for (const t of TERRITORIES) map.set(t.code, new Map());
+    for (const t of effectiveTerritories) map.set(t.code, new Map());
 
     // si table HS = hs4 ou hs6, on va matcher par préfixe
     const hsCol = omMeta?.hsCol || "";
@@ -203,12 +334,12 @@ export default function TaxesOM() {
     }
 
     return { map, hsLen };
-  }, [omRows, omMeta]);
+  }, [effectiveTerritories, omRows, omMeta]);
 
   const vatByTerritory = React.useMemo(() => {
     const tCol = vatMeta?.territoryCol;
     const m = new Map<string, any[]>();
-    for (const t of TERRITORIES) m.set(t.code, []);
+    for (const t of effectiveTerritories) m.set(t.code, []);
     for (const row of vatRows) {
       if (!tCol) continue;
       const terr = String(row?.[tCol] ?? "").trim();
@@ -216,12 +347,12 @@ export default function TaxesOM() {
       m.get(terr)!.push(row);
     }
     return m;
-  }, [vatRows, vatMeta]);
+  }, [effectiveTerritories, vatRows, vatMeta]);
 
   const extraCountByTerritory = React.useMemo(() => {
     const tCol = taxMeta?.territoryCol;
     const m = new Map<string, number>();
-    for (const t of TERRITORIES) m.set(t.code, 0);
+    for (const t of effectiveTerritories) m.set(t.code, 0);
     for (const row of taxRows) {
       if (!tCol) continue;
       const terr = String(row?.[tCol] ?? "").trim();
@@ -229,7 +360,7 @@ export default function TaxesOM() {
       m.set(terr, (m.get(terr) || 0) + 1);
     }
     return m;
-  }, [taxRows, taxMeta]);
+  }, [effectiveTerritories, taxRows, taxMeta]);
 
   const selectedDetails = React.useMemo(() => {
     if (!selected) return null;
@@ -294,11 +425,12 @@ export default function TaxesOM() {
               hsColLower.includes("hs8") ? 8 :
               hsColLower.includes("hs10") ? 10 : 0;
 
+            const normalizedHs = baseHsCodes.map(normalizeHS).filter(Boolean);
             const hsFilter = hsLen
-              ? Array.from(new Set(HS_CODES.map((h) => normalizeHS(h).slice(0, hsLen))))
-              : HS_CODES.map(normalizeHS);
+              ? Array.from(new Set(normalizedHs.map((h) => h.slice(0, hsLen))))
+              : normalizedHs;
 
-            const terrFilter = TERRITORIES.map((t) => t.code);
+            const terrFilter = territoryCodes;
 
             const res = await (supabase
               .from(omTable)
@@ -325,7 +457,7 @@ export default function TaxesOM() {
           setVatMeta({ table: vatTable, territoryCol: terrCol });
 
           if (terrCol) {
-            const terrFilter = TERRITORIES.map((t) => t.code);
+            const terrFilter = territoryCodes;
             const res = await (supabase
               .from(vatTable)
               .select("*")
@@ -359,7 +491,7 @@ export default function TaxesOM() {
           setTaxMeta({ table: taxTable, territoryCol: terrCol });
 
           if (terrCol) {
-            const terrFilter = TERRITORIES.map((t) => t.code);
+            const terrFilter = territoryCodes;
             const res = await (supabase
               .from(taxTable)
               .select("*")
@@ -394,21 +526,116 @@ export default function TaxesOM() {
     return () => {
       alive = false;
     };
-  }, [refreshNonce]);
+  }, [hsKey, refreshNonce, territoryKey]);
 
   return (
-    <AppLayout>
-      <div className="space-y-5">
-        {/* Header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <AppLayout wrapperClassName="control-tower-world">
+      <div className="space-y-6">
+        {/* Hero */}
+        <section className="rounded-3xl border border-border bg-card/95 p-6 shadow-xl">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-2xl space-y-2">
+              <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Tour de controle export</p>
+              <h1 className="text-3xl md:text-4xl font-semibold font-display text-foreground">
+                Votre cockpit export, regle sur vos marches prioritaires.
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Produits et destinations preconfigures pour decider vite : couts, taxes, documents et alertes utiles.
+              </p>
+              {activeTerritory ? (
+                <div className="mt-2">
+                  <Badge variant="secondary">Focus : {territoryLabel(activeTerritory)} ({activeTerritory})</Badge>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => setPrefsOpen(true)} className="gap-2">
+                <Sparkles className="h-4 w-4" />
+                {hasPrefs ? "Ajuster mon profil" : "Configurer mon profil"}
+              </Button>
+              <Link to="/app/simulator">
+                <Button variant="secondary" className="gap-2">
+                  <Scale className="h-4 w-4" />
+                  Simuler un cout
+                </Button>
+              </Link>
+              <Link to="/app/centre-veille/reglementation">
+                <Button variant="outline" className="gap-2">
+                  <Search className="h-4 w-4" />
+                  Veille
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-border bg-white/80 p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <MapPin className="h-4 w-4" />
+                Destinations prioritaires
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {prefs.countries.length ? (
+                  prefs.countries.map((code) => (
+                    <Badge key={code} variant="secondary">
+                      {territoryLabel(code)} ({normalizeCountryCode(code)})
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-xs text-muted-foreground">Aucune destination definie.</span>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-white/80 p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Hash className="h-4 w-4" />
+                Produits (HS)
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {prefs.hsCodes.length ? (
+                  prefs.hsCodes.map((hs) => (
+                    <Badge key={hs} variant="outline">
+                      HS {hs}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-xs text-muted-foreground">Aucun HS : conditions generales.</span>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-white/80 p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Target className="h-4 w-4" />
+                Mode & source
+              </div>
+              <div className="mt-2 text-sm font-semibold">{directionLabel[prefs.direction ?? "both"]}</div>
+              <div className="mt-1 text-xs text-muted-foreground">Source : {PREF_SOURCE_LABEL[prefs.source]}</div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                {prefs.hsCodes.length ? "Lecture detaillee par produit." : "Lecture generale multi-produits."}
+              </div>
+            </div>
+          </div>
+
+          {!hasPrefs ? (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              Ajoute au moins une destination et un HS pour personnaliser le cockpit.
+            </div>
+          ) : null}
+        </section>
+
+        {/* Ops header */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">Dashboard</p>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
+            <p className="text-sm text-muted-foreground">Tableau operationnel</p>
+            <h2 className="text-2xl font-semibold flex items-center gap-2">
               <Scale className="h-6 w-6" />
-              OM & Taxes — Récapitulatif par territoire - HS code
-            </h1>
+              Taxes & OM - recapitulatif par destination / HS
+            </h2>
             <p className="text-sm text-muted-foreground">
-              Objectif : afficher un tableau récapitulatif des <b>OM</b> et <b>taxes</b> pour tes HS codes sur chaque territoire.
+              Vue synthese des taxes et obligations selon les territoires et vos produits.
             </p>
           </div>
 
@@ -445,8 +672,8 @@ export default function TaxesOM() {
 
         {/* Meta */}
         <div className="flex flex-wrap gap-2 items-center">
-          <Badge variant="secondary">HS: {HS_CODES.length}</Badge>
-          <Badge variant="secondary">Territoires: {TERRITORIES.length}</Badge>
+          <Badge variant="secondary">HS: {baseHsCodes.length}</Badge>
+          <Badge variant="secondary">Territoires: {effectiveTerritories.length}</Badge>
           <Badge variant="outline">
             OM table: <span className="ml-1 font-semibold">{omMeta?.table || "—"}</span>
           </Badge>
@@ -483,7 +710,7 @@ export default function TaxesOM() {
                 className="pl-9"
               />
             </div>
-            <Badge variant="secondary">{filteredHs.length} / {HS_CODES.length}</Badge>
+            <Badge variant="secondary">{filteredHs.length} / {baseHsCodes.length}</Badge>
             <div className="text-xs text-muted-foreground sm:ml-auto">
               Clique une case pour voir les détails (OM/VAT/Extra).
             </div>
@@ -505,7 +732,7 @@ export default function TaxesOM() {
                 <thead className="bg-muted/40 sticky top-0">
                   <tr className="[&>th]:text-left [&>th]:px-3 [&>th]:py-2">
                     <th className="min-w-[120px]">HS code</th>
-                    {TERRITORIES.map((t) => (
+                    {effectiveTerritories.map((t) => (
                       <th key={t.code} className="min-w-[200px]">
                         <div className="font-medium">{t.code}</div>
                         <div className="text-xs text-muted-foreground">{t.name}</div>
@@ -523,7 +750,7 @@ export default function TaxesOM() {
                           <Badge variant="outline">{hs}</Badge>
                         </td>
 
-                        {TERRITORIES.map((t) => {
+                        {effectiveTerritories.map((t) => {
                           const terrMap = omMap.map.get(t.code);
                           const omList = terrMap?.get(hsKey) || [];
                           const omRate = omList.length ? extractRateFromRow(omList[0]) : null;
@@ -677,6 +904,13 @@ export default function TaxesOM() {
             )}
           </CardContent>
         </Card>
+
+        <OnboardingPrefsModal
+          open={prefsOpen}
+          onOpenChange={setPrefsOpen}
+          email={user?.email ?? null}
+          onSaved={refreshPrefs}
+        />
       </div>
     </AppLayout>
   );

@@ -9,41 +9,41 @@ export const marketingTranslations = {
     },
 
     heroLanding: {
-      title: "Le département export digital des PME.",
-      subtitle: "Simulation, documents, conformité et veille — sans recruter, sans multiplier les outils.",
-      ctaPrimary: "Tester gratuitement",
-      ctaSecondary: "Découvrir les plans",
+      title: "La tour de controle export des PME.",
+      subtitle: "Nous reglons le cockpit sur vos produits et destinations : couts, taxes, documents, risques.",
+      ctaPrimary: "Voir le cockpit",
+      ctaSecondary: "Offre en ligne 65 EUR/mois",
       proofDescription:
-        "Voilà comment la plateforme remplace les tâches routinières de l’ADV, du responsable export et du consultant sur les routines.",
-      proofTitle: "Ce que l’outil automatise (au lieu d’embaucher)",
+        "Un cockpit qui remplace les routines manuelles : couts, conformite, documents, veille.",
+      proofTitle: "Ce que le cockpit automatise",
       proofItems: [
         {
-          title: "ADV export",
-          description: "Checklists, documents et PDF prêts à partager avec vos opérationnels.",
+          title: "Couts & marges",
+          description: "Scenarios rapides : TVA, droits, transport, impact marge.",
         },
         {
-          title: "Responsable export / ADV",
-          description: "Standardisation, contrôle et historiques pour piloter vos flux.",
+          title: "Documents & conformite",
+          description: "Checklist claire, pieces a fournir, anomalies a corriger.",
         },
         {
-          title: "Consultant export (taches récurrentes)",
-          description: "Cadrage, synthèse et rapports sans mobiliser un consultant trop souvent.",
+          title: "Pilotage par destination",
+          description: "Lecture par pays/HS, risques et obligations par marche.",
         },
         {
-          title: "Veille & conformité",
-          description: "Flux RSS, filtres et alertes par pays/HS selon votre plan.",
+          title: "Veille ciblee",
+          description: "Signaux reglementaires par pays/produits, alertes utiles.",
         },
       ],
       bullets: [
-        "Automatise une grande partie du travail d’un service export (ADV, responsable, consultant sur tâches récurrentes)",
-        "Simulateur coût rendu (Incoterms, transport, frais) + rapports PDF",
-        "Checklists documentaires standardisées",
-        "Veille réglementaire automatisée (flux + filtres + digest)",
+        "Profil regle par pays & HS",
+        "Cout rendu + alertes DDP/Incoterms",
+        "Checklist documents claire",
+        "Veille ciblee par destination",
       ],
       disclaimers: [
         "Ne remplace pas un agent en douane/commissionnaire.",
-        "Estimations et checklists à titre indicatif, sources fournies quand disponibles.",
-        "L’utilisateur reste responsable de la conformité finale.",
+        "Estimations et checklists a titre indicatif, sources fournies quand disponibles.",
+        "L'utilisateur reste responsable de la conformite finale.",
       ],
     },
 
@@ -161,36 +161,36 @@ export const marketingTranslations = {
     },
 
     heroLanding: {
-      title: "Your digital export department for SMEs.",
-      subtitle: "Costs, documents, compliance watch — without hiring.",
-      ctaPrimary: "Try for free",
-      ctaSecondary: "See the plans",
+      title: "Your export control tower for SMEs.",
+      subtitle: "We tune the cockpit to your products and destinations: costs, taxes, documents, risks.",
+      ctaPrimary: "View the cockpit",
+      ctaSecondary: "Online plan EUR 65/mo",
       proofDescription:
-        "This is how the platform removes routine workloads from your ADV, export manager and consultant.",
-      proofTitle: "What the tool automates instead of hiring",
+        "A cockpit that removes manual routines: costs, compliance, documents, watch.",
+      proofTitle: "What the cockpit automates",
       proofItems: [
         {
-          title: "Export back-office",
-          description: "Checklists, documents and PDFs ready to share across teams.",
+          title: "Costs & margins",
+          description: "Fast scenarios: VAT, duties, transport, margin impact.",
         },
         {
-          title: "Export manager / ADV lead",
-          description: "Standardization, quality control and history logs for every flow.",
+          title: "Documents & compliance",
+          description: "Clear checklist, required docs, anomalies to fix.",
         },
         {
-          title: "Export consultant (repeating tasks)",
-          description: "Scoping, synthesis and templated reporting without overloading consultants.",
+          title: "Destination steering",
+          description: "Read by country/HS, risks and obligations per market.",
         },
         {
-          title: "Watch & compliance",
-          description: "RSS feeds, filters and alerts by country/HS tailored to your plan.",
+          title: "Targeted watch",
+          description: "Regulatory signals by country/products, useful alerts.",
         },
       ],
       bullets: [
-        "Automates a large part of export work (ADV, manager, consultant on recurring tasks)",
-        "Landed-cost simulator (Incoterms, transport, fees) + PDF reports",
-        "Standardized documentation checklists",
-        "Automated compliance watch (feeds + filters + digest)",
+        "Profile set by country & HS",
+        "Landed cost + DDP/Incoterms alerts",
+        "Clear document checklist",
+        "Targeted watch by destination",
       ],
       disclaimers: [
         "Does not replace a licensed customs agent/forwarder.",

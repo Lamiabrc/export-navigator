@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Newsreader:wght@400;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Serif:wght@400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -143,7 +143,16 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: "Space Grotesk", "Segoe UI", sans-serif;
+    font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .font-display {
+    font-family: "IBM Plex Serif", "Georgia", serif;
+    letter-spacing: -0.01em;
   }
 
   /* ✅ FIX IMPORTANT: supprime l’effet Vite “site centré + padding + text-align:center” */

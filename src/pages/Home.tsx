@@ -29,18 +29,18 @@ export default function Home() {
 
   const heroTitle = tt(
     "heroLanding.title",
-    "Votre service export digital — sans recruter.",
-    "Your digital export department — without hiring."
+    "Votre tour de controle export, prete en 24 h.",
+    "Your export control tower, ready in 24 hours."
   );
 
   const heroSubtitle = tt(
     "heroLanding.subtitle",
-    "Simulez vos coûts export, détectez les pièges (TVA, DDP, sanctions) et sortez une checklist claire avant expédition. En 2 minutes.",
-    "Simulate export costs, spot traps (VAT, DDP, sanctions) and get a clear pre-shipment checklist. In 2 minutes."
+    "Cockpit regle sur vos produits et destinations : couts, taxes, documents, risques. Vous decidez vite.",
+    "Cockpit tuned to your products and destinations: costs, taxes, documents, risks. Decide faster."
   );
 
-  const heroPrimary = tt("heroLanding.ctaPrimary", "Lancer l’outil", "Run the tool");
-  const heroSecondary = tt("heroLanding.ctaSecondary", "Offre en ligne 65€/mois", "Online plan €65/mo");
+  const heroPrimary = tt("heroLanding.ctaPrimary", "Voir le cockpit", "View the cockpit");
+  const heroSecondary = tt("heroLanding.ctaSecondary", "Offre en ligne 65 EUR/mois", "Online plan EUR 65/mo");
 
   // Bullets (fallback si i18n vide)
   const heroBulletsRaw = t("heroLanding.bullets");
@@ -49,16 +49,16 @@ export default function Home() {
       ? (heroBulletsRaw as string[])
       : isEN
         ? [
-            "Landed cost in minutes",
-            "Incoterms / DDP risk flags",
-            "Docs checklist (invoice, PL, CO…)",
-            "Regulatory watch (signals)",
+            "Profile set by country & HS",
+            "Landed cost + DDP/Incoterms alerts",
+            "Clear document checklist",
+            "Targeted watch by destination",
           ]
         : [
-            "Coût rendu (landed cost) en minutes",
-            "Incoterms / DDP : alertes risques",
-            "Checklist docs (facture, PL, CO…)",
-            "Veille réglementaire (signaux)",
+            "Profil regle par pays & HS",
+            "Cout rendu + alertes DDP/Incoterms",
+            "Checklist documents claire",
+            "Veille ciblee par destination",
           ];
 
   // Feature cards (fallback si i18n vide)
@@ -74,45 +74,44 @@ export default function Home() {
         ? [
             {
               title: "Costs & margins",
-              description: "Estimate landed cost and see what impacts your margin (VAT, duties, fees).",
+              description: "Fast scenarios: VAT, duties, transport, margin impact.",
             },
             {
-              title: "Risk flags",
-              description: "DDP traps, inconsistencies, compliance red flags before shipment.",
+              title: "Documents & compliance",
+              description: "Clear checklist, required docs, anomalies to fix.",
             },
             {
-              title: "Docs & actions",
-              description: "Get a clear checklist + next actions: GO / NO GO and what to fix.",
+              title: "Destination steering",
+              description: "Read by country/HS, risks and obligations per market.",
             },
           ]
         : [
             {
-              title: "Coûts & marges",
-              description: "Estimez votre coût rendu et l’impact sur votre marge (TVA, douane, frais).",
+              title: "Couts & marges",
+              description: "Scenarios rapides : TVA, droits, transport, impact marge.",
             },
             {
-              title: "Alertes risques",
-              description: "Pièges DDP, incohérences, points de conformité avant expédition.",
+              title: "Documents & conformite",
+              description: "Checklist claire, pieces a fournir, anomalies a corriger.",
             },
             {
-              title: "Docs & actions",
-              description: "Checklist + actions : GO / NO GO et quoi corriger immédiatement.",
+              title: "Pilotage par destination",
+              description: "Lecture par pays/HS, risques et obligations par marche.",
             },
           ];
 
-  // ✅ Proof section : on affiche même si i18n n’a rien
   const proofTitle = tt(
     "heroLanding.proofTitle",
-    "Ce que l’outil automatise (au lieu d’embaucher)",
-    "What the tool automates (instead of hiring)"
+    "Ce que le cockpit automatise",
+    "What the cockpit automates"
   );
 
   const proofDescription =
     (t("heroLanding.proofDescription") as string) && (t("heroLanding.proofDescription") as string) !== "heroLanding.proofDescription"
       ? (t("heroLanding.proofDescription") as string)
       : isEN
-        ? "A practical export view: costs, compliance, documents and watch — in one place."
-        : "Une vue export opérationnelle : coûts, conformité, documents et veille — au même endroit.";
+        ? "A cockpit that removes manual routines: costs, compliance, documents, watch."
+        : "Un cockpit qui remplace les routines manuelles : couts, conformite, documents, veille.";
 
   const proofItemsRaw = t("heroLanding.proofItems");
   const proofItemsFromI18n: Array<{ title: string; description: string }> =
@@ -201,14 +200,14 @@ export default function Home() {
         </div>
 
         <div className="relative z-10 mx-auto flex min-h-[88vh] max-w-5xl flex-col items-center justify-center gap-6 px-6 text-center">
-          <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.6em] text-white/70">
+          <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs tracking-[0.2em] font-semibold text-white/70">
             MPL Export Navigator
             <span className="hidden rounded-full bg-white/10 px-2 py-1 text-[10px] tracking-[0.3em] text-white/70 sm:inline">
-              {isEN ? "Online plan €65/mo" : "Offre en ligne 65€/mois"}
+              {heroSecondary}
             </span>
           </p>
 
-          <h1 className="text-4xl font-semibold leading-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
+          <h1 className="text-4xl font-semibold font-display leading-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
             {heroTitle}
           </h1>
 
@@ -216,7 +215,7 @@ export default function Home() {
 
           <div className="mt-2 max-w-3xl">
             <div className="rounded-3xl border border-white/15 bg-white/5 p-4 text-left">
-              <p className="text-xs uppercase tracking-[0.35em] text-white/60">
+              <p className="text-xs tracking-[0.2em] font-semibold text-white/60">
                 {isEN ? "Simple promise" : "Promesse simple"}
               </p>
               <p className="mt-2 text-sm text-white/85">
@@ -227,7 +226,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-4 grid w-full max-w-3xl grid-cols-1 gap-2 text-xs uppercase tracking-[0.6em] text-white/80 md:grid-cols-2">
+          <div className="mt-4 grid w-full max-w-3xl grid-cols-1 gap-2 text-xs tracking-[0.2em] font-semibold text-white/80 md:grid-cols-2">
             {heroBullets.map((bullet) => (
               <div key={bullet} className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2">
                 {bullet}
@@ -235,7 +234,7 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="flex flex-wrap justify-center gap-4 text-xs font-semibold uppercase tracking-[0.35em] md:text-sm">
+          <div className="flex flex-wrap justify-center gap-4 text-xs font-semibold tracking-[0.2em] md:text-sm">
             <Link to="/tool" className="rounded-full bg-[#DC2626] px-7 py-3 text-white transition hover:bg-[#b0231d]">
               {heroPrimary}
             </Link>
@@ -247,7 +246,7 @@ export default function Home() {
           {/* PROOF BAR */}
           <div className="mt-6 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-              <p className="text-xs uppercase tracking-[0.35em] text-white/60">
+              <p className="text-xs tracking-[0.2em] font-semibold text-white/60">
                 {isEN ? "Costs" : "Coûts"}
               </p>
               <p className="mt-1 text-sm text-white/85">
@@ -255,7 +254,7 @@ export default function Home() {
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-              <p className="text-xs uppercase tracking-[0.35em] text-white/60">
+              <p className="text-xs tracking-[0.2em] font-semibold text-white/60">
                 {isEN ? "Risks" : "Risques"}
               </p>
               <p className="mt-1 text-sm text-white/85">
@@ -263,7 +262,7 @@ export default function Home() {
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-              <p className="text-xs uppercase tracking-[0.35em] text-white/60">
+              <p className="text-xs tracking-[0.2em] font-semibold text-white/60">
                 {isEN ? "Action" : "Action"}
               </p>
               <p className="mt-1 text-sm text-white/85">
@@ -273,7 +272,7 @@ export default function Home() {
           </div>
 
           {/* CONTACT STRIP */}
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-xs uppercase tracking-[0.35em] text-white/70">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-xs tracking-[0.2em] font-semibold text-white/70">
             <a
               href={`tel:${phoneRaw}`}
               className="rounded-full border border-white/15 bg-white/5 px-4 py-2 transition hover:bg-white/10"
@@ -301,19 +300,19 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.6em] text-[#1E3A8A]">{proofTitle}</p>
+              <p className="text-xs tracking-[0.2em] font-semibold text-[#1E3A8A]">{proofTitle}</p>
               <p className="mt-2 text-sm text-slate-600">{proofDescription}</p>
             </div>
             <div className="mt-4 flex flex-wrap gap-3 md:mt-0">
               <Link
                 to="/pricing"
-                className="rounded-full bg-[#1E3A8A] px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-[#162864]"
+                className="rounded-full bg-[#1E3A8A] px-6 py-3 text-xs font-semibold tracking-[0.2em] text-white transition hover:bg-[#162864]"
               >
                 {isEN ? "See €65 plan" : "Voir l’offre 65€"}
               </Link>
               <Link
                 to="/veille"
-                className="rounded-full border border-[#1E3A8A]/30 px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
+                className="rounded-full border border-[#1E3A8A]/30 px-6 py-3 text-xs font-semibold tracking-[0.2em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
               >
                 {isEN ? "View watch" : "Voir la veille"}
               </Link>
@@ -339,8 +338,8 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-6">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="text-sm uppercase tracking-[0.6em] text-[#1E3A8A]">Focus</h2>
-              <p className="mt-2 text-3xl font-semibold text-[#0B1220]">
+              <h2 className="text-xs tracking-[0.2em] font-semibold text-[#1E3A8A]">Focus</h2>
+              <p className="mt-2 text-3xl font-semibold font-display text-[#0B1220]">
                 {isEN ? "Clear view, fast decisions" : "Vue claire, décisions rapides"}
               </p>
               <p className="mt-2 max-w-2xl text-sm text-slate-600">
@@ -353,13 +352,13 @@ export default function Home() {
             <div className="mt-4 flex flex-wrap gap-3 md:mt-0">
               <Link
                 to="/import/check-invoice"
-                className="rounded-full bg-[#1E3A8A] px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-[#162864]"
+                className="rounded-full bg-[#1E3A8A] px-6 py-3 text-xs font-semibold tracking-[0.2em] text-white transition hover:bg-[#162864]"
               >
                 {isEN ? "Check an invoice" : "Vérifier une facture"}
               </Link>
               <Link
                 to="/tool"
-                className="rounded-full border border-[#1E3A8A]/30 px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
+                className="rounded-full border border-[#1E3A8A]/30 px-6 py-3 text-xs font-semibold tracking-[0.2em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
               >
                 {isEN ? "Run the analysis" : "Lancer l’analyse"}
               </Link>
@@ -378,14 +377,14 @@ export default function Home() {
                 <div className="mt-3 flex items-center gap-3">
                   <Link
                     to="/tool"
-                    className="text-xs font-semibold uppercase tracking-[0.35em] text-[#0B1220]/70 transition group-hover:text-[#0B1220]"
+                    className="text-xs font-semibold tracking-[0.2em] text-[#0B1220]/70 transition group-hover:text-[#0B1220]"
                   >
                     {isEN ? "Try →" : "Essayer →"}
                   </Link>
                   <span className="text-xs text-slate-400">•</span>
                   <Link
                     to="/pricing"
-                    className="text-xs font-semibold uppercase tracking-[0.35em] text-[#1E3A8A]/80 transition hover:text-[#1E3A8A]"
+                    className="text-xs font-semibold tracking-[0.2em] text-[#1E3A8A]/80 transition hover:text-[#1E3A8A]"
                   >
                     {isEN ? "€65/mo" : "65€/mois"}
                   </Link>
@@ -399,16 +398,16 @@ export default function Home() {
       {/* HOW IT WORKS */}
       <section className="bg-slate-50 py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <h3 className="text-sm uppercase tracking-[0.6em] text-slate-500">
+          <h3 className="text-xs tracking-[0.2em] font-semibold text-slate-500">
             {isEN ? "How it works" : "Comment ça marche"}
           </h3>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">
+          <p className="mt-2 text-3xl font-semibold font-display text-slate-900">
             {isEN ? "3 steps, no hassle" : "3 étapes, sans prise de tête"}
           </p>
 
           <div className="mt-10 grid gap-6 md:grid-cols-3">
             <div className="rounded-3xl border border-slate-200 bg-white p-6">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">{isEN ? "Step 1" : "Étape 1"}</p>
+              <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">{isEN ? "Step 1" : "Étape 1"}</p>
               <p className="mt-2 text-lg font-semibold text-slate-900">
                 {isEN ? "Choose destination & context" : "Choisir destination & contexte"}
               </p>
@@ -418,7 +417,7 @@ export default function Home() {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-6">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">{isEN ? "Step 2" : "Étape 2"}</p>
+              <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">{isEN ? "Step 2" : "Étape 2"}</p>
               <p className="mt-2 text-lg font-semibold text-slate-900">
                 {isEN ? "Import / check an invoice" : "Importer / vérifier une facture"}
               </p>
@@ -428,7 +427,7 @@ export default function Home() {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-6">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">{isEN ? "Step 3" : "Étape 3"}</p>
+              <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">{isEN ? "Step 3" : "Étape 3"}</p>
               <p className="mt-2 text-lg font-semibold text-slate-900">
                 {isEN ? "Decide & act" : "Décider & passer à l’action"}
               </p>
@@ -441,13 +440,13 @@ export default function Home() {
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
               to="/tool"
-              className="rounded-full bg-[#DC2626] px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-[#b0231d]"
+              className="rounded-full bg-[#DC2626] px-6 py-3 text-xs font-semibold tracking-[0.2em] text-white transition hover:bg-[#b0231d]"
             >
               {isEN ? "Start now" : "Démarrer maintenant"}
             </Link>
             <Link
               to="/pricing"
-              className="rounded-full border border-slate-300 bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-slate-800 transition hover:border-slate-500"
+              className="rounded-full border border-slate-300 bg-white px-6 py-3 text-xs font-semibold tracking-[0.2em] text-slate-800 transition hover:border-slate-500"
             >
               {isEN ? "Plans & limits" : "Offres & limites"}
             </Link>
@@ -458,8 +457,8 @@ export default function Home() {
       {/* SOURCES / TRUST */}
       <section className="bg-white py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <h3 className="text-sm uppercase tracking-[0.6em] text-[#1E3A8A]">{isEN ? "Trust" : "Confiance"}</h3>
-          <p className="mt-2 text-3xl font-semibold text-[#0B1220]">
+          <h3 className="text-xs tracking-[0.2em] font-semibold text-[#1E3A8A]">{isEN ? "Trust" : "Confiance"}</h3>
+          <p className="mt-2 text-3xl font-semibold font-display text-[#0B1220]">
             {isEN ? "Compliance & watch, at the right place" : "Conformité & veille, au bon endroit"}
           </p>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
@@ -470,7 +469,7 @@ export default function Home() {
 
           <div className="mt-10 grid gap-6 md:grid-cols-3">
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">{isEN ? "Customs / VAT" : "Douanes / TVA"}</p>
+              <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">{isEN ? "Customs / VAT" : "Douanes / TVA"}</p>
               <p className="mt-2 text-lg font-semibold text-slate-900">{isEN ? "Rules & obligations" : "Règles & obligations"}</p>
               <p className="mt-2 text-sm text-slate-600">
                 {isEN
@@ -480,7 +479,7 @@ export default function Home() {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">DDP / Incoterms</p>
+              <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">DDP / Incoterms</p>
               <p className="mt-2 text-lg font-semibold text-slate-900">
                 {isEN ? "Responsibilities & costs" : "Responsabilités & coûts"}
               </p>
@@ -492,7 +491,7 @@ export default function Home() {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-              <p className="text-xs uppercase tracking-[0.35em] text-slate-500">{isEN ? "Compliance" : "Conformité"}</p>
+              <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">{isEN ? "Compliance" : "Conformité"}</p>
               <p className="mt-2 text-lg font-semibold text-slate-900">{isEN ? "Sanctions / vigilance" : "Sanctions / vigilance"}</p>
               <p className="mt-2 text-sm text-slate-600">
                 {isEN ? "Signals & control points before shipment." : "Signaux & points de contrôle avant expédition."}
@@ -505,8 +504,8 @@ export default function Home() {
       {/* FINAL CTA */}
       <section className="py-16">
         <div className="mx-auto max-w-5xl px-6 text-center">
-          <p className="text-sm uppercase tracking-[0.5em] text-slate-500">{isEN ? "Next steps" : "Étapes suivantes"}</p>
-          <h3 className="mt-3 text-3xl font-semibold text-slate-900">{isEN ? "Need an expert?" : "Besoin d’un expert ?"}</h3>
+          <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">{isEN ? "Next steps" : "Étapes suivantes"}</p>
+          <h3 className="mt-3 text-3xl font-semibold font-display text-slate-900">{isEN ? "Need an expert?" : "Besoin d’un expert ?"}</h3>
           <p className="mt-2 text-slate-600">
             {isEN
               ? "The tool gives a first view. For high-risk shipments (DDP, sanctions, sensitive goods), get an express validation."
@@ -516,19 +515,19 @@ export default function Home() {
           <div className="mt-6 flex flex-wrap justify-center gap-4">
             <Link
               to="/tool"
-              className="rounded-full bg-[#DC2626] px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-white transition hover:bg-[#b0231d]"
+              className="rounded-full bg-[#DC2626] px-6 py-3 text-xs font-semibold tracking-[0.2em] text-white transition hover:bg-[#b0231d]"
             >
               {isEN ? "Run the tool" : "Lancer l’outil"}
             </Link>
             <Link
               to="/pricing"
-              className="rounded-full border border-[#1E3A8A]/60 px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
+              className="rounded-full border border-[#1E3A8A]/60 px-6 py-3 text-xs font-semibold tracking-[0.2em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
             >
               {isEN ? "Online plan €65/mo" : "Offre en ligne 65€/mois"}
             </Link>
             <Link
               to="/contact?offer=diagnostic"
-              className="rounded-full border border-slate-300 bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.4em] text-slate-800 transition hover:border-slate-500"
+              className="rounded-full border border-slate-300 bg-white px-6 py-3 text-xs font-semibold tracking-[0.2em] text-slate-800 transition hover:border-slate-500"
             >
               {isEN ? "Express validation" : "Validation express"}
             </Link>
