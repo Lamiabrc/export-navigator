@@ -116,7 +116,7 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
       return;
     }
 
-    const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2023-10-16" });
+    const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-04-10" });
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false },

@@ -202,7 +202,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let q = admin
       .from("regulatory_items")
       .select("id,title,summary,link,published_at,category,territory,image_url,created_at, regulatory_feeds(source_name,source_url,logo_url,enabled,is_public,territory,category)")
-      .order("published_at", { ascending: false, nullsLast: true })
+      .order("published_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(queryLimit);
 

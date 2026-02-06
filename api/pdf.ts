@@ -1,13 +1,11 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { allowCors } from "./_supabase.js";
+import { allowCors, readJson } from "./_supabase.js";
 
 function toText(v: any) {
   return String(v ?? "").trim();
 }
 
-export default async function handler(req: any, res: any) {
-  if (allowCors(req, res)) return;
-
+export default allowCors(async function handler(req: any, res: any) {
   if (req.method !== "POST") {
     res.statusCode = 405;
     res.end("Method not allowed");
@@ -15,10 +13,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const chunks: any[] = [];
-    for await (const c of req) chunks.push(c);
-    const raw = Buffer.concat(chunks).toString("utf-8");
-    const payload = raw ? JSON.parse(raw) : {};
+    const payload = await readJson<any>(req);
 
     const title = toText(payload?.title) || "Rapport de contrôle export";
     const email = toText(payload?.email);
@@ -90,4 +85,4 @@ export default async function handler(req: any, res: any) {
     res.statusCode = 500;
     res.end(e?.message || "pdf failed");
   }
-}
+});

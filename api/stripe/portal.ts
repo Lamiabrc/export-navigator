@@ -4,7 +4,7 @@ import Stripe from "stripe";
 import { allowCors, json, supabaseAdmin } from "../_supabase.js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2023-10-16",
+  apiVersion: "2024-04-10",
 });
 
 function getBearerToken(req: VercelRequest) {
