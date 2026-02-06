@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { BrandLogo } from "../BrandLogo";
 import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
+import { TricolorBanner } from "@/components/layout/TricolorBanner";
 import {
   TimeRangePicker,
   AutoRefreshControl,
@@ -186,6 +187,9 @@ export function MainLayout({
         </header>
 
         <div className={cn("p-4 md:p-10", contentClassName)}>
+          <div className="mb-4">
+            <TricolorBanner />
+          </div>
           {variant === "bare" ? (
             <div className="space-y-4">{children}</div>
           ) : (

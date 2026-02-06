@@ -6,6 +6,7 @@ import { useI18n } from "@/contexts/LanguageContext";
 import type { LanguageCode } from "@/i18n/translations";
 import { navLinks } from "@/config/navLinks";
 import { GdprGuarantee } from "@/components/GdprGuarantee";
+import { TricolorBanner } from "@/components/layout/TricolorBanner";
 
 // ✅ Encoding-safe flags (avoid broken emoji bytes)
 const flags: Record<LanguageCode, string> = {
@@ -155,7 +156,12 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
         <div className="h-1 bg-gradient-to-r from-blue-700 via-white to-red-600" />
       </header>
 
-      <main className="flex-1">{children}</main>
+      <main className="flex-1">
+        <div className="mx-auto max-w-6xl px-6 pt-6">
+          <TricolorBanner />
+        </div>
+        {children}
+      </main>
 
       <div className="border-t border-blue-100 bg-white/85 px-6 py-8">
         <div className="mx-auto max-w-6xl">

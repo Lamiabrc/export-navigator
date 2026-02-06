@@ -4,6 +4,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
+import { TricolorBanner } from "@/components/layout/TricolorBanner";
 import { useI18n } from "@/contexts/LanguageContext";
 import type { LanguageCode } from "@/i18n/translations";
 import { navLinks } from "@/config/navLinks";
@@ -320,6 +321,9 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
       </header>
 
       <main className="relative z-10 mx-auto w-full max-w-7xl px-6 py-10 md:px-10">
+        <div className="mb-6">
+          <TricolorBanner />
+        </div>
         {children ?? <Outlet />}
       </main>
 
@@ -333,10 +337,10 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
               <Link to="/methodologie" className="hover:text-foreground hover:underline">
-                Methodologie
+                Méthodologie
               </Link>
               <Link to="/about" className="hover:text-foreground hover:underline">
-                A propos
+                À propos
               </Link>
               <Link to="/guides" className="hover:text-foreground hover:underline">
                 Guides
