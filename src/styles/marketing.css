@@ -1,0 +1,82 @@
+﻿@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&family=Cormorant+Garamond:wght@500;600;700&display=swap");
+
+:root {
+  --marketing-sans: "Manrope", "IBM Plex Sans", "Segoe UI", sans-serif;
+  --marketing-serif: "Cormorant Garamond", "IBM Plex Serif", serif;
+  --marketing-ink: #0b1220;
+  --marketing-line: rgba(15, 23, 42, 0.08);
+}
+
+.marketing-shell {
+  font-family: var(--marketing-sans);
+  color: var(--marketing-ink);
+  background-color: #f7f8fb;
+}
+
+.marketing-shell .marketing-display {
+  font-family: var(--marketing-serif);
+  letter-spacing: -0.02em;
+}
+
+.marketing-fine-grid {
+  background-image: linear-gradient(var(--marketing-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--marketing-line) 1px, transparent 1px);
+  background-size: 120px 120px;
+}
+
+.marketing-radial {
+  background: radial-gradient(circle at 20% 15%, rgba(37, 99, 235, 0.12), transparent 45%),
+    radial-gradient(circle at 80% 20%, rgba(220, 38, 38, 0.1), transparent 45%);
+}
+
+.marketing-section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.04), rgba(15, 23, 42, 0.12), rgba(15, 23, 42, 0.04));
+}
+
+.marketing-card {
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  transition: transform 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease;
+}
+
+.marketing-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.14);
+  border-color: rgba(15, 23, 42, 0.18);
+}
+
+.marketing-device {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: linear-gradient(160deg, #0f172a 0%, #1e293b 45%, #0f172a 100%);
+  box-shadow: 0 30px 60px rgba(15, 23, 42, 0.25);
+}
+
+.marketing-device::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.05), transparent 40%, rgba(255, 255, 255, 0.08));
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.marketing-device::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 20%, rgba(59, 130, 246, 0.18), transparent 50%),
+    radial-gradient(circle at 70% 80%, rgba(248, 113, 113, 0.16), transparent 45%);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketing-card {
+    transition: none;
+  }
+}

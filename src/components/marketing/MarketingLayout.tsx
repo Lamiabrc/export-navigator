@@ -19,7 +19,17 @@ function cx(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
 }
 
-export const MarketingLayout = ({ children }: { children: ReactNode }) => {
+type MarketingLayoutProps = {
+  children: ReactNode;
+  hideBanner?: boolean;
+  hideFooter?: boolean;
+};
+
+export const MarketingLayout = ({
+  children,
+  hideBanner = false,
+  hideFooter = false,
+}: MarketingLayoutProps) => {
   const { lang, t, setLang } = useI18n();
   const location = useLocation();
   const banner = getBannerContent(location.pathname);
@@ -159,32 +169,38 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
       </header>
 
       <main className="flex-1">
-        <div className="mx-auto max-w-6xl px-6 pt-6">
-          <TricolorBanner title={banner.title} question={banner.question} />
-        </div>
+        {!hideBanner && (
+          <div className="mx-auto max-w-6xl px-6 pt-6">
+            <TricolorBanner title={banner.title} question={banner.question} />
+          </div>
+        )}
         {children}
       </main>
 
-      <div className="border-t border-blue-100 bg-white/85 px-6 py-8">
-        <div className="mx-auto max-w-6xl">
-          <GdprGuarantee />
+      {!hideFooter && (
+        <>
+          <div className="border-t border-blue-100 bg-white/85 px-6 py-8">
+            <div className="mx-auto max-w-6xl">
+              <GdprGuarantee />
 
-          {(globalDisclaimers.length > 0 || heroDisclaimers.length > 0) && (
-            <div className="mt-6 grid gap-2 text-xs text-slate-600 md:grid-cols-2">
-              {[...heroDisclaimers, ...globalDisclaimers]
-                .filter(Boolean)
-                .map((text, index) => (
-                  <p key={`${text}-${index}`} className="text-xs text-slate-500">
-                    {text}
-                  </p>
-                ))}
+              {(globalDisclaimers.length > 0 || heroDisclaimers.length > 0) && (
+                <div className="mt-6 grid gap-2 text-xs text-slate-600 md:grid-cols-2">
+                  {[...heroDisclaimers, ...globalDisclaimers]
+                    .filter(Boolean)
+                    .map((text, index) => (
+                      <p key={`${text}-${index}`} className="text-xs text-slate-500">
+                        {text}
+                      </p>
+                    ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
-      <footer className="border-t border-blue-100 bg-white/85 py-8 text-center text-xs font-medium text-slate-500">
-        {t("footer.copy")}
-      </footer>
+          </div>
+          <footer className="border-t border-blue-100 bg-white/85 py-8 text-center text-xs font-medium text-slate-500">
+            {t("footer.copy")}
+          </footer>
+        </>
+      )}
     </div>
   );
 };

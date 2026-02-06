@@ -1,542 +1,428 @@
-import * as React from "react";
-import { Link } from "react-router-dom";
+﻿import { Link } from "react-router-dom";
+import type { LucideIcon } from "lucide-react";
+import {
+  BellRing,
+  BookOpen,
+  FileCheck2,
+  FileText,
+  Globe,
+  ShieldCheck,
+  Target,
+  TrendingUp,
+} from "lucide-react";
 
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { HeroPremium } from "@/components/marketing/HeroPremium";
+import { Section } from "@/components/marketing/Section";
+import { FeatureGrid } from "@/components/marketing/FeatureGrid";
+import { Steps } from "@/components/marketing/Steps";
+import { CTAStrip } from "@/components/marketing/CTAStrip";
+import { Footer } from "@/components/marketing/Footer";
 import { useI18n } from "@/contexts/LanguageContext";
-import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { usePageMeta } from "@/hooks/usePageMeta";
 
-type FeatureCard = { title: string; description: string };
+import "@/styles/marketing.css";
+
+type CopyItem = {
+  title: string;
+  description: string;
+  icon: LucideIcon;
+};
 
 export default function Home() {
   const { t, lang } = useI18n();
   const isEN = lang === "en";
-  const prefersReducedMotion = usePrefersReducedMotion();
-  const [shouldLoadVideo, setShouldLoadVideo] = React.useState(false);
-  const heroRef = React.useRef<HTMLDivElement | null>(null);
 
   usePageMeta("meta.home.title", "meta.home.description");
 
-  // ✅ Robust i18n fallback (si la clé renvoie "heroLanding.title", on prend le fallback)
   const tt = (key: string, frFallback: string, enFallback: string) => {
-    try {
-      const v = t(key as any) as any;
-      if (!v || typeof v !== "string" || v === key) return isEN ? enFallback : frFallback;
-      return v;
-    } catch {
-      return isEN ? enFallback : frFallback;
-    }
+    const candidate = t(key);
+    if (typeof candidate === "string" && candidate && candidate !== key) return candidate;
+    return isEN ? enFallback : frFallback;
   };
 
-  const heroTitle = tt(
-    "heroLanding.title",
-    "Votre tour de contrôle export, prêt en 24 h.",
-    "Your export control tower, ready in 24 hours."
+  const ttList = <T,>(key: string, frFallback: T[], enFallback: T[]) => {
+    const candidate = t(key);
+    if (Array.isArray(candidate) && candidate.length > 0) return candidate as T[];
+    return isEN ? enFallback : frFallback;
+  };
+
+  const heroBullets = ttList<string>(
+    "homePremium.hero.bullets",
+    [
+      "Profil produit + destination pour fiabiliser les regles",
+      "Cout rendu, taxes, transport, marge cible",
+      "Checklist documents et alertes Incoterms",
+      "Veille reglementaire sur vos marches",
+    ],
+    [
+      "Product + destination profile to secure the rules",
+      "Landed cost, taxes, transport, target margin",
+      "Document checklist and Incoterms alerts",
+      "Regulatory watch on your markets",
+    ],
   );
 
-  const heroSubtitle = tt(
-    "heroLanding.subtitle",
-    "Cockpit réglé sur vos produits et destinations : coûts, taxes, documents, risques. Vous décidez vite.",
-    "Cockpit tuned to your products and destinations: costs, taxes, documents, risks. Decide faster."
-  );
+  const heroStats = [
+    {
+      value: tt("homePremium.hero.stats.0.value", "4 blocs", "4 blocks"),
+      label: tt("homePremium.hero.stats.0.label", "Cout, docs, risque, veille", "Cost, docs, risk, watch"),
+    },
+    {
+      value: tt("homePremium.hero.stats.1.value", "2 modes", "2 modes"),
+      label: tt(
+        "homePremium.hero.stats.1.label",
+        "Analyse export + controle facture",
+        "Export analysis + invoice check",
+      ),
+    },
+    {
+      value: tt("homePremium.hero.stats.2.value", "1 profil", "1 profile"),
+      label: tt(
+        "homePremium.hero.stats.2.label",
+        "Produit + destination pour etre fiable",
+        "Product + destination for reliable rules",
+      ),
+    },
+  ];
 
-  const heroPrimary = tt("heroLanding.ctaPrimary", "Voir le cockpit", "View the cockpit");
-  const heroSecondary = tt("heroLanding.ctaSecondary", "Offre en ligne 65 €/mois", "Online plan €65/mo");
+  const pilotageItems = [
+    {
+      title: tt("homePremium.pilotage.cost.title", "Cout rendu et marge", "Landed cost and margin"),
+      description: tt(
+        "homePremium.pilotage.cost.desc",
+        "Scenarios rapides: droits, taxes, transport, prix cible.",
+        "Fast scenarios: duties, taxes, transport, target price.",
+      ),
+      icon: TrendingUp,
+    },
+    {
+      title: tt("homePremium.pilotage.compliance.title", "Conformite et DDP", "Compliance and DDP"),
+      description: tt(
+        "homePremium.pilotage.compliance.desc",
+        "Alertes sur responsabilites, TVA, clauses et risques pays.",
+        "Alerts on responsibilities, VAT, clauses, and country risk.",
+      ),
+      icon: ShieldCheck,
+    },
+    {
+      title: tt("homePremium.pilotage.docs.title", "Documents clairs", "Clear documents"),
+      description: tt(
+        "homePremium.pilotage.docs.desc",
+        "Checklist par destination, preuves, mentions et formats.",
+        "Checklist by destination, proofs, statements, formats.",
+      ),
+      icon: FileText,
+    },
+    {
+      title: tt("homePremium.pilotage.watch.title", "Veille ciblee", "Targeted watch"),
+      description: tt(
+        "homePremium.pilotage.watch.desc",
+        "Signaux reglementaires et sanctions a surveiller.",
+        "Regulatory signals and sanctions to watch.",
+      ),
+      icon: BellRing,
+    },
+  ];
 
-  // Bullets (fallback si i18n vide)
-  const heroBulletsRaw = t("heroLanding.bullets");
-  const heroBullets: string[] =
-    Array.isArray(heroBulletsRaw) && heroBulletsRaw.length
-      ? (heroBulletsRaw as string[])
-      : isEN
-        ? [
-            "Profile set by country & HS",
-            "Landed cost + DDP/Incoterms alerts",
-            "Clear document checklist",
-            "Targeted watch by destination",
-          ]
-        : [
-            "Profil réglé par pays & HS",
-            "Coût rendu + alertes DDP/Incoterms",
-            "Checklist documents claire",
-            "Veille ciblée par destination",
-          ];
+  const steps = [
+    {
+      title: tt("homePremium.steps.0.title", "Definir le profil", "Define the profile"),
+      description: tt(
+        "homePremium.steps.0.desc",
+        "Produit/HS, destination, Incoterm, volumes et contexte.",
+        "Product/HS, destination, Incoterm, volumes, context.",
+      ),
+    },
+    {
+      title: tt("homePremium.steps.1.title", "Lancer l'analyse", "Run the analysis"),
+      description: tt(
+        "homePremium.steps.1.desc",
+        "Scenario export ou controle facture selon le besoin.",
+        "Export scenario or invoice check based on the need.",
+      ),
+    },
+    {
+      title: tt("homePremium.steps.2.title", "Decider et partager", "Decide and share"),
+      description: tt(
+        "homePremium.steps.2.desc",
+        "GO/NO GO, actions a mener, documents a fournir.",
+        "GO/NO GO, actions to take, documents to provide.",
+      ),
+    },
+  ];
 
-  // Feature cards (fallback si i18n vide)
-  const featureCardsRaw = t("heroLanding.featureCards");
-  const featureCardsFromI18n: FeatureCard[] = Array.isArray(featureCardsRaw)
-    ? (featureCardsRaw as unknown as FeatureCard[])
-    : [];
-
-  const featureCards: FeatureCard[] =
-    featureCardsFromI18n.length > 0
-      ? featureCardsFromI18n
-      : isEN
-        ? [
-            { title: "Costs & margins", description: "Fast scenarios: VAT, duties, transport, margin impact." },
-            { title: "Documents & compliance", description: "Clear checklist, required docs, anomalies to fix." },
-            { title: "Destination steering", description: "Read by country/HS, risks and obligations per market." },
-          ]
-        : [
-            { title: "Coûts & marges", description: "Scénarios rapides : TVA, droits, transport, impact marge." },
-            { title: "Documents & conformité", description: "Checklist claire, pièces à fournir, anomalies à corriger." },
-            { title: "Pilotage par destination", description: "Lecture par pays/HS, risques et obligations par marché." },
-          ];
-
-  const proofTitle = tt("heroLanding.proofTitle", "Ce que le cockpit automatise", "What the cockpit automates");
-
-  const proofDescriptionRaw = t("heroLanding.proofDescription");
-  const proofDescription =
-    typeof proofDescriptionRaw === "string" && proofDescriptionRaw && proofDescriptionRaw !== "heroLanding.proofDescription"
-      ? proofDescriptionRaw
-      : isEN
-        ? "A cockpit that removes manual routines: costs, compliance, documents, watch."
-        : "Un cockpit qui remplace les routines manuelles : coûts, conformité, documents, veille.";
-
-  const proofItemsRaw = t("heroLanding.proofItems");
-  const proofItemsFromI18n: Array<{ title: string; description: string }> =
-    Array.isArray(proofItemsRaw) && proofItemsRaw.length > 0 && typeof proofItemsRaw[0] === "object"
-      ? (proofItemsRaw as unknown as Array<{ title: string; description: string }>)
-      : [];
-
-  const proofItems: Array<{ title: string; description: string }> =
-    proofItemsFromI18n.length > 0
-      ? proofItemsFromI18n
-      : isEN
-        ? [
-            { title: "Landed cost", description: "Quick cost scenarios: destination, value, transport, fees." },
-            { title: "DDP / Incoterms", description: "Flags hidden costs + responsibilities that create disputes." },
-            { title: "Document checklist", description: "Invoice, packing list, origin, transport docs — what’s needed." },
-            { title: "Watch signals", description: "Sanctions & regulatory signals to avoid last-minute surprises." },
-          ]
-        : [
-            { title: "Coût rendu", description: "Scénarios rapides : destination, valeur, transport, frais." },
-            { title: "DDP / Incoterms", description: "Alerte sur coûts cachés + responsabilités à risque." },
-            { title: "Checklist documents", description: "Facture, packing list, origine, transport — indispensables." },
-            { title: "Veille & signaux", description: "Sanctions & signaux réglementaires pour éviter la surprise." },
-          ];
-
-  // Contact direct
-  const phoneRaw = "0676435551";
-  const phonePretty = "06 76 43 55 51";
-  const emailMain = "contact@exportfrancefacile.com";
-
-  React.useEffect(() => {
-    if (prefersReducedMotion) return;
-
-    const node = heroRef.current;
-    if (!node) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setShouldLoadVideo(true);
-          observer.disconnect();
-        }
+  const tools = [
+    {
+      title: tt("homePremium.tools.analysis.title", "Analyse export", "Export analysis"),
+      description: tt(
+        "homePremium.tools.analysis.desc",
+        "Lecture pays/produit, cout rendu, Incoterms.",
+        "Country/product view, landed cost, Incoterms.",
+      ),
+      icon: Target,
+      link: {
+        to: "/analyse",
+        label: tt("homePremium.tools.analysis.link", "Ouvrir", "Open"),
       },
-      { rootMargin: "200px" }
-    );
+      badge: tt("homePremium.tools.analysis.badge", "Public", "Public"),
+    },
+    {
+      title: tt("homePremium.tools.invoice.title", "Controle facture", "Invoice check"),
+      description: tt(
+        "homePremium.tools.invoice.desc",
+        "Verification lignes, totaux, incoherences.",
+        "Line checks, totals, inconsistency flags.",
+      ),
+      icon: FileCheck2,
+      link: {
+        to: "/app/invoice-check",
+        label: tt("homePremium.tools.invoice.link", "Acceder", "Access"),
+      },
+      badge: tt("homePremium.tools.invoice.badge", "PRO", "PRO"),
+    },
+    {
+      title: tt("homePremium.tools.watch.title", "Veille VIP", "VIP watch"),
+      description: tt(
+        "homePremium.tools.watch.desc",
+        "Alertes personnalisees dans l'outil.",
+        "Personalized alerts inside the tool.",
+      ),
+      icon: BellRing,
+      link: {
+        to: "/pricing#vip",
+        label: tt("homePremium.tools.watch.link", "Voir VIP", "View VIP"),
+      },
+      badge: "VIP",
+    },
+    {
+      title: tt("homePremium.tools.guides.title", "Guides", "Guides"),
+      description: tt(
+        "homePremium.tools.guides.desc",
+        "Incoterms, DDP, bonnes pratiques.",
+        "Incoterms, DDP, best practices.",
+      ),
+      icon: BookOpen,
+      link: {
+        to: "/guides",
+        label: tt("homePremium.tools.guides.link", "Explorer", "Explore"),
+      },
+      badge: tt("homePremium.tools.guides.badge", "Public", "Public"),
+    },
+  ];
 
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [prefersReducedMotion]);
+  const trustCards: CopyItem[] = [
+    {
+      title: tt("homePremium.trust.sources.title", "Sources officielles", "Official sources"),
+      description: tt(
+        "homePremium.trust.sources.desc",
+        "Douanes, Incoterms, regimes fiscaux, sanctions. Sources typiques et citees.",
+        "Customs, Incoterms, tax regimes, sanctions. Typical sources, cited when possible.",
+      ),
+      icon: Globe,
+    },
+    {
+      title: tt("homePremium.trust.compliance.title", "Cadre de conformite", "Compliance frame"),
+      description: tt(
+        "homePremium.trust.compliance.desc",
+        "L'outil structure la decision, sans remplacer un agent en douane.",
+        "The tool structures the decision without replacing a customs broker.",
+      ),
+      icon: ShieldCheck,
+    },
+    {
+      title: tt("homePremium.trust.limits.title", "Limites claires", "Clear limits"),
+      description: tt(
+        "homePremium.trust.limits.desc",
+        "Cas sensibles ou DDP: audit express et validation humaine.",
+        "Sensitive cases or DDP: express audit and human validation.",
+      ),
+      icon: FileCheck2,
+    },
+  ];
+  const trustLabel = tt("homePremium.trust.label", "Confiance", "Trust");
 
   return (
-    <MarketingLayout>
-      {/* HERO */}
-      <section className="relative min-h-[88vh] overflow-hidden text-white" ref={heroRef}>
-        <div className="absolute inset-0">
-          {!prefersReducedMotion && shouldLoadVideo ? (
-            <video
-              className="h-full w-full object-cover"
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="none"
-              poster="/videos/hero-export.jpg"
-            >
-              <source src="/videos/hero-export.webm" type="video/webm" />
-              <source src="/videos/hero-export.mp4" type="video/mp4" />
-            </video>
-          ) : (
-            <div
-              className="absolute inset-0 bg-gradient-to-br from-[#0B1220] via-[#1E3A8A] to-[#0B1220]"
-              style={{
-                backgroundImage: "url(/videos/hero-export.jpg)",
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-              }}
-              aria-hidden
-            />
+    <MarketingLayout hideBanner hideFooter>
+      <div className="marketing-shell">
+        <HeroPremium
+          eyebrow={tt("homePremium.hero.eyebrow", "MPL Export Navigator", "MPL Export Navigator")}
+          title={tt(
+            "homePremium.hero.title",
+            "Le cockpit export qui clarifie vos decisions.",
+            "The export cockpit that clarifies decisions.",
           )}
+          subtitle={tt(
+            "homePremium.hero.subtitle",
+            "Reglez votre profil produits + destinations. Obtenez cout rendu, documents et risques avec alertes DDP/Incoterms.",
+            "Set your product + destination profile. Get landed cost, documents, and risk alerts for DDP/Incoterms.",
+          )}
+          primaryCta={{
+            label: tt("homePremium.hero.ctaPrimary", "Voir le cockpit", "View the cockpit"),
+            to: "/tool",
+          }}
+          secondaryCta={{
+            label: tt("homePremium.hero.ctaSecondary", "Offre en ligne 65 EUR/mois", "Online plan EUR 65/mo"),
+            to: "/pricing",
+          }}
+          bullets={heroBullets}
+          stats={heroStats}
+          note={{
+            label: tt(
+              "homePremium.hero.note",
+              "Veille personnalisee dans l'outil = reservee VIP",
+              "Personalized watch inside the tool = VIP only",
+            ),
+            to: "/pricing#vip",
+          }}
+        />
 
-          {/* overlays */}
-          <div
-            className="absolute inset-0 bg-gradient-to-b from-[#0B1220]/85 via-[#0B1220]/70 to-[#0B1220]/90"
-            aria-hidden
-          />
-          <div
-            className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.10),transparent_55%)]"
-            aria-hidden
-          />
-          <div
-            className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:64px_64px] opacity-20"
-            aria-hidden
-          />
-        </div>
+        <Section
+          eyebrow={tt("homePremium.pilotage.eyebrow", "Ce que vous pilotez", "What you control")}
+          title={tt(
+            "homePremium.pilotage.title",
+            "Une lecture claire des decisions export",
+            "A clear view of export decisions",
+          )}
+          description={tt(
+            "homePremium.pilotage.desc",
+            "Couts, conformite, documents et veille dans un cockpit unique.",
+            "Costs, compliance, documents, and watch in one cockpit.",
+          )}
+          tone="muted"
+        >
+          <FeatureGrid items={pilotageItems} columns={4} />
+        </Section>
 
-        <div className="relative z-10 mx-auto flex min-h-[88vh] max-w-5xl flex-col items-center justify-center gap-6 px-6 text-center">
-          <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold tracking-[0.2em] text-white/70">
-            MPL Export Navigator
-            <span className="hidden rounded-full bg-white/10 px-2 py-1 text-[10px] tracking-[0.3em] text-white/70 sm:inline">
-              {heroSecondary}
-            </span>
-          </p>
+        <Section
+          eyebrow={tt("homePremium.steps.eyebrow", "Comment ca marche", "How it works")}
+          title={tt("homePremium.steps.title", "3 etapes, sans frictions", "3 steps, no friction")}
+          description={tt(
+            "homePremium.steps.desc",
+            "Du profil a la decision en quelques minutes.",
+            "From profile to decision in minutes.",
+          )}
+          tone="plain"
+        >
+          <Steps items={steps} label={isEN ? "Step" : "Etape"} />
+        </Section>
 
-          <h1 className="text-4xl font-semibold font-display leading-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">
-            {heroTitle}
-          </h1>
+        <Section
+          eyebrow={tt("homePremium.tools.eyebrow", "Outils phares", "Featured tools")}
+          title={tt("homePremium.tools.title", "Les modules clefs du cockpit", "Key cockpit modules")}
+          description={tt(
+            "homePremium.tools.desc",
+            "Analyse export, controle facture, veille VIP, guides.",
+            "Export analysis, invoice check, VIP watch, guides.",
+          )}
+          tone="muted"
+        >
+          <FeatureGrid items={tools} columns={4} />
+        </Section>
 
-          <p className="max-w-3xl text-lg leading-relaxed text-white/80 md:text-xl">{heroSubtitle}</p>
-
-          <div className="mt-2 max-w-3xl">
-            <div className="rounded-3xl border border-white/15 bg-white/5 p-4 text-left">
-              <p className="text-xs font-semibold tracking-[0.2em] text-white/60">
-                {isEN ? "Simple promise" : "Promesse simple"}
-              </p>
-              <p className="mt-2 text-sm text-white/85">
-                {isEN
-                  ? "Less stress before shipping: you get a clear GO/NO GO and the exact fixes to apply."
-                  : "Moins de stress avant expédition : un GO/NO GO clair + les corrections à appliquer."}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 grid w-full max-w-3xl grid-cols-1 gap-2 text-xs font-semibold tracking-[0.2em] text-white/80 md:grid-cols-2">
-            {heroBullets.map((bullet) => (
-              <div key={bullet} className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2">
-                {bullet}
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap justify-center gap-4 text-xs font-semibold tracking-[0.2em] md:text-sm">
-            <Link to="/tool" className="rounded-full bg-[#DC2626] px-7 py-3 text-white transition hover:bg-[#b0231d]">
-              {heroPrimary}
-            </Link>
-            <Link
-              to="/pricing"
-              className="rounded-full border border-white/80 px-7 py-3 text-white transition hover:border-white"
-            >
-              {heroSecondary}
-            </Link>
-          </div>
-
-          {/* PROOF BAR */}
-          <div className="mt-6 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-              <p className="text-xs font-semibold tracking-[0.2em] text-white/60">{isEN ? "Costs" : "Coûts"}</p>
-              <p className="mt-1 text-sm text-white/85">
-                {isEN ? "Landed cost scenarios in minutes." : "Scénarios de coût rendu en quelques minutes."}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-              <p className="text-xs font-semibold tracking-[0.2em] text-white/60">{isEN ? "Risks" : "Risques"}</p>
-              <p className="mt-1 text-sm text-white/85">
-                {isEN ? "DDP / VAT / compliance traps flagged." : "Pièges DDP / TVA / conformité détectés."}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-              <p className="text-xs font-semibold tracking-[0.2em] text-white/60">{isEN ? "Action" : "Action"}</p>
-              <p className="mt-1 text-sm text-white/85">
-                {isEN ? "Checklist + GO/NO GO output." : "Checklist + sortie GO/NO GO."}
-              </p>
-            </div>
-          </div>
-
-          {/* CONTACT STRIP */}
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-xs font-semibold tracking-[0.2em] text-white/70">
-            <a
-              href={`tel:${phoneRaw}`}
-              className="rounded-full border border-white/15 bg-white/5 px-4 py-2 transition hover:bg-white/10"
-            >
-              {isEN ? "Call" : "Appeler"} {phonePretty}
-            </a>
-            <a
-              href={`mailto:${emailMain}`}
-              className="rounded-full border border-white/15 bg-white/5 px-4 py-2 transition hover:bg-white/10"
-            >
-              {emailMain}
-            </a>
-            <Link
-              to="/contact?offer=diagnostic"
-              className="rounded-full border border-white/20 px-4 py-2 text-white/80 transition hover:border-white/60"
-            >
-              {isEN ? "Express audit" : "Audit express"}
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* AUTOMATION PROOF */}
-      <section className="bg-white py-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs font-semibold tracking-[0.2em] text-[#1E3A8A]">{proofTitle}</p>
-              <p className="mt-2 text-sm text-slate-600">{proofDescription}</p>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-3 md:mt-0">
-              <Link
-                to="/pricing"
-                className="rounded-full bg-[#1E3A8A] px-6 py-3 text-xs font-semibold tracking-[0.2em] text-white transition hover:bg-[#162864]"
-              >
-                {isEN ? "See €65 plan" : "Voir l’offre 65€"}
-              </Link>
-              <Link
-                to="/veille"
-                className="rounded-full border border-[#1E3A8A]/30 px-6 py-3 text-xs font-semibold tracking-[0.2em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
-              >
-                {isEN ? "View watch" : "Voir la veille"}
-              </Link>
-            </div>
-          </div>
-
-          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {proofItems.map((item) => (
-              <article
-                key={item.title}
-                className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm"
-              >
-                <h3 className="text-lg font-semibold text-[#1E3A8A]">{item.title}</h3>
-                <p className="text-sm text-slate-600">{item.description}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FOCUS */}
-      <section className="bg-white py-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="text-xs font-semibold tracking-[0.2em] text-[#1E3A8A]">Focus</h2>
-              <p className="mt-2 text-3xl font-semibold font-display text-[#0B1220]">
-                {isEN ? "Clear view, fast decisions" : "Vue claire, décisions rapides"}
-              </p>
-              <p className="mt-2 max-w-2xl text-sm text-slate-600">
-                {isEN
-                  ? "Operational export view: costs, risk flags, and what to fix before shipment."
-                  : "Une lecture export opérationnelle : coûts, alertes risques, et ce qu’il faut corriger avant expédition."}
-              </p>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-3 md:mt-0">
-              <Link
-                to="/import/check-invoice"
-                className="rounded-full bg-[#1E3A8A] px-6 py-3 text-xs font-semibold tracking-[0.2em] text-white transition hover:bg-[#162864]"
-              >
-                {isEN ? "Check an invoice" : "Vérifier une facture"}
-              </Link>
-              <Link
-                to="/tool"
-                className="rounded-full border border-[#1E3A8A]/30 px-6 py-3 text-xs font-semibold tracking-[0.2em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
-              >
-                {isEN ? "Run the analysis" : "Lancer l’analyse"}
-              </Link>
-            </div>
-          </div>
-
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
-            {featureCards.map((card) => (
-              <article
-                key={card.title}
-                className="group flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl"
-              >
-                <div className="h-1 w-12 rounded-full bg-[#1E3A8A]/80" />
-                <h3 className="text-xl font-semibold text-[#1E3A8A]">{card.title}</h3>
-                <p className="text-sm text-slate-600">{card.description}</p>
-                <div className="mt-3 flex items-center gap-3">
-                  <Link
-                    to="/tool"
-                    className="text-xs font-semibold tracking-[0.2em] text-[#0B1220]/70 transition group-hover:text-[#0B1220]"
-                  >
-                    {isEN ? "Try →" : "Essayer →"}
-                  </Link>
-                  <span className="text-xs text-slate-400">•</span>
-                  <Link
-                    to="/pricing"
-                    className="text-xs font-semibold tracking-[0.2em] text-[#1E3A8A]/80 transition hover:text-[#1E3A8A]"
-                  >
-                    {isEN ? "€65/mo" : "65€/mois"}
-                  </Link>
+        <Section
+          eyebrow={tt("homePremium.trust.eyebrow", "Confiance", "Trust")}
+          title={tt(
+            "homePremium.trust.title",
+            "Sources, conformite, limites claires",
+            "Sources, compliance, clear limits",
+          )}
+          description={tt(
+            "homePremium.trust.desc",
+            "Un cadre fiable, et une validation humaine quand le risque l'exige.",
+            "A reliable framework and human validation when risk requires it.",
+          )}
+          tone="plain"
+        >
+          <div className="grid gap-6 md:grid-cols-3">
+            {trustCards.map((card) => {
+              const Icon = card.icon;
+              return (
+                <div key={card.title} className="marketing-card p-6">
+                  <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    {trustLabel}
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold text-slate-900">{card.title}</h3>
+                  <p className="mt-2 text-sm text-slate-600">{card.description}</p>
                 </div>
-              </article>
-            ))}
+              );
+            })}
           </div>
-        </div>
-      </section>
-
-      {/* HOW IT WORKS */}
-      <section className="bg-slate-50 py-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <h3 className="text-xs font-semibold tracking-[0.2em] text-slate-500">
-            {isEN ? "How it works" : "Comment ça marche"}
-          </h3>
-          <p className="mt-2 text-3xl font-semibold font-display text-slate-900">
-            {isEN ? "3 steps, no hassle" : "3 étapes, sans prise de tête"}
-          </p>
-
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6">
-              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">{isEN ? "Step 1" : "Étape 1"}</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">
-                {isEN ? "Choose destination & context" : "Choisir destination & contexte"}
-              </p>
-              <p className="mt-2 text-sm text-slate-600">
-                {isEN ? "Country/territory + operation type." : "Pays/territoire + type d’opération."}
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-white p-6">
-              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">{isEN ? "Step 2" : "Étape 2"}</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">
-                {isEN ? "Import / check an invoice" : "Importer / vérifier une facture"}
-              </p>
-              <p className="mt-2 text-sm text-slate-600">
-                {isEN ? "Quick checks + alerts on inconsistencies." : "Contrôles rapides + alertes si incohérences."}
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-white p-6">
-              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">{isEN ? "Step 3" : "Étape 3"}</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">{isEN ? "Decide & act" : "Décider & agir"}</p>
-              <p className="mt-2 text-sm text-slate-600">
-                {isEN ? "GO / NO GO + clear next actions." : "GO / NO GO + recommandations concrètes."}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-white/70 px-4 py-3 text-sm text-slate-600">
             <Link
-              to="/tool"
-              className="rounded-full bg-[#DC2626] px-6 py-3 text-xs font-semibold tracking-[0.2em] text-white transition hover:bg-[#b0231d]"
+              to="/pricing#vip"
+              className="font-semibold text-slate-900 underline underline-offset-4 hover:text-slate-700"
             >
-              {isEN ? "Start now" : "Démarrer maintenant"}
-            </Link>
-            <Link
-              to="/pricing"
-              className="rounded-full border border-slate-300 bg-white px-6 py-3 text-xs font-semibold tracking-[0.2em] text-slate-800 transition hover:border-slate-500"
-            >
-              {isEN ? "Plans & limits" : "Offres & limites"}
+              {tt(
+                "homePremium.trust.note",
+                "Veille personnalisee dans l'outil = reservee VIP",
+                "Personalized watch inside the tool = VIP only",
+              )}
             </Link>
           </div>
-        </div>
-      </section>
+        </Section>
 
-      {/* SOURCES / TRUST */}
-      <section className="bg-white py-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <h3 className="text-xs font-semibold tracking-[0.2em] text-[#1E3A8A]">{isEN ? "Trust" : "Confiance"}</h3>
-          <p className="mt-2 text-3xl font-semibold font-display text-[#0B1220]">
-            {isEN ? "Compliance & watch, at the right place" : "Conformité & veille, au bon endroit"}
-          </p>
-          <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            {isEN
-              ? "Goal: reliable, actionable references. For sensitive cases, an expert can validate."
-              : "Objectif : des repères fiables et actionnables. Pour les cas sensibles, une experte peut valider."}
-          </p>
+        <CTAStrip
+          eyebrow={tt("homePremium.cta.eyebrow", "Audit express", "Express audit")}
+          title={tt(
+            "homePremium.cta.title",
+            "Besoin d'un regard expert avant expedition ?",
+            "Need an expert review before shipment?",
+          )}
+          description={tt(
+            "homePremium.cta.desc",
+            "Nous validons les cas sensibles (DDP, sanctions, produits a risque) et vous donnons un plan d'action clair.",
+            "We validate sensitive cases (DDP, sanctions, risk products) and provide a clear action plan.",
+          )}
+          primary={{
+            label: tt("homePremium.cta.primary", "Demander un audit", "Request an audit"),
+            to: "/contact?offer=diagnostic",
+          }}
+          secondary={{
+            label: tt("homePremium.cta.secondary", "Voir le cockpit", "View the cockpit"),
+            to: "/tool",
+          }}
+          tertiary={{
+            label: tt("homePremium.cta.tertiary", "Offre 65 EUR/mois", "Plan EUR 65/mo"),
+            to: "/pricing",
+          }}
+          note={tt(
+            "homePremium.cta.note",
+            "contact@exportfrancefacile.com | 06 76 43 55 51",
+            "contact@exportfrancefacile.com | 06 76 43 55 51",
+          )}
+        />
 
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">
-                {isEN ? "Customs / VAT" : "Douanes / TVA"}
-              </p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">
-                {isEN ? "Rules & obligations" : "Règles & obligations"}
-              </p>
-              <p className="mt-2 text-sm text-slate-600">
-                {isEN
-                  ? "Spot risk areas (VAT, statements, proof, local rules)."
-                  : "Repérez les zones à risque (TVA, mentions, justificatifs, règles locales)."}
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">DDP / Incoterms</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">
-                {isEN ? "Responsibilities & costs" : "Responsabilités & coûts"}
-              </p>
-              <p className="mt-2 text-sm text-slate-600">
-                {isEN
-                  ? "Clarifies who pays what and where hidden costs appear."
-                  : "Clarifie qui paie quoi, et où se cachent les coûts classiques."}
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">
-                {isEN ? "Compliance" : "Conformité"}
-              </p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">
-                {isEN ? "Sanctions / vigilance" : "Sanctions / vigilance"}
-              </p>
-              <p className="mt-2 text-sm text-slate-600">
-                {isEN ? "Signals & control points before shipment." : "Signaux & points de contrôle avant expédition."}
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* FINAL CTA */}
-      <section className="py-16">
-        <div className="mx-auto max-w-5xl px-6 text-center">
-          <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">{isEN ? "Next steps" : "Étapes suivantes"}</p>
-          <h3 className="mt-3 text-3xl font-semibold font-display text-slate-900">
-            {isEN ? "Need an expert?" : "Besoin d’un expert ?"}
-          </h3>
-          <p className="mt-2 text-slate-600">
-            {isEN
-              ? "The tool gives a first view. For higher-risk shipments (DDP, sanctions, sensitive goods), get an express validation."
-              : "L’outil donne une première vue. Pour un envoi à risque (DDP, sanctions, produit sensible), demandez une validation express."}
-          </p>
-
-          <div className="mt-6 flex flex-wrap justify-center gap-4">
-            <Link
-              to="/tool"
-              className="rounded-full bg-[#DC2626] px-6 py-3 text-xs font-semibold tracking-[0.2em] text-white transition hover:bg-[#b0231d]"
-            >
-              {isEN ? "Run the tool" : "Lancer l’outil"}
-            </Link>
-            <Link
-              to="/pricing"
-              className="rounded-full border border-[#1E3A8A]/60 px-6 py-3 text-xs font-semibold tracking-[0.2em] text-[#1E3A8A] transition hover:border-[#1E3A8A]"
-            >
-              {isEN ? "Online plan €65/mo" : "Offre en ligne 65€/mois"}
-            </Link>
-            <Link
-              to="/contact?offer=diagnostic"
-              className="rounded-full border border-slate-300 bg-white px-6 py-3 text-xs font-semibold tracking-[0.2em] text-slate-800 transition hover:border-slate-500"
-            >
-              {isEN ? "Express validation" : "Validation express"}
-            </Link>
-          </div>
-
-          <div className="mt-6 text-xs text-slate-500">
-            {isEN ? "Direct email:" : "Email direct :"}{" "}
-            <a className="underline" href={`mailto:${emailMain}`}>
-              {emailMain}
-            </a>
-            {" • "}
-            <a className="underline" href={`tel:${phoneRaw}`}>
-              {phonePretty}
-            </a>
-          </div>
-        </div>
-      </section>
+        <Footer
+          brand={{
+            title: "MPL Export Navigator",
+            description: tt(
+              "homePremium.footer.desc",
+              "Cockpit export pour PME. Couts rendus, documents, risques et veille.",
+              "Export cockpit for SMEs. Landed cost, documents, risks, and watch.",
+            ),
+          }}
+          contact={{
+            email: "contact@exportfrancefacile.com",
+            phone: "06 76 43 55 51",
+            phoneRaw: "0676435551",
+          }}
+          links={[
+            { label: tt("homePremium.footer.links.tool", "Cockpit", "Cockpit"), to: "/tool" },
+            { label: tt("homePremium.footer.links.analysis", "Analyse", "Analysis"), to: "/analyse" },
+            { label: tt("homePremium.footer.links.watch", "Veille", "Watch"), to: "/veille" },
+            { label: tt("homePremium.footer.links.guides", "Guides", "Guides"), to: "/guides" },
+            { label: tt("homePremium.footer.links.pricing", "Offres", "Pricing"), to: "/pricing" },
+            { label: tt("homePremium.footer.links.contact", "Contact", "Contact"), to: "/contact" },
+          ]}
+          legalLinks={[
+            { label: tt("homePremium.footer.legal.mentions", "Mentions legales", "Legal notice"), to: "/mentions-legales" },
+            { label: tt("homePremium.footer.legal.privacy", "Confidentialite", "Privacy"), to: "/confidentialite" },
+            { label: tt("homePremium.footer.legal.cookies", "Cookies", "Cookies"), to: "/cookies" },
+          ]}
+        />
+      </div>
     </MarketingLayout>
   );
 }
