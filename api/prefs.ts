@@ -13,6 +13,20 @@ function normalizeArray(value?: string[] | null): string[] {
 }
 
 export default allowCors(async function handler(req: VercelRequest, res: VercelResponse) {
+  const mode = String((req.query as any)?.mode || "").trim();
+  if (req.method === "GET" && mode === "hs_search") {
+    const q = String((req.query as any)?.q || "").trim();
+    if (q.length < 2) return json(res, 200, { ok: true, items: [] });
+
+    const { data, error } = await supabaseAdmin().rpc("mpl_search_hs", { q, lim: 12 });
+    if (error) return json(res, 500, { ok: false, error: error.message });
+
+    return json(res, 200, {
+      ok: true,
+      items: (data || []).map((x: any) => ({ code: x.code, label: x.label })),
+    });
+  }
+
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
   }
