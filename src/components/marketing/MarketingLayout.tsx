@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 
 import { BrandLogo } from "@/components/BrandLogo";
 import { useI18n } from "@/contexts/LanguageContext";
-import { usePlan } from "@/auth/PlanContext";
 import type { LanguageCode } from "@/i18n/translations";
 import { navLinks } from "@/config/navLinks";
 import { GdprGuarantee } from "@/components/GdprGuarantee";
@@ -14,19 +13,12 @@ const flags: Record<LanguageCode, string> = {
   en: String.fromCodePoint(0x1f1ec, 0x1f1e7), // 🇬🇧
 };
 
-const planOptions = [
-  { label: "FREE", value: "FREE" },
-  { label: "PRO", value: "PRO" },
-  { label: "VIP", value: "VIP" },
-];
-
 function cx(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
 }
 
 export const MarketingLayout = ({ children }: { children: ReactNode }) => {
   const { lang, t, setLang } = useI18n();
-  const { plan, setPlan } = usePlan();
   const location = useLocation();
   const isEN = lang === "en";
 
@@ -46,8 +38,8 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
   const globalDisclaimers = (t("disclaimers") as string[]) ?? [];
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
+    <div className="flex min-h-screen flex-col bg-white text-slate-900">
+      <header className="sticky top-0 z-40 border-b border-blue-100 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
           {/* BRAND */}
           <BrandLogo
@@ -62,7 +54,7 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
           />
 
           {/* NAV */}
-          <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-semibold text-slate-600 md:flex">
+          <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-semibold text-blue-900/70 md:flex">
             {navLinks.map((link) => {
               const label = navLabel(link.key, link.fallback);
               const isActive =
@@ -75,12 +67,12 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
                   key={link.key}
                   to={link.to}
                   className={cx(
-                    "transition-colors hover:text-slate-900",
-                    isActive && "text-slate-900"
+                    "transition-colors hover:text-blue-900",
+                    isActive && "text-blue-900"
                   )}
                   aria-label={label}
                 >
-                  <span className={cx(isActive && "border-b-2 border-slate-900 pb-1")}>
+                  <span className={cx(isActive && "border-b-2 border-blue-900 pb-1")}>
                     {label}
                   </span>
                 </Link>
@@ -94,7 +86,7 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
             <div
               role="group"
               aria-label={navLabel("header.languageAria", "Langue")}
-              className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm"
+              className="flex items-center gap-1 rounded-full border border-blue-200 bg-white px-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-900/70 shadow-sm"
             >
               {(["fr", "en"] as LanguageCode[]).map((code) => (
                 <button
@@ -103,7 +95,7 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
                   onClick={() => setLang(code)}
                   className={cx(
                     "flex items-center gap-1 rounded-full px-2 py-1 transition",
-                    lang === code ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+                    lang === code ? "bg-blue-900 text-white" : "text-blue-900/70 hover:text-blue-900"
                   )}
                   aria-label={navLabel("header.languageLabel", "Changer la langue")}
                 >
@@ -111,23 +103,6 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
                   <span>{code.toUpperCase()}</span>
                 </button>
               ))}
-            </div>
-
-            {/* Plan */}
-            <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.35em] text-slate-600 shadow-sm md:flex">
-              <span>Plan</span>
-              <select
-                value={plan}
-                onChange={(event) => setPlan(event.target.value as typeof plan)}
-                className="bg-transparent text-[11px] font-bold uppercase tracking-[0.35em] outline-none"
-                aria-label="Select plan"
-              >
-                {planOptions.map((option) => (
-                  <option key={option.value} value={option.value} className="text-slate-900">
-                    {option.label}
-                  </option>
-                ))}
-              </select>
             </div>
 
             {/* CTA (unique, cohérent, visible) */}
@@ -140,7 +115,7 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
 
             <Link
               to="/login"
-              className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 transition hover:text-slate-900 md:inline-flex"
+              className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-blue-900/70 transition hover:text-blue-900 md:inline-flex"
             >
               {isEN ? "Sign in" : "Connexion"}
             </Link>
@@ -148,9 +123,9 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
         </div>
 
         {/* Mobile nav (simple, sans burger) */}
-        <div className="md:hidden border-t border-slate-200 bg-white/80">
+        <div className="md:hidden border-t border-blue-100 bg-white/80">
           <div className="mx-auto max-w-6xl overflow-x-auto px-4 py-2">
-            <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.25em] text-slate-600">
+            <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.25em] text-blue-900/70">
               {navLinks.map((link) => {
                 const label = navLabel(link.key, link.fallback);
                 const isActive =
@@ -164,8 +139,8 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
                     className={cx(
                       "whitespace-nowrap rounded-full border px-3 py-2 transition",
                       isActive
-                        ? "border-slate-900 bg-slate-900 text-white"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                        ? "border-blue-900 bg-blue-900 text-white"
+                        : "border-blue-200 bg-white text-blue-900/80 hover:border-blue-300"
                     )}
                   >
                     {label}
@@ -182,7 +157,7 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
 
       <main className="flex-1">{children}</main>
 
-      <div className="border-t border-slate-200 bg-white/80 px-6 py-8">
+      <div className="border-t border-blue-100 bg-white/85 px-6 py-8">
         <div className="mx-auto max-w-6xl">
           <GdprGuarantee />
 
@@ -199,7 +174,7 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
           )}
         </div>
       </div>
-      <footer className="border-t border-slate-200 bg-white/80 py-8 text-center text-xs font-medium text-slate-500">
+      <footer className="border-t border-blue-100 bg-white/85 py-8 text-center text-xs font-medium text-slate-500">
         {t("footer.copy")}
       </footer>
     </div>

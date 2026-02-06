@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
 import { useI18n } from "@/contexts/LanguageContext";
-import { usePlan } from "@/auth/PlanContext";
 import type { LanguageCode } from "@/i18n/translations";
 import { navLinks } from "@/config/navLinks";
 
@@ -16,12 +15,6 @@ const flags: Record<LanguageCode, string> = {
   fr: String.fromCodePoint(0x1f1eb, 0x1f1f7),
   en: String.fromCodePoint(0x1f1ec, 0x1f1e7),
 };
-
-const planOptions = [
-  { label: "FREE", value: "FREE" },
-  { label: "PRO", value: "PRO" },
-  { label: "VIP", value: "VIP" },
-];
 
 function cx(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
@@ -189,7 +182,6 @@ function FooterRss() {
 export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const { t, lang, setLang } = useI18n();
-  const { plan, setPlan } = usePlan();
   const siteDisclaimers = (t("disclaimers") as string[]) ?? [];
 
   const navLabel = (key: string, fallback: string) => {
@@ -209,12 +201,12 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const emailMain = "contact@exportfrancefacile.com";
 
   return (
-    <div className="relative min-h-screen bg-background text-foreground">
+    <div className="relative min-h-screen bg-white text-foreground">
       {/* Backdrop “light-friendly” */}
-      <CinematicBackdrop variant="public" className="z-0 opacity-25" />
-      <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-background/80 via-background/85 to-background" />
+      <CinematicBackdrop variant="public" className="z-0 opacity-20" />
+      <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-white/85 via-white/90 to-white" />
 
-      <header className="relative z-10 border-b border-border bg-background/85 backdrop-blur">
+      <header className="relative z-10 border-b border-blue-100 bg-white/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
           {/* BRAND */}
           <BrandLogo
@@ -229,7 +221,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
           />
 
           {/* NAV */}
-          <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-semibold text-slate-600 md:flex">
+          <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-semibold text-blue-900/70 md:flex">
             {navLinks.map((link) => {
               const label = navLabel(link.key, link.fallback);
               const isActive =
@@ -242,12 +234,12 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                   key={link.key}
                   to={link.to}
                   className={cx(
-                    "transition-colors hover:text-slate-900",
-                    isActive && "text-slate-900"
+                    "transition-colors hover:text-blue-900",
+                    isActive && "text-blue-900"
                   )}
                   aria-label={label}
                 >
-                  <span className={cx(isActive && "border-b-2 border-slate-900 pb-1")}>
+                  <span className={cx(isActive && "border-b-2 border-blue-900 pb-1")}>
                     {label}
                   </span>
                 </Link>
@@ -261,7 +253,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             <div
               role="group"
               aria-label={navLabel("header.languageAria", "Langue")}
-              className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 shadow-sm"
+              className="flex items-center gap-1 rounded-full border border-blue-200 bg-white px-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-900/70 shadow-sm"
             >
               {(["fr", "en"] as LanguageCode[]).map((code) => (
                 <button
@@ -270,7 +262,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                   onClick={() => setLang(code)}
                   className={cx(
                     "flex items-center gap-1 rounded-full px-2 py-1 transition",
-                    lang === code ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+                    lang === code ? "bg-blue-900 text-white" : "text-blue-900/70 hover:text-blue-900"
                   )}
                   aria-label={navLabel("header.languageLabel", "Changer la langue")}
                 >
@@ -278,23 +270,6 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                   <span>{code.toUpperCase()}</span>
                 </button>
               ))}
-            </div>
-
-            {/* Plan */}
-            <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.35em] text-slate-600 shadow-sm md:flex">
-              <span>Plan</span>
-              <select
-                value={plan}
-                onChange={(event) => setPlan(event.target.value as typeof plan)}
-                className="bg-transparent text-[11px] font-bold uppercase tracking-[0.35em] outline-none"
-                aria-label="Select plan"
-              >
-                {planOptions.map((option) => (
-                  <option key={option.value} value={option.value} className="text-slate-900">
-                    {option.label}
-                  </option>
-                ))}
-              </select>
             </div>
 
             {/* CTA */}
@@ -307,7 +282,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
             <Link
               to="/login"
-              className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-slate-600 transition hover:text-slate-900 md:inline-flex"
+              className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-blue-900/70 transition hover:text-blue-900 md:inline-flex"
             >
               Connexion
             </Link>
@@ -315,9 +290,9 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         </div>
 
         {/* Mobile nav */}
-        <div className="md:hidden border-t border-border bg-background/70">
+        <div className="md:hidden border-t border-blue-100 bg-white/80">
           <div className="mx-auto max-w-6xl overflow-x-auto px-4 py-2">
-            <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+            <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.25em] text-blue-900/70">
               {navLinks.map((link) => {
                 const active = isActivePath(location.pathname, link.to);
                 const label = navLabel(link.key, link.fallback);
@@ -328,8 +303,8 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                     className={cn(
                       "whitespace-nowrap rounded-full border px-3 py-2 transition",
                       active
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border bg-background text-foreground/80 hover:border-foreground/40"
+                        ? "border-blue-900 bg-blue-900 text-white"
+                        : "border-blue-200 bg-white text-blue-900/80 hover:border-blue-300"
                     )}
                   >
                     {label}
@@ -348,7 +323,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         {children ?? <Outlet />}
       </main>
 
-      <footer className="relative z-10 border-t border-border bg-background/80">
+      <footer className="relative z-10 border-t border-blue-100 bg-white/85">
         <div className="mx-auto grid max-w-7xl gap-6 px-6 py-10 md:px-10 lg:grid-cols-[1fr_0.95fr]">
           <div className="space-y-3">
             <div className="text-sm font-semibold text-foreground">MPL Export Navigator</div>
@@ -358,7 +333,10 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
               <Link to="/methodologie" className="hover:text-foreground hover:underline">
-                Méthodologie
+                Methodologie
+              </Link>
+              <Link to="/about" className="hover:text-foreground hover:underline">
+                A propos
               </Link>
               <Link to="/guides" className="hover:text-foreground hover:underline">
                 Guides
