@@ -14,6 +14,7 @@ export default function Home() {
   const prefersReducedMotion = usePrefersReducedMotion();
   const [shouldLoadVideo, setShouldLoadVideo] = React.useState(false);
   const heroRef = React.useRef<HTMLDivElement | null>(null);
+
   usePageMeta("meta.home.title", "meta.home.description");
 
   // ✅ Robust i18n fallback (si la clé renvoie "heroLanding.title", on prend le fallback)
@@ -29,18 +30,18 @@ export default function Home() {
 
   const heroTitle = tt(
     "heroLanding.title",
-    "Votre tour de controle export, prete en 24 h.",
+    "Votre tour de contrôle export, prêt en 24 h.",
     "Your export control tower, ready in 24 hours."
   );
 
   const heroSubtitle = tt(
     "heroLanding.subtitle",
-    "Cockpit regle sur vos produits et destinations : couts, taxes, documents, risques. Vous decidez vite.",
+    "Cockpit réglé sur vos produits et destinations : coûts, taxes, documents, risques. Vous décidez vite.",
     "Cockpit tuned to your products and destinations: costs, taxes, documents, risks. Decide faster."
   );
 
   const heroPrimary = tt("heroLanding.ctaPrimary", "Voir le cockpit", "View the cockpit");
-  const heroSecondary = tt("heroLanding.ctaSecondary", "Offre en ligne 65 EUR/mois", "Online plan EUR 65/mo");
+  const heroSecondary = tt("heroLanding.ctaSecondary", "Offre en ligne 65 €/mois", "Online plan €65/mo");
 
   // Bullets (fallback si i18n vide)
   const heroBulletsRaw = t("heroLanding.bullets");
@@ -55,10 +56,10 @@ export default function Home() {
             "Targeted watch by destination",
           ]
         : [
-            "Profil regle par pays & HS",
-            "Cout rendu + alertes DDP/Incoterms",
+            "Profil réglé par pays & HS",
+            "Coût rendu + alertes DDP/Incoterms",
             "Checklist documents claire",
-            "Veille ciblee par destination",
+            "Veille ciblée par destination",
           ];
 
   // Feature cards (fallback si i18n vide)
@@ -68,50 +69,29 @@ export default function Home() {
     : [];
 
   const featureCards: FeatureCard[] =
-    featureCardsFromI18n?.length > 0
+    featureCardsFromI18n.length > 0
       ? featureCardsFromI18n
       : isEN
         ? [
-            {
-              title: "Costs & margins",
-              description: "Fast scenarios: VAT, duties, transport, margin impact.",
-            },
-            {
-              title: "Documents & compliance",
-              description: "Clear checklist, required docs, anomalies to fix.",
-            },
-            {
-              title: "Destination steering",
-              description: "Read by country/HS, risks and obligations per market.",
-            },
+            { title: "Costs & margins", description: "Fast scenarios: VAT, duties, transport, margin impact." },
+            { title: "Documents & compliance", description: "Clear checklist, required docs, anomalies to fix." },
+            { title: "Destination steering", description: "Read by country/HS, risks and obligations per market." },
           ]
         : [
-            {
-              title: "Couts & marges",
-              description: "Scenarios rapides : TVA, droits, transport, impact marge.",
-            },
-            {
-              title: "Documents & conformite",
-              description: "Checklist claire, pieces a fournir, anomalies a corriger.",
-            },
-            {
-              title: "Pilotage par destination",
-              description: "Lecture par pays/HS, risques et obligations par marche.",
-            },
+            { title: "Coûts & marges", description: "Scénarios rapides : TVA, droits, transport, impact marge." },
+            { title: "Documents & conformité", description: "Checklist claire, pièces à fournir, anomalies à corriger." },
+            { title: "Pilotage par destination", description: "Lecture par pays/HS, risques et obligations par marché." },
           ];
 
-  const proofTitle = tt(
-    "heroLanding.proofTitle",
-    "Ce que le cockpit automatise",
-    "What the cockpit automates"
-  );
+  const proofTitle = tt("heroLanding.proofTitle", "Ce que le cockpit automatise", "What the cockpit automates");
 
+  const proofDescriptionRaw = t("heroLanding.proofDescription");
   const proofDescription =
-    (t("heroLanding.proofDescription") as string) && (t("heroLanding.proofDescription") as string) !== "heroLanding.proofDescription"
-      ? (t("heroLanding.proofDescription") as string)
+    typeof proofDescriptionRaw === "string" && proofDescriptionRaw && proofDescriptionRaw !== "heroLanding.proofDescription"
+      ? proofDescriptionRaw
       : isEN
         ? "A cockpit that removes manual routines: costs, compliance, documents, watch."
-        : "Un cockpit qui remplace les routines manuelles : couts, conformite, documents, veille.";
+        : "Un cockpit qui remplace les routines manuelles : coûts, conformité, documents, veille.";
 
   const proofItemsRaw = t("heroLanding.proofItems");
   const proofItemsFromI18n: Array<{ title: string; description: string }> =
@@ -143,6 +123,7 @@ export default function Home() {
 
   React.useEffect(() => {
     if (prefersReducedMotion) return;
+
     const node = heroRef.current;
     if (!node) return;
 
@@ -191,8 +172,14 @@ export default function Home() {
           )}
 
           {/* overlays */}
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0B1220]/85 via-[#0B1220]/70 to-[#0B1220]/90" aria-hidden />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.10),transparent_55%)]" aria-hidden />
+          <div
+            className="absolute inset-0 bg-gradient-to-b from-[#0B1220]/85 via-[#0B1220]/70 to-[#0B1220]/90"
+            aria-hidden
+          />
+          <div
+            className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.10),transparent_55%)]"
+            aria-hidden
+          />
           <div
             className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:64px_64px] opacity-20"
             aria-hidden
@@ -200,7 +187,7 @@ export default function Home() {
         </div>
 
         <div className="relative z-10 mx-auto flex min-h-[88vh] max-w-5xl flex-col items-center justify-center gap-6 px-6 text-center">
-          <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs tracking-[0.2em] font-semibold text-white/70">
+          <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold tracking-[0.2em] text-white/70">
             MPL Export Navigator
             <span className="hidden rounded-full bg-white/10 px-2 py-1 text-[10px] tracking-[0.3em] text-white/70 sm:inline">
               {heroSecondary}
@@ -215,7 +202,7 @@ export default function Home() {
 
           <div className="mt-2 max-w-3xl">
             <div className="rounded-3xl border border-white/15 bg-white/5 p-4 text-left">
-              <p className="text-xs tracking-[0.2em] font-semibold text-white/60">
+              <p className="text-xs font-semibold tracking-[0.2em] text-white/60">
                 {isEN ? "Simple promise" : "Promesse simple"}
               </p>
               <p className="mt-2 text-sm text-white/85">
@@ -226,7 +213,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-4 grid w-full max-w-3xl grid-cols-1 gap-2 text-xs tracking-[0.2em] font-semibold text-white/80 md:grid-cols-2">
+          <div className="mt-4 grid w-full max-w-3xl grid-cols-1 gap-2 text-xs font-semibold tracking-[0.2em] text-white/80 md:grid-cols-2">
             {heroBullets.map((bullet) => (
               <div key={bullet} className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2">
                 {bullet}
@@ -238,7 +225,10 @@ export default function Home() {
             <Link to="/tool" className="rounded-full bg-[#DC2626] px-7 py-3 text-white transition hover:bg-[#b0231d]">
               {heroPrimary}
             </Link>
-            <Link to="/pricing" className="rounded-full border border-white/80 px-7 py-3 text-white transition hover:border-white">
+            <Link
+              to="/pricing"
+              className="rounded-full border border-white/80 px-7 py-3 text-white transition hover:border-white"
+            >
               {heroSecondary}
             </Link>
           </div>
@@ -246,25 +236,19 @@ export default function Home() {
           {/* PROOF BAR */}
           <div className="mt-6 grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-              <p className="text-xs tracking-[0.2em] font-semibold text-white/60">
-                {isEN ? "Costs" : "Coûts"}
-              </p>
+              <p className="text-xs font-semibold tracking-[0.2em] text-white/60">{isEN ? "Costs" : "Coûts"}</p>
               <p className="mt-1 text-sm text-white/85">
                 {isEN ? "Landed cost scenarios in minutes." : "Scénarios de coût rendu en quelques minutes."}
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-              <p className="text-xs tracking-[0.2em] font-semibold text-white/60">
-                {isEN ? "Risks" : "Risques"}
-              </p>
+              <p className="text-xs font-semibold tracking-[0.2em] text-white/60">{isEN ? "Risks" : "Risques"}</p>
               <p className="mt-1 text-sm text-white/85">
                 {isEN ? "DDP / VAT / compliance traps flagged." : "Pièges DDP / TVA / conformité détectés."}
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
-              <p className="text-xs tracking-[0.2em] font-semibold text-white/60">
-                {isEN ? "Action" : "Action"}
-              </p>
+              <p className="text-xs font-semibold tracking-[0.2em] text-white/60">{isEN ? "Action" : "Action"}</p>
               <p className="mt-1 text-sm text-white/85">
                 {isEN ? "Checklist + GO/NO GO output." : "Checklist + sortie GO/NO GO."}
               </p>
@@ -272,7 +256,7 @@ export default function Home() {
           </div>
 
           {/* CONTACT STRIP */}
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-xs tracking-[0.2em] font-semibold text-white/70">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-xs font-semibold tracking-[0.2em] text-white/70">
             <a
               href={`tel:${phoneRaw}`}
               className="rounded-full border border-white/15 bg-white/5 px-4 py-2 transition hover:bg-white/10"
@@ -300,7 +284,7 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-xs tracking-[0.2em] font-semibold text-[#1E3A8A]">{proofTitle}</p>
+              <p className="text-xs font-semibold tracking-[0.2em] text-[#1E3A8A]">{proofTitle}</p>
               <p className="mt-2 text-sm text-slate-600">{proofDescription}</p>
             </div>
             <div className="mt-4 flex flex-wrap gap-3 md:mt-0">
@@ -338,7 +322,7 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-6">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="text-xs tracking-[0.2em] font-semibold text-[#1E3A8A]">Focus</h2>
+              <h2 className="text-xs font-semibold tracking-[0.2em] text-[#1E3A8A]">Focus</h2>
               <p className="mt-2 text-3xl font-semibold font-display text-[#0B1220]">
                 {isEN ? "Clear view, fast decisions" : "Vue claire, décisions rapides"}
               </p>
@@ -398,7 +382,7 @@ export default function Home() {
       {/* HOW IT WORKS */}
       <section className="bg-slate-50 py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <h3 className="text-xs tracking-[0.2em] font-semibold text-slate-500">
+          <h3 className="text-xs font-semibold tracking-[0.2em] text-slate-500">
             {isEN ? "How it works" : "Comment ça marche"}
           </h3>
           <p className="mt-2 text-3xl font-semibold font-display text-slate-900">
@@ -407,7 +391,7 @@ export default function Home() {
 
           <div className="mt-10 grid gap-6 md:grid-cols-3">
             <div className="rounded-3xl border border-slate-200 bg-white p-6">
-              <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">{isEN ? "Step 1" : "Étape 1"}</p>
+              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">{isEN ? "Step 1" : "Étape 1"}</p>
               <p className="mt-2 text-lg font-semibold text-slate-900">
                 {isEN ? "Choose destination & context" : "Choisir destination & contexte"}
               </p>
@@ -417,7 +401,7 @@ export default function Home() {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-6">
-              <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">{isEN ? "Step 2" : "Étape 2"}</p>
+              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">{isEN ? "Step 2" : "Étape 2"}</p>
               <p className="mt-2 text-lg font-semibold text-slate-900">
                 {isEN ? "Import / check an invoice" : "Importer / vérifier une facture"}
               </p>
@@ -427,10 +411,8 @@ export default function Home() {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-6">
-              <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">{isEN ? "Step 3" : "Étape 3"}</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">
-                {isEN ? "Decide & act" : "Décider & passer à l’action"}
-              </p>
+              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">{isEN ? "Step 3" : "Étape 3"}</p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">{isEN ? "Decide & act" : "Décider & agir"}</p>
               <p className="mt-2 text-sm text-slate-600">
                 {isEN ? "GO / NO GO + clear next actions." : "GO / NO GO + recommandations concrètes."}
               </p>
@@ -457,7 +439,7 @@ export default function Home() {
       {/* SOURCES / TRUST */}
       <section className="bg-white py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <h3 className="text-xs tracking-[0.2em] font-semibold text-[#1E3A8A]">{isEN ? "Trust" : "Confiance"}</h3>
+          <h3 className="text-xs font-semibold tracking-[0.2em] text-[#1E3A8A]">{isEN ? "Trust" : "Confiance"}</h3>
           <p className="mt-2 text-3xl font-semibold font-display text-[#0B1220]">
             {isEN ? "Compliance & watch, at the right place" : "Conformité & veille, au bon endroit"}
           </p>
@@ -469,8 +451,12 @@ export default function Home() {
 
           <div className="mt-10 grid gap-6 md:grid-cols-3">
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-              <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">{isEN ? "Customs / VAT" : "Douanes / TVA"}</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">{isEN ? "Rules & obligations" : "Règles & obligations"}</p>
+              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">
+                {isEN ? "Customs / VAT" : "Douanes / TVA"}
+              </p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {isEN ? "Rules & obligations" : "Règles & obligations"}
+              </p>
               <p className="mt-2 text-sm text-slate-600">
                 {isEN
                   ? "Spot risk areas (VAT, statements, proof, local rules)."
@@ -479,7 +465,7 @@ export default function Home() {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-              <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">DDP / Incoterms</p>
+              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">DDP / Incoterms</p>
               <p className="mt-2 text-lg font-semibold text-slate-900">
                 {isEN ? "Responsibilities & costs" : "Responsabilités & coûts"}
               </p>
@@ -491,8 +477,12 @@ export default function Home() {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-              <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">{isEN ? "Compliance" : "Conformité"}</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">{isEN ? "Sanctions / vigilance" : "Sanctions / vigilance"}</p>
+              <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">
+                {isEN ? "Compliance" : "Conformité"}
+              </p>
+              <p className="mt-2 text-lg font-semibold text-slate-900">
+                {isEN ? "Sanctions / vigilance" : "Sanctions / vigilance"}
+              </p>
               <p className="mt-2 text-sm text-slate-600">
                 {isEN ? "Signals & control points before shipment." : "Signaux & points de contrôle avant expédition."}
               </p>
@@ -504,11 +494,13 @@ export default function Home() {
       {/* FINAL CTA */}
       <section className="py-16">
         <div className="mx-auto max-w-5xl px-6 text-center">
-          <p className="text-xs tracking-[0.2em] font-semibold text-slate-500">{isEN ? "Next steps" : "Étapes suivantes"}</p>
-          <h3 className="mt-3 text-3xl font-semibold font-display text-slate-900">{isEN ? "Need an expert?" : "Besoin d’un expert ?"}</h3>
+          <p className="text-xs font-semibold tracking-[0.2em] text-slate-500">{isEN ? "Next steps" : "Étapes suivantes"}</p>
+          <h3 className="mt-3 text-3xl font-semibold font-display text-slate-900">
+            {isEN ? "Need an expert?" : "Besoin d’un expert ?"}
+          </h3>
           <p className="mt-2 text-slate-600">
             {isEN
-              ? "The tool gives a first view. For high-risk shipments (DDP, sanctions, sensitive goods), get an express validation."
+              ? "The tool gives a first view. For higher-risk shipments (DDP, sanctions, sensitive goods), get an express validation."
               : "L’outil donne une première vue. Pour un envoi à risque (DDP, sanctions, produit sensible), demandez une validation express."}
           </p>
 
