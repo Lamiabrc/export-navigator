@@ -341,4 +341,129 @@ export default function About() {
       {/* CREDENTIALS + IMMERSIONS */}
       <section className="bg-white py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <div className
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+              <div className="flex items-center gap-3">
+                <GraduationCap className="h-5 w-5 text-slate-900" />
+                <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.credentialsTitle}</h3>
+              </div>
+              <p className="mt-3 text-sm text-slate-600">{copy.credentialsBody}</p>
+              <ul className="mt-5 space-y-3">
+                {credentials.map((x) => (
+                  <li key={x.label} className="flex items-start gap-3 text-sm text-slate-700">
+                    <span className="mt-0.5 h-5 w-5 flex-shrink-0 rounded-full border border-slate-200 bg-slate-50" />
+                    <div>
+                      <div className="font-semibold text-slate-900">{x.label}</div>
+                      {x.note ? <div className="mt-1 text-sm text-slate-600">{x.note}</div> : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-lg">
+              <div className="flex items-center gap-3">
+                <BriefcaseBusiness className="h-5 w-5 text-slate-900" />
+                <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.immersionTitle}</h3>
+              </div>
+              <p className="mt-3 text-sm text-slate-600">{copy.immersionBody}</p>
+
+              <div className="mt-6 space-y-3">
+                {immersions.map((x) => (
+                  <div key={x.label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="mt-0.5 h-5 w-5 text-slate-900" />
+                      <div className="text-sm text-slate-700">{x.label}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+                <div className="font-semibold text-slate-900">Conseil “anti-aller-retour”</div>
+                <div className="mt-1">
+                  Donnez dès le départ : destination, valeur, incoterm, HS code (même approximatif), délais, contraintes client.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* TRANSPARENCY + CONTACT */}
+      <section className="py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.transparencyTitle}</h3>
+              <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-slate-700">
+                <li>Les estimations sont indicatives : elles aident à la décision, ne remplacent pas un conseil officiel.</li>
+                <li>Les paramètres exacts peuvent dépendre du HS code, du régime, des exemptions et du dossier documentaire.</li>
+                <li>Les contenus de veille sont informatifs : toujours vérifier la source officielle avant d’engager un flux.</li>
+                <li>Pour un dossier engageant (DDP, valeur élevée, produit sensible), demandez une validation.</li>
+              </ul>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-lg">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.contactTitle}</h3>
+
+              <div className="mt-5 space-y-3 text-sm text-slate-700">
+                <a
+                  href={`tel:${phoneRaw}`}
+                  className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 hover:bg-slate-50"
+                >
+                  <Phone className="h-4 w-4" />
+                  {phonePretty}
+                </a>
+
+                <a
+                  href={`mailto:${emailMain}`}
+                  className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 hover:bg-slate-50"
+                >
+                  <Mail className="h-4 w-4" />
+                  {emailMain}
+                </a>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+                  <div className="font-semibold text-slate-900">Réponse plus rapide si vous indiquez :</div>
+                  <div className="mt-1">Destination • Valeur • Incoterm • HS (approx.) • Délai • Contrainte (client/transport).</div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Link
+                    to="/contact?offer=diagnostic"
+                    className="rounded-full bg-[#DC2626] px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-[#B0231D]"
+                  >
+                    {copy.ctaButton}
+                  </Link>
+                  <Link
+                    to="/veille"
+                    className="rounded-full border border-slate-200 bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-slate-700 transition hover:bg-slate-50"
+                  >
+                    Voir la veille
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CTA BAND */}
+          <div className="mt-10 rounded-3xl border border-slate-200 bg-gradient-to-r from-[#1E3A8A] via-[#0B1220] to-[#DC2626] p-8 text-white shadow-xl">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-xs uppercase tracking-[0.35em] text-white/70">{copy.ctaTitle}</div>
+                <div className="mt-2 text-2xl font-semibold">{copy.ctaBody}</div>
+              </div>
+              <Link
+                to="/contact?offer=diagnostic"
+                className="inline-flex rounded-full bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-slate-900 transition hover:bg-white/90"
+              >
+                {copy.ctaButton}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+    </MarketingLayout>
+  );
+}
