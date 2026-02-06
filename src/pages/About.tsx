@@ -15,6 +15,10 @@ import {
   ClipboardCheck,
   Layers3,
   BadgeCheck,
+  Brain,
+  Flame,
+  Scale,
+  Award,
 } from "lucide-react";
 
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
@@ -76,7 +80,7 @@ export default function About() {
 
     credentialsTitle: "Diplômes & formation",
     credentialsBody:
-      "Une approche structurée et pragmatique, nourrie par la formation et l’expérience terrain (immersion en entreprise, cas concrets, priorisation des risques).",
+      "Une approche structurée et pragmatique, nourrie par la formation, l’analyse et l’expérience terrain (immersion en entreprise, cas concrets, priorisation des risques).",
 
     immersionTitle: "Immersions & terrain",
     immersionBody:
@@ -129,15 +133,44 @@ export default function About() {
     },
   ];
 
+  // ⚠️ Ici : on enrichit fortement diplômes/formation, comme demandé.
   const credentials: Bullet[] = [
+    { label: "Licence de droit", note: "Fondations solides : lecture des textes, analyse des risques, rigueur documentaire." },
+    { label: "Diplôme en mathématiques", note: "Logique, modélisation, estimation, scénarios et cohérence des chiffres." },
+    { label: "Assistante import / export", note: "Culture opérationnelle : documents, flux, contraintes réelles du terrain." },
     { label: "CNAM — Certificat de compétences : “L’environnement international des entreprises”" },
-    { label: "Approche terrain : diagnostic + immersion en entreprise (MPL Export Conseil, depuis 2019)" },
+    { label: "Formation continue & auto-apprentissage", note: "Veille active, outils, méthodes, amélioration continue." },
+  ];
+
+  // Ajout du trait "curiosité féroce" : on le rend “marque” sans faire too much.
+  const mindset: Array<{ title: string; desc: string; icon: React.ReactNode }> = [
+    {
+      title: "Curiosité féroce (au service du client)",
+      desc: "Je creuse jusqu’à comprendre : texte, cas, exception, incohérence. Objectif : transformer le complexe en clair et actionnable.",
+      icon: <Flame className="h-5 w-5 text-slate-900" />,
+    },
+    {
+      title: "Rigueur juridique",
+      desc: "Réflexes de conformité : traçabilité, justification, prudence sur les cas sensibles (DDP, sanctions, licences).",
+      icon: <Scale className="h-5 w-5 text-slate-900" />,
+    },
+    {
+      title: "Pensée analytique",
+      desc: "Approche “math” : scénarios, ordres de grandeur, détection d’anomalies, priorisation des risques.",
+      icon: <Brain className="h-5 w-5 text-slate-900" />,
+    },
+    {
+      title: "Culture opérationnelle import/export",
+      desc: "On parle concret : documents, délais, transport, responsabilités, et points où ça casse vraiment.",
+      icon: <Award className="h-5 w-5 text-slate-900" />,
+    },
   ];
 
   const immersions: Bullet[] = [
     { label: "Immersion opérationnelle : audit rapide des flux export (documents, incoterms, acteurs, zones à risque)" },
     { label: "Accompagnement décisionnel : DDP, TVA, douane, contraintes pays/territoires" },
     { label: "Mise en place de checklists et routines : moins d’erreurs, moins de retards, plus de sérénité" },
+    { label: "Coaching “zéro friction” : clarifier qui fait quoi + standardiser sans alourdir" },
   ];
 
   const process: Array<{ step: string; title: string; desc: string; icon: React.ReactNode }> = [
@@ -271,6 +304,19 @@ export default function About() {
               </article>
             ))}
           </div>
+
+          {/* Mindset strip */}
+          <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {mindset.map((m) => (
+              <div key={m.title} className="rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
+                <div className="flex items-center gap-3">
+                  {m.icon}
+                  <div className="text-sm font-semibold text-slate-900">{m.title}</div>
+                </div>
+                <p className="mt-2 text-sm text-slate-600">{m.desc}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -348,17 +394,32 @@ export default function About() {
                 <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.credentialsTitle}</h3>
               </div>
               <p className="mt-3 text-sm text-slate-600">{copy.credentialsBody}</p>
-              <ul className="mt-5 space-y-3">
+
+              <div className="mt-5 space-y-3">
                 {credentials.map((x) => (
-                  <li key={x.label} className="flex items-start gap-3 text-sm text-slate-700">
-                    <span className="mt-0.5 h-5 w-5 flex-shrink-0 rounded-full border border-slate-200 bg-slate-50" />
-                    <div>
-                      <div className="font-semibold text-slate-900">{x.label}</div>
-                      {x.note ? <div className="mt-1 text-sm text-slate-600">{x.note}</div> : null}
+                  <div key={x.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="mt-0.5 h-5 w-5 text-slate-900" />
+                      <div>
+                        <div className="font-semibold text-slate-900">{x.label}</div>
+                        {x.note ? <div className="mt-1 text-sm text-slate-600">{x.note}</div> : null}
+                      </div>
                     </div>
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex items-start gap-3">
+                  <Flame className="mt-0.5 h-5 w-5 text-slate-900" />
+                  <div>
+                    <div className="font-semibold text-slate-900">Curiosité féroce</div>
+                    <div className="mt-1 text-sm text-slate-600">
+                      Je vais au bout des sujets : textes, exceptions, cas réels, contradictions. Résultat : moins d’angles morts et des décisions plus sûres.
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-lg">
@@ -395,7 +456,7 @@ export default function About() {
         <div className="mx-auto max-w-6xl px-6">
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.transparencyTitle}</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">Transparence & limites</h3>
               <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-slate-700">
                 <li>Les estimations sont indicatives : elles aident à la décision, ne remplacent pas un conseil officiel.</li>
                 <li>Les paramètres exacts peuvent dépendre du HS code, du régime, des exemptions et du dossier documentaire.</li>
@@ -405,7 +466,7 @@ export default function About() {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-lg">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.contactTitle}</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">Contact direct</h3>
 
               <div className="mt-5 space-y-3 text-sm text-slate-700">
                 <a
@@ -426,7 +487,9 @@ export default function About() {
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
                   <div className="font-semibold text-slate-900">Réponse plus rapide si vous indiquez :</div>
-                  <div className="mt-1">Destination • Valeur • Incoterm • HS (approx.) • Délai • Contrainte (client/transport).</div>
+                  <div className="mt-1">
+                    Destination • Valeur • Incoterm • HS (approx.) • Délai • Contrainte (client/transport).
+                  </div>
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-3">
@@ -434,7 +497,7 @@ export default function About() {
                     to="/contact?offer=diagnostic"
                     className="rounded-full bg-[#DC2626] px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-[#B0231D]"
                   >
-                    {copy.ctaButton}
+                    Demander un diagnostic
                   </Link>
                   <Link
                     to="/veille"
@@ -451,14 +514,16 @@ export default function About() {
           <div className="mt-10 rounded-3xl border border-slate-200 bg-gradient-to-r from-[#1E3A8A] via-[#0B1220] to-[#DC2626] p-8 text-white shadow-xl">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <div className="text-xs uppercase tracking-[0.35em] text-white/70">{copy.ctaTitle}</div>
-                <div className="mt-2 text-2xl font-semibold">{copy.ctaBody}</div>
+                <div className="text-xs uppercase tracking-[0.35em] text-white/70">Besoin d’une validation express ?</div>
+                <div className="mt-2 text-2xl font-semibold">
+                  DDP, produit sensible, valeur élevée : on sécurise la décision avant l’envoi.
+                </div>
               </div>
               <Link
                 to="/contact?offer=diagnostic"
                 className="inline-flex rounded-full bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-slate-900 transition hover:bg-white/90"
               >
-                {copy.ctaButton}
+                Demander un diagnostic
               </Link>
             </div>
           </div>
