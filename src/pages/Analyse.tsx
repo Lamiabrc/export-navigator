@@ -1,4 +1,6 @@
-import React from "react";
+import * as React from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,9 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import { usePlan } from "@/auth/PlanContext";
+
 import { cn } from "@/lib/utils";
 import { computeLandedCost } from "@/lib/landedCost";
 import type { Incoterm, TransportMode, LandedCostInput } from "@/lib/landedCost";
+
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
@@ -65,9 +71,18 @@ type PlanSlug = "FREE" | "TOOL" | "PRO" | "VIP";
 
 function normalizePlan(raw: string): PlanSlug {
   const v = String(raw || "").trim().toUpperCase();
-  if (v === "VIP" || v === "VIP+" || v === "ENTERPRISE" || v === "PREMIUM") return "VIP";
-  if (v === "PRO" || v === "PRO+" || v === "PROPLUS" || v === "PRO_PLUS") return "PRO";
-  if (v === "TOOL" || v === "BASIC" || v === "STARTER") return "TOOL";
+
+  // ✅ Compat avec tes slugs internes (vu dans App.tsx)
+  if (v.includes("PILOTAGE") || v.includes("VIP")) return "VIP";
+  if (v.includes("PRO")) return "PRO";
+  if (v.includes("TOOL")) return "TOOL";
+  if (v.includes("FREE")) return "FREE";
+
+  // legacy / variations
+  if (v === "VIP+" || v === "ENTERPRISE" || v === "PREMIUM") return "VIP";
+  if (v === "PRO+" || v === "PROPLUS" || v === "PRO_PLUS") return "PRO";
+  if (v === "BASIC" || v === "STARTER") return "TOOL";
+
   return "FREE";
 }
 
@@ -157,6 +172,7 @@ function buildShareId() {
 
 function readShareStore(): Record<string, SharePayload> {
   try {
+    if (typeof window === "undefined") return {};
     const raw = localStorage.getItem(SHARE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
@@ -168,7 +184,12 @@ function readShareStore(): Record<string, SharePayload> {
 }
 
 function writeShareStore(store: Record<string, SharePayload>) {
-  localStorage.setItem(SHARE_KEY, JSON.stringify(store));
+  try {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(SHARE_KEY, JSON.stringify(store));
+  } catch {
+    // ignore
+  }
 }
 
 async function generatePdf(payload: SharePayload) {
@@ -272,7 +293,17 @@ async function generatePdf(payload: SharePayload) {
 }
 
 export default function Analyse() {
-  const plan = React.useMemo(() => safePlanGuess(), []);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { toast } = useToast();
+
+  // ✅ Plan: on privilégie le contexte, sinon fallback localStorage
+  const { plan: planFromCtx, loading: planLoading } = usePlan();
+  const plan = React.useMemo<PlanSlug>(() => {
+    if (planFromCtx) return normalizePlan(String(planFromCtx));
+    return safePlanGuess();
+  }, [planFromCtx]);
+
   const isVip = hasAtLeast(plan, "VIP");
   const isToolPlus = hasAtLeast(plan, "TOOL");
 
@@ -291,7 +322,7 @@ export default function Analyse() {
   const remainingFreeRuns = Math.max(0, FREE_RUN_LIMIT - freeRuns);
   const freeLocked = plan === "FREE" && remainingFreeRuns <= 0;
 
-  // ✅ Snapshot (on calcule à la demande => permet "1 usage" en FREE)
+  // ✅ Snapshot
   const [computed, setComputed] = React.useState<{
     input: LandedCostInput;
     result: ReturnType<typeof computeLandedCost>;
@@ -300,6 +331,7 @@ export default function Analyse() {
 
   React.useEffect(() => {
     try {
+      if (typeof window === "undefined") return;
       const raw = localStorage.getItem(FREE_ANALYSE_RUNS_KEY);
       const n = raw ? Number(raw) : 0;
       setFreeRuns(Number.isFinite(n) ? n : 0);
@@ -308,13 +340,18 @@ export default function Analyse() {
     }
   }, []);
 
+  // ✅ Pré-remplissage via query params (?incoterm=DDP)
   React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const incoterm = params.get("incoterm");
-    if (incoterm && INCOTERMS.includes(incoterm as Incoterm)) {
-      setForm((prev) => ({ ...prev, incoterm: incoterm as Incoterm }));
+    try {
+      const params = new URLSearchParams(location.search);
+      const incoterm = params.get("incoterm");
+      if (incoterm && INCOTERMS.includes(incoterm as Incoterm)) {
+        setForm((prev) => ({ ...prev, incoterm: incoterm as Incoterm }));
+      }
+    } catch {
+      // ignore
     }
-  }, []);
+  }, [location.search]);
 
   const currentInput = React.useMemo(() => toInput(form), [form]);
   const currentResult = React.useMemo(() => computeLandedCost(currentInput), [currentInput]);
@@ -339,26 +376,40 @@ export default function Analyse() {
   }, [activeResult.total, scenarioResults, isToolPlus]);
 
   const goPricing = (anchor?: string) => {
-    window.location.href = anchor ? `/pricing#${anchor}` : "/pricing";
+    const path = anchor ? `/pricing#${anchor}` : "/pricing";
+    navigate(path);
+    if (anchor) {
+      window.setTimeout(() => {
+        const el = document.getElementById(anchor);
+        el?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    }
   };
+
+  const goTo = (path: string) => navigate(path);
 
   const handleGoWatch = () => {
     if (!isVip) {
-      // VIP only
-      window.alert("La veille est réservée au plan VIP. Passez au VIP pour activer la veille premium par destination.");
+      toast({
+        title: "Accès VIP",
+        description: "La veille est réservée au plan VIP. Passez au VIP pour activer la veille premium par destination.",
+      });
       goPricing("vip");
       return;
     }
-    window.location.href = "/veille";
+    goTo("/veille");
   };
 
   const handleCompute = () => {
     if (plan === "FREE" && freeLocked) {
-      setShareStatus("Limite FREE atteinte : 1 calcul gratuit. Passez à TOOL (149€/mois) pour un accès illimité.");
+      setShareStatus("Limite FREE atteinte : 1 calcul gratuit. Passez à TOOL pour un accès illimité.");
+      toast({
+        title: "Limite FREE atteinte",
+        description: "Passez à TOOL pour utiliser le simulateur sans limite.",
+      });
       return;
     }
 
-    // snapshot
     const snap = {
       input: currentInput,
       result: currentResult,
@@ -380,11 +431,11 @@ export default function Analyse() {
 
   const handlePdf = async () => {
     if (!computed) {
-      window.alert("Clique d’abord sur “Calculer” pour générer le PDF.");
+      toast({ title: "Action requise", description: "Clique d’abord sur “Calculer” pour générer le PDF." });
       return;
     }
     if (!isToolPlus) {
-      window.alert("Le PDF est inclus à partir de l’offre TOOL (149€/mois).");
+      toast({ title: "TOOL requis", description: "Le PDF est inclus à partir de l’offre TOOL." });
       goPricing("tool");
       return;
     }
@@ -404,6 +455,7 @@ export default function Analyse() {
       link.download = `mpl-decision-${Date.now()}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
+      toast({ title: "PDF généré", description: "Le téléchargement a démarré." });
     } finally {
       setPdfLoading(false);
     }
@@ -411,11 +463,11 @@ export default function Analyse() {
 
   const handleShare = async () => {
     if (!computed) {
-      window.alert("Clique d’abord sur “Calculer” pour générer un lien.");
+      toast({ title: "Action requise", description: "Clique d’abord sur “Calculer” pour générer un lien." });
       return;
     }
     if (!isToolPlus) {
-      window.alert("Le partage est inclus à partir de l’offre TOOL (149€/mois).");
+      toast({ title: "TOOL requis", description: "Le partage est inclus à partir de l’offre TOOL." });
       goPricing("tool");
       return;
     }
@@ -426,6 +478,7 @@ export default function Analyse() {
       input: computed.input,
       result: computed.result,
     };
+
     const store = readShareStore();
     store[payload.id] = payload;
     writeShareStore(store);
@@ -434,8 +487,10 @@ export default function Analyse() {
     try {
       await navigator.clipboard.writeText(shareUrl);
       setShareStatus("Lien copié dans le presse-papiers.");
+      toast({ title: "Lien copié", description: "Partage-le à ton client ou à ton équipe." });
     } catch {
       setShareStatus(`Lien généré : ${shareUrl}`);
+      toast({ title: "Lien généré", description: "Copie le lien affiché sous les boutons." });
     }
   };
 
@@ -457,7 +512,7 @@ export default function Analyse() {
 
             <div className="flex flex-col items-end gap-2">
               <Badge variant="outline" className="border-white/20 text-white/80">
-                Plan : {plan}
+                Plan : {planLoading ? "…" : plan}
               </Badge>
               {plan === "FREE" ? (
                 <Badge variant="outline" className="border-white/20 text-white/80">
@@ -472,19 +527,11 @@ export default function Analyse() {
           </div>
 
           <div className="mt-6 flex flex-wrap gap-3">
-            <Button onClick={() => (window.location.href = "/contact")}>Demander un audit export</Button>
-            <Button
-              variant="outline"
-              className="border-white/30 text-white hover:bg-white/10"
-              onClick={() => (window.location.href = "/import/check-invoice")}
-            >
+            <Button onClick={() => goTo("/contact")}>Demander un audit export</Button>
+            <Button variant="outline" className="border-white/30 text-white hover:bg-white/10" onClick={() => goTo("/import/check-invoice")}>
               Vérifier une facture import/export
             </Button>
-            <Button
-              variant="outline"
-              className="border-white/30 text-white hover:bg-white/10"
-              onClick={handleGoWatch}
-            >
+            <Button variant="outline" className="border-white/30 text-white hover:bg-white/10" onClick={handleGoWatch}>
               Veille export (VIP)
             </Button>
           </div>
@@ -492,10 +539,9 @@ export default function Analyse() {
           <div className="mt-4 text-xs text-white/70">
             {plan === "FREE" ? (
               <>
-                Vous testez en <span className="font-semibold text-white">FREE</span> : 1 calcul gratuit.
-                Pour un usage régulier sans recruter une ADV export :{" "}
+                Vous testez en <span className="font-semibold text-white">FREE</span> : 1 calcul gratuit. Pour un usage régulier :{" "}
                 <button className="underline hover:opacity-90" onClick={() => goPricing("tool")}>
-                  TOOL 149€/mois
+                  TOOL
                 </button>
                 .
               </>
@@ -503,11 +549,11 @@ export default function Analyse() {
               <>
                 Besoin d’un accompagnement humain :{" "}
                 <button className="underline hover:opacity-90" onClick={() => goPricing("pro")}>
-                  PRO (1h/semaine)
+                  PRO
                 </button>{" "}
                 ou{" "}
                 <button className="underline hover:opacity-90" onClick={() => goPricing("vip")}>
-                  VIP (veille + 1 journée/mois)
+                  VIP
                 </button>
                 .
               </>
@@ -518,7 +564,7 @@ export default function Analyse() {
         {/* PAYWALL (FREE lock) */}
         {showPaywall && (
           <section>
-            <Card className="rounded-3xl border-slate-200/70 bg-slate-50 shadow-sm">
+            <Card className="rounded-3xl border-border bg-muted/30 shadow-sm">
               <CardHeader>
                 <CardTitle>Limite FREE atteinte</CardTitle>
                 <CardDescription>
@@ -527,17 +573,15 @@ export default function Analyse() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm text-slate-700">
-                  <div className="font-semibold text-slate-900">TOOL — 149 €/mois (100% en ligne)</div>
-                  <div>Simulateur complet • Vérification facture import/export • Suivi opérations</div>
+                <div className="text-sm">
+                  <div className="font-semibold">TOOL — 149 €/mois (100% en ligne)</div>
+                  <div className="text-muted-foreground">Simulateur complet • Vérification facture • Suivi opérations</div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => (window.location.href = "/import/check-invoice")}>
+                  <Button variant="outline" onClick={() => goTo("/import/check-invoice")}>
                     Tester la vérification
                   </Button>
-                  <Button className="bg-[#1E3A8A] hover:bg-[#162864]" onClick={() => goPricing("tool")}>
-                    Voir TOOL 149€
-                  </Button>
+                  <Button onClick={() => goPricing("tool")}>Voir TOOL</Button>
                 </div>
               </CardContent>
             </Card>
@@ -558,11 +602,7 @@ export default function Analyse() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Valeur marchandise</Label>
-                  <Input
-                    value={form.goodsValue}
-                    onChange={(e) => updateForm(setForm, "goodsValue", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.goodsValue} onChange={(e) => updateForm(setForm, "goodsValue", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
@@ -581,20 +621,12 @@ export default function Analyse() {
 
                 <div className="space-y-2">
                   <Label>Quantité (optionnel)</Label>
-                  <Input
-                    value={form.quantity}
-                    onChange={(e) => updateForm(setForm, "quantity", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.quantity} onChange={(e) => updateForm(setForm, "quantity", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
                   <Label>Destination (pays)</Label>
-                  <Input
-                    value={form.destination}
-                    onChange={(e) => updateForm(setForm, "destination", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.destination} onChange={(e) => updateForm(setForm, "destination", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
@@ -632,24 +664,16 @@ export default function Analyse() {
 
               <Separator />
 
-              {/* Champs avancés => visibles, mais on pousse TOOL+ */}
+              {/* Champs avancés */}
               <div className={cn("grid gap-4 md:grid-cols-2", !isToolPlus && "opacity-70")}>
                 <div className="space-y-2">
                   <Label>Pré-acheminement</Label>
-                  <Input
-                    value={form.preCarriage}
-                    onChange={(e) => updateForm(setForm, "preCarriage", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.preCarriage} onChange={(e) => updateForm(setForm, "preCarriage", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
                   <Label>Fret principal</Label>
-                  <Input
-                    value={form.mainFreight}
-                    onChange={(e) => updateForm(setForm, "mainFreight", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.mainFreight} onChange={(e) => updateForm(setForm, "mainFreight", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
@@ -664,30 +688,18 @@ export default function Analyse() {
                         <SelectItem value="amount">Montant</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Input
-                      value={form.insuranceValue}
-                      onChange={(e) => updateForm(setForm, "insuranceValue", e.target.value)}
-                      className={INPUT_CLASSES}
-                    />
+                    <Input value={form.insuranceValue} onChange={(e) => updateForm(setForm, "insuranceValue", e.target.value)} className={INPUT_CLASSES} />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label>Emballage</Label>
-                  <Input
-                    value={form.packaging}
-                    onChange={(e) => updateForm(setForm, "packaging", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.packaging} onChange={(e) => updateForm(setForm, "packaging", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
                   <Label>Douane / transit</Label>
-                  <Input
-                    value={form.brokerage}
-                    onChange={(e) => updateForm(setForm, "brokerage", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.brokerage} onChange={(e) => updateForm(setForm, "brokerage", e.target.value)} className={INPUT_CLASSES} />
                 </div>
 
                 <div className="space-y-2">
@@ -697,40 +709,28 @@ export default function Analyse() {
 
                 <div className="space-y-2">
                   <Label>Taux droits (manuel %)</Label>
-                  <Input
-                    value={form.dutyRate}
-                    onChange={(e) => updateForm(setForm, "dutyRate", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.dutyRate} onChange={(e) => updateForm(setForm, "dutyRate", e.target.value)} className={INPUT_CLASSES} />
                   <p className="text-xs text-muted-foreground">Entrez le % validé (HS / pays / origine).</p>
                 </div>
 
                 <div className="space-y-2">
                   <Label>TVA import (manuel %)</Label>
-                  <Input
-                    value={form.vatRate}
-                    onChange={(e) => updateForm(setForm, "vatRate", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.vatRate} onChange={(e) => updateForm(setForm, "vatRate", e.target.value)} className={INPUT_CLASSES} />
                   <p className="text-xs text-muted-foreground">Champ manuel. Pas d’auto lookup.</p>
                 </div>
 
                 <div className="space-y-2">
                   <Label>Marge cible (optionnel %)</Label>
-                  <Input
-                    value={form.marginTarget}
-                    onChange={(e) => updateForm(setForm, "marginTarget", e.target.value)}
-                    className={INPUT_CLASSES}
-                  />
+                  <Input value={form.marginTarget} onChange={(e) => updateForm(setForm, "marginTarget", e.target.value)} className={INPUT_CLASSES} />
                 </div>
               </div>
 
               {!isToolPlus && (
-                <div className="rounded-xl border bg-slate-50 p-4 text-sm text-slate-700">
-                  <div className="font-semibold text-slate-900">Astuce</div>
-                  Pour un usage régulier + vérification facture import/export + suivi des opérations :{" "}
+                <div className="rounded-xl border bg-muted/30 p-4 text-sm">
+                  <div className="font-semibold">Astuce</div>
+                  Pour un usage régulier + vérification facture + suivi :{" "}
                   <button className="underline" onClick={() => goPricing("tool")}>
-                    TOOL 149€/mois
+                    TOOL
                   </button>
                   .
                 </div>
@@ -738,32 +738,22 @@ export default function Analyse() {
 
               <div className="flex flex-wrap gap-3">
                 <Button onClick={handleCompute} disabled={plan === "FREE" && freeLocked}>
-                  {plan === "FREE" && freeLocked
-                    ? "Calcul FREE indisponible"
-                    : computed
-                      ? "Recalculer"
-                      : "Calculer"}
+                  {plan === "FREE" && freeLocked ? "Calcul FREE indisponible" : computed ? "Recalculer" : "Calculer"}
                 </Button>
 
-                <Button
-                  variant="outline"
-                  onClick={() => (window.location.href = "/import/check-invoice")}
-                  className="border-border"
-                >
+                <Button variant="outline" onClick={() => goTo("/import/check-invoice")}>
                   Vérifier une facture
                 </Button>
 
                 {!isToolPlus && (
                   <Button variant="outline" onClick={() => goPricing("tool")}>
-                    Passer à TOOL (149€)
+                    Passer à TOOL
                   </Button>
                 )}
               </div>
 
               {plan === "FREE" && (
-                <p className="text-xs text-muted-foreground">
-                  FREE = {FREE_RUN_LIMIT} calcul gratuit. TOOL/PRO/VIP = illimité.
-                </p>
+                <p className="text-xs text-muted-foreground">FREE = {FREE_RUN_LIMIT} calcul gratuit. TOOL/PRO/VIP = illimité.</p>
               )}
             </CardContent>
           </Card>
@@ -773,6 +763,7 @@ export default function Analyse() {
               <CardTitle>Résultats</CardTitle>
               <CardDescription>Vue de synthèse + breakdown.</CardDescription>
             </CardHeader>
+
             <CardContent className="space-y-6">
               {!computed ? (
                 <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
@@ -796,12 +787,8 @@ export default function Analyse() {
                   {activeResult.margin && (
                     <div className="rounded-xl border bg-card p-4">
                       <div className="text-xs uppercase text-muted-foreground">Marge cible</div>
-                      <div className="mt-1 text-lg font-semibold">
-                        {formatMoney(activeResult.margin.targetAmount, activeInput.currency)}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Prix cible : {formatMoney(activeResult.margin.targetPrice, activeInput.currency)}
-                      </div>
+                      <div className="mt-1 text-lg font-semibold">{formatMoney(activeResult.margin.targetAmount, activeInput.currency)}</div>
+                      <div className="text-sm text-muted-foreground">Prix cible : {formatMoney(activeResult.margin.targetPrice, activeInput.currency)}</div>
                     </div>
                   )}
 
@@ -835,22 +822,18 @@ export default function Analyse() {
             <CardHeader>
               <CardTitle>Comparateur de scénarios</CardTitle>
               <CardDescription>
-                {isToolPlus
-                  ? "Modifiez incoterm, mode et coûts pour comparer jusqu'à 3 scénarios."
-                  : "Disponible à partir de TOOL (149€/mois)."}
+                {isToolPlus ? "Modifiez incoterm, mode et coûts pour comparer jusqu'à 3 scénarios." : "Disponible à partir de TOOL."}
               </CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-6">
               {!isToolPlus ? (
-                <div className="rounded-xl border bg-slate-50 p-4 text-sm text-slate-700">
-                  <div className="font-semibold text-slate-900">Débloquer le comparateur</div>
-                  TOOL (149€/mois) = simulateur complet + comparateur + vérification facture import/export + suivi opérations.
+                <div className="rounded-xl border bg-muted/30 p-4 text-sm">
+                  <div className="font-semibold">Débloquer le comparateur</div>
+                  TOOL = simulateur complet + comparateur + vérification facture + suivi opérations.
                   <div className="mt-3 flex gap-2">
-                    <Button className="bg-[#1E3A8A] hover:bg-[#162864]" onClick={() => goPricing("tool")}>
-                      Passer à TOOL
-                    </Button>
-                    <Button variant="outline" onClick={() => (window.location.href = "/contact")}>
+                    <Button onClick={() => goPricing("tool")}>Passer à TOOL</Button>
+                    <Button variant="outline" onClick={() => goTo("/contact")}>
                       Demander une démo
                     </Button>
                   </div>
@@ -965,16 +948,12 @@ export default function Analyse() {
                       <div className="mt-3 space-y-2 text-sm text-muted-foreground">
                         <div className="flex items-center justify-between">
                           <span>Base</span>
-                          <span className="text-foreground">
-                            {computed ? formatMoney(activeResult.total, activeInput.currency) : "—"}
-                          </span>
+                          <span className="text-foreground">{computed ? formatMoney(activeResult.total, activeInput.currency) : "—"}</span>
                         </div>
                         {scenarioResults.map((scenario) => (
                           <div key={scenario.id} className="flex items-center justify-between">
                             <span>{scenario.label}</span>
-                            <span className="text-foreground">
-                              {formatMoney(scenario.result.total, scenario.input.currency)}
-                            </span>
+                            <span className="text-foreground">{formatMoney(scenario.result.total, scenario.input.currency)}</span>
                           </div>
                         ))}
                       </div>
@@ -1013,9 +992,7 @@ export default function Analyse() {
 
             <CardContent className="space-y-4">
               {!computed ? (
-                <div className="rounded-lg border bg-card p-3 text-sm text-muted-foreground">
-                  Clique sur “Calculer” pour afficher les alertes.
-                </div>
+                <div className="rounded-lg border bg-card p-3 text-sm text-muted-foreground">Clique sur “Calculer” pour afficher les alertes.</div>
               ) : (
                 <div className="space-y-2">
                   {activeResult.warnings.map((warning) => (
@@ -1045,16 +1022,15 @@ export default function Analyse() {
                 <Button variant="outline" onClick={handleShare}>
                   Partager un lien (TOOL+)
                 </Button>
-                <Button variant="outline" onClick={() => (window.location.href = "/import/check-invoice")}>
+                <Button variant="outline" onClick={() => goTo("/import/check-invoice")}>
                   Vérifier une facture
                 </Button>
               </div>
 
               {shareStatus && <p className="text-xs text-muted-foreground">{shareStatus}</p>}
 
-              <div className="rounded-xl border bg-slate-50 p-4 text-xs text-slate-600">
-                <span className="font-semibold text-slate-900">Note :</span> ces résultats sont indicatifs. Pour une
-                décision “zéro surprise”, demande une validation (audit / express).
+              <div className="rounded-xl border bg-muted/30 p-4 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">Note :</span> résultats indicatifs. Pour une décision “zéro surprise”, demande une validation (audit / express).
               </div>
             </CardContent>
           </Card>
@@ -1062,12 +1038,12 @@ export default function Analyse() {
       </div>
 
       <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2">
-        <Button size="lg" onClick={() => (window.location.href = "/contact")}>
+        <Button size="lg" onClick={() => goTo("/contact")}>
           Demander un audit export
         </Button>
         {!isToolPlus && (
           <Button size="lg" variant="outline" onClick={() => goPricing("tool")}>
-            Passer à TOOL (149€)
+            Passer à TOOL
           </Button>
         )}
       </div>
