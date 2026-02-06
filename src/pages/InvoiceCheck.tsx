@@ -214,7 +214,7 @@ export default function InvoiceCheck() {
               </div>
               <div className="flex items-center gap-3">
                 <Button onClick={generateReport} disabled={reporting}>
-                  {reporting - "Generation..." : "Generer le rapport PDF"}
+                  {reporting ? "Generation..." : "Generer le rapport PDF"}
                 </Button>
                 <Button variant="outline" onClick={openAudit}>Demander un audit complet</Button>
               </div>
