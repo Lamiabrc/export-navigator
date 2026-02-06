@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Sidebar } from "./Sidebar";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Search, FileCheck2, Bot, LogOut, Newspaper, Calculator } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { BrandLogo } from "../BrandLogo";
 import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
 import { TricolorBanner } from "@/components/layout/TricolorBanner";
+import { getBannerContent } from "@/config/bannerContent";
 import {
   TimeRangePicker,
   AutoRefreshControl,
@@ -31,6 +32,8 @@ export function MainLayout({
 }: MainLayoutProps) {
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const banner = getBannerContent(location.pathname);
 
   // Search UX: tu pourras le brancher à un contexte global plus tard (GlobalFiltersContext)
   const [q, setQ] = React.useState("");
@@ -188,7 +191,7 @@ export function MainLayout({
 
         <div className={cn("p-4 md:p-10", contentClassName)}>
           <div className="mb-4">
-            <TricolorBanner />
+            <TricolorBanner title={banner.title} question={banner.question} />
           </div>
           {variant === "bare" ? (
             <div className="space-y-4">{children}</div>

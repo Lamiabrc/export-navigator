@@ -2,14 +2,14 @@ import { cn } from "@/lib/utils";
 
 type TricolorBannerProps = {
   title?: string;
-  subtitle?: string;
+  question?: string;
   compact?: boolean;
   className?: string;
 };
 
 export function TricolorBanner({
   title = "MPL Export Navigator",
-  subtitle = "Aide a la decision export, veille et conformite.",
+  question = "Quelle decision export devez-vous securiser ?",
   compact = true,
   className,
 }: TricolorBannerProps) {
@@ -27,7 +27,11 @@ export function TricolorBanner({
           MPL Export Conseil
         </div>
         <div className="text-lg font-semibold md:text-xl">{title}</div>
-        {subtitle ? <div className="text-sm text-white/85">{subtitle}</div> : null}
+        {question ? (
+          <div className="text-sm text-white/85">
+            <span className="font-semibold">Question :</span> {question}
+          </div>
+        ) : null}
       </div>
     </section>
   );

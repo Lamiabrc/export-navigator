@@ -7,6 +7,7 @@ import type { LanguageCode } from "@/i18n/translations";
 import { navLinks } from "@/config/navLinks";
 import { GdprGuarantee } from "@/components/GdprGuarantee";
 import { TricolorBanner } from "@/components/layout/TricolorBanner";
+import { getBannerContent } from "@/config/bannerContent";
 
 // ✅ Encoding-safe flags (avoid broken emoji bytes)
 const flags: Record<LanguageCode, string> = {
@@ -21,6 +22,7 @@ function cx(...classes: Array<string | false | undefined | null>) {
 export const MarketingLayout = ({ children }: { children: ReactNode }) => {
   const { lang, t, setLang } = useI18n();
   const location = useLocation();
+  const banner = getBannerContent(location.pathname);
   const isEN = lang === "en";
 
   const navLabel = (key: string, fallback: string) => {
@@ -158,7 +160,7 @@ export const MarketingLayout = ({ children }: { children: ReactNode }) => {
 
       <main className="flex-1">
         <div className="mx-auto max-w-6xl px-6 pt-6">
-          <TricolorBanner />
+          <TricolorBanner title={banner.title} question={banner.question} />
         </div>
         {children}
       </main>

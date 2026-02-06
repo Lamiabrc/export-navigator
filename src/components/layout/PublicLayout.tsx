@@ -8,6 +8,7 @@ import { TricolorBanner } from "@/components/layout/TricolorBanner";
 import { useI18n } from "@/contexts/LanguageContext";
 import type { LanguageCode } from "@/i18n/translations";
 import { navLinks } from "@/config/navLinks";
+import { getBannerContent } from "@/config/bannerContent";
 
 type RssItem = { title: string; link: string; pubDate?: string };
 
@@ -183,6 +184,7 @@ function FooterRss() {
 export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const { t, lang, setLang } = useI18n();
+  const banner = getBannerContent(location.pathname);
   const siteDisclaimers = (t("disclaimers") as string[]) ?? [];
 
   const navLabel = (key: string, fallback: string) => {
@@ -322,7 +324,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
       <main className="relative z-10 mx-auto w-full max-w-7xl px-6 py-10 md:px-10">
         <div className="mb-6">
-          <TricolorBanner />
+          <TricolorBanner title={banner.title} question={banner.question} />
         </div>
         {children ?? <Outlet />}
       </main>

@@ -320,18 +320,18 @@ export default function Methodologie() {
     <PublicLayout>
       <div className="mx-auto max-w-6xl space-y-10">
         {/* HERO */}
-        <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-r from-blue-700 via-blue-950 to-red-600 p-7 text-white shadow-sm md:p-10">
-          <div className="pointer-events-none absolute inset-0 opacity-25 [background-image:radial-gradient(circle_at_20%_10%,white,transparent_45%),radial-gradient(circle_at_80%_35%,white,transparent_40%)]" />
+        <section className="relative overflow-hidden rounded-3xl border border-blue-100 bg-white p-7 text-slate-900 shadow-sm md:p-10">
+          <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_20%_10%,rgba(37,99,235,0.15),transparent_45%),radial-gradient(circle_at_80%_35%,rgba(220,38,38,0.12),transparent_40%)]" />
           <div className="relative space-y-3">
-            <p className="text-xs uppercase tracking-[0.35em] text-white/80">{c.eyebrow}</p>
+            <p className="text-xs uppercase tracking-[0.35em] text-slate-500">{c.eyebrow}</p>
             <h1 className="text-3xl font-semibold leading-tight md:text-4xl">{c.title}</h1>
-            <p className="max-w-3xl text-base text-white/85 md:text-lg">{c.subtitle}</p>
+            <p className="max-w-3xl text-base text-slate-600 md:text-lg">{c.subtitle}</p>
 
             <div className="flex flex-wrap gap-2 pt-3">
               <Button
                 asChild
                 variant="secondary"
-                className="rounded-full bg-white/95 text-slate-900 hover:bg-white"
+                className="rounded-full bg-slate-900 text-white hover:bg-slate-800"
               >
                 <a href={`tel:${phoneRaw}`} className="inline-flex items-center gap-2">
                   <Phone className="h-4 w-4" />
@@ -342,7 +342,7 @@ export default function Methodologie() {
               <Button
                 asChild
                 variant="secondary"
-                className="rounded-full bg-white/15 text-white hover:bg-white/20"
+                className="rounded-full bg-slate-100 text-slate-900 hover:bg-slate-200"
               >
                 <a href={`mailto:${emailMain}`} className="inline-flex items-center gap-2">
                   <Mail className="h-4 w-4" />
@@ -353,12 +353,12 @@ export default function Methodologie() {
               <Button
                 asChild
                 variant="outline"
-                className="rounded-full border-white/40 text-white hover:bg-white/10"
+                className="rounded-full border-slate-300 text-slate-900 hover:bg-slate-50"
               >
                 <Link to="/contact">{c.ctaRequest}</Link>
               </Button>
 
-              <Button asChild className="rounded-full bg-slate-950/40 hover:bg-slate-950/55">
+              <Button asChild className="rounded-full bg-blue-700 text-white hover:bg-blue-800">
                 <Link to="/analyse">{c.ctaLaunch}</Link>
               </Button>
             </div>
@@ -515,18 +515,18 @@ export default function Methodologie() {
         </section>
 
         {/* FINAL CTA */}
-        <section className="rounded-3xl border border-slate-200 bg-gradient-to-r from-blue-700 via-blue-950 to-red-600 p-6 text-white shadow-sm md:p-8">
+        <section className="rounded-3xl border border-blue-100 bg-slate-50 p-6 text-slate-900 shadow-sm md:p-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="text-xs uppercase tracking-[0.25em] text-white/70">{c.finalEyebrow}</div>
+              <div className="text-xs uppercase tracking-[0.25em] text-slate-500">{c.finalEyebrow}</div>
               <div className="mt-1 text-2xl font-semibold">{c.finalTitle}</div>
-              <div className="mt-2 max-w-2xl text-sm text-white/85">{c.finalDesc}</div>
+              <div className="mt-2 max-w-2xl text-sm text-slate-600">{c.finalDesc}</div>
             </div>
 
             <div className="flex flex-wrap gap-3">
               <Button
                 variant="secondary"
-                className="bg-white/95 text-slate-900 hover:bg-white"
+                className="bg-slate-900 text-white hover:bg-slate-800"
                 onClick={() => navigate("/contact?offer=express")}
               >
                 {c.finalExpress}
@@ -534,7 +534,7 @@ export default function Methodologie() {
 
               <Button
                 variant="outline"
-                className="border-white/60 text-white hover:bg-white/10"
+                className="border-slate-300 text-slate-900 hover:bg-white"
                 onClick={() => navigate("/contact")}
               >
                 {c.finalAudit}
@@ -542,7 +542,7 @@ export default function Methodologie() {
 
               <Button
                 variant="outline"
-                className="border-white/40 text-white hover:bg-white/10"
+                className="border-slate-300 text-slate-900 hover:bg-white"
                 onClick={() => navigate("/analyse")}
               >
                 {c.finalLaunch}
