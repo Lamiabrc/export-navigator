@@ -229,8 +229,7 @@ export default function Resources() {
                 </div>
               ))}
             </CardContent>
-            </Card>
-          </div>
+          </Card>
         </section>
 
         <Card className="border border-border">
