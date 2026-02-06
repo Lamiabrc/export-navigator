@@ -187,7 +187,7 @@ function isPermissionError(e: any) {
 
 /**
  * ✅ On lit 1 ligne pour "deviner" les colonnes réelles
- * => plus de 400 en spam
+ * => évite les erreurs en cascade si la table n'existe pas / RLS
  */
 async function pickFirstWorkingTable(tables: string[]) {
   const errors: any[] = [];
@@ -219,26 +219,28 @@ function percentFormat(raw: any) {
   return `${rounded}%`;
 }
 
-function extractRateFromRow(row: any) {
+function extractDutyRateFromRow(row: any) {
   const v =
-    row?.om_rate ??
-    row?.taux_om ??
-    row?.taux ??
+    row?.duty_rate ??
+    row?.duty_pct ??
+    row?.tariff_rate ??
+    row?.customs_duty_rate ??
+    row?.ad_valorem_rate ??
     row?.rate ??
-    row?.octroi_rate ??
-    row?.om ??
+    row?.duty ??
     null;
 
   return percentFormat(v);
 }
 
+// Repères indicatifs (fallback si table VAT vide)
 function vatFallbackForTerritory(code: string) {
-  if (code === "FR") return "TVA 20% (reference France)";
-  if (code === "DE") return "TVA 19% (indicatif)";
-  if (code === "ES") return "TVA 21% (indicatif)";
-  if (code === "US") return "Sales tax selon Etat (indicatif)";
-  if (code === "GB") return "TVA 20% (indicatif)";
-  return "TVA locale (indicatif)";
+  if (code === "FR") return "TVA 20% (repere)";
+  if (code === "DE") return "TVA 19% (repere)";
+  if (code === "ES") return "TVA 21% (repere)";
+  if (code === "GB") return "TVA 20% (repere)";
+  if (code === "US") return "Sales tax selon Etat (repere)";
+  return "TVA locale (repere)";
 }
 
 function hslVar(v: string) {
@@ -320,11 +322,11 @@ export default function ControlTower() {
   const [selected, setSelected] = React.useState<SelectedCell>(null);
 
   // Data
-  const [omMeta, setOmMeta] = React.useState<{ table: string; hsCol: string | null; territoryCol: string | null } | null>(null);
+  const [dutyMeta, setDutyMeta] = React.useState<{ table: string; hsCol: string | null; territoryCol: string | null } | null>(null);
   const [vatMeta, setVatMeta] = React.useState<{ table: string; territoryCol: string | null } | null>(null);
   const [taxMeta, setTaxMeta] = React.useState<{ table: string; territoryCol: string | null } | null>(null);
 
-  const [omRows, setOmRows] = React.useState<any[]>([]);
+  const [dutyRows, setDutyRows] = React.useState<any[]>([]);
   const [vatRows, setVatRows] = React.useState<any[]>([]);
   const [taxRows, setTaxRows] = React.useState<any[]>([]);
 
@@ -337,27 +339,27 @@ export default function ControlTower() {
     return baseHsCodes.filter((h) => h.toLowerCase().includes(q));
   }, [baseHsCodes, search]);
 
-  const omMap = React.useMemo(() => {
-    // omMap[territory][hsKey] = rows[]
+  const dutyMap = React.useMemo(() => {
+    // dutyMap[territory][hsKey] = rows[]
     const map = new Map<string, Map<string, any[]>>();
     for (const t of effectiveTerritories) map.set(t.code, new Map());
 
-    const hsCol = omMeta?.hsCol || "";
+    const hsCol = dutyMeta?.hsCol || "";
     const hsLen =
       hsCol.toLowerCase().includes("hs4") ? 4 :
       hsCol.toLowerCase().includes("hs6") ? 6 :
       hsCol.toLowerCase().includes("hs8") ? 8 :
       hsCol.toLowerCase().includes("hs10") ? 10 : 0;
 
-    const tCol = omMeta?.territoryCol;
+    const tCol = dutyMeta?.territoryCol;
 
-    for (const row of omRows) {
+    for (const row of dutyRows) {
       if (!tCol) continue;
       const terr = String(row?.[tCol] ?? "").trim();
       if (!map.has(terr)) continue;
 
       const rawHs = normalizeHS(
-        row?.[omMeta?.hsCol as any] ??
+        row?.[dutyMeta?.hsCol as any] ??
         row?.hs_code ??
         row?.hs ??
         row?.hs6 ??
@@ -374,7 +376,7 @@ export default function ControlTower() {
     }
 
     return { map, hsLen };
-  }, [effectiveTerritories, omRows, omMeta]);
+  }, [effectiveTerritories, dutyRows, dutyMeta]);
 
   const vatByTerritory = React.useMemo(() => {
     const tCol = vatMeta?.territoryCol;
@@ -406,24 +408,24 @@ export default function ControlTower() {
     if (!selected) return null;
     const { territory, hs } = selected;
 
-    const hsKeyLocal = omMap.hsLen ? normalizeHS(hs).slice(0, omMap.hsLen) : normalizeHS(hs);
-    const terrMap = omMap.map.get(territory);
-    const om = terrMap?.get(hsKeyLocal) || [];
+    const hsKeyLocal = dutyMap.hsLen ? normalizeHS(hs).slice(0, dutyMap.hsLen) : normalizeHS(hs);
+    const terrMap = dutyMap.map.get(territory);
+    const duties = terrMap?.get(hsKeyLocal) || [];
     const vat = vatByTerritory.get(territory) || [];
     const extra = taxRows.filter((r) => String(r?.[taxMeta?.territoryCol as any] ?? "").trim() === territory);
 
-    return { om, vat, extra };
-  }, [selected, omMap, vatByTerritory, taxRows, taxMeta]);
+    return { duties, vat, extra };
+  }, [selected, dutyMap, vatByTerritory, taxRows, taxMeta]);
 
   // ✅ Aperçu cockpit (stats + data chart)
   const cockpit = React.useMemo(() => {
     const byTerr = effectiveTerritories.map((t) => {
-      let omHits = 0;
+      let dutyHits = 0;
 
       for (const hs of filteredHs) {
-        const hsKeyLocal = omMap.hsLen ? normalizeHS(hs).slice(0, omMap.hsLen) : normalizeHS(hs);
-        const omList = omMap.map.get(t.code)?.get(hsKeyLocal) || [];
-        if (omList.length) omHits += 1;
+        const hsKeyLocal = dutyMap.hsLen ? normalizeHS(hs).slice(0, dutyMap.hsLen) : normalizeHS(hs);
+        const dutyList = dutyMap.map.get(t.code)?.get(hsKeyLocal) || [];
+        if (dutyList.length) dutyHits += 1;
       }
 
       const vatRowsCount = (vatByTerritory.get(t.code) || []).length;
@@ -432,25 +434,25 @@ export default function ControlTower() {
       return {
         code: t.code,
         name: t.name,
-        omHits,
+        dutyHits,
         vatRows: vatRowsCount,
         extraRules,
       };
     });
 
     const totalCells = filteredHs.length * effectiveTerritories.length;
-    const omCells = byTerr.reduce((s, r) => s + r.omHits, 0);
-    const omCoveragePct = totalCells > 0 ? Math.round((omCells / totalCells) * 1000) / 10 : 0;
+    const dutyCells = byTerr.reduce((s, r) => s + r.dutyHits, 0);
+    const dutyCoveragePct = totalCells > 0 ? Math.round((dutyCells / totalCells) * 1000) / 10 : 0;
 
     const territoriesWithVat = byTerr.filter((r) => r.vatRows > 0).length;
     const extraRulesTotal = byTerr.reduce((s, r) => s + r.extraRules, 0);
 
-    return { byTerr, totalCells, omCells, omCoveragePct, territoriesWithVat, extraRulesTotal };
-  }, [effectiveTerritories, filteredHs, omMap, vatByTerritory, extraCountByTerritory]);
+    return { byTerr, totalCells, dutyCells, dutyCoveragePct, territoriesWithVat, extraRulesTotal };
+  }, [effectiveTerritories, filteredHs, dutyMap, vatByTerritory, extraCountByTerritory]);
 
   const exportMatrixCsv = React.useCallback(() => {
     const terrs = effectiveTerritories.map((t) => t.code);
-    const head = ["HS", ...terrs.flatMap((t) => [`${t} OM`, `${t} TVA`, `${t} Extra`])];
+    const head = ["HS", ...terrs.flatMap((t) => [`${t} Droits`, `${t} TVA`, `${t} Extra`])];
 
     const rows: string[] = [];
     rows.push(head.join(";"));
@@ -459,16 +461,16 @@ export default function ControlTower() {
       const line: string[] = [hs];
 
       for (const t of terrs) {
-        const hsKeyLocal = omMap.hsLen ? normalizeHS(hs).slice(0, omMap.hsLen) : normalizeHS(hs);
-        const omList = omMap.map.get(t)?.get(hsKeyLocal) || [];
-        const omRate = omList.length ? extractRateFromRow(omList[0]) : null;
+        const hsKeyLocal = dutyMap.hsLen ? normalizeHS(hs).slice(0, dutyMap.hsLen) : normalizeHS(hs);
+        const dutyList = dutyMap.map.get(t)?.get(hsKeyLocal) || [];
+        const dutyRate = dutyList.length ? extractDutyRateFromRow(dutyList[0]) : null;
 
         const vatList = vatByTerritory.get(t) || [];
         const vatDisplay = vatList.length ? "voir table" : vatFallbackForTerritory(t);
 
         const extraCount = extraCountByTerritory.get(t) || 0;
 
-        line.push(omRate || "—");
+        line.push(dutyRate || "—");
         line.push(vatDisplay);
         line.push(String(extraCount));
       }
@@ -478,7 +480,7 @@ export default function ControlTower() {
 
     const filename = `mpl_control_tower_${new Date().toISOString().slice(0, 10)}.csv`;
     downloadTextFile(filename, rows.join("\n"));
-  }, [effectiveTerritories, filteredHs, omMap, vatByTerritory, extraCountByTerritory]);
+  }, [effectiveTerritories, filteredHs, dutyMap, vatByTerritory, extraCountByTerritory]);
 
   React.useEffect(() => {
     let alive = true;
@@ -492,37 +494,43 @@ export default function ControlTower() {
       try {
         if (!SUPABASE_ENV_OK) throw new Error("Connexion base indisponible.");
 
-        // 1) OM / Octroi : on prend octroi_rates en priorité
-        let omTable = "";
-        let omSample: any = null;
+        // 1) Droits / Tarifs douaniers (si dispo)
+        let dutyTable = "";
+        let dutySample: any = null;
+
         try {
-          const picked = await pickFirstWorkingTable(["octroi_rates", "om_rates"]);
-          omTable = picked.table;
-          omSample = picked.sample;
+          const picked = await pickFirstWorkingTable([
+            "customs_duty_rates",
+            "duty_rates",
+            "tariff_rates",
+            "tariff_rates_v2",
+          ]);
+          dutyTable = picked.table;
+          dutySample = picked.sample;
         } catch (e: any) {
           if (isMissingTableError(e)) {
-            setWarning((p) => (p ? `${p}\nTaux OM indisponibles.` : "Taux OM indisponibles."));
+            setWarning((p) => (p ? `${p}\nDroits de douane indisponibles (mode demo).` : "Droits de douane indisponibles (mode demo)."));
           } else {
             throw e;
           }
         }
 
-        let territoryColOm: string | null = null;
-        let hsColOm: string | null = null;
+        let territoryColDuty: string | null = null;
+        let hsColDuty: string | null = null;
 
-        if (omTable && omSample) {
-          territoryColOm = firstExistingKey(omSample, ["drom_code", "territory_code", "destination", "ile", "island", "territory"]);
-          hsColOm = firstExistingKey(omSample, ["hs_code", "hs", "hs6", "hs8", "hs10", "hs_code10", "hs_code_10", "hs4"]);
-          setOmMeta({ table: omTable, territoryCol: territoryColOm, hsCol: hsColOm });
+        if (dutyTable && dutySample) {
+          territoryColDuty = firstExistingKey(dutySample, ["territory_code", "country_code", "destination", "zone", "country", "market", "territory"]);
+          hsColDuty = firstExistingKey(dutySample, ["hs_code", "hs", "hs6", "hs8", "hs10", "hs_code10", "hs_code_10", "hs4"]);
+          setDutyMeta({ table: dutyTable, territoryCol: territoryColDuty, hsCol: hsColDuty });
 
-          if (!territoryColOm || !hsColOm) {
+          if (!territoryColDuty || !hsColDuty) {
             setWarning((p) =>
               p
-                ? `${p}\nStructure OM incomplete (champs requis manquants).`
-                : `Structure OM incomplete (champs requis manquants).`
+                ? `${p}\nStructure droits incomplete (champs requis manquants).`
+                : `Structure droits incomplete (champs requis manquants).`
             );
           } else {
-            const hsColLower = hsColOm.toLowerCase();
+            const hsColLower = hsColDuty.toLowerCase();
             const hsLen =
               hsColLower.includes("hs4") ? 4 :
               hsColLower.includes("hs6") ? 6 :
@@ -537,19 +545,19 @@ export default function ControlTower() {
             const terrFilter = territoryCodes;
 
             const res = await (supabase
-              .from(omTable)
+              .from(dutyTable)
               .select("*")
-              .in(hsColOm, hsFilter)
-              .in(territoryColOm, terrFilter)
+              .in(hsColDuty, hsFilter)
+              .in(territoryColDuty, terrFilter)
               .limit(10000) as any);
 
             if (res.error) throw res.error;
             if (!alive) return;
-            setOmRows(res.data || []);
+            setDutyRows(res.data || []);
           }
         } else {
-          setOmMeta(null);
-          setOmRows([]);
+          setDutyMeta(null);
+          setDutyRows([]);
         }
 
         // 2) VAT rates (si dispo)
@@ -557,7 +565,7 @@ export default function ControlTower() {
           const pickedVat = await pickFirstWorkingTable(["vat_rates", "vat_rates_v2"]);
           const vatTable = pickedVat.table;
           const sample = pickedVat.sample;
-          const terrCol = firstExistingKey(sample, ["territory_code", "destination", "zone", "drom_code", "territory"]);
+          const terrCol = firstExistingKey(sample, ["territory_code", "country_code", "destination", "zone", "country", "market", "territory"]);
           setVatMeta({ table: vatTable, territoryCol: terrCol });
 
           if (terrCol) {
@@ -586,12 +594,12 @@ export default function ControlTower() {
           }
         }
 
-        // 3) Taxes extra
+        // 3) Taxes / règles additionnelles
         try {
           const pickedTax = await pickFirstWorkingTable(["tax_rules_extra"]);
           const taxTable = pickedTax.table;
           const sample = pickedTax.sample;
-          const terrCol = firstExistingKey(sample, ["territory_code", "destination", "zone", "drom_code", "territory"]);
+          const terrCol = firstExistingKey(sample, ["territory_code", "country_code", "destination", "zone", "country", "market", "territory"]);
           setTaxMeta({ table: taxTable, territoryCol: terrCol });
 
           if (terrCol) {
@@ -610,9 +618,9 @@ export default function ControlTower() {
           }
         } catch (e: any) {
           if (isMissingTableError(e)) {
-            setWarning((p) => (p ? `${p}\nRegles taxes additionnelles indisponibles (mode demo).` : "Regles taxes additionnelles indisponibles (mode demo)."));
+            setWarning((p) => (p ? `${p}\nRegles additionnelles indisponibles (mode demo).` : "Regles additionnelles indisponibles (mode demo)."));
           } else {
-            setWarning((p) => (p ? `${p}\nTaxes additionnelles indisponibles` : `Taxes additionnelles indisponibles`));
+            setWarning((p) => (p ? `${p}\nRegles additionnelles indisponibles` : `Regles additionnelles indisponibles`));
           }
           setTaxMeta(null);
           setTaxRows([]);
@@ -620,7 +628,7 @@ export default function ControlTower() {
       } catch (e: any) {
         console.error(e);
         if (!alive) return;
-        setError(e?.message || "Erreur chargement dashboard OM/Taxes");
+        setError(e?.message || "Erreur chargement dashboard taxes/droits");
       } finally {
         if (alive) setIsLoading(false);
       }
@@ -630,7 +638,7 @@ export default function ControlTower() {
     return () => {
       alive = false;
     };
-  }, [hsKey, refreshNonce, territoryKey]);
+  }, [hsKey, refreshNonce, territoryKey, baseHsCodes, territoryCodes]);
 
   return (
     <AppLayout wrapperClassName="control-tower-world">
@@ -644,20 +652,31 @@ export default function ControlTower() {
                 Votre cockpit export, regle sur vos marches prioritaires.
               </h1>
               <p className="text-sm text-muted-foreground">
-                Produits et destinations preconfigures pour decider vite : taxes, regles, et signaux utiles.
+                Produits et destinations preconfigures pour decider vite : droits, TVA, regles additionnelles et signaux utiles.
               </p>
+
               {activeTerritory ? (
                 <div className="mt-2">
-                  <Badge variant="secondary">Focus : {territoryLabel(activeTerritory)} ({activeTerritory})</Badge>
+                  <Badge variant="secondary">
+                    Focus : {territoryLabel(activeTerritory)} ({activeTerritory})
+                  </Badge>
                 </div>
               ) : null}
 
               {/* ✅ micro-KPI */}
               <div className="mt-3 flex flex-wrap gap-2">
-                <Badge variant="outline">Couverture OM : <b className="ml-1">{cockpit.omCoveragePct}%</b></Badge>
-                <Badge variant="outline">Cellules OM : <b className="ml-1">{cockpit.omCells}/{cockpit.totalCells}</b></Badge>
-                <Badge variant="outline">Territoires VAT : <b className="ml-1">{cockpit.territoriesWithVat}/{effectiveTerritories.length}</b></Badge>
-                <Badge variant="outline">Regles extra : <b className="ml-1">{cockpit.extraRulesTotal}</b></Badge>
+                <Badge variant="outline">
+                  Couverture droits : <b className="ml-1">{cockpit.dutyCoveragePct}%</b>
+                </Badge>
+                <Badge variant="outline">
+                  Cellules droits : <b className="ml-1">{cockpit.dutyCells}/{cockpit.totalCells}</b>
+                </Badge>
+                <Badge variant="outline">
+                  Territoires VAT : <b className="ml-1">{cockpit.territoriesWithVat}/{effectiveTerritories.length}</b>
+                </Badge>
+                <Badge variant="outline">
+                  Regles extra : <b className="ml-1">{cockpit.extraRulesTotal}</b>
+                </Badge>
               </div>
             </div>
 
@@ -755,7 +774,7 @@ export default function ControlTower() {
           </Card>
         ) : null}
 
-        {/* ✅ Aperçu cockpit (AYOCIN-like: insights avant l’opérationnel) */}
+        {/* ✅ Aperçu cockpit */}
         <Card className="border-muted">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -763,7 +782,7 @@ export default function ControlTower() {
               Apercu cockpit
             </CardTitle>
             <CardDescription>
-              Lecture rapide par territoire : couverture OM (nb HS couverts), volume VAT (rows), regles extra.
+              Lecture rapide par territoire : couverture droits (nb HS couverts), volume VAT (rows), regles extra.
             </CardDescription>
           </CardHeader>
 
@@ -782,13 +801,13 @@ export default function ControlTower() {
               </div>
 
               <div className="rounded-2xl border bg-background p-4">
-                <div className="text-xs text-muted-foreground">Couverture OM</div>
-                <div className="mt-1 text-2xl font-semibold">{cockpit.omCoveragePct}%</div>
+                <div className="text-xs text-muted-foreground">Couverture droits</div>
+                <div className="mt-1 text-2xl font-semibold">{cockpit.dutyCoveragePct}%</div>
                 <div className="mt-2 h-2 w-full rounded-full bg-muted">
                   <div
                     className="h-2 rounded-full"
                     style={{
-                      width: `${Math.max(0, Math.min(100, cockpit.omCoveragePct))}%`,
+                      width: `${Math.max(0, Math.min(100, cockpit.dutyCoveragePct))}%`,
                       background: hslVar("primary"),
                     }}
                   />
@@ -818,7 +837,7 @@ export default function ControlTower() {
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar name="OM (HS couverts)" dataKey="omHits" fill={hslVar("primary")} radius={[8, 8, 0, 0]} />
+                    <Bar name="Droits (HS couverts)" dataKey="dutyHits" fill={hslVar("primary")} radius={[8, 8, 0, 0]} />
                     <Bar name="VAT (rows)" dataKey="vatRows" fill={hslVar("secondary")} radius={[8, 8, 0, 0]} />
                     <Bar name="Extra (regles)" dataKey="extraRules" fill={hslVar("accent")} radius={[8, 8, 0, 0]} />
                   </BarChart>
@@ -826,7 +845,7 @@ export default function ControlTower() {
               </div>
 
               <div className="mt-2 text-xs text-muted-foreground">
-                Astuce : si VAT est vide, on affiche un repere indicatif (ex: FR 20%). Les OM matchent par prefixe (hs4/hs6/hs8/hs10) si besoin.
+                Astuce : si VAT est vide, on affiche un repere indicatif. Les droits peuvent matcher par prefixe (hs4/hs6/hs8/hs10) si besoin.
               </div>
             </div>
           </CardContent>
@@ -837,7 +856,7 @@ export default function ControlTower() {
           <Badge variant="secondary">HS: {baseHsCodes.length}</Badge>
           <Badge variant="secondary">Territoires: {effectiveTerritories.length}</Badge>
           <Badge variant="outline">
-            OM table: <span className="ml-1 font-semibold">{omMeta?.table || "—"}</span>
+            Droits table: <span className="ml-1 font-semibold">{dutyMeta?.table || "—"}</span>
           </Badge>
           <Badge variant="outline">
             VAT table: <span className="ml-1 font-semibold">{vatMeta?.table || "—"}</span>
@@ -846,7 +865,7 @@ export default function ControlTower() {
             Extra table: <span className="ml-1 font-semibold">{taxMeta?.table || "—"}</span>
           </Badge>
           <Badge variant="outline">
-            OM rows: <span className="ml-1 font-semibold">{omRows.length}</span>
+            Droits rows: <span className="ml-1 font-semibold">{dutyRows.length}</span>
           </Badge>
           <Badge variant="outline">
             VAT rows: <span className="ml-1 font-semibold">{vatRows.length}</span>
@@ -862,10 +881,10 @@ export default function ControlTower() {
             <p className="text-sm text-muted-foreground">Tableau operationnel</p>
             <h2 className="text-2xl font-semibold flex items-center gap-2">
               <Scale className="h-6 w-6" />
-              Taxes & OM — recapitulatif par destination / HS
+              Droits, TVA & regles — recapitulatif par destination / HS
             </h2>
             <p className="text-sm text-muted-foreground">
-              Vue synthese des taxes et obligations selon les territoires et vos produits.
+              Vue synthese des taxes et contraintes selon les territoires et vos produits.
             </p>
           </div>
 
@@ -914,7 +933,7 @@ export default function ControlTower() {
             </div>
             <Badge variant="secondary">{filteredHs.length} / {baseHsCodes.length}</Badge>
             <div className="text-xs text-muted-foreground sm:ml-auto">
-              Clique une case pour voir les details (OM/VAT/Extra).
+              Clique une case pour voir les details (Droits/VAT/Extra).
             </div>
           </CardContent>
         </Card>
@@ -922,10 +941,10 @@ export default function ControlTower() {
         {/* Matrix */}
         <Card>
           <CardHeader>
-            <CardTitle>Matrice OM & Taxes</CardTitle>
+            <CardTitle>Matrice taxes</CardTitle>
             <CardDescription>
               Lignes = HS codes. Colonnes = territoires. <br />
-              Chaque cellule : OM (si trouve) • TVA (table ou repere) • Extra (nb regles).
+              Chaque cellule : Droits (si trouves) • TVA (table ou repere) • Extra (nb regles).
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -944,7 +963,7 @@ export default function ControlTower() {
                 </thead>
                 <tbody>
                   {filteredHs.map((hs) => {
-                    const hsKeyLocal = omMap.hsLen ? normalizeHS(hs).slice(0, omMap.hsLen) : normalizeHS(hs);
+                    const hsKeyLocal = dutyMap.hsLen ? normalizeHS(hs).slice(0, dutyMap.hsLen) : normalizeHS(hs);
 
                     return (
                       <tr key={hs} className="border-t">
@@ -953,9 +972,9 @@ export default function ControlTower() {
                         </td>
 
                         {effectiveTerritories.map((t) => {
-                          const terrMap = omMap.map.get(t.code);
-                          const omList = terrMap?.get(hsKeyLocal) || [];
-                          const omRate = omList.length ? extractRateFromRow(omList[0]) : null;
+                          const terrMap = dutyMap.map.get(t.code);
+                          const dutyList = terrMap?.get(hsKeyLocal) || [];
+                          const dutyRate = dutyList.length ? extractDutyRateFromRow(dutyList[0]) : null;
 
                           const vatList = vatByTerritory.get(t.code) || [];
                           const vatDisplay = vatList.length ? "voir table" : vatFallbackForTerritory(t.code);
@@ -973,19 +992,19 @@ export default function ControlTower() {
                               onClick={() => setSelected({ territory: t.code, hs })}
                             >
                               <div className="flex flex-wrap gap-2">
-                                <Badge variant={omRate ? "secondary" : "outline"}>
-                                  OM: {omRate || "—"}
+                                <Badge variant={dutyRate ? "secondary" : "outline"}>
+                                  Droits: {dutyRate || "—"}
                                 </Badge>
                                 <Badge variant="outline">TVA: {vatDisplay}</Badge>
                                 <Badge variant="outline">Extra: {extraCount}</Badge>
                               </div>
-                              {omList.length ? (
+                              {dutyList.length ? (
                                 <div className="text-xs text-muted-foreground mt-2">
-                                  {omList.length} regle(s) OM
+                                  {dutyList.length} regle(s) droits
                                 </div>
                               ) : (
                                 <div className="text-xs text-muted-foreground mt-2">
-                                  aucune regle OM
+                                  aucune regle droits
                                 </div>
                               )}
                             </td>
@@ -999,7 +1018,7 @@ export default function ControlTower() {
             </div>
 
             <div className="text-xs text-muted-foreground mt-2">
-              NB : si ta table OM est en <b>hs4/hs6</b>, la page match automatiquement par prefixe.
+              NB : si ta table droits est en <b>hs4/hs6</b>, la page match automatiquement par prefixe.
             </div>
           </CardContent>
         </Card>
@@ -1017,23 +1036,23 @@ export default function ControlTower() {
           <CardContent className="space-y-4">
             {!selected ? (
               <div className="text-sm text-muted-foreground">
-                Clique une cellule du tableau pour afficher les lignes OM / VAT / Extra correspondantes.
+                Clique une cellule du tableau pour afficher les lignes Droits / VAT / Extra correspondantes.
               </div>
             ) : (
               <>
-                {/* OM */}
+                {/* Droits */}
                 <Card className="border-muted">
                   <CardHeader>
-                    <CardTitle className="text-base">OM (octroi)</CardTitle>
+                    <CardTitle className="text-base">Droits / Tarifs</CardTitle>
                     <CardDescription>
-                      Source: <code className="text-xs">{omMeta?.table || "—"}</code>
+                      Source: <code className="text-xs">{dutyMeta?.table || "—"}</code>
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {!selectedDetails?.om?.length ? (
-                      <div className="text-sm text-muted-foreground">Aucune ligne OM trouvee.</div>
+                    {!selectedDetails?.duties?.length ? (
+                      <div className="text-sm text-muted-foreground">Aucune ligne droits trouvee.</div>
                     ) : (
-                      selectedDetails.om.slice(0, 20).map((row: any, idx: number) => (
+                      selectedDetails.duties.slice(0, 20).map((row: any, idx: number) => (
                         <Card key={row.id ?? `${idx}`} className="border-muted">
                           <CardContent className="pt-4">
                             <KVPairs row={row} />
@@ -1041,7 +1060,7 @@ export default function ControlTower() {
                         </Card>
                       ))
                     )}
-                    {selectedDetails?.om?.length > 20 ? (
+                    {selectedDetails?.duties?.length > 20 ? (
                       <div className="text-xs text-muted-foreground">Affichage limite a 20 lignes.</div>
                     ) : null}
                   </CardContent>
@@ -1078,14 +1097,14 @@ export default function ControlTower() {
                 {/* Extra */}
                 <Card className="border-muted">
                   <CardHeader>
-                    <CardTitle className="text-base">Taxes extra</CardTitle>
+                    <CardTitle className="text-base">Taxes / regles additionnelles</CardTitle>
                     <CardDescription>
                       Source: <code className="text-xs">{taxMeta?.table || "—"}</code>
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {!selectedDetails?.extra?.length ? (
-                      <div className="text-sm text-muted-foreground">Aucune taxe extra trouvee.</div>
+                      <div className="text-sm text-muted-foreground">Aucune regle additionnelle trouvee.</div>
                     ) : (
                       selectedDetails.extra.slice(0, 10).map((row: any, idx: number) => (
                         <Card key={row.id ?? `${idx}`} className="border-muted">
