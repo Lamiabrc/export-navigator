@@ -1,4 +1,3 @@
-// src/lib/exportSimulator.ts
 export type Incoterm = "EXW" | "FCA" | "FOB" | "CFR" | "CIF" | "DAP" | "DDP";
 export type Currency = "EUR" | "USD" | "GBP" | "CHF" | "CNY";
 
@@ -23,32 +22,28 @@ export type CostLine = {
 export type SimulationInput = {
   quantity: number;
 
-  // Valeur marchandise
   productUnitPrice: number;
   productCurrency: Currency;
-  fxToEur: number; // 1 unité de la devise produit = fxToEur EUR
+  fxToEur: number;
 
   incoterm: Incoterm;
 
-  // Coûts logistiques/administratifs (en EUR)
-  preCarriageEur?: number; // acheminement interne jusqu’au point de départ export
-  mainCarriageEur?: number; // transport principal international
+  preCarriageEur?: number;
+  mainCarriageEur?: number;
   insuranceMode?: "rate" | "fixed";
-  insuranceRatePct?: number; // % appliqué sur (marchandise + transport principal)
+  insuranceRatePct?: number;
   insuranceFixedEur?: number;
 
-  exportClearanceEur?: number; // formalités export
-  importClearanceEur?: number; // dédouanement import
-  handlingEur?: number; // manutention/terminal/THC
-  otherFeesEur?: number; // bancaire, inspection, packaging, etc.
+  exportClearanceEur?: number;
+  importClearanceEur?: number;
+  handlingEur?: number;
+  otherFeesEur?: number;
 
-  // Taxes (import)
-  dutyRatePct?: number; // droits de douane %
-  vatRatePct?: number; // TVA import %
-  preferOrigin?: boolean; // si origine préférentielle => droits peuvent être réduits (simplifié)
-  dutyRatePreferentialPct?: number; // si preferOrigin = true
+  dutyRatePct?: number;
+  vatRatePct?: number;
+  preferOrigin?: boolean;
+  dutyRatePreferentialPct?: number;
 
-  // Vente (optionnel, pour marge)
   sellingUnitPriceEur?: number;
 };
 
@@ -57,7 +52,7 @@ export type SimulationResult = {
   quantity: number;
 
   goodsValueEur: number;
-  customsValueEur: number; // base droits (simplifiée type CIF-frontière)
+  customsValueEur: number;
   dutyEur: number;
   vatBaseEur: number;
   vatEur: number;
@@ -88,14 +83,6 @@ const labelMap: Record<CostLineKey, string> = {
   vat: "TVA import",
 };
 
-/**
- * Hypothèses volontairement simples mais utiles :
- * - Valeur en douane ~ Marchandise + Transport principal + Assurance (+ éventuellement pré-acheminement)
- * - Base TVA import ~ Valeur en douane + Droits + (dédouanement + manutention + autres frais)
- * - Les coûts sont fournis en EUR, sauf marchandise (convertie)
- *
- * Tu pourras raffiner selon pays/Incoterm, mais cette base donne déjà un calcul exploitable.
- */
 export function computeLandedCost(input: SimulationInput): SimulationResult {
   const qty = Math.max(1, Math.floor(input.quantity || 1));
 
@@ -114,18 +101,12 @@ export function computeLandedCost(input: SimulationInput): SimulationResult {
       ? round2(clamp0(input.insuranceFixedEur || 0))
       : round2(clamp0(((goodsValueEur + mainCarriage) * clamp0(input.insuranceRatePct || 0)) / 100));
 
-  // Valeur en douane (simplifiée) : selon incoterm, certains coûts peuvent déjà être inclus.
-  // Ici on garde une formule robuste et lisible :
-  // - EXW/FCA/FOB : on ajoute pré-acheminement + transport principal + assurance
-  // - CFR : on ajoute transport principal (assurance à part)
-  // - CIF : on ajoute transport principal + assurance
-  // - DAP/DDP : idem CIF pour la base douane (les frais "après frontière" ne devraient pas gonfler la base)
   let customsValueEur = goodsValueEur;
 
   if (input.incoterm === "EXW" || input.incoterm === "FCA" || input.incoterm === "FOB") {
     customsValueEur = goodsValueEur + preCarriage + mainCarriage + insurance;
   } else if (input.incoterm === "CFR") {
-    customsValueEur = goodsValueEur + mainCarriage + insurance; // on garde assurance séparée mais incluse en douane
+    customsValueEur = goodsValueEur + mainCarriage + insurance;
   } else if (input.incoterm === "CIF" || input.incoterm === "DAP" || input.incoterm === "DDP") {
     customsValueEur = goodsValueEur + mainCarriage + insurance;
   }
