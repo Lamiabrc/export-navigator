@@ -1,5 +1,21 @@
 import { Link } from "react-router-dom";
-import { ShieldCheck, Radar, Calculator, FileCheck2, Globe2, Clock, Phone, Mail } from "lucide-react";
+import {
+  ShieldCheck,
+  Radar,
+  Calculator,
+  FileCheck2,
+  Globe2,
+  Clock,
+  Phone,
+  Mail,
+  GraduationCap,
+  BriefcaseBusiness,
+  CheckCircle2,
+  MapPinned,
+  ClipboardCheck,
+  Layers3,
+  BadgeCheck,
+} from "lucide-react";
 
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
 import { useI18n } from "@/contexts/LanguageContext";
@@ -9,41 +25,141 @@ type Copy = {
   headline: string;
   title: string;
   subtitle: string;
+
   missionTitle: string;
   missionBody: string;
+
   blocksTitle: string;
+
+  expertiseTitle: string;
+  expertiseSubtitle: string;
+
+  credentialsTitle: string;
+  credentialsBody: string;
+
+  immersionTitle: string;
+  immersionBody: string;
+
+  methodTitle: string;
+  methodSubtitle: string;
+
   ctaTitle: string;
   ctaBody: string;
   ctaButton: string;
+
   transparencyTitle: string;
   contactTitle: string;
 };
+
+type ListItem = { title: string; desc: string };
+type Bullet = { label: string; note?: string };
 
 export default function About() {
   const { t } = useI18n();
   usePageMeta("meta.about.title", "meta.about.description");
 
+  const fallback: Copy = {
+    headline: "À propos",
+    title: "MPL Export Navigator",
+    subtitle:
+      "Le “département export” digital des PME : estimation des coûts export, détection des risques (TVA, douane, DDP), checklists actionnables et veille — avec option de validation experte quand le dossier est sensible.",
+
+    missionTitle: "Pourquoi cet outil existe",
+    missionBody:
+      "Parce qu’en export, les erreurs coûtent cher : TVA mal gérée, incoterm incohérent, DDP risqué, documents incomplets, sanctions… Export Navigator vous donne une vue claire et une checklist actionnable. Et si votre cas est complexe, MPL Export Conseil peut valider et sécuriser la décision.",
+
+    blocksTitle: "Ce que vous obtenez",
+
+    expertiseTitle: "Une expertise multi-domaines, orientée décision",
+    expertiseSubtitle:
+      "Le cœur : transformer un sujet “flou” en plan d’action simple, chiffré et documenté — sans recruter, sans multiplier les outils.",
+
+    credentialsTitle: "Diplômes & formation",
+    credentialsBody:
+      "Une approche structurée et pragmatique, nourrie par la formation et l’expérience terrain (immersion en entreprise, cas concrets, priorisation des risques).",
+
+    immersionTitle: "Immersions & terrain",
+    immersionBody:
+      "Depuis 2019, MPL Export Conseil intervient au plus près des opérations : diagnostic, organisation, documentation, conformité et aide à la décision pour sécuriser les expéditions et réduire les blocages.",
+
+    methodTitle: "Méthode (simple, robuste, réplicable)",
+    methodSubtitle:
+      "Une méthode en 3 étapes : cadrer → simuler → sécuriser. Chaque sortie doit être exploitable : risques, documents, recommandations, next steps.",
+
+    ctaTitle: "Besoin d’une validation express ?",
+    ctaBody: "Si votre expédition engage du DDP, une valeur élevée ou un produit sensible, je vous aide à sécuriser la décision.",
+    ctaButton: "Demander un diagnostic",
+
+    transparencyTitle: "Transparence & limites",
+    contactTitle: "Contact direct",
+  };
+
   const copyRaw = t("aboutPage");
-  const copy: Copy = (typeof copyRaw === "object" && copyRaw !== null ? copyRaw as unknown as Copy : null) ?? {
-      headline: "À propos",
-      title: "MPL Export Navigator",
-      subtitle:
-        "Un outil simple pour estimer vos coûts export, détecter les risques (TVA, douane, DDP) et décider vite — avec possibilité de validation par un consultant.",
-      missionTitle: "Pourquoi cet outil existe",
-      missionBody:
-        "Parce qu’en export, les erreurs coûtent cher : TVA mal gérée, incoterm incohérent, DDP risqué, documents incomplets, sanctions… Export Navigator vous donne une vue claire et une checklist actionnable, puis MPL Export Conseil peut valider les cas complexes.",
-      blocksTitle: "Ce que vous obtenez",
-      ctaTitle: "Besoin d’une validation express ?",
-      ctaBody:
-        "Si votre expédition engage du DDP ou un produit sensible, je vous aide à sécuriser la décision.",
-      ctaButton: "Demander un diagnostic",
-      transparencyTitle: "Transparence & limites",
-      contactTitle: "Contact direct",
-    };
+  const copyObj = typeof copyRaw === "object" && copyRaw !== null ? (copyRaw as Partial<Copy>) : {};
+  const copy: Copy = { ...fallback, ...copyObj };
 
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
   const emailMain = "contact@exportfrancefacile.com";
+
+  const pillars: ListItem[] = [
+    {
+      title: "Simulation coûts & scénarios",
+      desc: "Landed cost, coûts unitaires, scénarios Incoterms (dont DDP), points de vigilance & arbitrages.",
+    },
+    {
+      title: "Douane & conformité documentaire",
+      desc: "Checklist actionnable : facture, packing list, documents d’origine, transport, exigences pays, cohérence des données.",
+    },
+    {
+      title: "TVA & risques fiscaux",
+      desc: "Repérage des zones de risque et incohérences fréquentes (territoires, ventes, DDP, formalités, rôle des parties).",
+    },
+    {
+      title: "Sanctions & contrôles export",
+      desc: "Veille et signaux utiles : pays sensibles, restrictions, contrôles — pour éviter la mauvaise surprise au dernier moment.",
+    },
+    {
+      title: "Organisation export (PME)",
+      desc: "Structuration simple : qui fait quoi, quand, avec quels documents. Moins d’impro, plus de reproductibilité.",
+    },
+    {
+      title: "Validation “cas sensibles”",
+      desc: "Quand ça engage : DDP, valeur élevée, produit à risque, délais serrés — une validation pour sécuriser la décision.",
+    },
+  ];
+
+  const credentials: Bullet[] = [
+    { label: "CNAM — Certificat de compétences : “L’environnement international des entreprises”" },
+    { label: "Approche terrain : diagnostic + immersion en entreprise (MPL Export Conseil, depuis 2019)" },
+  ];
+
+  const immersions: Bullet[] = [
+    { label: "Immersion opérationnelle : audit rapide des flux export (documents, incoterms, acteurs, zones à risque)" },
+    { label: "Accompagnement décisionnel : DDP, TVA, douane, contraintes pays/territoires" },
+    { label: "Mise en place de checklists et routines : moins d’erreurs, moins de retards, plus de sérénité" },
+  ];
+
+  const process: Array<{ step: string; title: string; desc: string; icon: React.ReactNode }> = [
+    {
+      step: "01",
+      title: "Cadrer",
+      desc: "Destination, valeur, incoterm, produit, contraintes. On clarifie le contexte et les inconnues.",
+      icon: <ClipboardCheck className="h-5 w-5 text-slate-900" />,
+    },
+    {
+      step: "02",
+      title: "Simuler",
+      desc: "Chiffrage + scénarios. On fait apparaître les écarts, les risques et les décisions à prendre.",
+      icon: <Calculator className="h-5 w-5 text-slate-900" />,
+    },
+    {
+      step: "03",
+      title: "Sécuriser",
+      desc: "Checklist + recommandations. Si besoin : validation experte sur les points sensibles.",
+      icon: <BadgeCheck className="h-5 w-5 text-slate-900" />,
+    },
+  ];
 
   return (
     <MarketingLayout>
@@ -58,21 +174,21 @@ export default function About() {
               <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-700">{copy.subtitle}</p>
 
               <div className="mt-8 flex flex-wrap gap-2">
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700">
-                  Aide à la décision
-                </span>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700">
-                  DDP / Incoterms
-                </span>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700">
-                  France / international
-                </span>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700">
-                  TVA / Douane
-                </span>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700">
-                  Sanctions / conformité
-                </span>
+                {[
+                  "Aide à la décision",
+                  "DDP / Incoterms",
+                  "TVA / Douane",
+                  "Sanctions / conformité",
+                  "PME / international",
+                  "Checklists",
+                ].map((x) => (
+                  <span
+                    key={x}
+                    className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700"
+                  >
+                    {x}
+                  </span>
+                ))}
               </div>
 
               <div className="mt-10 flex flex-wrap gap-4">
@@ -121,129 +237,108 @@ export default function About() {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* WHAT YOU GET */}
-      <section className="bg-white py-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <h2 className="text-sm uppercase tracking-[0.6em] text-[#1E3A8A]">{copy.blocksTitle}</h2>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">Une vue claire, puis une validation si besoin</p>
-
-          <div className="mt-10 grid gap-6 md:grid-cols-3">
-            <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
-              <div className="flex items-center gap-3">
-                <Globe2 className="h-5 w-5 text-slate-900" />
-                <h3 className="text-lg font-semibold text-slate-900">Contexte pays / territoire</h3>
-              </div>
-              <p className="mt-3 text-sm text-slate-600">
-                Comprendre les implications selon destination, incoterm et transit.
-              </p>
-            </article>
-
-            <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="h-5 w-5 text-slate-900" />
-                <h3 className="text-lg font-semibold text-slate-900">Risques & conformité</h3>
-              </div>
-              <p className="mt-3 text-sm text-slate-600">
-                Repérer ce qui peut bloquer : TVA, douane, sanctions, docs incomplets, DDP “piège”.
-              </p>
-            </article>
-
-            <article className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
-              <div className="flex items-center gap-3">
-                <Clock className="h-5 w-5 text-slate-900" />
-                <h3 className="text-lg font-semibold text-slate-900">Décision rapide</h3>
-              </div>
-              <p className="mt-3 text-sm text-slate-600">
-                Un premier avis en quelques minutes, puis un diagnostic si votre cas est sensible.
-              </p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      {/* TRANSPARENCY */}
-      <section className="py-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">
-                {copy.transparencyTitle}
-              </h3>
-              <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-slate-700">
-                <li>Les estimations sont indicatives : elles aident à la décision, ne remplacent pas un conseil officiel.</li>
-                <li>Les taux exacts peuvent dépendre du HS code, du régime, des exemptions et du dossier documentaire.</li>
-                <li>Sur les scénarios gratuits, les données peuvent rester côté navigateur (selon les pages).</li>
-                <li>Pour un dossier engageant (DDP, valeur élevée, produit sensible), demandez une validation.</li>
-              </ul>
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-lg">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.contactTitle}</h3>
-
-              <div className="mt-5 space-y-3 text-sm text-slate-700">
-                <a
-                  href={`tel:${phoneRaw}`}
-                  className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 hover:bg-slate-50"
-                >
-                  <Phone className="h-4 w-4" />
-                  {phonePretty}
-                </a>
-
-                <a
-                  href={`mailto:${emailMain}`}
-                  className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 hover:bg-slate-50"
-                >
-                  <Mail className="h-4 w-4" />
-                  {emailMain}
-                </a>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-                  <div className="font-semibold text-slate-900">Conseil pour gagner du temps</div>
-                  <div className="mt-1">
-                    Dans votre message : destination, valeur, incoterm, HS code (même approximatif), et délai.
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="mt-0.5 h-5 w-5 text-slate-900" />
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">Objectif</div>
+                    <div className="text-sm text-slate-600">
+                      Éviter la mauvaise surprise (blocage, retard, non-conformité) et sécuriser la décision.
+                    </div>
                   </div>
                 </div>
-
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <Link
-                    to="/contact?offer=diagnostic"
-                    className="rounded-full bg-[#DC2626] px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-[#B0231D]"
-                  >
-                    {copy.ctaButton}
-                  </Link>
-                  <Link
-                    to="/newsletter"
-                    className="rounded-full border border-slate-200 bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-slate-700 transition hover:bg-slate-50"
-                  >
-                    Recevoir la veille
-                  </Link>
-                </div>
               </div>
-            </div>
-          </div>
-
-          {/* CTA BAND */}
-          <div className="mt-10 rounded-3xl border border-slate-200 bg-gradient-to-r from-[#1E3A8A] via-[#0B1220] to-[#DC2626] p-8 text-white shadow-xl">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="text-xs uppercase tracking-[0.35em] text-white/70">{copy.ctaTitle}</div>
-                <div className="mt-2 text-2xl font-semibold">{copy.ctaBody}</div>
-              </div>
-              <Link
-                to="/contact?offer=diagnostic"
-                className="inline-flex rounded-full bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-slate-900 transition hover:bg-white/90"
-              >
-                {copy.ctaButton}
-              </Link>
             </div>
           </div>
         </div>
       </section>
-    </MarketingLayout>
-  );
-}
+
+      {/* EXPERTISE */}
+      <section className="bg-white py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <h2 className="text-sm uppercase tracking-[0.6em] text-[#1E3A8A]">{copy.expertiseTitle}</h2>
+          <p className="mt-2 max-w-3xl text-base text-slate-700">{copy.expertiseSubtitle}</p>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {pillars.map((p) => (
+              <article key={p.title} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
+                <div className="flex items-center gap-3">
+                  <Layers3 className="h-5 w-5 text-slate-900" />
+                  <h3 className="text-lg font-semibold text-slate-900">{p.title}</h3>
+                </div>
+                <p className="mt-3 text-sm text-slate-600">{p.desc}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* METHOD */}
+      <section className="py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-lg">
+            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.methodTitle}</h3>
+                <p className="mt-2 max-w-3xl text-sm text-slate-600">{copy.methodSubtitle}</p>
+              </div>
+              <Link
+                to="/tool"
+                className="mt-3 inline-flex w-fit rounded-full bg-slate-900 px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-slate-800"
+              >
+                Tester maintenant
+              </Link>
+            </div>
+
+            <div className="mt-8 grid gap-4 md:grid-cols-3">
+              {process.map((s) => (
+                <div key={s.step} className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      {s.icon}
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
+                          Étape {s.step}
+                        </div>
+                        <div className="text-base font-semibold text-slate-900">{s.title}</div>
+                      </div>
+                    </div>
+                    <CheckCircle2 className="mt-1 h-5 w-5 text-slate-300" />
+                  </div>
+                  <p className="mt-3 text-sm text-slate-600">{s.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <MapPinned className="h-4 w-4" />
+                  Contexte pays / territoire
+                </div>
+                <p className="mt-2 text-sm text-slate-600">Impacts destination, incoterm, transit, contraintes locales.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <ShieldCheck className="h-4 w-4" />
+                  Risques & conformité
+                </div>
+                <p className="mt-2 text-sm text-slate-600">TVA, douane, sanctions, docs incomplets, DDP “piège”.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <Clock className="h-4 w-4" />
+                  Décision rapide
+                </div>
+                <p className="mt-2 text-sm text-slate-600">Un premier avis en minutes, puis validation si besoin.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CREDENTIALS + IMMERSIONS */}
+      <section className="bg-white py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className
