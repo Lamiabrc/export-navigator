@@ -8,17 +8,15 @@ import {
   Clock,
   Phone,
   Mail,
-  GraduationCap,
+  Sparkles,
   BriefcaseBusiness,
-  CheckCircle2,
   MapPinned,
-  ClipboardCheck,
-  Layers3,
-  BadgeCheck,
+  Scale,
   Brain,
   Flame,
-  Scale,
-  Award,
+  CheckCircle2,
+  ClipboardCheck,
+  BadgeCheck,
 } from "lucide-react";
 
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
@@ -35,14 +33,11 @@ type Copy = {
 
   blocksTitle: string;
 
-  expertiseTitle: string;
-  expertiseSubtitle: string;
-
-  credentialsTitle: string;
-  credentialsBody: string;
-
-  immersionTitle: string;
-  immersionBody: string;
+  storyKicker: string;
+  storyTitle: string;
+  storyBodyA: string;
+  storyBodyB: string;
+  storyBodyC: string;
 
   methodTitle: string;
   methodSubtitle: string;
@@ -55,8 +50,7 @@ type Copy = {
   contactTitle: string;
 };
 
-type ListItem = { title: string; desc: string };
-type Bullet = { label: string; note?: string };
+type ListItem = { title: string; desc: string; icon: React.ReactNode };
 
 export default function About() {
   const { t } = useI18n();
@@ -74,24 +68,22 @@ export default function About() {
 
     blocksTitle: "Ce que vous obtenez",
 
-    expertiseTitle: "Une expertise multi-domaines, orientée décision",
-    expertiseSubtitle:
-      "Le cœur : transformer un sujet “flou” en plan d’action simple, chiffré et documenté — sans recruter, sans multiplier les outils.",
-
-    credentialsTitle: "Diplômes & formation",
-    credentialsBody:
-      "Une approche structurée et pragmatique, nourrie par la formation, l’analyse et l’expérience terrain (immersion en entreprise, cas concrets, priorisation des risques).",
-
-    immersionTitle: "Immersions & terrain",
-    immersionBody:
-      "Depuis 2019, MPL Export Conseil intervient au plus près des opérations : diagnostic, organisation, documentation, conformité et aide à la décision pour sécuriser les expéditions et réduire les blocages.",
+    storyKicker: "Mon approche",
+    storyTitle: "Du terrain aux décisions : une expertise construite par immersion",
+    storyBodyA:
+      "Depuis 2018 — année où j’ai obtenu mon diplôme en import/export à Rennes — je n’ai cessé d’intégrer des entreprises, PME comme grands groupes, pour m’enquérir de leurs process d’exportation : les indispensables, les points de rupture, les bonnes pratiques et les stratégies qui font gagner du temps (et éviter les blocages).",
+    storyBodyB:
+      "J’ai enrichi cette base par d’autres qualifications, notamment au CNAM avec le certificat de compétences “Environnement international des entreprises”, qui a renforcé mon approche en business intelligence et en géopolitique : comprendre les signaux pays, les risques et le contexte qui impactent les flux.",
+    storyBodyC:
+      "J’ai également consolidé l’aspect légal et réglementaire grâce à une licence de droit, pour mieux appréhender les enjeux de conformité : documents, responsabilités, clauses, vigilance sanctions, et zones sensibles. Ajoutez à cela un appétit du savoir et de l’IA : aujourd’hui, je rassemble tout ce capital dans une proposition claire — un service et un outil — pour rendre l’export plus simple, plus sûr, et plus rapide à décider.",
 
     methodTitle: "Méthode (simple, robuste, réplicable)",
     methodSubtitle:
       "Une méthode en 3 étapes : cadrer → simuler → sécuriser. Chaque sortie doit être exploitable : risques, documents, recommandations, next steps.",
 
     ctaTitle: "Besoin d’une validation express ?",
-    ctaBody: "Si votre expédition engage du DDP, une valeur élevée ou un produit sensible, je vous aide à sécuriser la décision.",
+    ctaBody:
+      "Si votre expédition engage du DDP, une valeur élevée ou un produit sensible, je vous aide à sécuriser la décision avant l’envoi.",
     ctaButton: "Demander un diagnostic",
 
     transparencyTitle: "Transparence & limites",
@@ -106,74 +98,40 @@ export default function About() {
   const phonePretty = "06 76 43 55 51";
   const emailMain = "contact@exportfrancefacile.com";
 
-  const pillars: ListItem[] = [
+  const offers: ListItem[] = [
     {
-      title: "Simulation coûts & scénarios",
-      desc: "Landed cost, coûts unitaires, scénarios Incoterms (dont DDP), points de vigilance & arbitrages.",
+      title: "Estimation rapide & scénarios",
+      desc: "Landed cost, coûts unitaires, scénarios Incoterms (dont DDP), arbitrages et alertes.",
+      icon: <Calculator className="h-5 w-5 text-slate-900" />,
     },
     {
-      title: "Douane & conformité documentaire",
-      desc: "Checklist actionnable : facture, packing list, documents d’origine, transport, exigences pays, cohérence des données.",
+      title: "Checklist & conformité documentaire",
+      desc: "Facture, packing list, transport, origine, exigences pays : une liste actionnable, pas du blabla.",
+      icon: <FileCheck2 className="h-5 w-5 text-slate-900" />,
     },
     {
-      title: "TVA & risques fiscaux",
-      desc: "Repérage des zones de risque et incohérences fréquentes (territoires, ventes, DDP, formalités, rôle des parties).",
+      title: "Veille export utile",
+      desc: "Signaux pays, sanctions, mesures : ce qui peut impacter vos expéditions (et vos décisions).",
+      icon: <Radar className="h-5 w-5 text-slate-900" />,
     },
     {
-      title: "Sanctions & contrôles export",
-      desc: "Veille et signaux utiles : pays sensibles, restrictions, contrôles — pour éviter la mauvaise surprise au dernier moment.",
+      title: "Lecture risques (TVA / Douane / DDP)",
+      desc: "Détecter ce qui peut coûter cher : incohérence incoterm, responsabilité, zones de blocage.",
+      icon: <ShieldCheck className="h-5 w-5 text-slate-900" />,
     },
     {
-      title: "Organisation export (PME)",
-      desc: "Structuration simple : qui fait quoi, quand, avec quels documents. Moins d’impro, plus de reproductibilité.",
-    },
-    {
-      title: "Validation “cas sensibles”",
-      desc: "Quand ça engage : DDP, valeur élevée, produit à risque, délais serrés — une validation pour sécuriser la décision.",
-    },
-  ];
-
-  // ⚠️ Ici : on enrichit fortement diplômes/formation, comme demandé.
-  const credentials: Bullet[] = [
-    { label: "Licence de droit", note: "Fondations solides : lecture des textes, analyse des risques, rigueur documentaire." },
-    { label: "Diplôme en mathématiques", note: "Logique, modélisation, estimation, scénarios et cohérence des chiffres." },
-    { label: "Assistante import / export", note: "Culture opérationnelle : documents, flux, contraintes réelles du terrain." },
-    { label: "CNAM — Certificat de compétences : “L’environnement international des entreprises”" },
-    { label: "Formation continue & auto-apprentissage", note: "Veille active, outils, méthodes, amélioration continue." },
-  ];
-
-  // Ajout du trait "curiosité féroce" : on le rend “marque” sans faire too much.
-  const mindset: Array<{ title: string; desc: string; icon: React.ReactNode }> = [
-    {
-      title: "Curiosité féroce (au service du client)",
-      desc: "Je creuse jusqu’à comprendre : texte, cas, exception, incohérence. Objectif : transformer le complexe en clair et actionnable.",
-      icon: <Flame className="h-5 w-5 text-slate-900" />,
-    },
-    {
-      title: "Rigueur juridique",
-      desc: "Réflexes de conformité : traçabilité, justification, prudence sur les cas sensibles (DDP, sanctions, licences).",
+      title: "Approche légal & réglementaire",
+      desc: "Comprendre l’enjeu conformité : responsabilités, preuves, vigilance sanctions, exigences pays.",
       icon: <Scale className="h-5 w-5 text-slate-900" />,
     },
     {
-      title: "Pensée analytique",
-      desc: "Approche “math” : scénarios, ordres de grandeur, détection d’anomalies, priorisation des risques.",
-      icon: <Brain className="h-5 w-5 text-slate-900" />,
-    },
-    {
-      title: "Culture opérationnelle import/export",
-      desc: "On parle concret : documents, délais, transport, responsabilités, et points où ça casse vraiment.",
-      icon: <Award className="h-5 w-5 text-slate-900" />,
+      title: "Décision rapide + validation si besoin",
+      desc: "Un premier avis en minutes, puis une validation experte si votre cas est sensible.",
+      icon: <Clock className="h-5 w-5 text-slate-900" />,
     },
   ];
 
-  const immersions: Bullet[] = [
-    { label: "Immersion opérationnelle : audit rapide des flux export (documents, incoterms, acteurs, zones à risque)" },
-    { label: "Accompagnement décisionnel : DDP, TVA, douane, contraintes pays/territoires" },
-    { label: "Mise en place de checklists et routines : moins d’erreurs, moins de retards, plus de sérénité" },
-    { label: "Coaching “zéro friction” : clarifier qui fait quoi + standardiser sans alourdir" },
-  ];
-
-  const process: Array<{ step: string; title: string; desc: string; icon: React.ReactNode }> = [
+  const process = [
     {
       step: "01",
       title: "Cadrer",
@@ -194,6 +152,14 @@ export default function About() {
     },
   ];
 
+  const markers = [
+    { label: "Immersion terrain", icon: <BriefcaseBusiness className="h-4 w-4" /> },
+    { label: "Business intelligence & géopolitique", icon: <Globe2 className="h-4 w-4" /> },
+    { label: "Cadre légal & conformité", icon: <Scale className="h-4 w-4" /> },
+    { label: "IA & automatisation utile", icon: <Brain className="h-4 w-4" /> },
+    { label: "Curiosité féroce", icon: <Flame className="h-4 w-4" /> },
+  ];
+
   return (
     <MarketingLayout>
       {/* HERO */}
@@ -207,19 +173,13 @@ export default function About() {
               <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-700">{copy.subtitle}</p>
 
               <div className="mt-8 flex flex-wrap gap-2">
-                {[
-                  "Aide à la décision",
-                  "DDP / Incoterms",
-                  "TVA / Douane",
-                  "Sanctions / conformité",
-                  "PME / international",
-                  "Checklists",
-                ].map((x) => (
+                {markers.map((m) => (
                   <span
-                    key={x}
-                    className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-700"
+                    key={m.label}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-700"
                   >
-                    {x}
+                    {m.icon}
+                    {m.label}
                   </span>
                 ))}
               </div>
@@ -273,11 +233,11 @@ export default function About() {
 
               <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="flex items-start gap-3">
-                  <ShieldCheck className="mt-0.5 h-5 w-5 text-slate-900" />
+                  <Sparkles className="mt-0.5 h-5 w-5 text-slate-900" />
                   <div>
-                    <div className="text-sm font-semibold text-slate-900">Objectif</div>
+                    <div className="text-sm font-semibold text-slate-900">Promesse</div>
                     <div className="text-sm text-slate-600">
-                      Éviter la mauvaise surprise (blocage, retard, non-conformité) et sécuriser la décision.
+                      Transformer un sujet “flou” en une décision claire : risques, actions, documents, next steps.
                     </div>
                   </div>
                 </div>
@@ -287,166 +247,126 @@ export default function About() {
         </div>
       </section>
 
-      {/* EXPERTISE */}
+      {/* STORY (REWRITE AS REQUESTED) */}
       <section className="bg-white py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <h2 className="text-sm uppercase tracking-[0.6em] text-[#1E3A8A]">{copy.expertiseTitle}</h2>
-          <p className="mt-2 max-w-3xl text-base text-slate-700">{copy.expertiseSubtitle}</p>
+          <p className="text-xs uppercase tracking-[0.6em] text-[#1E3A8A]">{copy.storyKicker}</p>
+          <h2 className="mt-3 text-3xl font-semibold text-slate-900">{copy.storyTitle}</h2>
 
-          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {pillars.map((p) => (
-              <article key={p.title} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
-                <div className="flex items-center gap-3">
-                  <Layers3 className="h-5 w-5 text-slate-900" />
-                  <h3 className="text-lg font-semibold text-slate-900">{p.title}</h3>
-                </div>
-                <p className="mt-3 text-sm text-slate-600">{p.desc}</p>
-              </article>
-            ))}
-          </div>
-
-          {/* Mindset strip */}
-          <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {mindset.map((m) => (
-              <div key={m.title} className="rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
-                <div className="flex items-center gap-3">
-                  {m.icon}
-                  <div className="text-sm font-semibold text-slate-900">{m.title}</div>
-                </div>
-                <p className="mt-2 text-sm text-slate-600">{m.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* METHOD */}
-      <section className="py-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-lg">
-            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.methodTitle}</h3>
-                <p className="mt-2 max-w-3xl text-sm text-slate-600">{copy.methodSubtitle}</p>
-              </div>
-              <Link
-                to="/tool"
-                className="mt-3 inline-flex w-fit rounded-full bg-slate-900 px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-slate-800"
-              >
-                Tester maintenant
-              </Link>
-            </div>
-
-            <div className="mt-8 grid gap-4 md:grid-cols-3">
-              {process.map((s) => (
-                <div key={s.step} className="rounded-2xl border border-slate-200 bg-white p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      {s.icon}
-                      <div>
-                        <div className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
-                          Étape {s.step}
-                        </div>
-                        <div className="text-base font-semibold text-slate-900">{s.title}</div>
-                      </div>
-                    </div>
-                    <CheckCircle2 className="mt-1 h-5 w-5 text-slate-300" />
-                  </div>
-                  <p className="mt-3 text-sm text-slate-600">{s.desc}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                  <MapPinned className="h-4 w-4" />
-                  Contexte pays / territoire
-                </div>
-                <p className="mt-2 text-sm text-slate-600">Impacts destination, incoterm, transit, contraintes locales.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                  <ShieldCheck className="h-4 w-4" />
-                  Risques & conformité
-                </div>
-                <p className="mt-2 text-sm text-slate-600">TVA, douane, sanctions, docs incomplets, DDP “piège”.</p>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                  <Clock className="h-4 w-4" />
-                  Décision rapide
-                </div>
-                <p className="mt-2 text-sm text-slate-600">Un premier avis en minutes, puis validation si besoin.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CREDENTIALS + IMMERSIONS */}
-      <section className="bg-white py-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-              <div className="flex items-center gap-3">
-                <GraduationCap className="h-5 w-5 text-slate-900" />
-                <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.credentialsTitle}</h3>
-              </div>
-              <p className="mt-3 text-sm text-slate-600">{copy.credentialsBody}</p>
-
-              <div className="mt-5 space-y-3">
-                {credentials.map((x) => (
-                  <div key={x.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-start gap-3">
-                      <CheckCircle2 className="mt-0.5 h-5 w-5 text-slate-900" />
-                      <div>
-                        <div className="font-semibold text-slate-900">{x.label}</div>
-                        {x.note ? <div className="mt-1 text-sm text-slate-600">{x.note}</div> : null}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="flex items-start gap-3">
-                  <Flame className="mt-0.5 h-5 w-5 text-slate-900" />
-                  <div>
-                    <div className="font-semibold text-slate-900">Curiosité féroce</div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      Je vais au bout des sujets : textes, exceptions, cas réels, contradictions. Résultat : moins d’angles morts et des décisions plus sûres.
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
+          <div className="mt-8 grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-lg">
-              <div className="flex items-center gap-3">
-                <BriefcaseBusiness className="h-5 w-5 text-slate-900" />
-                <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.immersionTitle}</h3>
+              <div className="flex items-start gap-4">
+                <div className="mt-1 rounded-2xl border border-slate-200 bg-white p-3">
+                  <BriefcaseBusiness className="h-5 w-5 text-slate-900" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900">Une construction par immersion (depuis 2018)</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-slate-700">{copy.storyBodyA}</p>
+                  <p className="mt-4 text-sm leading-relaxed text-slate-700">{copy.storyBodyB}</p>
+                  <p className="mt-4 text-sm leading-relaxed text-slate-700">{copy.storyBodyC}</p>
+
+                  <div className="mt-6 grid gap-3 md:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                        <Globe2 className="h-4 w-4" />
+                        BI & géopolitique
+                      </div>
+                      <p className="mt-2 text-sm text-slate-600">
+                        Lire le contexte pays, détecter les signaux, anticiper les impacts sur les flux.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                        <Scale className="h-4 w-4" />
+                        Legal & conformité
+                      </div>
+                      <p className="mt-2 text-sm text-slate-600">
+                        Responsabilités, preuves, exigences : sécuriser avant l’envoi.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                        <Brain className="h-4 w-4" />
+                        IA utile
+                      </div>
+                      <p className="mt-2 text-sm text-slate-600">
+                        Automatiser la lecture, structurer la décision, éviter le “bruit”.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                        <MapPinned className="h-4 w-4" />
+                        Process & indispensables
+                      </div>
+                      <p className="mt-2 text-sm text-slate-600">
+                        Ce qui doit être vrai pour expédier sans surprises.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <Link
+                      to="/tool"
+                      className="rounded-full bg-slate-900 px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-slate-800"
+                    >
+                      Découvrir l’outil
+                    </Link>
+                    <Link
+                      to="/veille"
+                      className="rounded-full border border-slate-200 bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-slate-700 transition hover:bg-slate-50"
+                    >
+                      Voir la veille
+                    </Link>
+                  </div>
+                </div>
               </div>
-              <p className="mt-3 text-sm text-slate-600">{copy.immersionBody}</p>
+            </div>
+
+            {/* SIDE: method snapshot */}
+            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.methodTitle}</h3>
+              <p className="mt-2 text-sm text-slate-600">{copy.methodSubtitle}</p>
 
               <div className="mt-6 space-y-3">
-                {immersions.map((x) => (
-                  <div key={x.label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                {process.map((s) => (
+                  <div key={s.step} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-start gap-3">
-                      <CheckCircle2 className="mt-0.5 h-5 w-5 text-slate-900" />
-                      <div className="text-sm text-slate-700">{x.label}</div>
+                      {s.icon}
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">Étape {s.step}</div>
+                        <div className="text-sm font-semibold text-slate-900">{s.title}</div>
+                        <div className="mt-1 text-sm text-slate-600">{s.desc}</div>
+                      </div>
+                      <CheckCircle2 className="mt-1 h-5 w-5 text-slate-300" />
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-                <div className="font-semibold text-slate-900">Conseil “anti-aller-retour”</div>
-                <div className="mt-1">
-                  Donnez dès le départ : destination, valeur, incoterm, HS code (même approximatif), délais, contraintes client.
-                </div>
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <span className="font-semibold text-slate-900">Résultat :</span> une décision claire + un plan d’action concret.
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* WHAT YOU GET */}
+      <section className="bg-white py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <h2 className="text-sm uppercase tracking-[0.6em] text-[#1E3A8A]">{copy.blocksTitle}</h2>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">Une vue claire, puis une validation si besoin</p>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {offers.map((o) => (
+              <article key={o.title} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
+                <div className="flex items-center gap-3">
+                  {o.icon}
+                  <h3 className="text-lg font-semibold text-slate-900">{o.title}</h3>
+                </div>
+                <p className="mt-3 text-sm text-slate-600">{o.desc}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>
@@ -456,7 +376,7 @@ export default function About() {
         <div className="mx-auto max-w-6xl px-6">
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">Transparence & limites</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.transparencyTitle}</h3>
               <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-slate-700">
                 <li>Les estimations sont indicatives : elles aident à la décision, ne remplacent pas un conseil officiel.</li>
                 <li>Les paramètres exacts peuvent dépendre du HS code, du régime, des exemptions et du dossier documentaire.</li>
@@ -466,7 +386,7 @@ export default function About() {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 shadow-lg">
-              <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">Contact direct</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-slate-900">{copy.contactTitle}</h3>
 
               <div className="mt-5 space-y-3 text-sm text-slate-700">
                 <a
@@ -486,9 +406,9 @@ export default function About() {
                 </a>
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-                  <div className="font-semibold text-slate-900">Réponse plus rapide si vous indiquez :</div>
+                  <div className="font-semibold text-slate-900">Conseil pour gagner du temps</div>
                   <div className="mt-1">
-                    Destination • Valeur • Incoterm • HS (approx.) • Délai • Contrainte (client/transport).
+                    Dans votre message : destination, valeur, incoterm, HS code (même approximatif), et délai.
                   </div>
                 </div>
 
@@ -497,7 +417,7 @@ export default function About() {
                     to="/contact?offer=diagnostic"
                     className="rounded-full bg-[#DC2626] px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-white transition hover:bg-[#B0231D]"
                   >
-                    Demander un diagnostic
+                    {copy.ctaButton}
                   </Link>
                   <Link
                     to="/veille"
@@ -514,16 +434,14 @@ export default function About() {
           <div className="mt-10 rounded-3xl border border-slate-200 bg-gradient-to-r from-[#1E3A8A] via-[#0B1220] to-[#DC2626] p-8 text-white shadow-xl">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <div className="text-xs uppercase tracking-[0.35em] text-white/70">Besoin d’une validation express ?</div>
-                <div className="mt-2 text-2xl font-semibold">
-                  DDP, produit sensible, valeur élevée : on sécurise la décision avant l’envoi.
-                </div>
+                <div className="text-xs uppercase tracking-[0.35em] text-white/70">{copy.ctaTitle}</div>
+                <div className="mt-2 text-2xl font-semibold">{copy.ctaBody}</div>
               </div>
               <Link
                 to="/contact?offer=diagnostic"
                 className="inline-flex rounded-full bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.35em] text-slate-900 transition hover:bg-white/90"
               >
-                Demander un diagnostic
+                {copy.ctaButton}
               </Link>
             </div>
           </div>
