@@ -85,7 +85,7 @@ export default function ToolPage() {
   const primaryCta = tr("toolPage.primaryCta", "Lancer une analyse");
   const reassurance = tr(
     "toolPage.reassurance",
-    "Sans inscription • Résultat immédiat • Pensé pour les PME export depuis la France"
+    "Sans inscription • Résultat immédiat • Pensé pour les PME qui exportent"
   );
 
   const safeHumanCta = humanValidationCta || "Demander une validation humaine";
@@ -118,13 +118,17 @@ export default function ToolPage() {
           className="pointer-events-none absolute inset-0 opacity-40"
           style={{
             background:
-              "radial-gradient(900px 500px at 20% 10%, rgba(59,130,246,0.25), transparent 60%), radial-gradient(900px 500px at 80% 0%, rgba(239,68,68,0.18), transparent 55%)",
+              "radial-gradient(900px 500px at 20% 10%, rgba(59,130,246,0.25), transparent 60%), radial-gradient(900px 500px at 80% 0%, rgba(14,165,233,0.18), transparent 55%)",
           }}
           aria-hidden
         />
+        {/* ✅ barre neutre (plus de référence FR) */}
         <div
           className="pointer-events-none absolute left-0 top-0 h-1 w-full"
-          style={{ background: "linear-gradient(90deg, #2563eb 0%, #ffffff 50%, #ef4444 100%)" }}
+          style={{
+            background:
+              "linear-gradient(90deg, rgba(59,130,246,1) 0%, rgba(255,255,255,0.85) 50%, rgba(14,165,233,1) 100%)",
+          }}
           aria-hidden
         />
 
@@ -164,10 +168,7 @@ export default function ToolPage() {
                 <span className="font-semibold">{tr("toolPage.trust2", "Alerte sur les points sensibles")}</span>
               </div>
               <p className="mt-2 text-white/70">
-                {tr(
-                  "toolPage.trust2Body",
-                  "L’outil signale les zones d’incertitude (données manquantes, hypothèses, risques)."
-                )}
+                {tr("toolPage.trust2Body", "L’outil signale les zones d’incertitude (données manquantes, hypothèses, risques).")}
               </p>
             </div>
 
@@ -177,10 +178,7 @@ export default function ToolPage() {
                 <span className="font-semibold">{tr("toolPage.trust3", "Option validation humaine")}</span>
               </div>
               <p className="mt-2 text-white/70">
-                {tr(
-                  "toolPage.trust3Body",
-                  "Pour sécuriser conformité & documents avant engagement (audit export sur demande)."
-                )}
+                {tr("toolPage.trust3Body", "Pour sécuriser conformité & documents avant engagement (audit export sur demande).")}
               </p>
             </div>
           </div>
@@ -195,7 +193,7 @@ export default function ToolPage() {
             <p className="mt-2 max-w-3xl text-sm text-slate-600">
               {tr(
                 "toolPage.howBody",
-                "En 3 étapes : saisie → calcul → décision. Simple, rapide, et utile pour cadrer un prix de vente export."
+                "En 3 étapes : saisie → calcul → décision. Simple, rapide, et utile pour cadrer un prix de vente à l’international."
               )}
             </p>
           </div>
@@ -314,7 +312,7 @@ export default function ToolPage() {
             <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-white/80">
               {tr(
                 "toolPage.footerNote",
-                "Note : l’outil aide à cadrer une décision, il ne remplace pas un conseil réglementaire ou un devis transport / douane."
+                "Note : l’outil aide à cadrer une décision, il ne remplace pas un conseil réglementaire ni un devis transport / douane."
               )}
             </div>
           </div>
