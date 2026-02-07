@@ -35,7 +35,36 @@ export function HeroCockpit({
   const prefersReducedMotion = usePrefersReducedMotion();
 
   return (
-    <section className={cn("mkt-section-dark mkt-section-hero mkt-radial-glow relative overflow-hidden", className)}>
+    <section className={cn("mkt-section-dark mkt-section-hero mkt-radial-glow relative isolate overflow-hidden", className)}>
+      <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(130deg, rgba(2, 6, 23, 0.92) 0%, rgba(15, 23, 42, 0.78) 45%, rgba(2, 6, 23, 0.92) 100%)",
+          }}
+        />
+        {!prefersReducedMotion && (
+          <video
+            className="absolute inset-0 h-full w-full object-cover"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+          >
+            <source src="/videos/hero-export.webm" type="video/webm" />
+            <source src="/videos/hero-export.mp4" type="video/mp4" />
+          </video>
+        )}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(2, 6, 23, 0.7) 0%, rgba(2, 6, 23, 0.82) 55%, rgba(2, 6, 23, 0.92) 100%)",
+          }}
+        />
+      </div>
       <div className="mkt-container relative z-10">
         <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
           {/* Content */}

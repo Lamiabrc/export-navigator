@@ -25,6 +25,8 @@ const Analyse = React.lazy(() => import("@/pages/Analyse"));
 const ShareDecision = React.lazy(() => import("@/pages/ShareDecision"));
 const Methodologie = React.lazy(() => import("@/pages/Methodologie"));
 const Guide = React.lazy(() => import("@/pages/Guide"));
+const Incoterms = React.lazy(() => import("@/pages/Incoterms"));
+const IncotermDetail = React.lazy(() => import("@/pages/IncotermDetail"));
 
 const WatchCenter = React.lazy(() => import("@/pages/WatchCenter"));
 const WatchRegulatory = React.lazy(() => import("@/pages/WatchRegulatory"));
@@ -115,7 +117,9 @@ export default function App() {
                         <Route path="/methodologie" element={<Methodologie />} />
 
                         {/* ✅ FIX: /guides existe (redirige vers un guide par défaut) */}
-                        <Route path="/guides" element={<Navigate to="/guides/incoterms-ddp" replace />} />
+                        <Route path="/guides" element={<Navigate to="/guides/incoterms" replace />} />
+                        <Route path="/guides/incoterms" element={<Incoterms />} />
+                        <Route path="/guides/incoterms-:code" element={<IncotermDetail />} />
                         <Route path="/guides/:slug" element={<Guide />} />
 
                         <Route path="/solutions" element={<Solutions />} />

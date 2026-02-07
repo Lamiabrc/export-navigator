@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-label="Tableau comparatif des Incoterms 2020">
+  <rect width="1200" height="760" fill="#F8FAFC" />
+  <text x="60" y="52" font-size="28" font-weight="700" fill="#0F172A" font-family="IBM Plex Sans, Arial, sans-serif">
+    Tableau Incoterms 2020
+  </text>
+  <text x="60" y="78" font-size="14" fill="#475569" font-family="IBM Plex Sans, Arial, sans-serif">
+    Resume des responsabilites principales : transport, assurance et import.
+  </text>
+
+  <rect x="60" y="100" width="1080" height="40" rx="10" fill="#1E3A8A" />
+  <text x="72" y="126" font-size="13" font-weight="600" fill="#FFFFFF" font-family="IBM Plex Sans, Arial, sans-serif">Incoterm</text>
+  <text x="182" y="126" font-size="13" font-weight="600" fill="#FFFFFF" font-family="IBM Plex Sans, Arial, sans-serif">Mode</text>
+  <text x="342" y="126" font-size="13" font-weight="600" fill="#FFFFFF" font-family="IBM Plex Sans, Arial, sans-serif">Transport principal</text>
+  <text x="602" y="126" font-size="13" font-weight="600" fill="#FFFFFF" font-family="IBM Plex Sans, Arial, sans-serif">Assurance</text>
+  <text x="802" y="126" font-size="13" font-weight="600" fill="#FFFFFF" font-family="IBM Plex Sans, Arial, sans-serif">Import / douane</text>
+
+  <!-- Rows -->
+  <g font-family="IBM Plex Sans, Arial, sans-serif" font-size="13" fill="#0F172A">
+    <rect x="60" y="140" width="1080" height="40" fill="#FFFFFF" />
+    <text x="72" y="166">EXW</text>
+    <text x="182" y="166">Tous modes</text>
+    <text x="342" y="166">Acheteur</text>
+    <text x="602" y="166">Acheteur (optionnelle)</text>
+    <text x="802" y="166">Acheteur</text>
+
+    <rect x="60" y="180" width="1080" height="40" fill="#F1F5F9" />
+    <text x="72" y="206">FCA</text>
+    <text x="182" y="206">Tous modes</text>
+    <text x="342" y="206">Acheteur</text>
+    <text x="602" y="206">Acheteur</text>
+    <text x="802" y="206">Acheteur</text>
+
+    <rect x="60" y="220" width="1080" height="40" fill="#FFFFFF" />
+    <text x="72" y="246">CPT</text>
+    <text x="182" y="246">Tous modes</text>
+    <text x="342" y="246">Vendeur</text>
+    <text x="602" y="246">Acheteur</text>
+    <text x="802" y="246">Acheteur</text>
+
+    <rect x="60" y="260" width="1080" height="40" fill="#F1F5F9" />
+    <text x="72" y="286">CIP</text>
+    <text x="182" y="286">Tous modes</text>
+    <text x="342" y="286">Vendeur</text>
+    <text x="602" y="286">Vendeur</text>
+    <text x="802" y="286">Acheteur</text>
+
+    <rect x="60" y="300" width="1080" height="40" fill="#FFFFFF" />
+    <text x="72" y="326">DAP</text>
+    <text x="182" y="326">Tous modes</text>
+    <text x="342" y="326">Vendeur</text>
+    <text x="602" y="326">Acheteur (optionnelle)</text>
+    <text x="802" y="326">Acheteur</text>
+
+    <rect x="60" y="340" width="1080" height="40" fill="#F1F5F9" />
+    <text x="72" y="366">DPU</text>
+    <text x="182" y="366">Tous modes</text>
+    <text x="342" y="366">Vendeur</text>
+    <text x="602" y="366">Acheteur (optionnelle)</text>
+    <text x="802" y="366">Acheteur</text>
+
+    <rect x="60" y="380" width="1080" height="40" fill="#FFFFFF" />
+    <text x="72" y="406">DDP</text>
+    <text x="182" y="406">Tous modes</text>
+    <text x="342" y="406">Vendeur</text>
+    <text x="602" y="406">Acheteur (optionnelle)</text>
+    <text x="802" y="406">Vendeur</text>
+
+    <rect x="60" y="420" width="1080" height="40" fill="#F1F5F9" />
+    <text x="72" y="446">FAS</text>
+    <text x="182" y="446">Maritime</text>
+    <text x="342" y="446">Acheteur</text>
+    <text x="602" y="446">Acheteur</text>
+    <text x="802" y="446">Acheteur</text>
+
+    <rect x="60" y="460" width="1080" height="40" fill="#FFFFFF" />
+    <text x="72" y="486">FOB</text>
+    <text x="182" y="486">Maritime</text>
+    <text x="342" y="486">Acheteur</text>
+    <text x="602" y="486">Acheteur</text>
+    <text x="802" y="486">Acheteur</text>
+
+    <rect x="60" y="500" width="1080" height="40" fill="#F1F5F9" />
+    <text x="72" y="526">CFR</text>
+    <text x="182" y="526">Maritime</text>
+    <text x="342" y="526">Vendeur</text>
+    <text x="602" y="526">Acheteur</text>
+    <text x="802" y="526">Acheteur</text>
+
+    <rect x="60" y="540" width="1080" height="40" fill="#FFFFFF" />
+    <text x="72" y="566">CIF</text>
+    <text x="182" y="566">Maritime</text>
+    <text x="342" y="566">Vendeur</text>
+    <text x="602" y="566">Vendeur</text>
+    <text x="802" y="566">Acheteur</text>
+  </g>
+
+  <text x="60" y="610" font-size="12" fill="#64748B" font-family="IBM Plex Sans, Arial, sans-serif">
+    Note : le transfert des risques n'est pas le transfert de propriete. Toujours preciser le lieu nomme.
+  </text>
+</svg>

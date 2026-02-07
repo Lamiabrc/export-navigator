@@ -50,6 +50,8 @@ Thumbs.db
 # Import / Data (LPPR, DBF, ZIP…)
 # =========================
 data/
+!src/data/
+!src/data/**
 *.zip
 *.dbf
 *.DBF
