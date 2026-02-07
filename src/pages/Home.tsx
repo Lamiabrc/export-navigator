@@ -113,6 +113,8 @@ export default function Home() {
 
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
+  const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
+  const [videoFailed, setVideoFailed] = React.useState(false);
 
   const [form, setForm] = React.useState<DiagnosticInputs>({
     destination_country: "",
@@ -312,11 +314,40 @@ export default function Home() {
   const showFullResults = Boolean(isAuthenticated && diagnostic);
   const showTeaser = !isAuthenticated;
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setPrefersReducedMotion(media.matches);
+    update();
+    if (media.addEventListener) {
+      media.addEventListener("change", update);
+      return () => media.removeEventListener("change", update);
+    }
+    media.addListener(update);
+    return () => media.removeListener(update);
+  }, []);
+
   return (
     <PublicLayout>
       <div className="space-y-16">
         {/* HERO */}
-        <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 text-white shadow-xl">
+        <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-900 text-white shadow-xl">
+          <div className="absolute inset-0">
+            {!prefersReducedMotion && !videoFailed ? (
+              <video
+                className="absolute inset-0 h-full w-full object-cover"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                onError={() => setVideoFailed(true)}
+              >
+                <source src="/videos/hero-export.webm" type="video/webm" />
+              </video>
+            ) : null}
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-950/80 via-slate-900/70 to-slate-900/70" />
+          </div>
           <div className="absolute -right-24 -top-24 h-56 w-56 rounded-full bg-cyan-500/30 blur-3xl" />
           <div className="absolute -bottom-24 left-10 h-56 w-56 rounded-full bg-blue-600/30 blur-3xl" />
 
