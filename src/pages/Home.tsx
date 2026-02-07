@@ -1,323 +1,1005 @@
-import { Link } from "react-router-dom";
+import * as React from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { PublicLayout } from "@/components/layout/PublicLayout";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { usePageMeta } from "@/hooks/usePageMeta";
+import { useAuth } from "@/contexts/AuthContext";
+import { buildDiagnostic, DiagnosticInputs, DiagnosticOutput } from "@/lib/diagnostic";
+import { fetchCountryWatch, WatchItem } from "@/lib/rssWatch";
+import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import {
-  TrendingUp,
-  FileText,
-  ShieldCheck,
-  BellRing,
-  Target,
-  FileCheck2,
-  BookOpen,
-  Globe,
+  ArrowRight,
   CheckCircle2,
+  Lock,
+  Sparkles,
+  ShieldCheck,
+  Target,
+  Zap,
 } from "lucide-react";
 
-import { PremiumMarketingLayout } from "@/components/marketing/PremiumMarketingLayout";
-import { HeroCockpit } from "@/components/marketing/HeroCockpit";
-import { SectionPremium } from "@/components/marketing/SectionPremium";
-import { FeatureGridPremium } from "@/components/marketing/FeatureGridPremium";
-import { StepsPremium } from "@/components/marketing/StepsPremium";
-import { CTAStripPremium } from "@/components/marketing/CTAStripPremium";
-import { useI18n } from "@/contexts/LanguageContext";
-import { usePageMeta } from "@/hooks/usePageMeta";
+const COUNTRIES = [
+  { value: "FR", label: "France (FR)" },
+  { value: "DE", label: "Allemagne (DE)" },
+  { value: "BE", label: "Belgique (BE)" },
+  { value: "NL", label: "Pays-Bas (NL)" },
+  { value: "CH", label: "Suisse (CH)" },
+  { value: "GB", label: "Royaume-Uni (GB)" },
+  { value: "US", label: "États-Unis (US)" },
+  { value: "CA", label: "Canada (CA)" },
+  { value: "CN", label: "Chine (CN)" },
+  { value: "JP", label: "Japon (JP)" },
+  { value: "IN", label: "Inde (IN)" },
+  { value: "AE", label: "Émirats arabes unis (AE)" },
+  { value: "MA", label: "Maroc (MA)" },
+  { value: "TR", label: "Turquie (TR)" },
+  { value: "BR", label: "Brésil (BR)" },
+  { value: "AU", label: "Australie (AU)" },
+  { value: "SG", label: "Singapour (SG)" },
+  { value: "ZA", label: "Afrique du Sud (ZA)" },
+];
+
+const INCOTERM_OPTIONS = ["EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF"];
+
+const CURRENCY_OPTIONS = ["EUR", "USD", "GBP", "CHF", "CAD", "JPY", "CNY"];
+
+const CONSENT_VERSION = "2026-02-07";
+const CONSENT_TEXT =
+  "J'accepte que mes données soient traitées pour produire ce diagnostic et améliorer l’outil.";
+
+const DIAGNOSTIC_DRAFT_KEY = "mpl_home_diagnostic_draft";
+const DIAGNOSTIC_AUTORUN_KEY = "mpl_home_diagnostic_autorun";
+
+const TEASER_CHECKLIST = [
+  "Facture commerciale + Incoterm précisé",
+  "Packing list + document de transport",
+];
+
+const TEASER_RISK = "Sans code HS, droits et contrôles restent approximatifs.";
+
+const FLAG_CLASSES: Record<"info" | "warning" | "risk", string> = {
+  info: "border-sky-200 bg-sky-50 text-sky-700",
+  warning: "border-amber-200 bg-amber-50 text-amber-700",
+  risk: "border-rose-200 bg-rose-50 text-rose-700",
+};
+
+function toNumber(value: string) {
+  const cleaned = value.replace(",", ".").trim();
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatMoney(value: number | null | undefined, currency?: string | null) {
+  if (value === null || value === undefined) return "—";
+  const cur = currency || "EUR";
+  try {
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: cur,
+      maximumFractionDigits: 0,
+    }).format(value);
+  } catch {
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "EUR",
+      maximumFractionDigits: 0,
+    }).format(value);
+  }
+}
+
+async function hashText(value: string) {
+  if (typeof window === "undefined" || !window.crypto?.subtle) {
+    return `plain:${value.length}`;
+  }
+  const data = new TextEncoder().encode(value);
+  const digest = await window.crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 export default function Home() {
-  const { lang } = useI18n();
-  const isFr = lang === "fr";
-
   usePageMeta("meta.home.title", "meta.home.description");
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // COPY
-  // ═══════════════════════════════════════════════════════════════════════════
+  const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
 
-  const heroCopy = {
-    eyebrow: "MPL Export Navigator",
-    title: isFr
-      ? "Le cockpit export qui clarifie vos décisions."
-      : "The export cockpit that clarifies your decisions.",
-    subtitle: isFr
-      ? "Réglez votre profil produits + destinations. Obtenez coût rendu, documents et risques avec alertes DDP/Incoterms."
-      : "Set your product + destination profile. Get landed cost, documents, and risk alerts for DDP/Incoterms.",
-    bullets: isFr
-      ? [
-          "Profil produit + destination pour fiabiliser les règles",
-          "Coût rendu, taxes, transport, marge cible",
-          "Checklist documents et alertes Incoterms",
-          "Veille réglementaire sur vos marchés",
-        ]
-      : [
-          "Product + destination profile to secure the rules",
-          "Landed cost, taxes, transport, target margin",
-          "Document checklist and Incoterms alerts",
-          "Regulatory watch on your markets",
-        ],
-    primaryCta: { label: isFr ? "Voir le cockpit" : "View cockpit", to: "/analyse" },
-    secondaryCta: { label: isFr ? "Offre en ligne 65 €/mois" : "Online €65/mo", to: "/pricing" },
-    vipNote: {
-      label: isFr
-        ? "Veille personnalisée dans l'outil = réservée VIP"
-        : "Personalized watch in the tool = VIP only",
-      to: "/pricing#vip",
-    },
-    stats: [
-      {
-        value: isFr ? "4 blocs" : "4 blocks",
-        label: isFr ? "Coût, docs, risque, veille" : "Cost, docs, risk, watch",
-      },
-      {
-        value: isFr ? "2 modes" : "2 modes",
-        label: isFr ? "Analyse export + contrôle facture" : "Export analysis + invoice check",
-      },
-      {
-        value: isFr ? "1 profil" : "1 profile",
-        label: isFr ? "Produit + destination pour être fiable" : "Product + destination for reliable rules",
-      },
-    ],
+  const [form, setForm] = React.useState<DiagnosticInputs>({
+    destination_country: "",
+    product_label: "",
+    hs_code: "",
+    origin_country: "",
+    incoterm: "",
+    quantity: null,
+    unit_price: null,
+    currency: "EUR",
+  });
+
+  const [consentChecked, setConsentChecked] = React.useState(false);
+  const [diagnostic, setDiagnostic] = React.useState<DiagnosticOutput | null>(null);
+  const [watchItems, setWatchItems] = React.useState<WatchItem[]>([]);
+  const [watchStatus, setWatchStatus] = React.useState<"idle" | "loading" | "error" | "ok">("idle");
+
+  const [isRunning, setIsRunning] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [notice, setNotice] = React.useState<string | null>(null);
+  const [signupOpen, setSignupOpen] = React.useState(false);
+  const [draftLoaded, setDraftLoaded] = React.useState(false);
+
+  const diagnosticRef = React.useRef<HTMLDivElement | null>(null);
+  const resultsRef = React.useRef<HTMLDivElement | null>(null);
+
+  const normalizedInputs = React.useCallback((): DiagnosticInputs => {
+    return {
+      destination_country: String(form.destination_country || "").trim(),
+      product_label: String(form.product_label || "").trim(),
+      hs_code: form.hs_code ? String(form.hs_code).trim() : null,
+      origin_country: form.origin_country ? String(form.origin_country).trim() : null,
+      incoterm: form.incoterm ? String(form.incoterm).trim() : null,
+      quantity: form.quantity ?? null,
+      unit_price: form.unit_price ?? null,
+      currency: form.currency || "EUR",
+    };
+  }, [form]);
+
+  const persistDraft = React.useCallback(() => {
+    if (typeof window === "undefined") return;
+    const payload = { ...form, consent: consentChecked };
+    window.localStorage.setItem(DIAGNOSTIC_DRAFT_KEY, JSON.stringify(payload));
+  }, [form, consentChecked]);
+
+  const clearDraft = React.useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(DIAGNOSTIC_DRAFT_KEY);
+  }, []);
+
+  const runAnalysis = React.useCallback(async () => {
+    setError(null);
+    setNotice(null);
+
+    const inputs = normalizedInputs();
+    if (!inputs.destination_country) {
+      setError("Choisis une destination pour lancer le diagnostic.");
+      return;
+    }
+    if (!inputs.product_label) {
+      setError("Décris le produit pour obtenir un diagnostic fiable.");
+      return;
+    }
+
+    setIsRunning(true);
+    setWatchStatus("loading");
+
+    try {
+      const output = buildDiagnostic(inputs);
+      setDiagnostic(output);
+
+      const watch = await fetchCountryWatch(inputs.destination_country, 6);
+      setWatchItems(watch);
+      setWatchStatus("ok");
+
+      if (!SUPABASE_ENV_OK || !user) {
+        setNotice("Sauvegarde indisponible : connexion base non configurée.");
+        return;
+      }
+
+      const consentHash = await hashText(CONSENT_TEXT);
+
+      const { data: consentRow, error: consentError } = await supabase
+        .from("user_consents")
+        .upsert(
+          {
+            user_id: user.id,
+            consent: true,
+            consent_version: CONSENT_VERSION,
+            consent_text_hash: consentHash,
+            consented_at: new Date().toISOString(),
+            scope: "diagnostic",
+          },
+          { onConflict: "user_id,scope,consent_version" }
+        )
+        .select("id")
+        .single();
+
+      if (consentError) throw consentError;
+
+      const outputsPayload = {
+        ...output,
+        watchItems: watch,
+      };
+
+      const { error: runError } = await supabase.from("diagnostic_runs").insert({
+        user_id: user.id,
+        destination_country: inputs.destination_country || null,
+        hs_code: inputs.hs_code || null,
+        product_label: inputs.product_label || null,
+        origin_country: inputs.origin_country || null,
+        incoterm: inputs.incoterm || null,
+        quantity: inputs.quantity ?? null,
+        unit_price: inputs.unit_price ?? null,
+        currency: inputs.currency || null,
+        inputs: inputs,
+        outputs: outputsPayload,
+        consent_id: consentRow?.id ?? null,
+        consent_version: CONSENT_VERSION,
+      });
+
+      if (runError) throw runError;
+
+      clearDraft();
+      resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (err: any) {
+      setError(err?.message || "Impossible de lancer le diagnostic.");
+      setWatchStatus("error");
+    } finally {
+      setIsRunning(false);
+    }
+  }, [clearDraft, normalizedInputs, user]);
+
+  const handleAnalyze = async () => {
+    if (!consentChecked) {
+      setError("Merci de confirmer le consentement pour lancer l’analyse.");
+      return;
+    }
+
+    if (!isAuthenticated || !user) {
+      persistDraft();
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(DIAGNOSTIC_AUTORUN_KEY, "1");
+      }
+      setSignupOpen(true);
+      return;
+    }
+
+    await runAnalysis();
   };
 
-  const pilotageCopy = {
-    eyebrow: isFr ? "Ce que vous pilotez" : "What you control",
-    title: isFr ? "Une lecture claire des décisions export" : "A clear view of export decisions",
-    description: isFr
-      ? "Coûts, conformité, documents et veille dans un cockpit unique."
-      : "Costs, compliance, documents, and watch in one cockpit.",
-    items: [
-      {
-        title: isFr ? "Coût rendu et marge" : "Landed cost and margin",
-        description: isFr
-          ? "Scénarios rapides : droits, taxes, transport, prix cible."
-          : "Fast scenarios: duties, taxes, transport, target price.",
-        icon: TrendingUp,
-      },
-      {
-        title: isFr ? "Conformité et DDP" : "Compliance and DDP",
-        description: isFr
-          ? "Alertes sur responsabilités, TVA, clauses et risques pays."
-          : "Alerts on responsibilities, VAT, clauses, and country risk.",
-        icon: ShieldCheck,
-      },
-      {
-        title: isFr ? "Documents clairs" : "Clear documents",
-        description: isFr
-          ? "Checklist par destination, preuves, mentions et formats."
-          : "Checklist by destination, proofs, statements, formats.",
-        icon: FileText,
-      },
-      {
-        title: isFr ? "Veille ciblée" : "Targeted watch",
-        description: isFr
-          ? "Signaux réglementaires et sanctions à surveiller."
-          : "Regulatory signals and sanctions to watch.",
-        icon: BellRing,
-      },
-    ],
+  const handleStartDiagnostic = () => {
+    diagnosticRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!isAuthenticated) setSignupOpen(true);
   };
 
-  const stepsCopy = {
-    eyebrow: isFr ? "Comment ça marche" : "How it works",
-    title: isFr ? "3 étapes, sans frictions" : "3 steps, no friction",
-    description: isFr ? "Du profil à la décision en quelques minutes." : "From profile to decision in minutes.",
-    label: isFr ? "Étape" : "Step",
-    items: [
-      {
-        title: isFr ? "Définir le profil" : "Define the profile",
-        description: isFr
-          ? "Produit/HS, destination, Incoterm, volumes et contexte."
-          : "Product/HS, destination, Incoterm, volumes, context.",
-      },
-      {
-        title: isFr ? "Lancer l'analyse" : "Run the analysis",
-        description: isFr
-          ? "Scénario export ou contrôle facture selon le besoin."
-          : "Export scenario or invoice check based on the need.",
-      },
-      {
-        title: isFr ? "Décider et partager" : "Decide and share",
-        description: isFr
-          ? "GO/NO GO, actions à mener, documents à fournir."
-          : "GO/NO GO, actions to take, documents to provide.",
-      },
-    ],
-  };
+  React.useEffect(() => {
+    if (!isAuthenticated) return;
+    if (typeof window === "undefined") return;
 
-  const toolsCopy = {
-    eyebrow: isFr ? "Outils phares" : "Featured tools",
-    title: isFr ? "Les modules clés du cockpit" : "Key cockpit modules",
-    description: isFr
-      ? "Analyse export, contrôle facture, veille VIP, guides."
-      : "Export analysis, invoice check, VIP watch, guides.",
-    items: [
-      {
-        title: isFr ? "Analyse export" : "Export analysis",
-        description: isFr
-          ? "Lecture pays/produit, coût rendu, Incoterms."
-          : "Country/product view, landed cost, Incoterms.",
-        icon: Target,
-        badge: isFr ? "Public" : "Public",
-        link: { to: "/analyse", label: isFr ? "Ouvrir" : "Open" },
-      },
-      {
-        title: isFr ? "Contrôle facture" : "Invoice check",
-        description: isFr
-          ? "Vérification lignes, totaux, incohérences."
-          : "Line checks, totals, inconsistency flags.",
-        icon: FileCheck2,
-        badge: "PRO",
-        link: { to: "/import/check-invoice", label: isFr ? "Accéder" : "Access" },
-      },
-      {
-        title: isFr ? "Veille VIP" : "VIP watch",
-        description: isFr
-          ? "Alertes personnalisées dans l'outil."
-          : "Personalized alerts inside the tool.",
-        icon: BellRing,
-        badge: "VIP",
-        link: { to: "/pricing#vip", label: isFr ? "Voir VIP" : "View VIP" },
-      },
-      {
-        title: isFr ? "Guides" : "Guides",
-        description: isFr
-          ? "Incoterms, DDP, bonnes pratiques."
-          : "Incoterms, DDP, best practices.",
-        icon: BookOpen,
-        badge: isFr ? "Public" : "Public",
-        link: { to: "/guides", label: isFr ? "Explorer" : "Explore" },
-      },
-    ],
-  };
+    const raw = window.localStorage.getItem(DIAGNOSTIC_DRAFT_KEY);
+    if (!raw) {
+      setDraftLoaded(true);
+      return;
+    }
 
-  const trustCopy = {
-    eyebrow: isFr ? "Confiance" : "Trust",
-    title: isFr ? "Sources, conformité, limites claires" : "Sources, compliance, clear limits",
-    description: isFr
-      ? "Un cadre fiable, et une validation humaine quand le risque l'exige."
-      : "A reliable framework and human validation when risk requires it.",
-    items: [
-      {
-        title: isFr ? "Sources officielles" : "Official sources",
-        description: isFr
-          ? "Douanes, Incoterms, régimes fiscaux, sanctions. Sources typiques et citées."
-          : "Customs, Incoterms, tax regimes, sanctions. Typical sources, cited when possible.",
-        icon: Globe,
-      },
-      {
-        title: isFr ? "Cadre de conformité" : "Compliance frame",
-        description: isFr
-          ? "L'outil structure la décision, sans remplacer un agent en douane."
-          : "The tool structures the decision without replacing a customs broker.",
-        icon: ShieldCheck,
-      },
-      {
-        title: isFr ? "Limites claires" : "Clear limits",
-        description: isFr
-          ? "Cas sensibles ou DDP : audit express et validation humaine."
-          : "Sensitive cases or DDP: express audit and human validation.",
-        icon: FileCheck2,
-      },
-    ],
-  };
+    try {
+      const parsed = JSON.parse(raw) as Partial<DiagnosticInputs> & { consent?: boolean };
+      setForm((prev) => ({
+        ...prev,
+        destination_country: parsed.destination_country || "",
+        product_label: parsed.product_label || "",
+        hs_code: parsed.hs_code || "",
+        origin_country: parsed.origin_country || "",
+        incoterm: parsed.incoterm || "",
+        quantity: typeof parsed.quantity === "number" ? parsed.quantity : null,
+        unit_price: typeof parsed.unit_price === "number" ? parsed.unit_price : null,
+        currency: parsed.currency || "EUR",
+      }));
+      setConsentChecked(Boolean(parsed.consent));
+    } catch {
+      // ignore
+    } finally {
+      setDraftLoaded(true);
+    }
+  }, [isAuthenticated]);
 
-  const ctaCopy = {
-    eyebrow: isFr ? "Audit express" : "Express audit",
-    title: isFr
-      ? "Besoin d'un regard expert avant expédition ?"
-      : "Need an expert review before shipment?",
-    description: isFr
-      ? "Nous validons les cas sensibles (DDP, sanctions, produits à risque) et vous donnons un plan d'action clair."
-      : "We validate sensitive cases (DDP, sanctions, risk products) and provide a clear action plan.",
-    primaryCta: {
-      label: isFr ? "Demander un diagnostic" : "Request a diagnostic",
-      to: "/contact?offer=diagnostic",
-    },
-    secondaryCta: { label: isFr ? "Voir le cockpit" : "View cockpit", to: "/analyse" },
-    note: "contact@exportfrancefacile.com | 06 76 43 55 51",
-  };
+  React.useEffect(() => {
+    if (!draftLoaded || !isAuthenticated) return;
+    if (typeof window === "undefined") return;
+    const shouldRun = window.localStorage.getItem(DIAGNOSTIC_AUTORUN_KEY) === "1";
+    if (!shouldRun || !consentChecked) return;
+    window.localStorage.removeItem(DIAGNOSTIC_AUTORUN_KEY);
+    void runAnalysis();
+  }, [consentChecked, draftLoaded, isAuthenticated, runAnalysis]);
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // RENDER
-  // ═══════════════════════════════════════════════════════════════════════════
+  const showFullResults = Boolean(isAuthenticated && diagnostic);
+  const showTeaser = !isAuthenticated;
 
   return (
-    <PremiumMarketingLayout>
-      {/* Hero */}
-      <HeroCockpit
-        eyebrow={heroCopy.eyebrow}
-        title={heroCopy.title}
-        subtitle={heroCopy.subtitle}
-        bullets={heroCopy.bullets}
-        primaryCta={heroCopy.primaryCta}
-        secondaryCta={heroCopy.secondaryCta}
-        stats={heroCopy.stats}
-        vipNote={heroCopy.vipNote}
-      />
+    <PublicLayout>
+      <div className="space-y-16">
+        {/* HERO */}
+        <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 text-white shadow-xl">
+          <div className="absolute -right-24 -top-24 h-56 w-56 rounded-full bg-cyan-500/30 blur-3xl" />
+          <div className="absolute -bottom-24 left-10 h-56 w-56 rounded-full bg-blue-600/30 blur-3xl" />
 
-      {/* Pilotage */}
-      <SectionPremium
-        eyebrow={pilotageCopy.eyebrow}
-        title={pilotageCopy.title}
-        description={pilotageCopy.description}
-        variant="muted"
-      >
-        <FeatureGridPremium items={pilotageCopy.items} columns={4} />
-      </SectionPremium>
+          <div className="relative grid gap-10 px-8 py-14 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="space-y-6">
+              <Badge className="w-fit bg-white/10 text-white hover:bg-white/10">Diagnostic export express</Badge>
+              <div className="space-y-3">
+                <h1 className="text-3xl font-semibold tracking-tight md:text-5xl">
+                  Export : contrôlez marges, risques et obligations en un seul outil.
+                </h1>
+                <p className="text-base text-white/80 md:text-lg">
+                  Diagnostic express, simulateur coûts/marges, veille pays. Des réponses claires avant d’envoyer une offre.
+                </p>
+              </div>
 
-      {/* Steps */}
-      <SectionPremium
-        eyebrow={stepsCopy.eyebrow}
-        title={stepsCopy.title}
-        description={stepsCopy.description}
-      >
-        <StepsPremium items={stepsCopy.items} label={stepsCopy.label} />
-      </SectionPremium>
+              <div className="flex flex-wrap gap-3">
+                <Button asChild size="lg" className="bg-white text-slate-900 hover:bg-slate-100">
+                  <Link to="/register?next=/">Créer un compte gratuit</Link>
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-white/40 text-white hover:bg-white/10"
+                  onClick={handleStartDiagnostic}
+                >
+                  Lancer un diagnostic
+                </Button>
+                <Button
+                  asChild
+                  size="lg"
+                  variant="ghost"
+                  className="text-white/80 hover:bg-white/10"
+                >
+                  <a href="#outil">Voir l’outil</a>
+                </Button>
+              </div>
 
-      {/* Tools */}
-      <SectionPremium
-        eyebrow={toolsCopy.eyebrow}
-        title={toolsCopy.title}
-        description={toolsCopy.description}
-        variant="muted"
-      >
-        <FeatureGridPremium items={toolsCopy.items} columns={4} />
-      </SectionPremium>
-
-      {/* Trust */}
-      <SectionPremium
-        eyebrow={trustCopy.eyebrow}
-        title={trustCopy.title}
-        description={trustCopy.description}
-      >
-        <FeatureGridPremium items={trustCopy.items} columns={3} />
-
-        {/* VIP Note */}
-        <div className="mt-8 rounded-2xl border border-[hsl(var(--mkt-blue-100))] bg-[hsl(var(--mkt-surface-muted))] p-6">
-          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-3">
-              <BellRing className="h-5 w-5 text-[hsl(var(--mkt-primary))]" />
-              <p className="text-sm font-medium text-[hsl(var(--mkt-ink))]">
-                {isFr
-                  ? "Veille personnalisée dans l'outil = réservée VIP"
-                  : "Personalized watch in the tool = VIP only"}
-              </p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm">
+                  <div className="font-semibold">Diagnostic rapide</div>
+                  <div className="text-white/70">Checklist + risques + Incoterms</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm">
+                  <div className="font-semibold">Marge pilotable</div>
+                  <div className="text-white/70">Estimation coûts & marge</div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm">
+                  <div className="font-semibold">Veille pays</div>
+                  <div className="text-white/70">Signaux récents par destination</div>
+                </div>
+              </div>
             </div>
-            <Link
-              to="/pricing#vip"
-              className="mkt-btn mkt-btn-secondary text-xs"
-            >
-              {isFr ? "Voir l'offre VIP" : "See VIP offer"}
-            </Link>
-          </div>
-        </div>
-      </SectionPremium>
 
-      {/* CTA Strip */}
-      <CTAStripPremium
-        eyebrow={ctaCopy.eyebrow}
-        title={ctaCopy.title}
-        description={ctaCopy.description}
-        primaryCta={ctaCopy.primaryCta}
-        secondaryCta={ctaCopy.secondaryCta}
-        note={ctaCopy.note}
-      />
-    </PremiumMarketingLayout>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
+                <Sparkles className="h-4 w-4" />
+                Ce que vous obtenez dès l’inscription
+              </div>
+              <ul className="mt-4 space-y-3 text-sm text-white/80">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 text-cyan-300" />
+                  Diagnostic export express personnalisé.
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 text-cyan-300" />
+                  Première estimation coûts/marge + recommandations.
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 text-cyan-300" />
+                  Veille pays et alertes actionnables.
+                </li>
+              </ul>
+              <div className="mt-6 rounded-xl border border-white/10 bg-slate-900/50 p-4 text-xs text-white/70">
+                Accès immédiat, sans carte bancaire. Vous gardez le contrôle et pouvez supprimer vos données à tout moment.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 5 BLOCS */}
+        <section className="space-y-6">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">Première approche export</p>
+            <h2 className="text-2xl font-semibold text-slate-900">De quoi j’ai besoin pour exporter ?</h2>
+            <p className="text-sm text-slate-600">
+              Les 5 blocs essentiels à clarifier pour sécuriser devis, contrat et logistique.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+            {[
+              {
+                title: "Produit",
+                bullets: ["Code HS & conformité", "Origine & restrictions", "Valeur & pricing"],
+              },
+              {
+                title: "Destination",
+                bullets: ["Pays cible & risque", "Accords commerciaux", "Contraintes locales"],
+              },
+              {
+                title: "Client & contrat",
+                bullets: ["Incoterm adapté", "Conditions paiement", "Responsabilités claires"],
+              },
+              {
+                title: "Logistique",
+                bullets: ["Mode de transport", "Assurance & délais", "Prestataires"],
+              },
+              {
+                title: "Douane & facture",
+                bullets: ["Documents requis", "Mentions facture", "Droits & taxes"],
+              },
+            ].map((card) => (
+              <Card key={card.title} className="border-slate-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base text-slate-900">{card.title}</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm text-slate-600">
+                  <ul className="space-y-2">
+                    {card.bullets.map((b) => (
+                      <li key={b} className="flex items-start gap-2">
+                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400" />
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        {/* DIAGNOSTIC */}
+        <section id="diagnostic" ref={diagnosticRef} className="space-y-6">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">Diagnostic express</p>
+            <h2 className="text-2xl font-semibold text-slate-900">Diagnostic export express</h2>
+            <p className="text-sm text-slate-600">
+              Remplissez le formulaire pour obtenir checklist, risques clés et veille pays. Inscription gratuite pour les résultats complets.
+            </p>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle>Votre contexte</CardTitle>
+                <CardDescription>Les champs essentiels pour un diagnostic fiable.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Destination</Label>
+                    <Select
+                      value={form.destination_country}
+                      onValueChange={(v) => setForm((s) => ({ ...s, destination_country: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choisir un pays" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COUNTRIES.map((c) => (
+                          <SelectItem key={c.value} value={c.value}>
+                            {c.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Produit</Label>
+                    <Input
+                      value={form.product_label}
+                      onChange={(e) => setForm((s) => ({ ...s, product_label: e.target.value }))}
+                      placeholder="Ex : équipements médicaux"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>Code HS (optionnel)</Label>
+                    <Input
+                      value={form.hs_code || ""}
+                      onChange={(e) => setForm((s) => ({ ...s, hs_code: e.target.value }))}
+                      placeholder="Ex : 8517"
+                      inputMode="numeric"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Pays d’origine (optionnel)</Label>
+                    <Select
+                      value={form.origin_country || "NONE"}
+                      onValueChange={(v) =>
+                        setForm((s) => ({ ...s, origin_country: v === "NONE" ? "" : v }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Non défini" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NONE">Non défini</SelectItem>
+                        {COUNTRIES.map((c) => (
+                          <SelectItem key={`origin-${c.value}`} value={c.value}>
+                            {c.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Incoterm (optionnel)</Label>
+                    <Select
+                      value={form.incoterm || "NONE"}
+                      onValueChange={(v) =>
+                        setForm((s) => ({ ...s, incoterm: v === "NONE" ? "" : v }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="À préciser" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NONE">À préciser</SelectItem>
+                        {INCOTERM_OPTIONS.map((code) => (
+                          <SelectItem key={code} value={code}>
+                            {code}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>Quantité (optionnel)</Label>
+                    <Input
+                      type="number"
+                      value={form.quantity ?? ""}
+                      onChange={(e) =>
+                        setForm((s) => ({ ...s, quantity: toNumber(e.target.value) }))
+                      }
+                      placeholder="Ex : 200"
+                      min="0"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Prix unitaire (optionnel)</Label>
+                    <Input
+                      type="number"
+                      value={form.unit_price ?? ""}
+                      onChange={(e) =>
+                        setForm((s) => ({ ...s, unit_price: toNumber(e.target.value) }))
+                      }
+                      placeholder="Ex : 450"
+                      min="0"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Devise</Label>
+                    <Select
+                      value={form.currency || "EUR"}
+                      onValueChange={(v) => setForm((s) => ({ ...s, currency: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CURRENCY_OPTIONS.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {c}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="consent"
+                      checked={consentChecked}
+                      onCheckedChange={(checked) => setConsentChecked(Boolean(checked))}
+                    />
+                    <div className="space-y-1 text-sm">
+                      <Label htmlFor="consent" className="font-medium text-slate-900">
+                        {CONSENT_TEXT} <Link to="/confidentialite" className="underline">Politique de confidentialité</Link>.
+                      </Label>
+                      <p className="text-xs text-slate-500">
+                        Vous pouvez supprimer vos données depuis votre profil.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {error ? (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                    {error}
+                  </div>
+                ) : null}
+
+                {notice ? (
+                  <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-700">
+                    {notice}
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button onClick={handleAnalyze} disabled={isRunning || !consentChecked}>
+                    {isRunning ? "Analyse en cours..." : "Analyser"}
+                  </Button>
+                  {!isAuthenticated ? (
+                    <Button variant="outline" asChild>
+                      <Link to="/register?next=/">Créer un compte gratuit</Link>
+                    </Button>
+                  ) : null}
+                </div>
+              </CardContent>
+            </Card>
+
+            <div ref={resultsRef} className="space-y-4">
+              {showFullResults ? (
+                <>
+                  <Card className="border-slate-200">
+                    <CardHeader>
+                      <CardTitle className="text-lg">Checklist documents</CardTitle>
+                      <CardDescription>À valider avant expédition.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2 text-sm text-slate-600">
+                        {diagnostic?.checklist.map((item) => (
+                          <li key={item} className="flex items-start gap-2">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-slate-200">
+                    <CardHeader>
+                      <CardTitle className="text-lg">Risques & points d’attention</CardTitle>
+                      <CardDescription>Ce qui peut bloquer ou faire perdre du temps.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {diagnostic?.flags.map((flag) => (
+                        <div
+                          key={flag.title}
+                          className={cn("rounded-xl border px-3 py-2 text-sm", FLAG_CLASSES[flag.level])}
+                        >
+                          <div className="font-semibold">{flag.title}</div>
+                          <div className="text-xs">{flag.detail}</div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-slate-200">
+                    <CardHeader>
+                      <CardTitle className="text-lg">Estimation coûts / marge</CardTitle>
+                      <CardDescription>Indicatif, à affiner avec vos prestataires.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {diagnostic?.estimate ? (
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            <div className="text-xs text-slate-500">CA estimé</div>
+                            <div className="text-lg font-semibold text-slate-900">
+                              {formatMoney(diagnostic.estimate.revenue, diagnostic.estimate.currency)}
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            <div className="text-xs text-slate-500">Coûts estimés</div>
+                            <div className="text-lg font-semibold text-slate-900">
+                              {formatMoney(diagnostic.estimate.costs, diagnostic.estimate.currency)}
+                            </div>
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            <div className="text-xs text-slate-500">Marge brute</div>
+                            <div className="text-lg font-semibold text-slate-900">
+                              {formatMoney(diagnostic.estimate.margin, diagnostic.estimate.currency)}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {diagnostic.estimate.marginPct.toFixed(1)}% de marge
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-slate-600">
+                          Ajoutez quantité et prix unitaire pour estimer rapidement la marge.
+                        </div>
+                      )}
+
+                      {diagnostic?.estimate?.assumptions ? (
+                        <ul className="space-y-1 text-xs text-slate-500">
+                          {diagnostic.estimate.assumptions.map((item) => (
+                            <li key={item}>• {item}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-slate-200">
+                    <CardHeader>
+                      <CardTitle className="text-lg">Veille pays</CardTitle>
+                      <CardDescription>Dernières mises à jour liées à la destination.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {watchStatus === "loading" ? (
+                        <div className="space-y-2">
+                          <div className="h-4 w-4/5 animate-pulse rounded bg-slate-100" />
+                          <div className="h-4 w-3/5 animate-pulse rounded bg-slate-100" />
+                          <div className="h-4 w-2/5 animate-pulse rounded bg-slate-100" />
+                        </div>
+                      ) : watchItems.length ? (
+                        <ul className="space-y-3 text-sm">
+                          {watchItems.map((item) => (
+                            <li key={item.link} className="space-y-1">
+                              <a
+                                href={item.link}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-slate-900 hover:underline"
+                              >
+                                {item.title}
+                              </a>
+                              <div className="text-xs text-slate-500">
+                                {item.source || "Source"}{item.publishedAt ? ` · ${new Date(item.publishedAt).toLocaleDateString("fr-FR")}` : ""}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="text-sm text-slate-600">
+                          Aucun item disponible pour cette destination pour le moment.
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <div className="flex flex-wrap gap-3">
+                    <Button asChild>
+                      <Link to="/app/control-tower">Aller dans Control Tower</Link>
+                    </Button>
+                    <Button variant="outline" onClick={() => setDiagnostic(null)}>
+                      Nouveau diagnostic
+                    </Button>
+                  </div>
+                </>
+              ) : showTeaser ? (
+                <>
+                  <Card className="border-slate-200">
+                    <CardHeader>
+                      <CardTitle className="text-lg">Aperçu gratuit</CardTitle>
+                      <CardDescription>Extrait des résultats que vous débloquez.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm text-slate-600">
+                      <ul className="space-y-2">
+                        {TEASER_CHECKLIST.map((item) => (
+                          <li key={item} className="flex items-start gap-2">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-500" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                        {TEASER_RISK}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-dashed border-slate-300 bg-slate-50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Lock className="h-4 w-4" /> Débloquez vos résultats
+                      </CardTitle>
+                      <CardDescription>Checklist complète, veille pays et estimation marge.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button asChild className="w-full">
+                        <Link to="/register?next=/">Créer un compte gratuit</Link>
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </>
+              ) : (
+                <Card className="border-slate-200">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Résultats</CardTitle>
+                    <CardDescription>Remplissez le formulaire pour obtenir votre diagnostic.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="text-sm text-slate-600">
+                    Les résultats apparaîtront ici après l’analyse.
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+        </section>
+
+
+        {/* OUTIL UNIQUE */}
+        <section id="outil" className="space-y-6">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">Outil unique</p>
+            <h2 className="text-2xl font-semibold text-slate-900">Un cockpit pour piloter l’export</h2>
+            <p className="text-sm text-slate-600">
+              Control Tower, simulateur et veille structurée pour prendre les bonnes décisions.
+            </p>
+          </div>
+
+          <Tabs defaultValue="tower" className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="tower">Control Tower</TabsTrigger>
+              <TabsTrigger value="simu">Simulateur</TabsTrigger>
+              <TabsTrigger value="watch">Veille</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="tower" className="mt-6 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <Target className="h-4 w-4" />
+                Pilotage export centralisé
+              </div>
+              <ul className="space-y-2 text-sm text-slate-600">
+                <li>• Vue globale par pays, produits et marges.</li>
+                <li>• Alertes en temps réel sur risques et conformité.</li>
+                <li>• Tableaux de bord prêts pour la direction.</li>
+              </ul>
+              <Button asChild variant="outline">
+                <Link to="/app/control-tower">Accéder à la Control Tower</Link>
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="simu" className="mt-6 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <Zap className="h-4 w-4" />
+                Scénarios coûts/marges en quelques clics
+              </div>
+              <ul className="space-y-2 text-sm text-slate-600">
+                <li>• Comparez transport, Incoterms, frais et taxes.</li>
+                <li>• Ajustez la marge cible selon le marché.</li>
+                <li>• Exportez un résumé pour vos équipes.</li>
+              </ul>
+              <Button asChild variant="outline">
+                <Link to="/app/simulator">Ouvrir le simulateur</Link>
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="watch" className="mt-6 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <ShieldCheck className="h-4 w-4" />
+                Veille pays structurée
+              </div>
+              <ul className="space-y-2 text-sm text-slate-600">
+                <li>• Flux ciblés par pays et thématique.</li>
+                <li>• Historique des signaux faibles utiles.</li>
+                <li>• Partage rapide avec vos équipes.</li>
+              </ul>
+              <Button asChild variant="outline">
+                <Link to="/veille">Voir la veille</Link>
+              </Button>
+            </TabsContent>
+          </Tabs>
+        </section>
+
+        {/* PREUVES DE CONFIANCE */}
+        <section className="space-y-6">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">Confiance</p>
+            <h2 className="text-2xl font-semibold text-slate-900">Pensé pour les PME, conforme RGPD</h2>
+            <p className="text-sm text-slate-600">Données sécurisées, contrôle et transparence.</p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {[
+              {
+                title: "RGPD & consentement",
+                desc: "Consentement explicite, stockage sécurisé, suppression possible à tout moment.",
+              },
+              {
+                title: "Gain de temps",
+                desc: "Une seule interface pour vérifier documents, risques et marges.",
+              },
+              {
+                title: "Pensé PME",
+                desc: "Des explications claires et des actions concrètes, sans jargon inutile.",
+              },
+            ].map((item) => (
+              <Card key={item.title} className="border-slate-200">
+                <CardHeader>
+                  <CardTitle className="text-base text-slate-900">{item.title}</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm text-slate-600">{item.desc}</CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        {/* PRICING + FAQ */}
+        <section className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle>Gratuit pour démarrer</CardTitle>
+                <CardDescription>Créez un compte et obtenez vos premiers diagnostics.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm text-slate-500">Offre gratuite</div>
+                  <div className="text-2xl font-semibold text-slate-900">0 €</div>
+                  <div className="text-xs text-slate-500">Sans engagement, accès immédiat.</div>
+                </div>
+                <ul className="space-y-2 text-sm text-slate-600">
+                  <li>• Diagnostic export express</li>
+                  <li>• Veille pays basique</li>
+                  <li>• Historique des analyses</li>
+                </ul>
+                <Button asChild className="w-full">
+                  <Link to="/register?next=/">Créer un compte gratuit</Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full">
+                  <Link to="/pricing">Découvrir les plans</Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <div className="space-y-4">
+              <h3 className="text-xl font-semibold text-slate-900">FAQ</h3>
+              <Accordion type="single" collapsible className="rounded-2xl border border-slate-200 bg-white">
+                {[
+                  {
+                    q: "Pourquoi l’inscription est obligatoire ?",
+                    a: "Parce que le diagnostic repose sur vos données et doit être conservé en historique. L’inscription garantit sécurité et suivi.",
+                  },
+                  {
+                    q: "Puis-je supprimer mes données ?",
+                    a: "Oui. Vous pouvez demander la suppression depuis votre profil ou via la politique de confidentialité.",
+                  },
+                  {
+                    q: "Le diagnostic remplace-t-il un agent en douane ?",
+                    a: "Non. Il fournit une première lecture actionnable, mais la validation finale dépend de votre contexte réel.",
+                  },
+                  {
+                    q: "Que se passe-t-il si je n’ai pas de code HS ?",
+                    a: "Le diagnostic reste disponible, mais les droits et contrôles sont moins précis. Nous recommandons d’ajouter un HS dès que possible.",
+                  },
+                ].map((item) => (
+                  <AccordionItem key={item.q} value={item.q}>
+                    <AccordionTrigger className="px-4">{item.q}</AccordionTrigger>
+                    <AccordionContent className="px-4 text-sm text-slate-600">{item.a}</AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <Dialog open={signupOpen} onOpenChange={setSignupOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Créer un compte gratuit</DialogTitle>
+            <DialogDescription>
+              Les résultats complets (checklist, risques, veille pays) sont disponibles après inscription gratuite.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" onClick={() => navigate(`/login?next=${encodeURIComponent("/")}`)}>
+              Se connecter
+            </Button>
+            <Button onClick={() => navigate(`/register?next=${encodeURIComponent("/")}`)}>
+              Créer un compte gratuit
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </PublicLayout>
   );
 }

@@ -162,7 +162,10 @@ export default function Login() {
 
           <div className="text-center text-sm text-slate-400">
             Pas de compte ?{" "}
-            <button className="text-cyan-200 hover:underline" onClick={() => navigate("/register")}>
+            <button
+              className="text-cyan-200 hover:underline"
+              onClick={() => navigate(`/register?next=${encodeURIComponent(nextPath)}`)}
+            >
               Creer un compte
             </button>
           </div>

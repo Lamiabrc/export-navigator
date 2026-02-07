@@ -1,5 +1,5 @@
-import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { FormEvent, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,15 @@ function getErrorMessage(err: unknown): string {
   return "Une erreur est survenue. Reessaie.";
 }
 
+function safeNextPath(candidate: unknown, fallback = "/") {
+  const v = typeof candidate === "string" ? candidate : "";
+  return v && v.startsWith("/") ? v : fallback;
+}
+
 export default function Register() {
   const { signUp, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,6 +32,12 @@ export default function Register() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  const nextPath = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const qNext = params.get("next");
+    return safeNextPath(qNext, "/");
+  }, [location.search]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -54,7 +66,7 @@ export default function Register() {
         return;
       }
       setSuccess("Compte cree. Verifie ta boite mail si la confirmation est activee.");
-      setTimeout(() => navigate("/login"), 1200);
+      setTimeout(() => navigate(`/login?next=${encodeURIComponent(nextPath)}`), 1200);
     } catch (e2) {
       setError(getErrorMessage(e2));
     } finally {
@@ -144,7 +156,10 @@ export default function Register() {
 
         <div className="text-center text-sm text-slate-400">
           Deja un compte ?{" "}
-          <button className="text-cyan-200 hover:underline" onClick={() => navigate("/login")}>
+          <button
+            className="text-cyan-200 hover:underline"
+            onClick={() => navigate(`/login?next=${encodeURIComponent(nextPath)}`)}
+          >
             Se connecter
           </button>
         </div>

@@ -186,6 +186,8 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const { t, lang, setLang } = useI18n();
   const banner = getBannerContent(location.pathname);
   const siteDisclaimers = (t("disclaimers") as string[]) ?? [];
+  const nextPath = `${location.pathname}${location.search}` || "/";
+  const nextParam = encodeURIComponent(nextPath);
 
   const navLabel = (key: string, fallback: string) => {
     const candidate = (t(key) as string) ?? "";
@@ -195,7 +197,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
   const ctaLabel = (() => {
     const candidate = (t("header.cta") as string) ?? "";
-    if (!candidate || candidate === "header.cta") return "Demander un diagnostic";
+    if (!candidate || candidate === "header.cta") return "Créer un compte gratuit";
     return candidate;
   })();
 
@@ -277,14 +279,14 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
             {/* CTA */}
             <Link
-              to="/contact?offer=diagnostic"
+              to={`/register?next=${nextParam}`}
               className="inline-flex rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#B0231D]"
             >
               {ctaLabel}
             </Link>
 
             <Link
-              to="/login"
+              to={`/login?next=${nextParam}`}
               className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-blue-900/70 transition hover:text-blue-900 md:inline-flex"
             >
               Connexion

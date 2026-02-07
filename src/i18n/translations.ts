@@ -3,9 +3,9 @@ export type LanguageCode = "fr" | "en";
 const fr = {
   meta: {
     home: {
-      title: "Export Navigator · France ↔ Monde — Décidez mieux",
+      title: "Export : diagnostic express, veille pays et marges | MPL Export Navigator",
       description:
-        "Export Navigator vous donne une première lecture import/export (coût complet, Incoterms, documents, risques) et automatise une grande partie des tâches récurrentes. La décision finale reste humaine selon votre contexte (TVA, douane, contrats).",
+        "Obtenez en quelques minutes un diagnostic export (documents, risques, Incoterms), une première estimation de marge et une veille pays. Inscription gratuite pour accéder aux résultats.",
     },
     tool: {
       title: "Export Navigator · Outil d'évaluation",
@@ -45,7 +45,7 @@ const fr = {
       about: "À propos",
       contact: "Contact",
     },
-    cta: "Demander un diagnostic",
+    cta: "Créer un compte gratuit",
     languageLabel: "Langue",
     languageAria: "Changer la langue du site",
   },
@@ -427,9 +427,9 @@ const fr = {
 const en = {
   meta: {
     home: {
-      title: "Export Navigator · France ↔ World — Decide better",
+      title: "Export: express diagnosis, country watch and margins | MPL Export Navigator",
       description:
-        "Export Navigator provides a first look at import/export costs, Incoterms, documents and risks, and automates a large part of recurring work. Final decisions remain human and contextual (VAT, customs, contracts).",
+        "Get a quick export diagnostic (documents, risks, Incoterms), a first margin estimate and a country watch. Free signup to access results.",
     },
     tool: {
       title: "Export Navigator · Estimation tool",
@@ -469,7 +469,7 @@ const en = {
       about: "About",
       contact: "Contact",
     },
-    cta: "Book a diagnostic",
+    cta: "Create free account",
     languageLabel: "Language",
     languageAria: "Switch site language",
   },
