@@ -10,6 +10,7 @@ import { formatDateTimeFr } from "@/lib/formatters";
 import { EmptyState } from "@/components/EmptyState";
 import { demoAlerts } from "@/lib/demoData";
 import { DEMO_MODE } from "@/integrations/supabase/client";
+import { PanoramicControlTowerMap } from "@/components/controlTower/PanoramicControlTowerMap";
 
 type AlertRow = {
   id: string;
@@ -110,16 +111,6 @@ export default function WatchCenter() {
     };
   }, []);
 
-  const availableCountries = React.useMemo(() => {
-    const set = new Set<string>();
-    for (const a of alerts) {
-      const c = normalizeCountry(a.country);
-      if (c) set.add(c);
-    }
-    const arr = Array.from(set).sort();
-    return arr.length ? arr : FALLBACK_COUNTRIES;
-  }, [alerts]);
-
   const filteredAlerts = React.useMemo(() => {
     const qn = q.trim().toLowerCase();
     const hsN = hsFilter.replace(/[^0-9]/g, "").trim();
@@ -157,6 +148,19 @@ export default function WatchCenter() {
     });
   }, [alerts, countryFilter, hsFilter, severityFilter, q]);
 
+  const selectedCountry = countryFilter === "all" ? null : normalizeCountry(countryFilter);
+
+  const availableCountries = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const a of alerts) {
+      const c = normalizeCountry(a.country);
+      if (c) set.add(c);
+    }
+    const arr = Array.from(set).sort();
+    if (selectedCountry && !arr.includes(selectedCountry)) arr.unshift(selectedCountry);
+    return arr.length ? arr : FALLBACK_COUNTRIES;
+  }, [alerts, selectedCountry]);
+
   const resetFilters = () => {
     setCountryFilter("all");
     setHsFilter("");
@@ -188,6 +192,14 @@ export default function WatchCenter() {
             </Button>
           </div>
         </div>
+
+        <PanoramicControlTowerMap
+          selectedCountry={selectedCountry}
+          selectedLabel={selectedCountry || "Tous"}
+          stats={{ alerts: filteredAlerts.length, updates: alerts.length, total: alerts.length }}
+          onCountrySelect={(iso) => setCountryFilter(iso)}
+          onReset={() => setCountryFilter("all")}
+        />
 
         <Card className="border border-slate-200">
           <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">

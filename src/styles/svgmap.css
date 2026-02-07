@@ -50,3 +50,5 @@
 .svgMap-tooltip .svgMap-tooltip-pointer{position:absolute;top:100%;left:50%;transform:translateX(-50%);overflow:hidden;height:10px;width:30px}
 .svgMap-tooltip .svgMap-tooltip-pointer::after{content:"";width:20px;height:20px;background:#0f172a;border:1px solid #1f2937;position:absolute;bottom:6px;left:50%;transform:translateX(-50%) rotate(45deg)}
 .svgMap-tooltip.svgMap-tooltip-flipped .svgMap-tooltip-pointer{bottom:auto;top:-10px;transform:translateX(-50%) scaleY(-1)}
+.svgMap-map-wrapper.svgMap-panorama{padding-top:28%;border-radius:16px}
+@media (max-width:900px){.svgMap-map-wrapper.svgMap-panorama{padding-top:50%;border-radius:14px}}
