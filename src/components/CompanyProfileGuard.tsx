@@ -1,21 +1,38 @@
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 
 import { CompanyProfileModal } from "@/components/CompanyProfileModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePlan } from "@/auth/PlanContext";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 
+const DISMISS_KEY_PREFIX = "mpl_company_profile_dismissed_";
+
 export function CompanyProfileGuard() {
   const { plan } = usePlan();
-  const { isAuthenticated } = useAuth();
-  const { profile, needsProfile, loading, saveProfile } = useCompanyProfile();
+  const { isAuthenticated, user } = useAuth();
+  const { profile, needsProfile, loading, saveProfile, error } = useCompanyProfile();
 
-  const open = useMemo(() => plan === "FREE" && needsProfile && isAuthenticated && !loading, [
-    plan,
-    needsProfile,
-    isAuthenticated,
-    loading,
-  ]);
+  const dismissKey = useMemo(
+    () => (user?.id ? `${DISMISS_KEY_PREFIX}${user.id}` : `${DISMISS_KEY_PREFIX}anon`),
+    [user?.id]
+  );
+
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!user?.id) {
+      setDismissed(false);
+      return;
+    }
+    const stored = window.localStorage.getItem(dismissKey);
+    setDismissed(stored === "1");
+  }, [dismissKey, user?.id]);
+
+  const open = useMemo(
+    () => plan === "FREE" && needsProfile && isAuthenticated && !loading && !dismissed && !error,
+    [plan, needsProfile, isAuthenticated, loading, dismissed, error]
+  );
 
   const initialValues = useMemo(
     () =>
@@ -48,5 +65,20 @@ export function CompanyProfileGuard() {
     });
   };
 
-  return <CompanyProfileModal open={open} initialValues={initialValues} onSave={handleSave} loading={loading} />;
+  const handleSkip = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(dismissKey, "1");
+    }
+    setDismissed(true);
+  };
+
+  return (
+    <CompanyProfileModal
+      open={open}
+      initialValues={initialValues}
+      onSave={handleSave}
+      loading={loading}
+      onSkip={handleSkip}
+    />
+  );
 }

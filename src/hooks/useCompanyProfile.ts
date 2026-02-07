@@ -43,12 +43,13 @@ export function useCompanyProfile() {
       .from("company_profiles")
       .select("*")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (supabaseError) {
       setError(supabaseError.message);
       setProfile(null);
     } else {
+      setError(null);
       setProfile(data ?? null);
     }
 

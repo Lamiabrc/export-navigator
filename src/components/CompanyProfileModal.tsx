@@ -33,9 +33,10 @@ type Props = {
   initialValues?: FormValues;
   onSave: (payload: FormValues) => Promise<void>;
   loading?: boolean;
+  onSkip?: () => void;
 };
 
-export function CompanyProfileModal({ open, initialValues, onSave, loading }: Props) {
+export function CompanyProfileModal({ open, initialValues, onSave, loading, onSkip }: Props) {
   const { t } = useI18n();
   const { toast } = useToast();
 
@@ -165,7 +166,14 @@ export function CompanyProfileModal({ open, initialValues, onSave, loading }: Pr
           </div>
         </div>
 
-        <footer className="mt-6 flex items-center justify-end gap-3">
+        <footer className="mt-6 flex items-center justify-between gap-3">
+          {onSkip ? (
+            <Button type="button" variant="outline" onClick={onSkip}>
+              {t("companyProfile.actions.later")}
+            </Button>
+          ) : (
+            <span />
+          )}
           <Button onClick={handleSubmit} disabled={loading}>
             {loading ? t("companyProfile.actions.saving") : t("companyProfile.actions.save")}
           </Button>
