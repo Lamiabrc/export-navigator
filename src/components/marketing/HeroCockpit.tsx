@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, TrendingUp, FileText, ShieldAlert, BellRing } from "lucide-react";
+import worldMap from "@/assets/world-map.svg";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { cn } from "@/lib/utils";
 
 type Stat = {
@@ -30,6 +32,8 @@ export function HeroCockpit({
   vipNote,
   className = "",
 }: HeroCockpitProps) {
+  const prefersReducedMotion = usePrefersReducedMotion();
+
   return (
     <section className={cn("mkt-section-dark mkt-section-hero mkt-radial-glow relative overflow-hidden", className)}>
       <div className="mkt-container relative z-10">
@@ -86,55 +90,96 @@ export function HeroCockpit({
             )}
           </div>
 
-          {/* Device Mockup */}
+          {/* Media Mockup */}
           <div className="relative mx-auto w-full max-w-lg lg:mx-0">
-            <div className="mkt-device aspect-[4/3]">
-              <div className="mkt-device-header">
-                <div className="mkt-device-dot" />
-                <div className="mkt-device-dot" />
-                <div className="mkt-device-dot" />
-                <span className="ml-3 text-xs font-medium text-white/40">Export Cockpit</span>
+            <div className="mkt-device aspect-[4/3] relative overflow-hidden">
+              <div className="absolute inset-0">
+                {prefersReducedMotion ? (
+                  <div
+                    className="h-full w-full bg-cover bg-center"
+                    style={{ backgroundImage: "url(/videos/hero-export.jpg)" }}
+                    aria-hidden
+                  />
+                ) : (
+                  <video
+                    className="h-full w-full object-cover"
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                    poster="/videos/hero-export.jpg"
+                  >
+                    <source src="/videos/hero-export.webm" type="video/webm" />
+                    <source src="/videos/hero-export.mp4" type="video/mp4" />
+                  </video>
+                )}
               </div>
-              <div className="mkt-device-content">
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Cost card */}
-                  <div className="mkt-device-card">
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
-                      <span className="mkt-device-label">Coût rendu</span>
-                    </div>
-                    <p className="mkt-device-value">12 450 €</p>
-                    <p className="mt-1 text-xs text-white/40">+droits +TVA</p>
-                  </div>
 
-                  {/* Documents card */}
-                  <div className="mkt-device-card">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-3.5 w-3.5 text-blue-400" />
-                      <span className="mkt-device-label">Documents</span>
-                    </div>
-                    <p className="mkt-device-value">5 requis</p>
-                    <p className="mt-1 text-xs text-white/40">EUR.1, facture...</p>
-                  </div>
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(135deg, rgba(6, 10, 20, 0.88) 0%, rgba(12, 20, 40, 0.72) 45%, rgba(6, 10, 20, 0.92) 100%)",
+                }}
+                aria-hidden
+              />
 
-                  {/* Risk card */}
-                  <div className="mkt-device-card">
-                    <div className="flex items-center gap-2">
-                      <ShieldAlert className="h-3.5 w-3.5 text-amber-400" />
-                      <span className="mkt-device-label">Risque</span>
-                    </div>
-                    <p className="mkt-device-value text-amber-400">Moyen</p>
-                    <p className="mt-1 text-xs text-white/40">DDP, TVA import</p>
-                  </div>
+              <div className="absolute inset-0 cinematic-map-glow opacity-60" aria-hidden />
+              <img
+                src={worldMap}
+                alt=""
+                className="pointer-events-none absolute -right-16 -top-12 w-[420px] opacity-40 mix-blend-screen"
+              />
 
-                  {/* Watch card */}
-                  <div className="mkt-device-card">
-                    <div className="flex items-center gap-2">
-                      <BellRing className="h-3.5 w-3.5 text-purple-400" />
-                      <span className="mkt-device-label">Veille VIP</span>
+              <div className="relative z-10">
+                <div className="mkt-device-header">
+                  <div className="mkt-device-dot" />
+                  <div className="mkt-device-dot" />
+                  <div className="mkt-device-dot" />
+                  <span className="ml-3 text-xs font-medium text-white/40">Export Cockpit</span>
+                </div>
+                <div className="mkt-device-content">
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Cost card */}
+                    <div className="mkt-device-card">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+                        <span className="mkt-device-label">Coût rendu</span>
+                      </div>
+                      <p className="mkt-device-value">12 450 €</p>
+                      <p className="mt-1 text-xs text-white/40">+droits +TVA</p>
                     </div>
-                    <p className="mkt-device-value">3 alertes</p>
-                    <p className="mt-1 text-xs text-white/40">Réglementaire</p>
+
+                    {/* Documents card */}
+                    <div className="mkt-device-card">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-3.5 w-3.5 text-blue-400" />
+                        <span className="mkt-device-label">Documents</span>
+                      </div>
+                      <p className="mkt-device-value">5 requis</p>
+                      <p className="mt-1 text-xs text-white/40">EUR.1, facture...</p>
+                    </div>
+
+                    {/* Risk card */}
+                    <div className="mkt-device-card">
+                      <div className="flex items-center gap-2">
+                        <ShieldAlert className="h-3.5 w-3.5 text-amber-400" />
+                        <span className="mkt-device-label">Risque</span>
+                      </div>
+                      <p className="mkt-device-value text-amber-400">Moyen</p>
+                      <p className="mt-1 text-xs text-white/40">DDP, TVA import</p>
+                    </div>
+
+                    {/* Watch card */}
+                    <div className="mkt-device-card">
+                      <div className="flex items-center gap-2">
+                        <BellRing className="h-3.5 w-3.5 text-purple-400" />
+                        <span className="mkt-device-label">Veille VIP</span>
+                      </div>
+                      <p className="mkt-device-value">3 alertes</p>
+                      <p className="mt-1 text-xs text-white/40">Réglementaire</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -169,3 +214,4 @@ export function HeroCockpit({
     </section>
   );
 }
+
