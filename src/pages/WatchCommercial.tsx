@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { isMissingTableError } from "@/domain/calc";
+import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { Database, TrendingUp } from "lucide-react";
 
 type SnapshotRow = {
@@ -94,6 +95,8 @@ function formatMoney(n: number | null | undefined, currency?: string | null) {
 
 export default function WatchCommercial() {
   const { variables } = useGlobalFilters();
+  const { profile } = useCompanyProfile();
+  const companyName = profile?.company_name?.trim() || "Votre entreprise";
 
   const defaultTerritory = normalizeTerritory(String(variables.territory_code || "FR"));
   const [territory, setTerritory] = React.useState<string>(defaultTerritory);
@@ -287,6 +290,7 @@ export default function WatchCommercial() {
             <p className="text-xs uppercase tracking-[0.35em] text-blue-700">Veille concurrentielle</p>
             <h1 className="text-3xl font-bold text-slate-900">Prix marché par produit</h1>
             <p className="text-sm text-slate-600">Analyse par produit, territoire et prix observé sur le marché.</p>
+            <p className="text-xs text-slate-500">Entreprise: {companyName}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

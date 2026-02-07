@@ -39,7 +39,7 @@ const Register = React.lazy(() => import("@/pages/Register"));
 const ForgotPassword = React.lazy(() => import("@/pages/ForgotPassword"));
 const SetPassword = React.lazy(() => import("@/pages/SetPassword"));
 
-const CommandCenter = React.lazy(() => import("@/pages/CommandCenter"));
+const ControlTower = React.lazy(() => import("@/pages/ControlTower"));
 
 // ✅ Nouveau simulateur “opérationnel + graphiques”
 const ExportSimulator = React.lazy(() => import("@/pages/ExportSimulator"));
@@ -198,7 +198,7 @@ export default function App() {
                           path="/app/control-tower"
                           element={
                             <ProtectedRoute>
-                              <CommandCenter />
+                              <ControlTower />
                             </ProtectedRoute>
                           }
                         />
