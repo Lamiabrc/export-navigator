@@ -77,6 +77,7 @@ export function MainLayout({
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <BrandLogo
                   size="md"
+                  href="/app/control-tower"
                   className="hidden sm:flex min-w-0"
                   textClassName="min-w-0"
                   titleClassName="text-foreground"
@@ -85,6 +86,7 @@ export function MainLayout({
                 />
                 <BrandLogo
                   size="sm"
+                  href="/app/control-tower"
                   className="sm:hidden min-w-0"
                   textClassName="min-w-0"
                   imageClassName="drop-shadow-sm"

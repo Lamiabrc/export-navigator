@@ -1,8 +1,9 @@
 import * as React from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { cn } from "@/lib/utils";
 
 type AppLayoutProps = React.ComponentProps<typeof MainLayout>;
 
-export function AppLayout(props: AppLayoutProps) {
-  return <MainLayout {...props} />;
+export function AppLayout({ wrapperClassName, ...props }: AppLayoutProps) {
+  return <MainLayout {...props} wrapperClassName={cn("control-tower-world", wrapperClassName)} />;
 }

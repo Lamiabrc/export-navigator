@@ -9,7 +9,6 @@ import {
   Bot,
   Calculator,
   FileCheck2,
-  Home,
   LogOut,
   Package,
   Scale,
@@ -36,7 +35,6 @@ const navigation: NavSection[] = [
   {
     title: "Accueil",
     items: [
-      { name: "Vitrine", href: "/", icon: Home },
       {
         name: "Tour de controle",
         href: "/app/control-tower",
