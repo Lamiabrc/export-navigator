@@ -79,38 +79,111 @@ type GlobalFiltersContextValue = {
   };
 };
 
-const FALLBACK_TERRITORIES: Lookups["territories"] = [
-  { code: "FR", label: "Metropole" },
-  { code: "GP", label: "Guadeloupe" },
-  { code: "MQ", label: "Martinique" },
-  { code: "GF", label: "Guyane" },
-  { code: "RE", label: "Reunion" },
-  { code: "YT", label: "Mayotte" },
+const FALLBACK_TERRITORY_CODES = [
+  "AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR",
+  "AS", "AT", "AU", "AW", "AX", "AZ", "BA", "BB", "BD", "BE",
+  "BF", "BG", "BH", "BI", "BJ", "BM", "BN", "BO", "BQ", "BR",
+  "BS", "BT", "BW", "BY", "BZ", "CA", "CC", "CD", "CF", "CG",
+  "CH", "CI", "CK", "CL", "CM", "CN", "CO", "CR", "CU", "CV",
+  "CW", "CX", "CY", "CZ", "DE", "DJ", "DK", "DM", "DO", "DZ",
+  "EA", "EC", "EE", "EG", "EH", "ER", "ES", "ET", "EU", "FI",
+  "FJ", "FK", "FM", "FO", "FR", "GA", "GB", "GD", "GE", "GF",
+  "GH", "GI", "GL", "GM", "GN", "GP", "GQ", "GR", "GS", "GT",
+  "GU", "GW", "GY", "HK", "HN", "HR", "HT", "HU", "ID", "IE",
+  "IL", "IM", "IN", "IO", "IQ", "IR", "IS", "IT", "JE", "JM",
+  "JO", "JP", "KE", "KG", "KH", "KI", "KM", "KN", "KP", "KR",
+  "KW", "KY", "KZ", "LA", "LB", "LC", "LI", "LK", "LR", "LS",
+  "LT", "LU", "LV", "LY", "MA", "MC", "MD", "ME", "MG", "MH",
+  "MK", "ML", "MM", "MN", "MO", "MP", "MQ", "MR", "MS", "MT",
+  "MU", "MV", "MW", "MX", "MY", "MZ", "NA", "NC", "NE", "NF",
+  "NG", "NI", "NL", "NO", "NP", "NR", "NU", "NZ", "OC", "OM",
+  "PA", "PE", "PF", "PG", "PH", "PK", "PL", "PM", "PN", "PR",
+  "PS", "PT", "PW", "PY", "QA", "RE", "RO", "RS", "RU", "RW",
+  "SA", "SB", "SC", "SD", "SE", "SG", "SH", "SI", "SJ", "SK",
+  "SL", "SM", "SN", "SO", "SR", "SS", "ST", "SV", "SX", "SY",
+  "SZ", "TC", "TD", "TF", "TG", "TH", "TJ", "TK", "TL", "TM",
+  "TN", "TO", "TR", "TT", "TV", "TW", "TZ", "UA", "UG", "UM",
+  "US", "UY", "UZ", "VA", "VC", "VE", "VG", "VI", "VN", "VU",
+  "WF", "WS", "XK", "YE", "YT", "ZA", "ZM", "ZW",
+];
+
+const CUSTOM_TERRITORY_LABELS: Record<string, string> = {
+  FR: "Metropole",
+  GP: "Guadeloupe",
+  MQ: "Martinique",
+  GF: "Guyane",
+  RE: "Reunion",
+  YT: "Mayotte",
+  BL: "Saint-Barthelemy",
+  MF: "Saint-Martin",
+};
+
+const EXTRA_TERRITORIES: Lookups["territories"] = [
   { code: "SPM", label: "Saint-Pierre-et-Miquelon" },
-  { code: "BL", label: "Saint-Barthelemy" },
-  { code: "MF", label: "Saint-Martin" },
 ];
 const ENABLE_TERRITORIES = import.meta.env.VITE_ENABLE_TERRITORIES === "true";
 
 function buildGlobalTerritories(): Lookups["territories"] {
   try {
     const supported = (Intl as any).supportedValuesOf?.("region") as string[] | undefined;
-    if (!supported?.length) return FALLBACK_TERRITORIES;
+    const base = supported?.length ? supported : FALLBACK_TERRITORY_CODES;
+    const dn =
+      typeof Intl !== "undefined" && typeof (Intl as any).DisplayNames === "function"
+        ? new Intl.DisplayNames(["fr"], { type: "region" })
+        : null;
 
-    const dn = new Intl.DisplayNames(["fr"], { type: "region" });
-    const entries = supported
-      .filter((code) => /^[A-Z]{2}$/.test(code))
-      .map((code) => ({ code, label: dn.of(code) || code }))
-      .filter((c) => c.label && c.label !== c.code);
+    const map = new Map<string, { code: string; label?: string | null }>();
+    for (const raw of base) {
+      if (!/^[A-Z]{2}$/.test(raw)) continue;
+      if (raw === "PM") continue; // use SPM (custom code)
+      const label = CUSTOM_TERRITORY_LABELS[raw] ?? (dn?.of(raw) || raw);
+      map.set(raw, { code: raw, label });
+    }
 
-    entries.sort((a, b) => a.label!.localeCompare(b.label!, "fr", { sensitivity: "base" }));
-    return entries.length ? entries : FALLBACK_TERRITORIES;
+    for (const extra of EXTRA_TERRITORIES) {
+      map.set(extra.code, extra);
+    }
+
+    const entries = Array.from(map.values());
+    entries.sort((a, b) =>
+      (a.label || a.code).localeCompare(b.label || b.code, "fr", { sensitivity: "base" })
+    );
+    return entries;
   } catch {
-    return FALLBACK_TERRITORIES;
+    const fallback = FALLBACK_TERRITORY_CODES
+      .filter((code) => /^[A-Z]{2}$/.test(code) && code !== "PM")
+      .map((code) => ({ code, label: CUSTOM_TERRITORY_LABELS[code] ?? code }));
+    return [...fallback, ...EXTRA_TERRITORIES];
   }
 }
 
 const GLOBAL_TERRITORIES = buildGlobalTerritories();
+
+function mergeTerritories(
+  primary: Lookups["territories"],
+  fallback: Lookups["territories"]
+) {
+  const map = new Map<string, { code: string; label?: string | null }>();
+
+  for (const t of fallback) {
+    if (!t?.code) continue;
+    map.set(t.code, { code: t.code, label: t.label ?? t.code });
+  }
+
+  for (const t of primary) {
+    if (!t?.code) continue;
+    const code = String(t.code);
+    const prev = map.get(code);
+    const label = t.label ?? prev?.label ?? code;
+    map.set(code, { code, label });
+  }
+
+  const entries = Array.from(map.values());
+  entries.sort((a, b) =>
+    (a.label || a.code).localeCompare(b.label || b.code, "fr", { sensitivity: "base" })
+  );
+  return entries;
+}
 
 const defaultTimeRange: TimeRangeValue = { preset: "last_30d" };
 const defaultAutoRefresh: AutoRefreshState = { enabled: false, intervalMs: 60_000 };
@@ -292,9 +365,11 @@ export function GlobalFiltersProvider({ children }: { children: React.ReactNode 
           return;
         }
         if (!isMounted) return;
+        const rows = (data as any[]) ?? [];
+        const merged = rows.length ? mergeTerritories(rows, GLOBAL_TERRITORIES) : GLOBAL_TERRITORIES;
         setLookups((prev) => ({
           ...prev,
-          territories: (data as any[])?.length ? (data as any[]) : GLOBAL_TERRITORIES,
+          territories: merged,
         }));
       } catch (err) {
         console.error("[global-filters] territories error", err);

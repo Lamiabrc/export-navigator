@@ -53,10 +53,9 @@ const COUNTRIES: CountryOption[] = [
 
 const HS_EXAMPLES = ["3004", "8708", "2204", "3304", "9403", "8504"];
 
-// 2 / 4 / 6 chiffres (chapitre/position/sous-position) => suffisant en veille.
-// (Tu peux durcir plus tard)
+// 2 / 4 / 6 / 8 / 10 chiffres (prefixes HS).
 function isValidHs(code: string) {
-  return /^\d{2}(\d{2})?(\d{2})?$/.test(code);
+  return /^\d{2}(\d{2}){0,4}$/.test(code);
 }
 
 function normalizeCode(v: string) {
@@ -301,7 +300,7 @@ export function OnboardingPrefsModal({ open, onOpenChange, email, onSaved }: Pro
             <Input
               value={hsInput}
               onChange={(e) => setHsInput(e.target.value)}
-              placeholder="HS (optionnel) : 2 / 4 / 6 chiffres (ex : 22, 2204, 300490)"
+              placeholder="HS (optionnel) : 2 / 4 / 6 / 8 / 10 chiffres (ex : 22, 2204, 300490)"
             />
 
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -327,7 +326,7 @@ export function OnboardingPrefsModal({ open, onOpenChange, email, onSaved }: Pro
 
             {invalidHs.length > 0 && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
-                Ignorés (format invalide) : <span className="font-semibold">{invalidHs.join(", ")}</span>. Utilise 2, 4 ou 6 chiffres.
+                Ignorés (format invalide) : <span className="font-semibold">{invalidHs.join(", ")}</span>. Utilise 2, 4, 6, 8 ou 10 chiffres.
               </div>
             )}
           </div>

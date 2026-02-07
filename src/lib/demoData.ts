@@ -37,7 +37,7 @@ export type DemoItem = {
 
   // ✅ pour personnaliser selon préférences
   country_iso2?: string | null; // ex: "US"
-  hs_prefix?: string | null; // ex: "8708" (2/4/6/8)
+  hs_prefix?: string | null; // ex: "8708" (2/4/6/8/10)
 };
 
 export type DemoAlert = {
@@ -341,7 +341,7 @@ export function getDemoWatchBundle(prefs?: DemoWatchPrefs): DemoWatchBundle {
 
     return {
       message:
-        "Aucun produit (HS) renseigné : voici les conditions générales + les signaux pays. Ajoute un HS (ou un préfixe 2/4/6) pour cibler la veille produit.",
+        "Aucun produit (HS) renseigné : voici les conditions générales + les signaux pays. Ajoute un HS (ou un préfixe 2/4/6/8/10) pour cibler la veille produit.",
       items: [...general, ...countryOnly].slice(0, 20),
       alerts: demoAlerts.filter((a) => a.country_iso2 && countryMatches(a.country_iso2, countries)).slice(0, 10),
     };

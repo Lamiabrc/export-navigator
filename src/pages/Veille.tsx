@@ -116,8 +116,10 @@ const CATEGORY_LABELS: Record<string, string> = {
 function normalizeHsPrefix(v: string) {
   const digits = (v || "").replace(/[^0-9]/g, "");
   if (!digits) return "";
-  if (digits.length < 2) return "";
-  return digits.slice(0, 6);
+  const clipped = digits.slice(0, 10);
+  if (clipped.length < 2) return "";
+  if (clipped.length % 2 !== 0) return "";
+  return clipped;
 }
 
 function safeLocalStorageGet(key: string) {
@@ -399,7 +401,7 @@ export default function Veille() {
   const addHs = () => {
     const hs = normalizeHsPrefix(hsInput);
     if (!hs) {
-      toast({ title: "HS invalide", description: "Entre un préfixe HS de 2 à 6 chiffres (ex : 30, 3004, 8517)." });
+      toast({ title: "HS invalide", description: "Entre un préfixe HS de 2 à 10 chiffres (2/4/6/8/10) (ex : 30, 3004, 8517)." });
       return;
     }
     if (!hsCodes.includes(hs)) setHsCodes((prev) => [...prev, hs]);
@@ -956,7 +958,7 @@ export default function Veille() {
                       <Input
                         value={hsInput}
                         onChange={(e) => setHsInput(e.target.value)}
-                        placeholder="Ex : 30, 3004, 8517"
+                        placeholder="Ex : 30, 3004, 8517, 85171234"
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
@@ -985,7 +987,7 @@ export default function Veille() {
                       </div>
                     ) : (
                       <p className="text-xs text-muted-foreground">
-                        Ajoute 1–3 préfixes HS (2–6 chiffres) pour filtrer au plus près de tes produits.
+                        Ajoute 1–3 préfixes HS (2–10 chiffres) (2/4/6/8/10) pour filtrer au plus près de tes produits.
                       </p>
                     )}
                   </div>

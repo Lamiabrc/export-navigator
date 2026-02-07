@@ -449,7 +449,7 @@ export default function LeadMagnet() {
 
   // ✅ HS detection fiable
   const normalizedInput = productOrHs.trim();
-  const hsOnly = /^[0-9]{2,6}$/.test(normalizedInput);
+  const hsOnly = /^\d{2}(\d{2}){0,4}$/.test(normalizedInput);
   const inferredHs = hsOnly ? normalizedInput : "";
   const inferredProduct = hsOnly ? "" : normalizedInput;
 
@@ -552,7 +552,7 @@ export default function LeadMagnet() {
     if (!normalizedInput) {
       toast({
         title: lang === "en" ? "Input required" : "Saisie requise",
-        description: lang === "en" ? "Enter a product or an HS code (2–6 digits)." : "Saisis un produit ou un code HS (2 à 6 chiffres).",
+        description: lang === "en" ? "Enter a product or an HS code (2/4/6/8/10 digits)." : "Saisis un produit ou un code HS (2/4/6/8/10 chiffres).",
       });
       return;
     }

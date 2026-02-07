@@ -27,8 +27,8 @@ type Props = {
 };
 
 function isValidHs(code: string) {
-  // 2/4/6 chiffres => utile en veille (chapitre/position/sous-position)
-  return /^\d{2}(\d{2})?(\d{2})?$/.test(code);
+  // 2/4/6/8/10 chiffres => utile en veille (chapitre/position/sous-position)
+  return /^\d{2}(\d{2}){0,4}$/.test(code);
 }
 
 export function PublicVeilleFiltersBar({ value, onChange, onSubmit, loading, countries }: Props) {
@@ -168,7 +168,7 @@ export function PublicVeilleFiltersBar({ value, onChange, onSubmit, loading, cou
           <Input
             value={hsInput}
             onChange={(e) => setHsInput(e.target.value)}
-            placeholder={allProducts ? "Tous produits (conditions générales)" : "HS : 2/4/6 chiffres (ex: 22, 2204, 300490)"}
+            placeholder={allProducts ? "Tous produits (conditions générales)" : "HS : 2/4/6/8/10 chiffres (ex: 22, 2204, 300490)"}
             disabled={allProducts}
           />
 
@@ -182,7 +182,7 @@ export function PublicVeilleFiltersBar({ value, onChange, onSubmit, loading, cou
 
           {invalidHs.length > 0 && (
             <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
-              Ignorés (format invalide) : <span className="font-semibold">{invalidHs.join(", ")}</span> — utilise 2/4/6 chiffres.
+              Ignorés (format invalide) : <span className="font-semibold">{invalidHs.join(", ")}</span> — utilise 2/4/6/8/10 chiffres.
             </div>
           )}
         </div>
