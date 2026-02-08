@@ -73,6 +73,9 @@ const VipRentability = React.lazy(() => import("@/pages/VipRentability"));
 
 const Legal = React.lazy(() => import("@/pages/Legal"));
 
+// ✅ NOUVEAU : page admin upload PDFs (Base documentaire)
+const AdminKbDocs = React.lazy(() => import("@/pages/AdminKbDocs"));
+
 const queryClient = new QueryClient();
 const LazyFallback = () => <div className="p-6 text-sm text-muted-foreground">Chargement…</div>;
 
@@ -319,6 +322,16 @@ export default function App() {
                           element={
                             <ProtectedRoute>
                               <Admin />
+                            </ProtectedRoute>
+                          }
+                        />
+
+                        {/* ✅ NOUVEAU : gestion PDFs (privé) */}
+                        <Route
+                          path="/app/admin/kb-docs"
+                          element={
+                            <ProtectedRoute>
+                              <AdminKbDocs />
                             </ProtectedRoute>
                           }
                         />
