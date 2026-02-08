@@ -49,6 +49,109 @@ type Precheck = {
 
 const STORAGE_KEY = "mpl_precheck_invoice_v1";
 
+const INFO_BLOCKS = [
+  {
+    id: "produit",
+    title: "Produit",
+    subtitle: "HS code, conformite et exigences techniques.",
+    bullets: [
+      "Identifier le HS code avec precision.",
+      "Verifier les exigences produit (normes, securite, etiquetage).",
+      "Confirmer l'origine et les restrictions eventuelles.",
+    ],
+    links: [
+      {
+        label: "Access2Markets (Portail officiel UE)",
+        href: "https://trade.ec.europa.eu/access-to-markets/en/home",
+      },
+      {
+        label: "Exigences produit - Your Europe",
+        href: "https://europa.eu/youreurope/business/product-requirements/compliance/identifying-product-requirements/index_en.htm",
+      },
+    ],
+  },
+  {
+    id: "destination",
+    title: "Destination",
+    subtitle: "Accords commerciaux, droits, taxes et regles pays.",
+    bullets: [
+      "Verifier les droits de douane et taxes applicables.",
+      "Consulter les accords commerciaux et regles d'origine.",
+      "Anticiper les contraintes locales (licences, restrictions).",
+    ],
+    links: [
+      {
+        label: "Access2Markets (duty, taxes, procedures)",
+        href: "https://trade.ec.europa.eu/access-to-markets/en/home",
+      },
+      {
+        label: "UE - Acces aux marches",
+        href: "https://policy.trade.ec.europa.eu/help-exporters-and-importers/accessing-markets_en",
+      },
+    ],
+  },
+  {
+    id: "client-contrat",
+    title: "Client & contrat",
+    subtitle: "Incoterms, obligations et clauses contractuelles.",
+    bullets: [
+      "Choisir un Incoterm adapte au mode de transport.",
+      "Clarifier responsabilites, risques et transfert des frais.",
+      "Verifier la loi applicable et les conditions de vente.",
+    ],
+    links: [
+      {
+        label: "ICC - Incoterms 2020",
+        href: "https://iccwbo.org/business-solutions/incoterms-rules/incoterms-2020/",
+      },
+      {
+        label: "CISG (ONU) - Convention vente internationale",
+        href: "https://uncitral.un.org/en/texts/salegoods/conventions/sale_of_goods/cisg",
+      },
+    ],
+  },
+  {
+    id: "logistique",
+    title: "Logistique",
+    subtitle: "Documents transport, assurance et suivi.",
+    bullets: [
+      "Prevoir le document de transport (air waybill / bill of lading).",
+      "Verifier la couverture assurance transport.",
+      "Organiser les delais et le suivi logistique.",
+    ],
+    links: [
+      {
+        label: "FIATA - Bill of Lading (FBL)",
+        href: "https://fiata.org/digital-bill-of-lading/",
+      },
+      {
+        label: "IATA - Cargo XML Toolkit (AWB)",
+        href: "https://www.iata.org/en/publications/manuals/cargo-xml-toolkit/",
+      },
+    ],
+  },
+  {
+    id: "douane-facture",
+    title: "Douane & facture",
+    subtitle: "Declaration, facture commerciale et obligations.",
+    bullets: [
+      "Preparer la declaration en douane (export/import).",
+      "Verifier les mentions obligatoires de la facture.",
+      "S'assurer des justificatifs requis en cas de controle.",
+    ],
+    links: [
+      {
+        label: "Douane.fr - Declaration en douane",
+        href: "https://www.douane.gouv.fr/demarche/deposer-une-declaration-en-douane-import-export",
+      },
+      {
+        label: "Commission UE - Declaration en douane",
+        href: "https://taxation-customs.ec.europa.eu/customs/customs-procedures-import-and-export/customs-operations/customs-declaration_en",
+      },
+    ],
+  },
+];
+
 function normalizeHs(v: string) {
   return String(v || "").replace(/[^0-9]/g, "").slice(0, 10);
 }
@@ -453,6 +556,56 @@ export default function Tool() {
             {/* Overlay lock */}
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-white/70 via-transparent to-transparent" />
           </Card>
+        </section>
+
+        {/* INFOS ESSENTIELLES */}
+        <section id="infos-export" className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-[0.35em] text-blue-600">Infos export</p>
+            <h2 className="text-2xl font-semibold text-slate-900">De quoi j'ai besoin pour exporter ?</h2>
+            <p className="text-sm text-slate-600">
+              Chaque bloc reprend une etape cle et des sources externes officielles pour aller plus loin.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {INFO_BLOCKS.map((block) => (
+              <Card key={block.id} id={block.id} className="border-slate-200">
+                <CardHeader>
+                  <CardTitle className="text-base">{block.title}</CardTitle>
+                  <CardDescription>{block.subtitle}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm text-slate-600">
+                  <ul className="space-y-2">
+                    {block.bullets.map((b) => (
+                      <li key={b} className="flex items-start gap-2">
+                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400" />
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      Sources utiles
+                    </div>
+                    <div className="mt-2 flex flex-col gap-2 text-sm">
+                      {block.links.map((link) => (
+                        <a
+                          key={link.href}
+                          href={link.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-700 hover:text-blue-900 hover:underline"
+                        >
+                          {link.label}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </section>
 
         {/* Homogénéité : pont vers l’app */}
