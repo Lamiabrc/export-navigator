@@ -17,6 +17,8 @@ import {
   VariablesBar,
 } from "./GlobalFilterControls";
 
+const SupportChatWidget = React.lazy(() => import("@/components/support/SupportChatWidget"));
+
 interface MainLayoutProps {
   children: React.ReactNode;
   contentClassName?: string;
@@ -34,11 +36,28 @@ export function MainLayout({
   const navigate = useNavigate();
   const location = useLocation();
   const banner = getBannerContent(location.pathname);
+  const [supportReady, setSupportReady] = React.useState(false);
+  const [supportOpen, setSupportOpen] = React.useState(false);
 
   // Search UX: tu pourras le brancher à un contexte global plus tard (GlobalFiltersContext)
   const [q, setQ] = React.useState("");
 
   const showSidebar = variant !== "bare";
+
+  React.useEffect(() => {
+    const handler = () => {
+      setSupportReady(true);
+      setSupportOpen(true);
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("support-widget:open", handler as EventListener);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("support-widget:open", handler as EventListener);
+      }
+    };
+  }, []);
 
   return (
     <div
@@ -204,6 +223,24 @@ export function MainLayout({
           )}
         </div>
       </main>
+
+      {supportReady ? (
+        <React.Suspense fallback={null}>
+          <SupportChatWidget open={supportOpen} onOpenChange={setSupportOpen} />
+        </React.Suspense>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setSupportReady(true);
+            setSupportOpen(true);
+          }}
+          className="fixed bottom-6 right-6 z-[90] inline-flex items-center gap-2 rounded-full bg-[#0B1220] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-[#16233a]"
+          aria-label="Ouvrir l'aide IA"
+        >
+          Aide IA
+        </button>
+      )}
     </div>
   );
 }

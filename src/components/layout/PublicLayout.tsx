@@ -10,6 +10,8 @@ import type { LanguageCode } from "@/i18n/translations";
 import { navLinks } from "@/config/navLinks";
 import { getBannerContent } from "@/config/bannerContent";
 
+const SupportChatWidget = React.lazy(() => import("@/components/support/SupportChatWidget"));
+
 type RssItem = { title: string; link: string; pubDate?: string };
 
 // Encoding-safe flags (avoid broken emoji bytes)
@@ -188,6 +190,8 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const siteDisclaimers = (t("disclaimers") as string[]) ?? [];
   const nextPath = `${location.pathname}${location.search}` || "/";
   const nextParam = encodeURIComponent(nextPath);
+  const [supportReady, setSupportReady] = React.useState(false);
+  const [supportOpen, setSupportOpen] = React.useState(false);
 
   const navLabel = (key: string, fallback: string) => {
     const candidate = (t(key) as string) ?? "";
@@ -204,6 +208,21 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
   const emailMain = "contact@exportfrancefacile.com";
+
+  React.useEffect(() => {
+    const handler = () => {
+      setSupportReady(true);
+      setSupportOpen(true);
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("support-widget:open", handler as EventListener);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("support-widget:open", handler as EventListener);
+      }
+    };
+  }, []);
 
   return (
     <div className="relative min-h-screen bg-white text-foreground">
@@ -382,6 +401,24 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
           <FooterRss />
         </div>
       </footer>
+
+      {supportReady ? (
+        <React.Suspense fallback={null}>
+          <SupportChatWidget open={supportOpen} onOpenChange={setSupportOpen} />
+        </React.Suspense>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setSupportReady(true);
+            setSupportOpen(true);
+          }}
+          className="fixed bottom-6 right-6 z-[90] inline-flex items-center gap-2 rounded-full bg-[#0B1220] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-[#16233a]"
+          aria-label="Ouvrir l'aide IA"
+        >
+          Aide IA
+        </button>
+      )}
     </div>
   );
 }
