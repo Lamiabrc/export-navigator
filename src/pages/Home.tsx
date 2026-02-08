@@ -529,22 +529,27 @@ export default function Home() {
             {[
               {
                 title: "Produit",
+                slug: "produit",
                 bullets: ["Code HS & conformité", "Origine & restrictions", "Valeur & pricing"],
               },
               {
                 title: "Destination",
+                slug: "destination",
                 bullets: ["Pays cible & risque", "Accords commerciaux", "Contraintes locales"],
               },
               {
                 title: "Client & contrat",
+                slug: "client-contrat",
                 bullets: ["Incoterm adapté", "Conditions paiement", "Responsabilités claires"],
               },
               {
                 title: "Logistique",
+                slug: "logistique",
                 bullets: ["Mode de transport", "Assurance & délais", "Prestataires"],
               },
               {
                 title: "Douane & facture",
+                slug: "douane-facture",
                 bullets: ["Documents requis", "Mentions facture", "Droits & taxes"],
               },
             ].map((card) => (
@@ -561,6 +566,12 @@ export default function Home() {
                       </li>
                     ))}
                   </ul>
+                  <Link
+                    to={`/tool#${card.slug}`}
+                    className="mt-3 inline-flex items-center text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline"
+                  >
+                    En savoir plus
+                  </Link>
                 </CardContent>
               </Card>
             ))}
