@@ -43,7 +43,7 @@ const ControlTower = React.lazy(() => import("@/pages/ControlTower"));
 
 // ✅ Nouveau simulateur “opérationnel + graphiques”
 const ExportSimulator = React.lazy(() => import("@/pages/ExportSimulator"));
-// ✅ Ancien simulateur (on le garde en legacy)
+// ✅ Ancien simulateur (legacy)
 const Simulator = React.lazy(() => import("@/pages/Simulator"));
 
 const Products = React.lazy(() => import("@/pages/Products"));
@@ -73,22 +73,18 @@ const VipRentability = React.lazy(() => import("@/pages/VipRentability"));
 const Legal = React.lazy(() => import("@/pages/Legal"));
 
 const queryClient = new QueryClient();
-const LazyFallback = () => (
-  <div className="p-6 text-sm text-muted-foreground">Chargement…</div>
-);
+const LazyFallback = () => <div className="p-6 text-sm text-muted-foreground">Chargement…</div>;
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          {/* ✅ clé de thème projet (évite collision avec ancien) */}
           <ThemeProvider defaultTheme="light" storageKey="mpl-ui-theme">
             <Toaster />
             <Sonner />
 
             <PlanProvider>
-              {/* ✅ si tu as appliqué le LanguageContext “no storage” */}
               <LanguageProvider persist="none">
                 <CookieConsent />
                 <BrowserRouter>
@@ -99,12 +95,15 @@ export default function App() {
                       <Routes>
                         {/* ===================== Marketing / Public ===================== */}
                         <Route path="/" element={<Home />} />
-                        <Route path="/tool" element={<ToolPage />} />
+
+                        {/* ✅ Tool devient un “lead magnet” canonique */}
+                        <Route path="/verifier-facture" element={<ToolPage />} />
+                        <Route path="/tool" element={<Navigate to="/verifier-facture" replace />} />
+
                         <Route path="/services" element={<ServicesPage />} />
 
                         {/* ✅ EN/legacy marketing (Watch supprimée => redirect) */}
                         <Route path="/watch" element={<Navigate to="/veille" replace />} />
-
                         {/* ✅ FR canonique */}
                         <Route path="/veille" element={<Veille />} />
 
@@ -116,7 +115,7 @@ export default function App() {
                         <Route path="/share/:id" element={<ShareDecision />} />
                         <Route path="/methodologie" element={<Methodologie />} />
 
-                        {/* ✅ FIX: /guides existe (redirige vers un guide par défaut) */}
+                        {/* ✅ guides */}
                         <Route path="/guides" element={<Navigate to="/guides/incoterms" replace />} />
                         <Route path="/guides/incoterms" element={<Incoterms />} />
                         <Route path="/guides/incoterms-:code" element={<IncotermDetail />} />
@@ -124,8 +123,6 @@ export default function App() {
 
                         <Route path="/solutions" element={<Solutions />} />
                         <Route path="/resources" element={<Resources />} />
-
-                        {/* ✅ Tarifs supprimée => redirect vers pricing */}
                         <Route path="/tarifs" element={<Navigate to="/pricing" replace />} />
 
                         <Route path="/contact" element={<Contact />} />
@@ -133,10 +130,10 @@ export default function App() {
                         <Route path="/export-to-france" element={<ExportToFrance />} />
                         <Route path="/newsletter" element={<Newsletter />} />
 
-                        {/* ✅ outil gratuit (pas besoin de login) */}
+                        {/* ✅ outil gratuit (public) */}
                         <Route path="/export/costing" element={<ExportCostingPage />} />
 
-                        {/* ===================== PRO/VIP (✅ derrière login) ===================== */}
+                        {/* ===================== PRO/VIP (derrière login) ===================== */}
                         <Route
                           path="/history"
                           element={
@@ -223,7 +220,7 @@ export default function App() {
                           }
                         />
 
-                        {/* ✅ Taxes OM supprimée => on garde l'URL mais redirection vers Control Tower */}
+                        {/* ✅ Anciennes routes taxes (legacy) => redirection */}
                         <Route
                           path="/app/droits-taxes"
                           element={
@@ -232,10 +229,9 @@ export default function App() {
                             </ProtectedRoute>
                           }
                         />
-                        {/* ✅ Backward compatibility */}
                         <Route path="/app/taxes-om" element={<Navigate to="/app/droits-taxes" replace />} />
 
-                        {/* ✅ NOUVEAU simulateur (opérationnel + graphiques) */}
+                        {/* ✅ simulateur */}
                         <Route
                           path="/app/simulator"
                           element={
@@ -244,8 +240,6 @@ export default function App() {
                             </ProtectedRoute>
                           }
                         />
-
-                        {/* ✅ Legacy : ancien simulateur conservé */}
                         <Route
                           path="/app/simulator-legacy"
                           element={
@@ -272,7 +266,6 @@ export default function App() {
                           }
                         />
 
-                        {/* ✅ Canonique : secteurs (remplace concurrence) */}
                         <Route
                           path="/app/centre-veille/secteurs"
                           element={
@@ -281,11 +274,7 @@ export default function App() {
                             </ProtectedRoute>
                           }
                         />
-                        {/* ✅ Backward compatibility */}
-                        <Route
-                          path="/app/centre-veille/concurrence"
-                          element={<Navigate to="/app/centre-veille/secteurs" replace />}
-                        />
+                        <Route path="/app/centre-veille/concurrence" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
 
                         <Route
                           path="/app/produits"
@@ -360,13 +349,11 @@ export default function App() {
                         <Route path="/explore" element={<Navigate to="/app/explore" replace />} />
                         <Route path="/sales" element={<Navigate to="/app/explore" replace />} />
 
-                        {/* ✅ anciens chemins taxes/om => droits-taxes */}
                         <Route path="/taxes-om" element={<Navigate to="/app/droits-taxes" replace />} />
 
                         <Route path="/simulator" element={<Navigate to="/app/simulator" replace />} />
                         <Route path="/watch/regulatory" element={<Navigate to="/app/centre-veille/reglementation" replace />} />
 
-                        {/* ✅ Tous les anciens chemins concurrence -> secteurs */}
                         <Route path="/watch/commercial" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
                         <Route path="/watch/competitive" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
                         <Route path="/competition" element={<Navigate to="/app/centre-veille/secteurs" replace />} />
