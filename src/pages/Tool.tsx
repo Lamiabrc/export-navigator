@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,6 +52,7 @@ const STORAGE_KEY = "mpl_precheck_invoice_v1";
 const INFO_BLOCKS = [
   {
     id: "produit",
+    infoSlug: "produit",
     title: "Produit",
     subtitle: "HS code, conformite et exigences techniques.",
     bullets: [
@@ -72,6 +73,7 @@ const INFO_BLOCKS = [
   },
   {
     id: "destination",
+    infoSlug: "destination",
     title: "Destination",
     subtitle: "Accords commerciaux, droits, taxes et regles pays.",
     bullets: [
@@ -92,6 +94,7 @@ const INFO_BLOCKS = [
   },
   {
     id: "client-contrat",
+    infoSlug: "incoterm",
     title: "Client & contrat",
     subtitle: "Incoterms, obligations et clauses contractuelles.",
     bullets: [
@@ -112,6 +115,7 @@ const INFO_BLOCKS = [
   },
   {
     id: "logistique",
+    infoSlug: "transport",
     title: "Logistique",
     subtitle: "Documents transport, assurance et suivi.",
     bullets: [
@@ -132,6 +136,7 @@ const INFO_BLOCKS = [
   },
   {
     id: "douane-facture",
+    infoSlug: "douane-taxes",
     title: "Douane & facture",
     subtitle: "Declaration, facture commerciale et obligations.",
     bullets: [
@@ -602,6 +607,12 @@ export default function Tool() {
                       ))}
                     </div>
                   </div>
+                  <Link
+                    to={`/infos/${block.infoSlug}`}
+                    className="inline-flex text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline"
+                  >
+                    Voir l'impact sur la decision
+                  </Link>
                 </CardContent>
               </Card>
             ))}

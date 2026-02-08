@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from "@/components/ui/badge";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { useAuth } from "@/contexts/AuthContext";
+import { useI18n } from "@/contexts/LanguageContext";
 import { buildDiagnostic, DiagnosticInputs, DiagnosticOutput } from "@/lib/diagnostic";
 import { fetchCountryWatch, WatchItem } from "@/lib/rssWatch";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
@@ -74,6 +75,61 @@ const FLAG_CLASSES: Record<"info" | "warning" | "risk", string> = {
   risk: "border-rose-200 bg-rose-50 text-rose-700",
 };
 
+const ASSISTANT_QA = [
+  {
+    id: "docs",
+    q: {
+      fr: "Quels documents pour un premier envoi ?",
+      en: "Which documents for a first shipment?",
+    },
+    a: {
+      fr:
+        "Point de depart : facture commerciale, packing list, document de transport et incoterm explicite. Ensuite on ajuste selon HS code et pays. Besoin d'aide ? Contactez-nous.",
+      en:
+        "Start with commercial invoice, packing list, transport document and a clear Incoterm. Then adapt by HS code and destination. Need help? Contact us.",
+    },
+  },
+  {
+    id: "incoterm",
+    q: {
+      fr: "Incoterm : quel impact sur les litiges ?",
+      en: "Incoterms: how do they impact disputes?",
+    },
+    a: {
+      fr:
+        "L'incoterm fixe qui paie quoi et ou le risque bascule. Un lieu mal precise cree des litiges et des surcouts. On peut valider ensemble.",
+      en:
+        "Incoterms define who pays what and where risk transfers. A vague place creates disputes and extra costs. We can validate it together.",
+    },
+  },
+  {
+    id: "transport",
+    q: {
+      fr: "Transport : impact sur prix et delais ?",
+      en: "Transport: impact on price and lead time?",
+    },
+    a: {
+      fr:
+        "Air = rapide mais cher, mer = economique mais long, route = flexible. Le choix change la marge et le cash. On peut simuler.",
+      en:
+        "Air is fast but expensive, sea is cheaper but slower, road is flexible. The choice changes margin and cash flow. We can simulate it.",
+    },
+  },
+  {
+    id: "douane",
+    q: {
+      fr: "Douane & taxes : que dois-je anticiper ?",
+      en: "Customs & taxes: what should I anticipate?",
+    },
+    a: {
+      fr:
+        "Droits + TVA influencent directement la marge. Une erreur de declaration = blocage. Il faut HS code, valeur et origine fiables.",
+      en:
+        "Duties + VAT directly impact margin. A declaration error can block the shipment. HS code, value and origin must be solid.",
+    },
+  },
+];
+
 function toNumber(value: string) {
   const cleaned = value.replace(",", ".").trim();
   if (!cleaned) return null;
@@ -119,6 +175,8 @@ export default function Home() {
 
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
+  const { lang } = useI18n();
+  const isFr = lang === "fr";
   const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false);
   const [videoFailed, setVideoFailed] = React.useState(false);
 
@@ -149,6 +207,7 @@ export default function Home() {
   const [newsletterConsent, setNewsletterConsent] = React.useState(false);
   const [newsletterLoading, setNewsletterLoading] = React.useState(false);
   const [newsletterMessage, setNewsletterMessage] = React.useState<string | null>(null);
+  const [assistantSelection, setAssistantSelection] = React.useState<string | null>(null);
 
   const diagnosticRef = React.useRef<HTMLDivElement | null>(null);
   const resultsRef = React.useRef<HTMLDivElement | null>(null);
@@ -359,6 +418,8 @@ export default function Home() {
     }
   };
 
+  const assistantAnswer = ASSISTANT_QA.find((q) => q.id === assistantSelection) || null;
+
   React.useEffect(() => {
     if (!isAuthenticated) return;
     if (typeof window === "undefined") return;
@@ -539,17 +600,17 @@ export default function Home() {
               },
               {
                 title: "Client & contrat",
-                slug: "client-contrat",
+                slug: "incoterm",
                 bullets: ["Incoterm adapté", "Conditions paiement", "Responsabilités claires"],
               },
               {
                 title: "Logistique",
-                slug: "logistique",
+                slug: "transport",
                 bullets: ["Mode de transport", "Assurance & délais", "Prestataires"],
               },
               {
                 title: "Douane & facture",
-                slug: "douane-facture",
+                slug: "douane-taxes",
                 bullets: ["Documents requis", "Mentions facture", "Droits & taxes"],
               },
             ].map((card) => (
@@ -567,7 +628,7 @@ export default function Home() {
                     ))}
                   </ul>
                   <Link
-                    to={`/tool#${card.slug}`}
+                    to={`/infos/${card.slug}`}
                     className="mt-3 inline-flex items-center text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline"
                   >
                     En savoir plus
@@ -576,6 +637,68 @@ export default function Home() {
               </Card>
             ))}
           </div>
+        </section>
+
+        {/* ASSISTANT IA (HOME) */}
+        <section id="assistant" className="space-y-6">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">
+              {isFr ? "Assistant IA" : "AI Assistant"}
+            </p>
+            <h2 className="text-2xl font-semibold text-slate-900">
+              {isFr ? "Posez vos premieres questions" : "Ask your first questions"}
+            </h2>
+            <p className="text-sm text-slate-600">
+              {isFr
+                ? "Reponses rapides, puis on vous oriente vers la bonne action."
+                : "Fast answers, then we guide you to the right next step."}
+            </p>
+          </div>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle>{isFr ? "Questions frequentes" : "Common questions"}</CardTitle>
+              <CardDescription>
+                {isFr
+                  ? "Cliquez une question pour afficher une reponse instantanee."
+                  : "Click a question to see an instant answer."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {ASSISTANT_QA.map((q) => (
+                  <Button
+                    key={q.id}
+                    variant={assistantSelection === q.id ? "default" : "outline"}
+                    onClick={() => setAssistantSelection(q.id)}
+                  >
+                    {isFr ? q.q.fr : q.q.en}
+                  </Button>
+                ))}
+              </div>
+
+              {assistantAnswer ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                  {isFr ? assistantAnswer.a.fr : assistantAnswer.a.en}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                  {isFr
+                    ? "Choisissez une question ci-dessus pour demarrer."
+                    : "Pick a question above to get started."}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button asChild>
+                  <Link to="/contact">{isFr ? "Nous contacter" : "Contact us"}</Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link to="/register?next=/">{isFr ? "Creer un compte gratuit" : "Create free account"}</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         {/* DIAGNOSTIC */}
