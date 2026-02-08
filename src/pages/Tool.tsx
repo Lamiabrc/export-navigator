@@ -1,330 +1,491 @@
-import { Link } from "react-router-dom";
-import {
-  CheckCircle2,
-  AlertTriangle,
-  ShieldCheck,
-  Sparkles,
-  Target,
-  FileCheck2,
-  BellRing,
-} from "lucide-react";
+import * as React from "react";
+import { useNavigate } from "react-router-dom";
+import { PublicLayout } from "@/components/layout/PublicLayout";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { CheckCircle2, Lock, Sparkles } from "lucide-react";
 
-import { PremiumMarketingLayout } from "@/components/marketing/PremiumMarketingLayout";
-import { SectionPremium } from "@/components/marketing/SectionPremium";
-import { FeatureGridPremium } from "@/components/marketing/FeatureGridPremium";
-import { StepsPremium } from "@/components/marketing/StepsPremium";
-import { CTAStripPremium } from "@/components/marketing/CTAStripPremium";
-import { useI18n } from "@/contexts/LanguageContext";
-import { usePageMeta } from "@/hooks/usePageMeta";
+const COUNTRIES = [
+  { code: "FR", name: "France" },
+  { code: "DE", name: "Allemagne" },
+  { code: "ES", name: "Espagne" },
+  { code: "IT", name: "Italie" },
+  { code: "BE", name: "Belgique" },
+  { code: "NL", name: "Pays-Bas" },
+  { code: "CH", name: "Suisse" },
+  { code: "GB", name: "Royaume-Uni" },
+  { code: "US", name: "États-Unis" },
+  { code: "CA", name: "Canada" },
+  { code: "MA", name: "Maroc" },
+  { code: "DZ", name: "Algérie" },
+  { code: "TN", name: "Tunisie" },
+  { code: "TR", name: "Turquie" },
+  { code: "CN", name: "Chine" },
+  { code: "IN", name: "Inde" },
+  { code: "AE", name: "Émirats arabes unis" },
+];
 
-export default function ToolPage() {
-  const { lang } = useI18n();
-  const isFr = lang === "fr";
+const INCOTERMS = ["EXW", "FCA", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"] as const;
 
-  usePageMeta("meta.tool.title", "meta.tool.description");
+type Precheck = {
+  destination_country: string;
+  origin_country: string;
+  hs_code: string;
+  product_label: string;
+  incoterm: string;
+  currency: string;
+  goods_value: string; // string for inputs
+  freight_cost: string;
+  insurance_cost: string;
+  email: string;
+  company: string;
+  consent: boolean;
+};
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // COPY
-  // ═══════════════════════════════════════════════════════════════════════════
+const STORAGE_KEY = "mpl_precheck_invoice_v1";
 
-  const heroCopy = {
-    eyebrow: isFr ? "Outil gratuit" : "Free tool",
-    title: isFr
-      ? "Calcul rapide du coût export (landed cost)"
-      : "Quick export cost calculation (landed cost)",
-    subtitle: isFr
-      ? "Estimez votre coût rendu (transport, assurance, droits, TVA, frais) et prenez une décision éclairée en quelques minutes."
-      : "Estimate your landed cost (transport, insurance, duties, VAT, fees) and make an informed decision in minutes.",
-    reassurance: isFr
-      ? "Sans inscription • Résultat immédiat • Pensé pour les PME qui exportent"
-      : "No registration • Instant result • Designed for exporting SMEs",
+function normalizeHs(v: string) {
+  return String(v || "").replace(/[^0-9]/g, "").slice(0, 10);
+}
+
+function isEmail(v: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+}
+
+function buildTeaserChecklist(pre: Precheck) {
+  const items: { label: string; ok: boolean; hint?: string }[] = [
+    { label: "Destination renseignée", ok: !!pre.destination_country, hint: "Indispensable pour les obligations et taxes." },
+    { label: "HS code renseigné", ok: !!normalizeHs(pre.hs_code), hint: "Utile pour les droits, restrictions et documents." },
+    { label: "Incoterm défini", ok: !!pre.incoterm, hint: "Détermine qui paie quoi (transport/assurance/douane)." },
+    { label: "Valeur marchandise", ok: !!pre.goods_value, hint: "Base de calcul pour la valeur en douane / marge." },
+  ];
+
+  const risks: string[] = [];
+  if (!normalizeHs(pre.hs_code)) risks.push("HS code manquant → risque de droits/taxes erronés.");
+  if (!pre.origin_country) risks.push("Origine non précisée → règles d’origine & conformité difficiles à valider.");
+  if (!pre.incoterm) risks.push("Incoterm absent → risque de litiges sur frais et responsabilités.");
+  if (!pre.goods_value) risks.push("Valeur marchandise manquante → impossible d’estimer correctement la marge.");
+  if (!pre.destination_country) risks.push("Destination manquante → impossible de cadrer les obligations.");
+
+  return { items, risks };
+}
+
+export default function Tool() {
+  const navigate = useNavigate();
+
+  const [pre, setPre] = React.useState<Precheck>({
+    destination_country: "DE",
+    origin_country: "FR",
+    hs_code: "",
+    product_label: "",
+    incoterm: "DAP",
+    currency: "EUR",
+    goods_value: "",
+    freight_cost: "",
+    insurance_cost: "",
+    email: "",
+    company: "",
+    consent: false,
+  });
+
+  const [error, setError] = React.useState<string | null>(null);
+  const [submitted, setSubmitted] = React.useState(false);
+
+  React.useEffect(() => {
+    // si l'utilisateur revient, on restaure
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        setPre((p) => ({ ...p, ...parsed }));
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const teaser = React.useMemo(() => buildTeaserChecklist(pre), [pre]);
+
+  const update = (key: keyof Precheck) => (value: string | boolean) => {
+    setPre((p) => ({ ...p, [key]: value as any }));
   };
 
-  const trustItems = [
-    {
-      title: isFr ? "Résultat clair & exploitable" : "Clear & actionable result",
-      description: isFr
-        ? "Total, coût unitaire, et ventilation des postes pour piloter vos marges."
-        : "Total, unit cost, and breakdown by line to manage your margins.",
-      icon: CheckCircle2,
-    },
-    {
-      title: isFr ? "Alerte sur les points sensibles" : "Alerts on sensitive points",
-      description: isFr
-        ? "L'outil signale les zones d'incertitude (données manquantes, hypothèses, risques)."
-        : "The tool flags uncertainty areas (missing data, assumptions, risks).",
-      icon: AlertTriangle,
-    },
-    {
-      title: isFr ? "Option validation humaine" : "Human validation option",
-      description: isFr
-        ? "Pour sécuriser conformité & documents avant engagement (audit export sur demande)."
-        : "To secure compliance & documents before commitment (export audit on request).",
-      icon: ShieldCheck,
-    },
-  ];
+  const handlePrimaryCta = () => {
+    setSubmitted(true);
+    setError(null);
 
-  const steps = [
-    {
-      title: isFr ? "Saisissez vos paramètres" : "Enter your parameters",
-      description: isFr
-        ? "Destination, Incoterm, mode de transport, valeur, quantités et frais."
-        : "Destination, Incoterm, transport mode, value, quantities, and fees.",
-    },
-    {
-      title: isFr ? "Obtenez un coût rendu" : "Get a landed cost",
-      description: isFr
-        ? "Total + coût unitaire + ventilation détaillée par poste."
-        : "Total + unit cost + detailed breakdown by line.",
-    },
-    {
-      title: isFr ? "Sécurisez la décision" : "Secure the decision",
-      description: isFr
-        ? "En cas de doute : audit / revue humaine (conformité, risques, doc)."
-        : "When in doubt: audit / human review (compliance, risks, doc).",
-    },
-  ];
+    if (!pre.consent) {
+      setError("Merci de cocher le consentement pour traiter vos données et générer l’analyse.");
+      return;
+    }
+    if (!pre.email || !isEmail(pre.email)) {
+      setError("Merci d’indiquer un email valide pour créer votre compte gratuit.");
+      return;
+    }
 
-  const features = [
-    {
-      title: isFr ? "Calcul rapide" : "Quick calculation",
-      description: isFr
-        ? "Résultat en quelques secondes, sans inscription ni complexité."
-        : "Result in seconds, no registration or complexity.",
-      icon: Sparkles,
-    },
-    {
-      title: isFr ? "Ventilation détaillée" : "Detailed breakdown",
-      description: isFr
-        ? "Chaque poste visible : transport, droits, taxes, frais annexes."
-        : "Each line visible: transport, duties, taxes, ancillary fees.",
-      icon: Target,
-    },
-    {
-      title: isFr ? "Avertissements intégrés" : "Built-in warnings",
-      description: isFr
-        ? "Alertes sur les points de vigilance (DDP, sanctions, licences)."
-        : "Alerts on watch points (DDP, sanctions, licenses).",
-      icon: AlertTriangle,
-    },
-    {
-      title: isFr ? "Décision facilitée" : "Easier decision",
-      description: isFr
-        ? "Un récapitulatif clair pour négocier ou valider votre prix export."
-        : "A clear summary to negotiate or validate your export price.",
-      icon: FileCheck2,
-    },
-  ];
+    // On stocke le “pré-check” pour l’utiliser après inscription (et le sauvegarder ensuite dans Supabase côté app).
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          destination_country: pre.destination_country,
+          origin_country: pre.origin_country,
+          hs_code: normalizeHs(pre.hs_code),
+          product_label: pre.product_label,
+          incoterm: pre.incoterm,
+          currency: pre.currency,
+          goods_value: pre.goods_value,
+          freight_cost: pre.freight_cost,
+          insurance_cost: pre.insurance_cost,
+          email: pre.email,
+          company: pre.company,
+          consent: pre.consent,
+        })
+      );
+    } catch {
+      // ignore
+    }
 
-  const limitations = isFr
-    ? [
-        "Les tarifs réels varient selon devis et saison (fret, assurances).",
-        "Les droits/TVA dépendent du classement (HS), origine, accords, régimes.",
-        "Certains pays/produits nécessitent licences, contrôles, docs spécifiques.",
-        "Les sanctions/embargos et règles de conformité doivent être vérifiés.",
-      ]
-    : [
-        "Actual rates vary by quote and season (freight, insurance).",
-        "Duties/VAT depend on classification (HS), origin, agreements, regimes.",
-        "Some countries/products require licenses, controls, specific docs.",
-        "Sanctions/embargoes and compliance rules must be verified.",
-      ];
-
-  const auditCases = isFr
-    ? [
-        "Montants importants / marge serrée",
-        "Nouveau pays ou nouveau produit",
-        "Doute HS code / origine / accords préférentiels",
-        "Risque sanctions / exigences documentaires",
-      ]
-    : [
-        "Large amounts / tight margin",
-        "New country or new product",
-        "HS code / origin / preferential agreements uncertainty",
-        "Sanctions risk / document requirements",
-      ];
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // RENDER
-  // ═══════════════════════════════════════════════════════════════════════════
+    // Redirige vers inscription gratuite. (Tu peux ensuite lire STORAGE_KEY dans Register/Login pour pré-remplir.)
+    navigate(`/register?next=${encodeURIComponent("/app/invoice-check")}`);
+  };
 
   return (
-    <PremiumMarketingLayout>
-      {/* Hero */}
-      <section className="mkt-section-dark mkt-section-hero mkt-radial-glow relative overflow-hidden">
-        <div className="mkt-container relative z-10">
-          <div className="mx-auto max-w-3xl text-center">
-            <p className="mkt-eyebrow" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-              {heroCopy.eyebrow}
-            </p>
-
-            <h1 className="mkt-display mkt-display-xl mt-4 text-white">
-              {heroCopy.title}
+    <PublicLayout>
+      <div className="space-y-10">
+        {/* HERO */}
+        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-center">
+          <div className="space-y-4">
+            <p className="text-xs uppercase tracking-[0.35em] text-blue-600">Vérification facture</p>
+            <h1 className="text-4xl font-semibold text-slate-900">
+              Vérifiez votre facture import/export{" "}
+              <span className="text-blue-700">avant envoi</span>.
             </h1>
-
-            <p className="mt-6 text-lg leading-relaxed" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
-              {heroCopy.subtitle}
+            <p className="text-slate-600">
+              En 2 minutes : une checklist claire, les risques à corriger, et une base de simulation
+              coûts/marge. Résultats complets via <b>compte gratuit</b>.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-              <Link to="/analyse" className="mkt-btn mkt-btn-primary">
-                {isFr ? "Lancer une analyse" : "Start an analysis"}
-              </Link>
-              <Link to="/contact" className="mkt-btn mkt-btn-light">
-                {isFr ? "Demander une validation humaine" : "Request human validation"}
-              </Link>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className="gap-1">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Checklist export
+              </Badge>
+              <Badge variant="outline" className="gap-1">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Points de vigilance
+              </Badge>
+              <Badge variant="outline" className="gap-1">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Pré-simulation
+              </Badge>
             </div>
 
-            <p className="mt-6 text-sm" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-              {heroCopy.reassurance}
+            <div className="flex flex-wrap gap-2 pt-2">
+              <Button onClick={() => document.getElementById("precheck")?.scrollIntoView({ behavior: "smooth" })} className="gap-2">
+                <Sparkles className="h-4 w-4" />
+                Démarrer le contrôle
+              </Button>
+              <Button variant="outline" onClick={() => navigate("/login")}>
+                J’ai déjà un compte
+              </Button>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Respect des données : consentement requis. Politique :{" "}
+              <a className="underline" href="/confidentialite">
+                confidentialité
+              </a>
+              .
             </p>
           </div>
 
-          {/* Trust cards */}
-          <div className="mt-16 grid gap-6 md:grid-cols-3">
-            {trustItems.map((item) => (
-              <div
-                key={item.title}
-                className="mkt-card-dark rounded-2xl border border-white/10 p-6"
-              >
-                <div className="flex items-center gap-3 text-white">
-                  <item.icon className="h-5 w-5" />
-                  <span className="font-semibold">{item.title}</span>
+          {/* TEASER */}
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <CardTitle className="text-base">Ce que vous obtiendrez</CardTitle>
+              <CardDescription>
+                Diagnostic complet après inscription gratuite (et sauvegarde de vos contrôles).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                  <div className="font-medium">Checklist documents</div>
+                  <div className="text-xs text-slate-600">Facture, packing list, preuves, transport…</div>
                 </div>
-                <p className="mt-3 text-sm" style={{ color: "rgba(255, 255, 255, 0.7)" }}>
-                  {item.description}
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                  <div className="font-medium">Risques & corrections</div>
+                  <div className="text-xs text-slate-600">Champs manquants, incohérences, alertes…</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                  <div className="font-medium">Simulation marge</div>
+                  <div className="text-xs text-slate-600">Valeur marchandise + frais = base claire</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                  <div className="font-medium">Historique</div>
+                  <div className="text-xs text-slate-600">Retrouvez vos contrôles dans l’app</div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                <b>Astuce :</b> vous pouvez démarrer ici, puis continuer dans l’application (Control Tower, simulateur, veille).
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* PRECHECK FORM */}
+        <section id="precheck" className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Contrôle express</CardTitle>
+              <CardDescription>
+                Renseignez le minimum. Vos réponses complètes seront débloquées après création de compte gratuit.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {error ? (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {error}
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label>Destination (pays)</Label>
+                  <Select value={pre.destination_country} onValueChange={(v) => update("destination_country")(v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choisir" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COUNTRIES.map((c) => (
+                        <SelectItem key={c.code} value={c.code}>
+                          {c.name} ({c.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Origine (pays)</Label>
+                  <Select value={pre.origin_country} onValueChange={(v) => update("origin_country")(v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choisir" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COUNTRIES.map((c) => (
+                        <SelectItem key={c.code} value={c.code}>
+                          {c.name} ({c.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>HS code (recommandé)</Label>
+                  <Input
+                    value={pre.hs_code}
+                    onChange={(e) => update("hs_code")(normalizeHs(e.target.value))}
+                    placeholder="ex: 94036090"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Produit (libellé)</Label>
+                  <Input
+                    value={pre.product_label}
+                    onChange={(e) => update("product_label")(e.target.value)}
+                    placeholder="ex: mobilier en bois, pièces industrielles…"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Incoterm</Label>
+                  <Select value={pre.incoterm} onValueChange={(v) => update("incoterm")(v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choisir" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INCOTERMS.map((i) => (
+                        <SelectItem key={i} value={i}>
+                          {i}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Devise</Label>
+                  <Input value={pre.currency} onChange={(e) => update("currency")(e.target.value.toUpperCase())} placeholder="EUR" />
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Valeur marchandise (HT)</Label>
+                  <Input value={pre.goods_value} onChange={(e) => update("goods_value")(e.target.value)} placeholder="ex: 12500" />
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Frais transport (si connus)</Label>
+                  <Input value={pre.freight_cost} onChange={(e) => update("freight_cost")(e.target.value)} placeholder="ex: 250" />
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Assurance (si connue)</Label>
+                  <Input value={pre.insurance_cost} onChange={(e) => update("insurance_cost")(e.target.value)} placeholder="ex: 45" />
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label>Email (création compte gratuit)</Label>
+                  <Input
+                    value={pre.email}
+                    onChange={(e) => update("email")(e.target.value)}
+                    placeholder="vous@entreprise.fr"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Société (optionnel)</Label>
+                  <Input value={pre.company} onChange={(e) => update("company")(e.target.value)} placeholder="Nom de l’entreprise" />
+                </div>
+
+                <div className="sm:col-span-2 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <input
+                    type="checkbox"
+                    checked={pre.consent}
+                    onChange={(e) => update("consent")(e.target.checked)}
+                    className="mt-1 h-4 w-4"
+                  />
+                  <div className="text-sm text-slate-700">
+                    <div className="font-medium">
+                      Consentement requis pour traiter ces informations et générer l’analyse.
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Vous pouvez demander la suppression de vos données depuis votre compte. Voir{" "}
+                      <a className="underline" href="/confidentialite">
+                        confidentialité
+                      </a>
+                      .
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button className="gap-2" onClick={handlePrimaryCta}>
+                  <Sparkles className="h-4 w-4" />
+                  Créer mon compte gratuit et obtenir mon diagnostic
+                </Button>
+                <Button variant="outline" onClick={() => navigate("/login")}>
+                  Se connecter
+                </Button>
+              </div>
+
+              {submitted ? (
+                <p className="text-xs text-muted-foreground">
+                  Les résultats complets sont débloqués après inscription (et sauvegardés ensuite dans l’application).
                 </p>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          {/* TEASER RESULTS (LOCKED) */}
+          <Card className="relative overflow-hidden">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="h-4 w-4 text-slate-500" />
+                Aperçu des résultats
+              </CardTitle>
+              <CardDescription>Un aperçu immédiat. Débloquez l’analyse complète via compte gratuit.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="text-sm font-semibold text-slate-900">Checklist (aperçu)</div>
+                {teaser.items.slice(0, 4).map((it) => (
+                  <div key={it.label} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-2">
+                    <div className={`mt-0.5 h-2.5 w-2.5 rounded-full ${it.ok ? "bg-emerald-500" : "bg-amber-400"}`} />
+                    <div className="min-w-0">
+                      <div className="text-sm text-slate-900">{it.label}</div>
+                      <div className="text-xs text-slate-500">{it.hint}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      {/* Steps */}
-      <SectionPremium
-        eyebrow={isFr ? "Comment ça marche" : "How it works"}
-        title={isFr ? "En 3 étapes : saisie → calcul → décision" : "3 steps: input → calculation → decision"}
-        description={
-          isFr
-            ? "Simple, rapide, et utile pour cadrer un prix de vente à l'international."
-            : "Simple, fast, and useful for framing an international selling price."
-        }
-      >
-        <StepsPremium items={steps} label={isFr ? "Étape" : "Step"} />
-      </SectionPremium>
-
-      {/* Features */}
-      <SectionPremium
-        eyebrow={isFr ? "Fonctionnalités" : "Features"}
-        title={isFr ? "Ce que l'outil vous apporte" : "What the tool gives you"}
-        description={
-          isFr
-            ? "Une base solide pour estimer et comparer, avant d'aller plus loin."
-            : "A solid base to estimate and compare, before going further."
-        }
-        variant="muted"
-      >
-        <FeatureGridPremium items={features} columns={4} />
-
-        <div className="mt-10 flex flex-wrap gap-4">
-          <Link to="/analyse" className="mkt-btn mkt-btn-secondary">
-            {isFr ? "Lancer une analyse" : "Start an analysis"}
-          </Link>
-          <Link to="/contact" className="mkt-btn mkt-btn-outline">
-            {isFr ? "Demander une validation humaine" : "Request human validation"}
-          </Link>
-        </div>
-      </SectionPremium>
-
-      {/* Limitations */}
-      <section className="mkt-section">
-        <div className="mkt-container">
-          <div className="mkt-section-dark rounded-3xl p-8 md:p-12">
-            <div className="mb-8">
-              <p className="mkt-eyebrow" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-                {isFr ? "Limites & hypothèses" : "Limits & assumptions"}
-              </p>
-              <h2 className="mkt-display mkt-display-md mt-2 text-white">
-                {isFr ? "Ce que l'outil ne fait pas" : "What the tool doesn't do"}
-              </h2>
-              <p className="mt-4 max-w-2xl text-lg" style={{ color: "rgba(255, 255, 255, 0.7)" }}>
-                {isFr
-                  ? "Cet outil est une estimation. Pour une décision engageante, une revue humaine reste recommandée."
-                  : "This tool is an estimate. For binding decisions, human review is still recommended."}
-              </p>
-            </div>
-
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Limitations */}
-              <div className="mkt-card-dark rounded-2xl border border-white/10 p-6">
-                <div className="flex items-center gap-3 text-white">
-                  <AlertTriangle className="h-5 w-5" />
-                  <span className="font-semibold">{isFr ? "À garder en tête" : "Keep in mind"}</span>
+              <div className="space-y-2">
+                <div className="text-sm font-semibold text-slate-900">Risques (aperçu)</div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  {teaser.risks.length ? (
+                    <ul className="list-disc space-y-1 pl-4">
+                      {teaser.risks.slice(0, 3).map((r) => (
+                        <li key={r}>{r}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div>Renseignez le formulaire pour voir les points de vigilance.</div>
+                  )}
                 </div>
-                <ul className="mt-4 space-y-3">
-                  {limitations.map((item) => (
-                    <li key={item} className="flex items-start gap-3 text-sm" style={{ color: "rgba(255, 255, 255, 0.8)" }}>
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-white/50 shrink-0" />
-                      {item}
-                    </li>
-                  ))}
+              </div>
+
+              <Separator />
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <div className="font-medium">Débloqué après inscription</div>
+                <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-slate-600">
+                  <li>Checklist complète + documents recommandés</li>
+                  <li>Simulation plus précise (valeur, frais, cohérence)</li>
+                  <li>Historique + export PDF (dans l’app)</li>
                 </ul>
               </div>
+            </CardContent>
 
-              {/* When to audit */}
-              <div className="mkt-card-dark rounded-2xl border border-white/10 p-6">
-                <div className="flex items-center gap-3 text-white">
-                  <ShieldCheck className="h-5 w-5" />
-                  <span className="font-semibold">{isFr ? "Quand demander un audit" : "When to request an audit"}</span>
-                </div>
-                <ul className="mt-4 space-y-3">
-                  {auditCases.map((item) => (
-                    <li key={item} className="flex items-start gap-3 text-sm" style={{ color: "rgba(255, 255, 255, 0.8)" }}>
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-white/50 shrink-0" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
+            {/* Overlay lock */}
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-white/70 via-transparent to-transparent" />
+          </Card>
+        </section>
 
-                <div className="mt-6 flex flex-wrap items-center gap-3">
-                  <Link to="/contact" className="mkt-btn mkt-btn-primary text-xs">
-                    {isFr ? "Demander une validation" : "Request validation"}
-                  </Link>
-                  <span className="text-xs" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-                    {isFr ? "Réponse sous 24-48h" : "Response within 24-48h"}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-8 rounded-xl border border-white/10 bg-white/5 p-5 text-sm" style={{ color: "rgba(255, 255, 255, 0.7)" }}>
-              {isFr
-                ? "Note : l'outil aide à cadrer une décision, il ne remplace pas un conseil réglementaire ni un devis transport / douane."
-                : "Note: the tool helps frame a decision, it does not replace regulatory advice or a transport/customs quote."}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <CTAStripPremium
-        eyebrow={isFr ? "Prêt à estimer ?" : "Ready to estimate?"}
-        title={isFr ? "Lancez votre première analyse export" : "Start your first export analysis"}
-        description={
-          isFr
-            ? "Gratuit, sans inscription, résultat immédiat."
-            : "Free, no registration, instant result."
-        }
-        primaryCta={{
-          label: isFr ? "Lancer l'analyse" : "Start analysis",
-          to: "/analyse",
-        }}
-        secondaryCta={{
-          label: isFr ? "Voir les tarifs" : "See pricing",
-          to: "/pricing",
-        }}
-        note="contact@exportfrancefacile.com | 06 76 43 55 51"
-      />
-    </PremiumMarketingLayout>
+        {/* Homogénéité : pont vers l’app */}
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Control Tower</CardTitle>
+              <CardDescription>Pilotage par destination et HS (CSV).</CardDescription>
+            </CardHeader>
+            <CardContent className="text-sm text-slate-600">
+              Visualisez vos flux, marges, et priorités par pays/produit. Accès via compte.
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Simulateur export</CardTitle>
+              <CardDescription>Coûts & rentabilité selon Incoterm.</CardDescription>
+            </CardHeader>
+            <CardContent className="text-sm text-slate-600">
+              Estimez la rentabilité avant de signer. Accès via compte.
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Centre de veille</CardTitle>
+              <CardDescription>Réglementation + secteurs.</CardDescription>
+            </CardHeader>
+            <CardContent className="text-sm text-slate-600">
+              Suivez les évolutions utiles pour vos destinations. Accès via compte.
+            </CardContent>
+          </Card>
+        </section>
+      </div>
+    </PublicLayout>
   );
 }
