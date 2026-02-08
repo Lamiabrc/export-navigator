@@ -24,10 +24,54 @@ const rank: Record<SubscriptionPlan, number> = {
 
 const SUPPORTED_PLANS: SubscriptionPlan[] = ["FREE", "PRO_ONLINE", "PRO_VISIO", "PILOTAGE_HEBDO"];
 
+function safeStorageGet(key: string) {
+  try {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function safeStorageSet(key: string, value: string) {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
+}
+
+const normalizePlanToken = (value: string) =>
+  value
+    .trim()
+    .toUpperCase()
+    // espaces / tirets / + -> underscore
+    .replace(/[\s+/-]+/g, "_")
+    .replace(/_+/g, "_");
+
 const getPlanFromValue = (value: string | null): SubscriptionPlan | undefined => {
   if (!value) return undefined;
-  const normalized = value.toUpperCase().replace(" ", "_") as SubscriptionPlan;
+  const normalized = normalizePlanToken(value) as SubscriptionPlan;
   return SUPPORTED_PLANS.includes(normalized) ? normalized : undefined;
+};
+
+// Map des valeurs possibles stockées en billing_subscriptions.plan -> SubscriptionPlan
+const mapBillingPlan = (planValue: unknown): SubscriptionPlan | null => {
+  if (!planValue || typeof planValue !== "string") return null;
+  const token = normalizePlanToken(planValue);
+
+  // exemples acceptés : "online", "pro_online", "PRO-ONLINE"
+  if (token === "ONLINE" || token === "PRO_ONLINE") return "PRO_ONLINE";
+
+  // exemples : "visio", "pro_visio"
+  if (token === "VISIO" || token === "PRO_VISIO") return "PRO_VISIO";
+
+  // exemples : "pilotage", "pilotage_hebdo", "PILOTAGE-HEBDO"
+  if (token === "PILOTAGE" || token === "PILOTAGE_HEBDO") return "PILOTAGE_HEBDO";
+
+  if (token === "FREE") return "FREE";
+
+  return null;
 };
 
 type PlanContextValue = {
@@ -42,28 +86,27 @@ type PlanContextValue = {
 const PlanContext = createContext<PlanContextValue | undefined>(undefined);
 
 export const PlanProvider = ({ children }: { children: ReactNode }) => {
-  const [manualPlan, setManualPlan] = useState<SubscriptionPlan>(() => {
-    if (typeof window === "undefined") {
-      return "FREE";
-    }
+  const mountedRef = useRef(true);
 
+  const [manualPlan, setManualPlan] = useState<SubscriptionPlan>(() => {
+    if (typeof window === "undefined") return "FREE";
+
+    // 1) override via query param ?plan=PRO_ONLINE
     const params = new URLSearchParams(window.location.search);
     const fromParam = getPlanFromValue(params.get(PLAN_QUERY_PARAM));
-    if (fromParam) {
-      return fromParam;
-    }
+    if (fromParam) return fromParam;
 
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored && SUPPORTED_PLANS.includes(stored as SubscriptionPlan)) {
-      return stored as SubscriptionPlan;
-    }
+    // 2) sinon localStorage
+    const stored = safeStorageGet(STORAGE_KEY);
+    const fromStored = getPlanFromValue(stored);
+    if (fromStored) return fromStored;
 
     return "FREE";
   });
+
   const [billingPlan, setBillingPlan] = useState<SubscriptionPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -72,18 +115,17 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  // persist le plan manuel (debug / override)
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, manualPlan);
+    safeStorageSet(STORAGE_KEY, manualPlan);
   }, [manualPlan]);
 
+  // prendre le plan depuis l’URL une seule fois au mount
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const fromParam = getPlanFromValue(params.get(PLAN_QUERY_PARAM));
-    if (fromParam) {
-      setManualPlan(fromParam);
-    }
+    if (fromParam) setManualPlan(fromParam);
   }, []);
 
   const setPlan = useCallback((next: SubscriptionPlan) => {
@@ -92,8 +134,10 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
 
   const resolvePlan = useCallback(async (userId: string) => {
     if (!mountedRef.current) return;
+
     setLoading(true);
     setError(undefined);
+
     const { data, error: queryError } = await supabase
       .from("billing_subscriptions")
       .select("plan,status,updated_at")
@@ -103,6 +147,7 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
       .maybeSingle();
 
     if (!mountedRef.current) return;
+
     if (queryError) {
       setError(queryError.message);
       setBillingPlan(null);
@@ -110,24 +155,33 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    if (data && (data.status === "active" || data.status === "trialing") && data.plan === "online") {
-      setBillingPlan("PRO_ONLINE");
+    // statut “actif” accepté (tu peux ajouter "past_due" si tu veux autoriser temporairement)
+    const statusOk = data?.status === "active" || data?.status === "trialing";
+
+    if (statusOk) {
+      const mapped = mapBillingPlan(data?.plan);
+      setBillingPlan(mapped); // null si inconnu => retombe sur manualPlan
     } else {
       setBillingPlan(null);
     }
+
     setLoading(false);
   }, []);
 
   const refreshPlan = useCallback(async () => {
+    setError(undefined);
+
     const { data } = await supabase.auth.getSession();
     const userId = data.session?.user?.id;
+
     if (userId) {
       await resolvePlan(userId);
-    } else {
-      if (!mountedRef.current) return;
-      setBillingPlan(null);
-      setLoading(false);
+      return;
     }
+
+    if (!mountedRef.current) return;
+    setBillingPlan(null);
+    setLoading(false);
   }, [resolvePlan]);
 
   useEffect(() => {
@@ -153,7 +207,7 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
 
   const canAccess = useCallback(
     (requiredPlan: SubscriptionPlan) => rank[effectivePlan] >= rank[requiredPlan],
-    [effectivePlan],
+    [effectivePlan]
   );
 
   const value = useMemo(
@@ -165,7 +219,7 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
       canAccess,
       refreshPlan,
     }),
-    [effectivePlan, loading, error, setPlan, canAccess, refreshPlan],
+    [effectivePlan, loading, error, setPlan, canAccess, refreshPlan]
   );
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;
@@ -173,9 +227,7 @@ export const PlanProvider = ({ children }: { children: ReactNode }) => {
 
 export const usePlan = () => {
   const context = useContext(PlanContext);
-  if (!context) {
-    throw new Error("usePlan must be used within a PlanProvider");
-  }
+  if (!context) throw new Error("usePlan must be used within a PlanProvider");
   return context;
 };
 
