@@ -16,6 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { buildDiagnostic, DiagnosticInputs, DiagnosticOutput } from "@/lib/diagnostic";
 import { fetchCountryWatch, WatchItem } from "@/lib/rssWatch";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
+import { isMissingTableError } from "@/domain/calc";
 import { cn } from "@/lib/utils";
 import {
   ArrowRight,
@@ -58,6 +59,7 @@ const CONSENT_TEXT =
 
 const DIAGNOSTIC_DRAFT_KEY = "mpl_home_diagnostic_draft";
 const DIAGNOSTIC_AUTORUN_KEY = "mpl_home_diagnostic_autorun";
+const NEWSLETTER_STORAGE_KEY = "mpl:newsletter:subscribers";
 
 const TEASER_CHECKLIST = [
   "Facture commerciale + Incoterm précisé",
@@ -77,6 +79,10 @@ function toNumber(value: string) {
   if (!cleaned) return null;
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
 function formatMoney(value: number | null | undefined, currency?: string | null) {
@@ -137,6 +143,12 @@ export default function Home() {
   const [notice, setNotice] = React.useState<string | null>(null);
   const [signupOpen, setSignupOpen] = React.useState(false);
   const [draftLoaded, setDraftLoaded] = React.useState(false);
+
+  const [newsletterCompany, setNewsletterCompany] = React.useState("");
+  const [newsletterEmail, setNewsletterEmail] = React.useState("");
+  const [newsletterConsent, setNewsletterConsent] = React.useState(false);
+  const [newsletterLoading, setNewsletterLoading] = React.useState(false);
+  const [newsletterMessage, setNewsletterMessage] = React.useState<string | null>(null);
 
   const diagnosticRef = React.useRef<HTMLDivElement | null>(null);
   const resultsRef = React.useRef<HTMLDivElement | null>(null);
@@ -269,6 +281,82 @@ export default function Home() {
   const handleStartDiagnostic = () => {
     diagnosticRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     if (!isAuthenticated) setSignupOpen(true);
+  };
+
+  const handleNewsletterSubscribe = async () => {
+    setNewsletterMessage(null);
+
+    const emailClean = newsletterEmail.trim().toLowerCase();
+    const companyClean = newsletterCompany.trim();
+
+    if (!emailClean) {
+      setNewsletterMessage("Ajoute un email professionnel pour t'inscrire.");
+      return;
+    }
+    if (!isValidEmail(emailClean)) {
+      setNewsletterMessage("Email invalide. Verifie la saisie.");
+      return;
+    }
+    if (!companyClean) {
+      setNewsletterMessage("Merci d'indiquer l'entreprise.");
+      return;
+    }
+    if (!newsletterConsent) {
+      setNewsletterMessage("Merci d'accepter la reception de la newsletter.");
+      return;
+    }
+
+    setNewsletterLoading(true);
+
+    const payload = {
+      email: emailClean,
+      company_name: companyClean,
+      frequency: "weekly",
+      source: "home",
+      consent: true,
+      consented_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    };
+
+    try {
+      if (SUPABASE_ENV_OK) {
+        const { error } = await supabase.from("newsletter_subscribers").insert(payload);
+        if (error) {
+          if (error.code === "23505") {
+            setNewsletterMessage("Cet email est deja inscrit.");
+            setNewsletterLoading(false);
+            return;
+          }
+          if (isMissingTableError(error)) {
+            // fallback local storage
+            const raw = window.localStorage.getItem(NEWSLETTER_STORAGE_KEY);
+            const arr = raw ? JSON.parse(raw) : [];
+            const list = Array.isArray(arr) ? arr : [];
+            const exists = list.some((x) => String(x?.email || "").toLowerCase() === emailClean);
+            const next = exists ? list.map((x) => (String(x?.email || "").toLowerCase() === emailClean ? payload : x)) : [payload, ...list];
+            window.localStorage.setItem(NEWSLETTER_STORAGE_KEY, JSON.stringify(next.slice(0, 200)));
+          } else {
+            throw error;
+          }
+        }
+      } else {
+        const raw = window.localStorage.getItem(NEWSLETTER_STORAGE_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        const list = Array.isArray(arr) ? arr : [];
+        const exists = list.some((x) => String(x?.email || "").toLowerCase() === emailClean);
+        const next = exists ? list.map((x) => (String(x?.email || "").toLowerCase() === emailClean ? payload : x)) : [payload, ...list];
+        window.localStorage.setItem(NEWSLETTER_STORAGE_KEY, JSON.stringify(next.slice(0, 200)));
+      }
+
+      setNewsletterCompany("");
+      setNewsletterEmail("");
+      setNewsletterConsent(false);
+      setNewsletterMessage("Inscription enregistree. Merci !");
+    } catch (err: any) {
+      setNewsletterMessage(err?.message || "Impossible d'enregistrer l'inscription.");
+    } finally {
+      setNewsletterLoading(false);
+    }
   };
 
   React.useEffect(() => {
@@ -950,6 +1038,60 @@ export default function Home() {
               </Card>
             ))}
           </div>
+        </section>
+
+        {/* NEWSLETTER */}
+        <section className="space-y-6">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-400">Newsletter</p>
+            <h2 className="text-2xl font-semibold text-slate-900">Recevoir la veille export</h2>
+            <p className="text-sm text-slate-600">
+              Un brief clair chaque semaine pour vos pays et produits prioritaires.
+            </p>
+          </div>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle>Inscription rapide</CardTitle>
+              <CardDescription>Collecte d'emails professionnels et societes.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-[1.1fr_1.3fr]">
+                <Input
+                  value={newsletterCompany}
+                  onChange={(e) => setNewsletterCompany(e.target.value)}
+                  placeholder="Entreprise"
+                  className="border-slate-200"
+                />
+                <Input
+                  value={newsletterEmail}
+                  onChange={(e) => setNewsletterEmail(e.target.value)}
+                  placeholder="Email professionnel"
+                  className="border-slate-200"
+                />
+              </div>
+
+              <label className="flex items-start gap-2 text-xs text-slate-600">
+                <Checkbox checked={newsletterConsent} onCheckedChange={(v) => setNewsletterConsent(Boolean(v))} />
+                J'accepte de recevoir la newsletter Export Navigator (desinscription a tout moment).
+              </label>
+
+              {newsletterMessage ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {newsletterMessage}
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button onClick={handleNewsletterSubscribe} disabled={newsletterLoading}>
+                  {newsletterLoading ? "Enregistrement..." : "S'inscrire"}
+                </Button>
+                <Button variant="ghost" asChild>
+                  <Link to="/newsletter">Voir la page newsletter</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         {/* PRICING + FAQ */}

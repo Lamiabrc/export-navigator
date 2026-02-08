@@ -26,6 +26,8 @@ export default function Register() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [companyName, setCompanyName] = useState("");
+  const [country, setCountry] = useState("FR");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -49,6 +51,10 @@ export default function Register() {
       setError("Merci de renseigner un email.");
       return;
     }
+    if (!companyName.trim()) {
+      setError("Merci de renseigner le nom de l'entreprise.");
+      return;
+    }
     if (!password || password.length < 6) {
       setError("Mot de passe trop court (min 6 caracteres).");
       return;
@@ -60,7 +66,17 @@ export default function Register() {
 
     try {
       setPending(true);
-      const { error: err } = await signUp(normalizedEmail, password);
+      const emailRedirectTo =
+        typeof window !== "undefined"
+          ? `${window.location.origin}/login?next=${encodeURIComponent(nextPath)}`
+          : undefined;
+      const { error: err } = await signUp(normalizedEmail, password, {
+        data: {
+          company_name: companyName.trim(),
+          country: country.trim().toUpperCase(),
+        },
+        emailRedirectTo,
+      });
       if (err) {
         setError(getErrorMessage(err));
         return;
@@ -94,6 +110,41 @@ export default function Register() {
 
           <CardContent>
             <form className="space-y-4" onSubmit={onSubmit}>
+              <div className="space-y-2">
+                <label className="text-sm text-slate-200">Entreprise</label>
+                <Input
+                  type="text"
+                  required
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="Nom de l'entreprise"
+                  autoComplete="organization"
+                  className="bg-slate-950 border-slate-800 text-white"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-slate-200">Pays</label>
+                <select
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  className="flex h-10 w-full items-center rounded-md border border-slate-800 bg-slate-950 px-3 text-sm text-white transition focus:border-slate-400 focus:outline-none"
+                >
+                  <option value="FR">France</option>
+                  <option value="BE">Belgique</option>
+                  <option value="DE">Allemagne</option>
+                  <option value="NL">Pays-Bas</option>
+                  <option value="CH">Suisse</option>
+                  <option value="GB">Royaume-Uni</option>
+                  <option value="US">Etats-Unis</option>
+                  <option value="CA">Canada</option>
+                  <option value="ES">Espagne</option>
+                  <option value="IT">Italie</option>
+                  <option value="MA">Maroc</option>
+                  <option value="AE">Emirats arabes unis</option>
+                </select>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm text-slate-200">Email</label>
                 <Input

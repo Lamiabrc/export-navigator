@@ -4,9 +4,10 @@ import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { isMissingTableError } from "@/domain/calc";
 
 type Frequency = "weekly" | "monthly";
@@ -21,46 +22,25 @@ const STORAGE_KEY = "mpl:newsletter:subscribers";
 export default function Newsletter() {
   const { toast } = useToast();
 
+  const [companyName, setCompanyName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [country, setCountry] = React.useState(""); // libre (FR, US, MQ, etc.)
   const [hs, setHs] = React.useState(""); // libre (ex: 9403)
   const [frequency, setFrequency] = React.useState<Frequency>("weekly");
   const [loading, setLoading] = React.useState(false);
+  const [consentChecked, setConsentChecked] = React.useState(false);
 
   const [serverAvailable, setServerAvailable] = React.useState<boolean | null>(null);
   const [serverWarning, setServerWarning] = React.useState("");
 
-  // Détection table newsletter_subscribers (optionnel)
   React.useEffect(() => {
-    let mounted = true;
-
-    supabase
-      .from("newsletter_subscribers")
-      .select("id", { head: true, count: "exact" })
-      .limit(1)
-      .then(({ error }) => {
-        if (!mounted) return;
-        if (error) {
-          setServerAvailable(false);
-          setServerWarning(
-            isMissingTableError(error)
-              ? "Inscription serveur indisponible (mode démo). Stockage local activé."
-              : (error.message || "Inscription serveur indisponible. Stockage local activé.")
-          );
-        } else {
-          setServerAvailable(true);
-          setServerWarning("");
-        }
-      })
-      .then(() => undefined, (err: any) => {
-        if (!mounted) return;
-        setServerAvailable(false);
-        setServerWarning(err?.message || "Inscription serveur indisponible. Stockage local activé.");
-      });
-
-    return () => {
-      mounted = false;
-    };
+    if (!SUPABASE_ENV_OK) {
+      setServerAvailable(false);
+      setServerWarning("Inscription serveur indisponible (config). Stockage local active.");
+      return;
+    }
+    setServerAvailable(true);
+    setServerWarning("");
   }, []);
 
   const saveLocal = (payload: any) => {
@@ -80,6 +60,7 @@ export default function Newsletter() {
 
   const subscribe = async () => {
     const emailClean = email.trim().toLowerCase();
+    const companyClean = companyName.trim();
     const countryClean = country.trim().toUpperCase();
     const hsClean = hs.trim();
 
@@ -88,7 +69,15 @@ export default function Newsletter() {
       return;
     }
     if (!isValidEmail(emailClean)) {
-      toast({ title: "Email invalide", description: "Vérifie l’email saisi." });
+      toast({ title: "Email invalide", description: "Verifie l'email saisi." });
+      return;
+    }
+    if (!companyClean) {
+      toast({ title: "Entreprise requise", description: "Ajoute le nom de l'entreprise pour finaliser." });
+      return;
+    }
+    if (!consentChecked) {
+      toast({ title: "Consentement requis", description: "Merci d'accepter la reception de la newsletter." });
       return;
     }
 
@@ -96,32 +85,42 @@ export default function Newsletter() {
 
     const payload = {
       email: emailClean,
+      company_name: companyClean,
       frequency,
       country: countryClean || null,
       hs_code: hsClean || null,
       source: "newsletter-page",
+      consent: true,
+      consented_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
     };
 
     try {
       // Si table existe => insertion serveur
       if (serverAvailable === true) {
-        const { error } = await supabase.from("newsletter_subscribers").upsert(
-          {
-            email: payload.email,
-            frequency: payload.frequency,
-            country: payload.country,
-            hs_code: payload.hs_code,
-            source: payload.source,
-            created_at: payload.created_at,
-          },
-          { onConflict: "email" }
-        );
+        const { error } = await supabase.from("newsletter_subscribers").insert({
+          email: payload.email,
+          company_name: payload.company_name,
+          frequency: payload.frequency,
+          country: payload.country,
+          hs_code: payload.hs_code,
+          source: payload.source,
+          consent: payload.consent,
+          consented_at: payload.consented_at,
+          created_at: payload.created_at,
+        });
 
         if (error) {
+          if (error.code === "23505") {
+            toast({
+              title: "Deja inscrit",
+              description: "Cet email est deja inscrit a la newsletter.",
+            });
+            return;
+          }
           if (isMissingTableError(error)) {
             setServerAvailable(false);
-            setServerWarning("Inscription serveur indisponible (mode démo). Stockage local activé.");
+            setServerWarning("Inscription serveur indisponible (mode demo). Stockage local active.");
             saveLocal(payload);
           } else {
             throw error;
@@ -133,21 +132,23 @@ export default function Newsletter() {
       }
 
       toast({
-        title: "Inscription enregistrée ✅",
+        title: "Inscription enregistree",
         description:
           frequency === "weekly"
-            ? "Tu recevras la veille export hebdo dès l’activation."
-            : "Tu recevras le brief mensuel dès l’activation.",
+            ? "Tu recevras la veille export hebdo des l'activation."
+            : "Tu recevras le brief mensuel des l'activation.",
       });
 
+      setCompanyName("");
       setEmail("");
       setCountry("");
       setHs("");
       setFrequency("weekly");
+      setConsentChecked(false);
     } catch (err: any) {
       toast({
-        title: "Erreur d’inscription",
-        description: err?.message || "Impossible d’enregistrer l’inscription.",
+        title: "Erreur d'inscription",
+        description: err?.message || "Impossible d'enregistrer l'inscription.",
       });
     } finally {
       setLoading(false);
@@ -206,7 +207,13 @@ export default function Newsletter() {
           </CardHeader>
 
           <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-[1.4fr_0.8fr_0.8fr]">
+            <div className="grid gap-3 md:grid-cols-[1.1fr_1.4fr_0.8fr_0.8fr]">
+              <Input
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Entreprise"
+                className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
+              />
               <Input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -226,6 +233,11 @@ export default function Newsletter() {
                 className="border-white/20 bg-white/90 text-slate-900 placeholder:text-slate-500"
               />
             </div>
+
+            <label className="flex items-start gap-2 text-xs text-white/80">
+              <Checkbox checked={consentChecked} onCheckedChange={(v) => setConsentChecked(Boolean(v))} />
+              J'accepte de recevoir la newsletter Export Navigator (desinscription a tout moment).
+            </label>
 
             <div className="flex flex-wrap items-center gap-2">
               <Button

@@ -7,7 +7,11 @@ type AuthCtx = {
   session: Session | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    options?: { data?: Record<string, any>; emailRedirectTo?: string }
+  ) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   sendPasswordLink: (email: string) => Promise<{ error: string | null }>;
@@ -82,9 +86,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated: !!session?.user,
       isLoading,
 
-      async signUp(email, password) {
+      async signUp(email, password, options) {
         if (!SUPABASE_ENV_OK) return { error: "Supabase non configure." };
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: options?.data,
+            emailRedirectTo: options?.emailRedirectTo,
+          },
+        });
+        if (!error && data?.user?.id) {
+          // best-effort: ensure session refresh if immediate
+          try {
+            await supabase.auth.getSession();
+          } catch {
+            // ignore
+          }
+        }
         return { error: error ? error.message : null };
       },
 
