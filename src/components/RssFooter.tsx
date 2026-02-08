@@ -11,9 +11,17 @@ type RssFooterItem = {
   pubDate?: string;
 };
 
-type RssApiResponse = {
+type RssMeta = {
+  title?: string;
+  description?: string;
+  link?: string;
+  lastBuildDate?: string;
+};
+
+type RssApiJsonResponse = {
   data?: { items?: RssFooterItem[] };
   items?: RssFooterItem[];
+  meta?: RssMeta;
   error?: string;
   message?: string;
 };
@@ -28,47 +36,83 @@ function safeDateLabel(pubDate?: string) {
   if (!pubDate) return null;
   const d = new Date(pubDate);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function pickItems(payload: RssApiResponse | null): RssFooterItem[] {
+function safeDateTimeLabel(pubDate?: string) {
+  if (!pubDate) return null;
+  const d = new Date(pubDate);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString("fr-FR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function pickItemsJson(payload: RssApiJsonResponse | null): RssFooterItem[] {
   const a = payload?.data?.items;
   const b = payload?.items;
   const items = (Array.isArray(a) ? a : Array.isArray(b) ? b : []) as RssFooterItem[];
-  // Nettoyage léger
   return items
     .filter((it) => (it?.title || "").trim() || (it?.link || "").trim())
     .slice(0, 6);
 }
 
-async function fetchJsonSafe(url: string, signal: AbortSignal) {
-  const res = await fetch(url, {
-    signal,
-    headers: { Accept: "application/json" },
-  });
-  const raw = await res.text();
-  let payload: RssApiResponse | null = null;
+function parseRssXml(xml: string): { meta: RssMeta; items: RssFooterItem[] } {
+  // DOMParser dispo côté navigateur
+  if (typeof window === "undefined") return { meta: {}, items: [] };
+
   try {
-    payload = raw ? (JSON.parse(raw) as RssApiResponse) : null;
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xml, "text/xml");
+
+    const channel = doc.querySelector("channel");
+    const meta: RssMeta = {
+      title: channel?.querySelector("title")?.textContent?.trim() || undefined,
+      description: channel?.querySelector("description")?.textContent?.trim() || undefined,
+      link: channel?.querySelector("link")?.textContent?.trim() || undefined,
+      lastBuildDate: channel?.querySelector("lastBuildDate")?.textContent?.trim() || undefined,
+    };
+
+    const nodes = Array.from(doc.querySelectorAll("item"));
+    const items: RssFooterItem[] = nodes.slice(0, 6).map((n, idx) => {
+      const title = n.querySelector("title")?.textContent?.trim() || "Article";
+      const link = n.querySelector("link")?.textContent?.trim() || undefined;
+      const pubDate = n.querySelector("pubDate")?.textContent?.trim() || undefined;
+
+      // sourceName : parfois <source> ou <dc:creator> selon feed. On met le mieux possible.
+      const source =
+        n.querySelector("source")?.textContent?.trim() ||
+        n.querySelector("dc\\:creator")?.textContent?.trim() ||
+        undefined;
+
+      return {
+        id: `${link || title}-${idx}`,
+        title,
+        link,
+        pubDate,
+        sourceName: source,
+      };
+    });
+
+    return { meta, items };
   } catch {
-    payload = null;
+    return { meta: {}, items: [] };
   }
+}
+
+async function fetchRaw(url: string, signal: AbortSignal) {
+  const res = await fetch(url, { signal, headers: { Accept: "*/*" } });
+  const raw = await res.text();
+
   if (!res.ok) {
-    const msg =
-      payload?.error ||
-      payload?.message ||
-      "Veille indisponible pour le moment. Réessayez dans quelques minutes.";
-    throw new Error(msg);
+    // certains backends renvoient HTML en erreur → on renvoie un message générique
+    throw new Error("Veille indisponible pour le moment. Réessayez dans quelques minutes.");
   }
-  return payload;
+
+  return { raw, contentType: res.headers.get("content-type") || "" };
 }
 
 export function RssFooter() {
   const [items, setItems] = React.useState<RssFooterItem[]>([]);
+  const [meta, setMeta] = React.useState<RssMeta>({});
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [refreshTick, setRefreshTick] = React.useState(0);
@@ -81,52 +125,52 @@ export function RssFooter() {
       setLoading(true);
       setError(null);
 
-      // 1) endpoint interne (si tu as une route proxy /api/rss)
-      // 2) fallback direct vers exportfrancefacile (si CORS OK côté API)
+      // Endpoint configurable : par défaut ton RSS XML sur exportfrancefacile
       const envEndpoint = (import.meta as any)?.env?.VITE_RSS_ENDPOINT as string | undefined;
-      const primary = (envEndpoint && envEndpoint.trim()) ? envEndpoint.trim() : "/api/rss";
-      const endpoints = [
-        `${primary}?limit=6&offset=0`,
-        `https://www.exportfrancefacile.com/api/rss?limit=6&offset=0`,
-      ];
+      const endpoint = (envEndpoint && envEndpoint.trim()) ? envEndpoint.trim() : "https://www.exportfrancefacile.com/api/rss";
 
       try {
-        let payload: RssApiResponse | null = null;
-
-        // essaie le 1er, sinon fallback
-        for (const url of endpoints) {
-          try {
-            payload = await fetchJsonSafe(url, controller.signal);
-            break;
-          } catch (e) {
-            // continue sur fallback
-            payload = null;
-          }
-        }
-
+        const { raw, contentType } = await fetchRaw(endpoint, controller.signal);
         if (!mounted) return;
 
-        const picked = pickItems(payload);
-        if (!picked.length) {
-          setItems([]);
+        const looksXml = contentType.includes("xml") || raw.trim().startsWith("<rss") || raw.trim().startsWith("<?xml");
+        const looksJson = contentType.includes("json") || raw.trim().startsWith("{") || raw.trim().startsWith("[");
+
+        if (looksXml) {
+          const parsed = parseRssXml(raw);
+          setMeta(parsed.meta);
+          setItems(parsed.items);
           setError(null);
+        } else if (looksJson) {
+          let payload: RssApiJsonResponse | null = null;
+          try {
+            payload = raw ? (JSON.parse(raw) as RssApiJsonResponse) : null;
+          } catch {
+            payload = null;
+          }
+          setMeta(payload?.meta || {});
+          setItems(pickItemsJson(payload));
+          if (payload?.error) setError(payload.error);
+          else setError(null);
         } else {
-          setItems(picked);
-          setError(null);
+          // format inattendu
+          setMeta({});
+          setItems([]);
+          setError("Format de veille non reconnu.");
         }
       } catch (err) {
         if (!mounted) return;
         const anyErr = err as { name?: string; message?: string };
         if (anyErr?.name === "AbortError") return;
-        setError(anyErr?.message || "Veille indisponible pour le moment. Réessayez dans quelques minutes.");
+        setMeta({});
         setItems([]);
+        setError(anyErr?.message || "Veille indisponible pour le moment. Réessayez dans quelques minutes.");
       } finally {
         if (mounted) setLoading(false);
       }
     };
 
     load();
-
     return () => {
       mounted = false;
       controller.abort();
@@ -134,6 +178,7 @@ export function RssFooter() {
   }, [refreshTick]);
 
   const hasItems = items.length > 0;
+  const lastBuild = safeDateTimeLabel(meta.lastBuildDate);
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -146,11 +191,14 @@ export function RssFooter() {
             </div>
             <div>
               <div className="text-xs uppercase tracking-[0.35em] text-muted-foreground">Veille export</div>
-              <div className="text-sm font-semibold text-foreground">Alertes récentes (sélection)</div>
+              <div className="text-sm font-semibold text-foreground">
+                {meta.title ? meta.title : "Alertes récentes"}
+              </div>
             </div>
           </div>
           <div className="text-xs text-muted-foreground">
-            Un aperçu utile en bas de page. Pour tout explorer : filtres, historique et suivi.
+            {meta.description ? meta.description : "Signaux faibles, conformité et points de vigilance."}
+            {lastBuild ? <span className="ml-2">· Dernière mise à jour : <b>{lastBuild}</b></span> : null}
           </div>
         </div>
 
@@ -167,6 +215,7 @@ export function RssFooter() {
             Actualiser
           </Button>
 
+          {/* /watch redirige déjà vers /veille chez toi */}
           <a href="/veille" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
             Centre de veille <ArrowRight className="h-4 w-4" />
           </a>
@@ -189,7 +238,11 @@ export function RssFooter() {
             </div>
           ) : !hasItems ? (
             <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-              Aucun article disponible pour le moment.
+              <div className="font-medium text-foreground">Aucune actualité disponible pour le moment.</div>
+              <div className="mt-1 text-xs">
+                Ton RSS est valide mais il ne contient aucun <code>&lt;item&gt;</code>. Dès que le flux est alimenté,
+                les alertes apparaîtront ici automatiquement.
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -236,7 +289,7 @@ export function RssFooter() {
           )}
 
           <div className="mt-3 text-[11px] text-muted-foreground">
-            Astuce : la veille complète (filtres + suivi) est disponible dans le Centre de veille.
+            Astuce : dans le Centre de veille, tu peux aller plus loin (filtres, suivi, historique).
           </div>
         </div>
 
@@ -247,9 +300,9 @@ export function RssFooter() {
               <ShieldCheck className="h-4 w-4" />
             </div>
             <div className="space-y-1">
-              <div className="text-sm font-semibold text-foreground">Débloquez la veille + vos contrôles</div>
+              <div className="text-sm font-semibold text-foreground">Débloquez le suivi et l’historique</div>
               <div className="text-xs text-muted-foreground">
-                Compte gratuit : vous gardez une trace de vos tests, et vous accédez aux vues avancées.
+                Compte gratuit : sauvegarde de vos contrôles + accès aux vues avancées.
               </div>
             </div>
           </div>
@@ -261,11 +314,11 @@ export function RssFooter() {
             </li>
             <li className="flex items-start gap-2">
               <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-              <span>Veille par pays/secteur + alertes plus ciblées</span>
+              <span>Veille plus ciblée (pays/secteur) dans l’app</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-              <span>Accès aux outils : Control Tower, simulateur, centre de veille</span>
+              <span>Accès aux outils : Control Tower, simulateur, conformité</span>
             </li>
           </ul>
 
@@ -282,17 +335,14 @@ export function RssFooter() {
             </a>
           </div>
 
-          <div className="mt-3 text-[11px] text-muted-foreground">
-            Endpoint RSS :{" "}
-            <a
-              href="https://www.exportfrancefacile.com/api/rss"
-              target="_blank"
-              rel="noreferrer"
-              className="underline"
-            >
-              exportfrancefacile.com/api/rss
-            </a>
-          </div>
+          {meta.link ? (
+            <div className="mt-3 text-[11px] text-muted-foreground">
+              Source :{" "}
+              <a href={meta.link} target="_blank" rel="noreferrer" className="underline">
+                {meta.link}
+              </a>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
