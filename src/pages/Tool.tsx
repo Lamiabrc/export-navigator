@@ -32,6 +32,50 @@ const COUNTRIES = [
 
 const INCOTERMS = ["EXW", "FCA", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"] as const;
 
+const EU_COUNTRY_CODES = new Set([
+  "AT",
+  "BE",
+  "BG",
+  "CY",
+  "CZ",
+  "DE",
+  "DK",
+  "EE",
+  "ES",
+  "FI",
+  "FR",
+  "GR",
+  "HR",
+  "HU",
+  "IE",
+  "IT",
+  "LT",
+  "LU",
+  "LV",
+  "MT",
+  "NL",
+  "PL",
+  "PT",
+  "RO",
+  "SE",
+  "SI",
+  "SK",
+]);
+
+const INSURANCE_REQUIRED_INCOTERMS = new Set(["CIF", "CIP"]);
+
+const DUTY_RATE_MOCK: Record<string, Array<{ hsPrefix: string; rate: number }>> = {
+  US: [
+    { hsPrefix: "3004", rate: 4.5 },
+    { hsPrefix: "8708", rate: 3.2 },
+  ],
+  CN: [{ hsPrefix: "8504", rate: 6.8 }],
+  GB: [{ hsPrefix: "3304", rate: 2.1 }],
+};
+
+const DEFAULT_DUTY_RATE_WITH_HS = 4;
+const DEFAULT_DUTY_RATE_NO_HS = 6;
+
 type Precheck = {
   destination_country: string;
   origin_country: string;
@@ -41,7 +85,7 @@ type Precheck = {
   currency: string;
   goods_value: string; // string for inputs
   freight_cost: string;
-  insurance_cost: string;
+  insurance_cost: string; // amount or percent if CIF/CIP
   email: string;
   company: string;
   consent: boolean;
@@ -161,27 +205,144 @@ function normalizeHs(v: string) {
   return String(v || "").replace(/[^0-9]/g, "").slice(0, 10);
 }
 
+function parseNumberInput(value: string) {
+  const cleaned = String(value || "").replace(",", ".").replace(/[^0-9.]/g, "");
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function isEuCountry(code?: string) {
+  return EU_COUNTRY_CODES.has(String(code || "").trim().toUpperCase());
+}
+
+function formatMoney(value: number, currency: string) {
+  try {
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: currency || "EUR",
+      maximumFractionDigits: 2,
+    }).format(value || 0);
+  } catch {
+    return `${(value || 0).toFixed(2)} ${currency || "EUR"}`;
+  }
+}
+
+type DutyRateSource = "eu" | "mock" | "fallback" | "missing";
+
+function pickDutyRate(countryCode: string, hsCode: string): { rate: number | null; source: DutyRateSource } {
+  const country = String(countryCode || "").trim().toUpperCase();
+  if (!country) return { rate: null, source: "missing" };
+  if (isEuCountry(country)) return { rate: 0, source: "eu" };
+
+  const hs = normalizeHs(hsCode);
+  const list = DUTY_RATE_MOCK[country] || [];
+
+  if (hs && list.length) {
+    let best: { hsPrefix: string; rate: number } | null = null;
+    for (const row of list) {
+      if (hs.startsWith(row.hsPrefix)) {
+        if (!best || row.hsPrefix.length > best.hsPrefix.length) best = row;
+      }
+    }
+    if (best) return { rate: best.rate, source: "mock" };
+  }
+
+  const fallback = hs ? DEFAULT_DUTY_RATE_WITH_HS : DEFAULT_DUTY_RATE_NO_HS;
+  return { rate: fallback, source: "fallback" };
+}
+
+function dutySourceHint(source: DutyRateSource, hasHs: boolean) {
+  if (source === "eu") return "UE : pas de droits";
+  if (source === "mock") return "Taux pays/HS (indicatif)";
+  if (source === "fallback") return hasHs ? "Taux indicatif (HS non trouve)" : "Taux indicatif (HS manquant)";
+  return "Pays manquant";
+}
+
+function defaultInsurancePct(destinationCode: string) {
+  return isEuCountry(destinationCode) ? 0.25 : 0.35;
+}
+
 function isEmail(v: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
 
 function buildTeaserChecklist(pre: Precheck) {
+  const currency = String(pre.currency || "").trim().toUpperCase();
+  const hs = normalizeHs(pre.hs_code);
+  const goodsValue = parseNumberInput(pre.goods_value);
+  const freightValue = parseNumberInput(pre.freight_cost);
+
+  const insuranceRequired = INSURANCE_REQUIRED_INCOTERMS.has(pre.incoterm);
+  const insuranceInput = parseNumberInput(pre.insurance_cost);
+  const insurancePct = insuranceRequired ? insuranceInput || defaultInsurancePct(pre.destination_country) : null;
+  const insuranceAmount = insuranceRequired ? goodsValue * ((insurancePct || 0) / 100) : insuranceInput;
+
+  const customsBase = goodsValue + freightValue + insuranceAmount;
+  const importRate = pickDutyRate(pre.destination_country, hs);
+  const exportRate = pickDutyRate(pre.origin_country, hs);
+  const importDuty = importRate.rate != null ? customsBase * (importRate.rate / 100) : 0;
+  const exportDuty = exportRate.rate != null ? customsBase * (exportRate.rate / 100) : 0;
+
   const items: { label: string; ok: boolean; hint?: string }[] = [
-    { label: "Destination renseignée", ok: !!pre.destination_country, hint: "Indispensable pour les obligations et taxes." },
-    { label: "HS code renseigné", ok: !!normalizeHs(pre.hs_code), hint: "Utile pour les droits, restrictions et documents." },
-    { label: "Incoterm défini", ok: !!pre.incoterm, hint: "Détermine qui paie quoi (transport/assurance/douane)." },
+    { label: "Destination renseignee", ok: !!pre.destination_country, hint: "Indispensable pour les obligations et taxes." },
+    { label: "Incoterm defini", ok: !!pre.incoterm, hint: "Determine qui paie quoi (transport/assurance/douane)." },
+    { label: "Devise renseignee", ok: !!currency, hint: "Necessaire pour exprimer les montants." },
     { label: "Valeur marchandise", ok: !!pre.goods_value, hint: "Base de calcul pour la valeur en douane / marge." },
+    { label: "HS code renseigne", ok: !!hs, hint: "Utile pour les droits, restrictions et documents." },
   ];
+  if (insuranceRequired) {
+    items.push({
+      label: `Assurance obligatoire (${pre.incoterm})`,
+      ok: insuranceInput > 0,
+      hint: `Saisir un % (ref ${defaultInsurancePct(pre.destination_country)}%)`,
+    });
+  }
 
   const risks: string[] = [];
-  if (!normalizeHs(pre.hs_code)) risks.push("HS code manquant → risque de droits/taxes erronés.");
-  if (!pre.origin_country) risks.push("Origine non précisée → règles d’origine & conformité difficiles à valider.");
-  if (!pre.incoterm) risks.push("Incoterm absent → risque de litiges sur frais et responsabilités.");
-  if (!pre.goods_value) risks.push("Valeur marchandise manquante → impossible d’estimer correctement la marge.");
-  if (!pre.destination_country) risks.push("Destination manquante → impossible de cadrer les obligations.");
+  if (!hs) risks.push("HS code manquant -> risque de droits/taxes errones.");
+  if (!pre.origin_country) risks.push("Origine non precisee -> regles d'origine & conformite difficiles a valider.");
+  if (!pre.incoterm) risks.push("Incoterm absent -> risque de litiges sur frais et responsabilites.");
+  if (!currency) risks.push("Devise manquante -> montants incomplets.");
+  if (!pre.goods_value) risks.push("Valeur marchandise manquante -> droits non calculables.");
+  if (!pre.destination_country) risks.push("Destination manquante -> impossible de cadrer les obligations.");
+  if (insuranceRequired && insuranceInput <= 0) {
+    risks.push(`Assurance obligatoire pour ${pre.incoterm} : renseigner un % (ref ${defaultInsurancePct(pre.destination_country)}%).`);
+  }
+  if (importRate.source === "fallback") {
+    risks.push("Droits import estimes generiques : taux pays/HS non trouve.");
+  }
+  if (exportRate.source === "fallback") {
+    risks.push("Droits export estimes generiques : taux pays/HS non trouve.");
+  }
 
-  return { items, risks };
+  return {
+    items,
+    risks,
+    duties: {
+      currency: currency || "EUR",
+      base: customsBase,
+      import: {
+        amount: importDuty,
+        rate: importRate.rate,
+        source: importRate.source,
+        country: pre.destination_country,
+      },
+      export: {
+        amount: exportDuty,
+        rate: exportRate.rate,
+        source: exportRate.source,
+        country: pre.origin_country,
+      },
+      insurance: {
+        required: insuranceRequired,
+        percent: insurancePct,
+        amount: insuranceAmount,
+      },
+      hsPresent: Boolean(hs),
+    },
+  };
 }
+
 
 export default function Tool() {
   const navigate = useNavigate();
@@ -234,6 +395,10 @@ export default function Tool() {
     }
     if (!pre.email || !isEmail(pre.email)) {
       setError("Merci d’indiquer un email valide pour créer votre compte gratuit.");
+      return;
+    }
+    if (!String(pre.currency || "").trim()) {
+      setError("Merci d'indiquer la devise (monnaie).");
       return;
     }
 
@@ -432,7 +597,7 @@ export default function Tool() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Devise</Label>
+                  <Label>Devise (monnaie)</Label>
                   <Input value={pre.currency} onChange={(e) => update("currency")(e.target.value.toUpperCase())} placeholder="EUR" />
                 </div>
 
@@ -447,8 +612,19 @@ export default function Tool() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Assurance (si connue)</Label>
-                  <Input value={pre.insurance_cost} onChange={(e) => update("insurance_cost")(e.target.value)} placeholder="ex: 45" />
+                  <Label>
+                    {INSURANCE_REQUIRED_INCOTERMS.has(pre.incoterm)
+                      ? "Assurance obligatoire (%)"
+                      : "Assurance (si connue)"}
+                  </Label>
+                  <Input
+                    value={pre.insurance_cost}
+                    onChange={(e) => update("insurance_cost")(e.target.value)}
+                    placeholder={INSURANCE_REQUIRED_INCOTERMS.has(pre.incoterm) ? `ex: ${defaultInsurancePct(pre.destination_country)}` : "ex: 45"}
+                  />
+                  {INSURANCE_REQUIRED_INCOTERMS.has(pre.incoterm) ? (
+                    <p className="text-[11px] text-slate-500">CIF/CIP : assurance obligatoire, en pourcentage de la valeur marchandise.</p>
+                  ) : null}
                 </div>
               </div>
 
@@ -520,7 +696,7 @@ export default function Tool() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <div className="text-sm font-semibold text-slate-900">Checklist (aperçu)</div>
-                {teaser.items.slice(0, 4).map((it) => (
+                {teaser.items.map((it) => (
                   <div key={it.label} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-2">
                     <div className={`mt-0.5 h-2.5 w-2.5 rounded-full ${it.ok ? "bg-emerald-500" : "bg-amber-400"}`} />
                     <div className="min-w-0">
@@ -545,6 +721,28 @@ export default function Tool() {
                   )}
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <div className="text-sm font-semibold text-slate-900">Droits estimes (import / export)</div>
+                <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600 space-y-1">
+                  <div>Base douane : {formatMoney(teaser.duties.base, teaser.duties.currency)}</div>
+                  <div>
+                    Import ({teaser.duties.import.country || "?"}) : {formatMoney(teaser.duties.import.amount, teaser.duties.currency)}
+                    {" | "}
+                    {teaser.duties.import.rate == null ? "-" : `${teaser.duties.import.rate.toFixed(2)}%`}
+                    {" | "}
+                    {dutySourceHint(teaser.duties.import.source, teaser.duties.hsPresent)}
+                  </div>
+                  <div>
+                    Export ({teaser.duties.export.country || "?"}) : {formatMoney(teaser.duties.export.amount, teaser.duties.currency)}
+                    {" | "}
+                    {teaser.duties.export.rate == null ? "-" : `${teaser.duties.export.rate.toFixed(2)}%`}
+                    {" | "}
+                    {dutySourceHint(teaser.duties.export.source, teaser.duties.hsPresent)}
+                  </div>
+                </div>
+              </div>
+
 
               <Separator />
 
