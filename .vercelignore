@@ -1,1 +1,3 @@
 api/hs/search.ts
+api/rss-proxy.ts
+api/_supabase.ts
