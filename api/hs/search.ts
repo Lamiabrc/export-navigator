@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { allowCors, json, supabaseAdmin } from "../_supabase.js";
+import { allowCors, json, supabaseAdmin } from "../../src/server/supabaseAdmin.js";
 
 export default allowCors(async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return json(res, 405, { ok: false, error: "Method not allowed" });

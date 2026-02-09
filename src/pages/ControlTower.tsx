@@ -405,7 +405,7 @@ function parseRssXml(xmlText: string, sourceName: string): RssItem[] {
 }
 
 async function fetchRssRaw(url: string) {
-  const proxied = `/api/rss-proxy?url=${encodeURIComponent(url)}`;
+  const proxied = `/api/rss?url=${encodeURIComponent(url)}`;
   const res = await fetch(proxied, {
     method: "GET",
     headers: {

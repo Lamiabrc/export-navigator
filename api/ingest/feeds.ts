@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
-import { supabaseAdmin } from "../_supabase.js";
+import { supabaseAdmin } from "../../src/server/supabaseAdmin.js";
 
 // Manual test (replace placeholders):
 // curl -X POST "<BASE_URL>/api/ingest/feeds" -H "x-cron-secret: <CRON_SECRET>"

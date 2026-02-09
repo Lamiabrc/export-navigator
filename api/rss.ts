@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { supabaseAdmin } from "./_supabase.js";
+import { supabaseAdmin } from "../src/server/supabaseAdmin.js";
 
 type ApiItem = {
   title: string;
@@ -20,6 +20,30 @@ type FeedItem = {
   source?: string | null;
   imageUrl?: string | null;
 };
+
+const PROXY_ALLOWED_HOSTS = new Set([
+  "policy.trade.ec.europa.eu",
+  "www.wto.org",
+  "www.economie.gouv.fr",
+  "www.service-public.gouv.fr",
+  "www.diplomatie.gouv.fr",
+  "www.bmwk.de",
+  "news.belgium.be",
+  "feeds.government.nl",
+  "www.finma.ch",
+  "api.io.canada.ca",
+  "ustr.gov",
+]);
+
+function isAllowedProxyUrl(raw: string) {
+  try {
+    const url = new URL(raw);
+    if (!["http:", "https:"].includes(url.protocol)) return false;
+    return PROXY_ALLOWED_HOSTS.has(url.hostname);
+  } catch {
+    return false;
+  }
+}
 
 function allowCors(req: VercelRequest, res: VercelResponse) {
   const origin = req.headers.origin || "*";
@@ -150,6 +174,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== "GET") {
       res.status(405).json({ ok: false, error: "Method not allowed" });
       return;
+    }
+
+    // Proxy mode to bypass CORS for known RSS sources
+    const proxyUrl = String(req.query?.url || "").trim();
+    if (proxyUrl) {
+      if (!isAllowedProxyUrl(proxyUrl)) {
+        res.status(400).json({ ok: false, error: "URL not allowed" });
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8_000);
+      try {
+        const upstream = await fetch(proxyUrl, {
+          method: "GET",
+          headers: {
+            Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+          },
+          signal: controller.signal,
+          redirect: "follow",
+        });
+        const text = await upstream.text();
+        res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
+        res.setHeader("Content-Type", "application/xml; charset=utf-8");
+        res.status(upstream.ok ? 200 : 502).send(text);
+        return;
+      } catch (err: any) {
+        res.status(502).json({ ok: false, error: err?.message || "fetch failed" });
+        return;
+      } finally {
+        clearTimeout(timeout);
+      }
     }
 
     const baseUrl = buildBaseUrl(req);

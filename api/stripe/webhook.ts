@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import Stripe from "stripe";
 
-import { json, supabaseAdmin } from "../_supabase.js";
+import { json, supabaseAdmin } from "../../src/server/supabaseAdmin.js";
 
 export const config = {
   api: { bodyParser: false },

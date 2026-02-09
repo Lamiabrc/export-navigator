@@ -1,4 +1,4 @@
-import { allowCors, json, readJson, supabaseAdmin } from "../_supabase.js";
+import { allowCors, json, readJson, supabaseAdmin } from "../../src/server/supabaseAdmin.js";
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));

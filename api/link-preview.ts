@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
-import { readJson, supabaseAdmin } from "./_supabase.js";
+import { readJson, supabaseAdmin } from "../src/server/supabaseAdmin.js";
 
 type Preview = {
   url: string;
