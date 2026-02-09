@@ -1,4 +1,4 @@
-import * as React from "react";
+﻿import * as React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
@@ -47,134 +47,44 @@ function isActivePath(pathname: string, to: string) {
   return pathname.startsWith(`${to}/`);
 }
 
-function FooterRss() {
-  const [items, setItems] = React.useState<RssItem[]>([]);
-  const [status, setStatus] = React.useState<"idle" | "loading" | "ok" | "error">("idle");
-
-  React.useEffect(() => {
-    let cancelled = false;
-    const controller = new AbortController();
-
-    const load = async () => {
-      try {
-        setStatus("loading");
-
-        const res = await fetch("/api/rss", {
-          signal: controller.signal,
-          headers: { Accept: "application/xml,text/xml,application/rss+xml,*/*" },
-        });
-
-        const text = await res.text();
-        if (!res.ok) throw new Error(text || "RSS error");
-
-        const parser = new DOMParser();
-        const xml = parser.parseFromString(text, "application/xml");
-        const parseError = xml.querySelector("parsererror");
-        if (parseError) throw new Error("RSS XML invalide");
-
-        const nodes = Array.from(xml.querySelectorAll("item")).slice(0, 6);
-        const parsed = nodes
-          .map((n) => {
-            const title = (n.querySelector("title")?.textContent || "").trim();
-            const link = (n.querySelector("link")?.textContent || "").trim();
-            const pubDate = (n.querySelector("pubDate")?.textContent || "").trim();
-            return { title, link, pubDate };
-          })
-          .filter((x) => x.title && safeExternalUrl(x.link));
-
-        if (!cancelled) {
-          setItems(parsed);
-          setStatus("ok");
-        }
-      } catch (e: any) {
-        if (cancelled) return;
-        if (e?.name === "AbortError") return;
-        setStatus("error");
-      }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, []);
+function FooterSocial() {
+  const links = [
+    {
+      label: "Facebook",
+      href: "https://www.facebook.com/profile.php?id=61587254986176",
+    },
+    {
+      label: "YouTube",
+      href: "https://www.youtube.com/channel/UCxRRjAnotPJahv9SzaPJsAw",
+    },
+    {
+      label: "LinkedIn",
+      href: "https://www.linkedin.com/company/mpl-conseil-export/?viewAsMember=true",
+    },
+  ];
 
   return (
     <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-            Veille export (RSS)
-          </div>
-          <div className="mt-1 text-sm text-muted-foreground">
-            Sanctions, douanes, conformité, marchés — mises à jour en continu.
-          </div>
-        </div>
-
-        <Button asChild variant="outline" className="shrink-0">
-          <a href="/api/rss" target="_blank" rel="noreferrer">
-            Ouvrir le flux
-          </a>
-        </Button>
+      <div className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Reseaux sociaux</div>
+      <div className="mt-2 text-sm text-muted-foreground">
+        Suivez MPL Export Conseil pour les actualites et contenus export.
       </div>
-
-      <div className="mt-4">
-        {status === "loading" && (
-          <div className="space-y-2">
-            <div className="h-4 w-4/5 animate-pulse rounded bg-muted" />
-            <div className="h-4 w-3/5 animate-pulse rounded bg-muted" />
-            <div className="h-4 w-2/5 animate-pulse rounded bg-muted" />
-          </div>
-        )}
-
-        {status === "error" && (
-          <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm text-foreground">
-            Le flux RSS n’est pas lisible pour le moment. Vérifie que{" "}
-            <span className="font-semibold">/api/rss</span> renvoie bien un XML RSS (status 200 + content-type xml).
-          </div>
-        )}
-
-        {status === "ok" && items.length === 0 && (
-          <div className="rounded-2xl border border-border bg-muted/40 p-4 text-sm text-foreground">
-            Aucun item RSS à afficher (flux vide).
-          </div>
-        )}
-
-        {items.length > 0 && (
-          <ul className="space-y-2">
-            {items.map((it) => {
-              const href = safeExternalUrl(it.link);
-              return (
-                <li key={it.link} className="flex items-start justify-between gap-4">
-                  {href ? (
-                    <a
-                      href={href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="min-w-0 text-sm font-medium text-foreground hover:text-primary hover:underline"
-                    >
-                      {it.title}
-                    </a>
-                  ) : (
-                    <div className="min-w-0 text-sm font-medium text-foreground">{it.title}</div>
-                  )}
-                  <span className="shrink-0 text-xs text-muted-foreground">{formatDate(it.pubDate)}</span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-
-      <div className="mt-5 flex flex-wrap gap-3">
-        <Button asChild>
-          <Link to="/veille">Voir la veille</Link>
-        </Button>
-        <Button
-          asChild
-          className="bg-[#DC2626] text-white hover:bg-[#B0231D]"
-        >
+      <ul className="mt-4 space-y-3">
+        {links.map((link) => (
+          <li key={link.href}>
+            <a
+              href={link.href}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm font-medium text-foreground hover:text-primary hover:underline"
+            >
+              {link.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-5">
+        <Button asChild className="bg-[#DC2626] text-white hover:bg-[#B0231D]">
           <Link to="/contact?offer=diagnostic">Demander un diagnostic</Link>
         </Button>
       </div>
@@ -200,7 +110,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
   const ctaLabel = (() => {
     const candidate = (t("header.cta") as string) ?? "";
-    if (!candidate || candidate === "header.cta") return "Créer un compte gratuit";
+    if (!candidate || candidate === "header.cta") return "CrÃ©er un compte gratuit";
     return candidate;
   })();
 
@@ -225,7 +135,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
   return (
     <div className="relative min-h-screen bg-white text-foreground">
-      {/* Backdrop “light-friendly” */}
+      {/* Backdrop â€œlight-friendlyâ€ */}
       <CinematicBackdrop variant="public" className="z-0 opacity-20" />
       <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-white/85 via-white/90 to-white" />
 
@@ -354,15 +264,15 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
           <div className="space-y-3">
             <div className="text-sm font-semibold text-foreground">MPL Export Navigator</div>
             <div className="text-sm text-muted-foreground">
-              Outil d’aide à la décision export — par MPL Export Conseil (audit, conformité, veille personnalisée).
+              Outil dâ€™aide Ã  la dÃ©cision export â€” par MPL Export Conseil (audit, conformitÃ©, veille personnalisÃ©e).
             </div>
 
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
               <Link to="/methodologie" className="hover:text-foreground hover:underline">
-                Méthodologie
+                MÃ©thodologie
               </Link>
               <Link to="/about" className="hover:text-foreground hover:underline">
-                À propos
+                Ã€ propos
               </Link>
               <Link to="/guides" className="hover:text-foreground hover:underline">
                 Guides
@@ -385,7 +295,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             </div>
 
             <div className="text-xs text-muted-foreground">
-              © {new Date().getFullYear()} MPL Export Conseil — outil d’aide à la décision.
+              Â© {new Date().getFullYear()} MPL Export Conseil â€” outil dâ€™aide Ã  la dÃ©cision.
             </div>
             <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground md:mt-2">
               {siteDisclaimers.map((text, index) => (
@@ -396,8 +306,8 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             </div>
           </div>
 
-          {/* RSS visible sur toutes les pages publiques */}
-          <FooterRss />
+          {/* Reseaux sociaux */}
+          <FooterSocial />
         </div>
       </footer>
 
@@ -419,3 +329,4 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
     </div>
   );
 }
+
