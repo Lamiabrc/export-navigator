@@ -405,24 +405,16 @@ function parseRssXml(xmlText: string, sourceName: string): RssItem[] {
 }
 
 async function fetchRssRaw(url: string) {
-  // 1) Try direct
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
-      },
-      cache: "no-store",
-    });
-    if (res.ok) return await res.text();
-  } catch {
-    // ignore
-  }
-  // 2) Fallback: AllOrigins raw proxy (helps when RSS is blocked by CORS)
-  const proxied = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-  const res2 = await fetch(proxied, { cache: "no-store" });
-  if (!res2.ok) throw new Error("Fetch RSS impossible (proxy).");
-  return await res2.text();
+  const proxied = `/api/rss-proxy?url=${encodeURIComponent(url)}`;
+  const res = await fetch(proxied, {
+    method: "GET",
+    headers: {
+      Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+    },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Fetch RSS impossible (proxy).");
+  return await res.text();
 }
 
 function getWatchSourcesForCountry(code: string): RssSource[] {
