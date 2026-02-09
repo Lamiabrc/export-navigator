@@ -9,8 +9,7 @@ import { useI18n } from "@/contexts/LanguageContext";
 import type { LanguageCode } from "@/i18n/translations";
 import { navLinks } from "@/config/navLinks";
 import { getBannerContent } from "@/config/bannerContent";
-
-const SupportChatWidget = React.lazy(() => import("@/components/support/SupportChatWidget"));
+import SupportChatWidget from "@/components/support/SupportChatWidget";
 
 type RssItem = { title: string; link: string; pubDate?: string };
 
@@ -403,9 +402,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
       </footer>
 
       {supportReady ? (
-        <React.Suspense fallback={null}>
-          <SupportChatWidget open={supportOpen} onOpenChange={setSupportOpen} />
-        </React.Suspense>
+        <SupportChatWidget open={supportOpen} onOpenChange={setSupportOpen} />
       ) : (
         <button
           type="button"

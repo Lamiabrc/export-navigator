@@ -16,8 +16,7 @@ import {
   SavedViewsMenu,
   VariablesBar,
 } from "./GlobalFilterControls";
-
-const SupportChatWidget = React.lazy(() => import("@/components/support/SupportChatWidget"));
+import SupportChatWidget from "@/components/support/SupportChatWidget";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -225,9 +224,7 @@ export function MainLayout({
       </main>
 
       {supportReady ? (
-        <React.Suspense fallback={null}>
-          <SupportChatWidget open={supportOpen} onOpenChange={setSupportOpen} />
-        </React.Suspense>
+        <SupportChatWidget open={supportOpen} onOpenChange={setSupportOpen} />
       ) : (
         <button
           type="button"
