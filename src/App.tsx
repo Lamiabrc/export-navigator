@@ -64,6 +64,7 @@ import VipRentability from "@/pages/VipRentability";
 import Legal from "@/pages/Legal";
 import AdminKbDocs from "@/pages/AdminKbDocs";
 import TaxesOm from "@/pages/TaxesOm";
+import Prospection from "@/pages/Prospection";
 
 const queryClient = new QueryClient();
 const LazyFallback = () => <div className="p-6 text-sm text-muted-foreground">Chargement…</div>;
@@ -102,6 +103,7 @@ export default function App() {
 
                         <Route path="/about" element={<AboutPage />} />
                         <Route path="/pricing" element={<Pricing />} />
+                        <Route path="/prospection" element={<Prospection />} />
 
                         {/* ✅ pages publiques */}
                         <Route path="/analyse" element={<Analyse />} />

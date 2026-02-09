@@ -23,6 +23,7 @@ export function MarketingFooter({ className = "" }: FooterProps) {
         { label: "Veille", to: "/veille" },
         { label: "Guides", to: "/guides" },
         { label: "Tarifs", to: "/pricing" },
+        { label: "Prospection", to: "/prospection" },
         { label: "Contact", to: "/contact" },
       ]
     : [
@@ -32,6 +33,7 @@ export function MarketingFooter({ className = "" }: FooterProps) {
         { label: "Watch", to: "/veille" },
         { label: "Guides", to: "/guides" },
         { label: "Pricing", to: "/pricing" },
+        { label: "Prospecting", to: "/prospection" },
         { label: "Contact", to: "/contact" },
       ];
 

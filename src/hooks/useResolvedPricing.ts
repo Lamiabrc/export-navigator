@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-export type TierSlug = "FREE" | "PRO_ONLINE" | "PRO_VISIO" | "PILOTAGE";
+export type TierSlug = "FREE" | "PRO_ONLINE" | "PROSPECTION" | "PRO_VISIO" | "PILOTAGE";
 
 export type PricingTier = {
   name: string;
@@ -71,6 +71,19 @@ function getDefaults(isFR: boolean): PricingResolved {
             "History & exports",
           ],
         },
+        PROSPECTION: {
+          name: "PROSPECTION",
+          price: "EUR 150 / month",
+          description: "Prospecting + representation framework with optional exclusivity.",
+          features: [
+            "Prospecting + representation contract",
+            "Optional exclusivity (commission adjustment)",
+            "Weekly pipeline updates",
+            "Sales scripts + target list",
+            "Onboarding checklist (docs, products, quantities)",
+          ],
+        },
+
         PRO_VISIO: {
           name: "PRO + VIDEO",
           price: "€149 / month",
@@ -127,6 +140,19 @@ function getDefaults(isFR: boolean): PricingResolved {
           "Historique & exports",
         ],
       },
+      PROSPECTION: {
+        name: "PROSPECTION",
+        price: "150 EUR / mois",
+        description: "Prospection + representation commerciale avec option d'exclusivite.",
+        features: [
+          "Contrat de prospection / representation",
+          "Option exclusivite (commission ajustee)",
+          "Reporting pipeline hebdo",
+          "Scripts + liste cibles",
+          "Onboarding docs & produits",
+        ],
+      },
+
       PRO_VISIO: {
         name: "PRO + VISIO",
         price: "149 € / mois",
@@ -157,13 +183,14 @@ function getDefaults(isFR: boolean): PricingResolved {
 function resolvePricing(meta: PricingMeta | null, defaults: PricingResolved): PricingResolved {
   if (!meta) return defaults;
 
-  const tierKeys: TierSlug[] = ["FREE", "PRO_ONLINE", "PRO_VISIO", "PILOTAGE"];
+  const tierKeys: TierSlug[] = ["FREE", "PRO_ONLINE", "PROSPECTION", "PRO_VISIO", "PILOTAGE"];
   const tiers = {} as Record<TierSlug, PricingTier>;
 
   // Compatibilité : si les traductions utilisent encore PRO/VIP
   const alias: Record<TierSlug, string[]> = {
     FREE: ["FREE"],
     PRO_ONLINE: ["PRO_ONLINE", "PRO"],
+    PROSPECTION: ["PROSPECTION"],
     PRO_VISIO: ["PRO_VISIO", "VIP"],
     PILOTAGE: ["PILOTAGE"],
   };
@@ -205,7 +232,7 @@ export function useResolvedPricing(t: (key: string) => unknown) {
 
   const resolved = useMemo(() => resolvePricing(pricingMeta, defaults), [pricingMeta, defaults]);
 
-  const tierKeys: TierSlug[] = ["FREE", "PRO_ONLINE", "PRO_VISIO", "PILOTAGE"];
+  const tierKeys: TierSlug[] = ["FREE", "PRO_ONLINE", "PROSPECTION", "PRO_VISIO", "PILOTAGE"];
 
   return { isFR, defaults, resolved, tierKeys };
 }

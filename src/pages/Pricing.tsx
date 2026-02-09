@@ -163,6 +163,7 @@ export default function Pricing() {
             const isPrimary = key === "PRO_ONLINE";
             const isOnlinePlan = key === "PRO_ONLINE";
             const isActiveOnline = plan === "PRO_ONLINE";
+            const isProspection = key === "PROSPECTION";
 
             return (
               <article
@@ -213,6 +214,16 @@ export default function Pricing() {
                         : isFr ? "S'abonner" : "Subscribe"}
                     </Button>
                   )
+                ) : isProspection ? (
+                  <Link
+                    to="/prospection"
+                    className={cn(
+                      "mkt-btn text-xs",
+                      isPrimary ? "mkt-btn-primary" : "mkt-btn-outline"
+                    )}
+                  >
+                    {isFr ? "Voir le contrat" : "View contract"}
+                  </Link>
                 ) : (
                   <Link
                     to="/contact"
