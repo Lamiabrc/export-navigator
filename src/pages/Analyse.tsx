@@ -316,6 +316,8 @@ export default function Analyse() {
 
   const [pdfLoading, setPdfLoading] = React.useState(false);
   const [shareStatus, setShareStatus] = React.useState<string | null>(null);
+  const resultsRef = React.useRef<HTMLDivElement | null>(null);
+  const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   // ✅ Soft-gating FREE: 1 calcul seulement
   const [freeRuns, setFreeRuns] = React.useState<number>(0);
@@ -426,6 +428,14 @@ export default function Analyse() {
       } catch {
         // ignore
       }
+    }
+  };
+
+  const handleComputeAndScroll = () => {
+    const locked = plan === "FREE" && freeLocked;
+    handleCompute();
+    if (!locked) {
+      setTimeout(scrollToResults, 120);
     }
   };
 
@@ -590,7 +600,7 @@ export default function Analyse() {
 
         {/* CONTENU */}
         <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          <Card className="card-hover">
+          <Card ref={resultsRef} className="card-hover">
             <CardHeader>
               <CardTitle>Entrées principales</CardTitle>
               <CardDescription>
@@ -739,6 +749,10 @@ export default function Analyse() {
               <div className="flex flex-wrap gap-3">
                 <Button onClick={handleCompute} disabled={plan === "FREE" && freeLocked}>
                   {plan === "FREE" && freeLocked ? "Calcul FREE indisponible" : computed ? "Recalculer" : "Calculer"}
+                </Button>
+
+                <Button variant="secondary" onClick={handleComputeAndScroll} disabled={plan === "FREE" && freeLocked}>
+                  Voir la synthese
                 </Button>
 
                 <Button variant="outline" onClick={() => goTo("/import/check-invoice")}>

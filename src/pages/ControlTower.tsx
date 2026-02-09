@@ -465,6 +465,8 @@ export default function ControlTower() {
   const [rssSources, setRssSources] = React.useState<RssSource[]>([]);
   const rssCacheRef = React.useRef<Map<string, { items: RssItem[]; at: number }>>(new Map());
   const rssPanelRef = React.useRef<HTMLDivElement | null>(null);
+  const resultsRef = React.useRef<HTMLDivElement | null>(null);
+  const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   const [activeNews, setActiveNews] = React.useState<RssItem | null>(null);
   const [pendingCountry, setPendingCountry] = React.useState<string | null>(null);
 
@@ -1293,7 +1295,7 @@ export default function ControlTower() {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <section ref={resultsRef} className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1351,6 +1353,12 @@ export default function ControlTower() {
 
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                 Séparateurs acceptés : <b>;</b> ou <b>,</b>. Décimales : virgule ou point.
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={scrollToResults}>
+                  Voir les resultats
+                </Button>
               </div>
             </CardContent>
           </Card>

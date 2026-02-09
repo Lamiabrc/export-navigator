@@ -10,6 +10,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { useToast } from "@/hooks/use-toast";
 import { postPdf } from "@/lib/leadMagnetApi";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { extractInvoiceFromPdf, type ParsedInvoice } from "@/lib/pdf/extractInvoice";
 
 type Line = {
   description: string;
@@ -76,6 +79,10 @@ function formatMoney(value: number, currency: string) {
 export default function InvoiceCheck() {
   const { toast } = useToast();
   const { labels, variables } = useGlobalFilters();
+  const { user } = useAuth();
+
+  const resultRef = React.useRef<HTMLDivElement | null>(null);
+  const scrollToResults = () => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const [destination, setDestination] = React.useState("");
   const [incoterm, setIncoterm] = React.useState("DAP");
@@ -88,6 +95,11 @@ export default function InvoiceCheck() {
   const [contactEmail, setContactEmail] = React.useState("");
   const [company, setCompany] = React.useState("");
   const [notes, setNotes] = React.useState("");
+
+  const [importing, setImporting] = React.useState(false);
+  const [importError, setImportError] = React.useState<string | null>(null);
+  const [importSummary, setImportSummary] = React.useState<any | null>(null);
+  const [importFileName, setImportFileName] = React.useState<string | null>(null);
 
   const prefillRef = React.useRef(false);
 
@@ -112,6 +124,118 @@ export default function InvoiceCheck() {
 
   const addLine = () => setLines((prev) => [...prev, { description: "", qty: 1, price: 0, hs: "" }]);
   const removeLine = (idx: number) => setLines((prev) => prev.filter((_, i) => i !== idx));
+
+  const normalizeSummary = (raw: any) => {
+    if (!raw) return null;
+    const lineItems = Array.isArray(raw.lineItems) ? raw.lineItems : Array.isArray(raw.lines) ? raw.lines : [];
+    return {
+      invoiceNumber: raw.invoiceNumber ?? raw.invoice_number ?? null,
+      supplier: raw.supplier ?? null,
+      date: raw.date ?? null,
+      totalHT: raw.totalHT ?? raw.total_ht ?? null,
+      totalTVA: raw.totalTVA ?? raw.total_tva ?? null,
+      totalTTC: raw.totalTTC ?? raw.total_ttc ?? null,
+      transitFees: raw.transitFees ?? raw.transit_fees ?? null,
+      billingCountry: raw.billingCountry ?? raw.billing_country ?? null,
+      vatExemptionMention: raw.vatExemptionMention ?? null,
+      lineItems,
+    };
+  };
+
+  const mapLinesFromParsed = (summary: any): Line[] => {
+    const items = Array.isArray(summary?.lineItems) ? summary.lineItems : [];
+    const mapped = items
+      .map((it: any) => {
+        const qtyRaw = Number(it?.quantity ?? it?.qty ?? 1);
+        const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
+        const amountRaw = Number(it?.amountHT ?? it?.amount ?? it?.total ?? 0);
+        const unit = qty > 0 ? amountRaw / qty : amountRaw;
+        const description = String(it?.description || it?.codeArticle || it?.label || "").trim();
+        return {
+          description: description || "Ligne importee",
+          qty,
+          price: Number.isFinite(unit) ? unit : 0,
+          hs: String(it?.hsCode || it?.hs || "").trim(),
+        } as Line;
+      })
+      .filter((it: Line) => it.description || it.qty || it.price || it.hs);
+
+    return mapped.length ? mapped : [{ description: "", qty: 1, price: 0, hs: "" }];
+  };
+
+  const handleImportFile = async (file: File) => {
+    if (!user) {
+      toast({ title: "Connexion requise", description: "Connecte-toi pour importer une facture." });
+      return;
+    }
+
+    setImporting(true);
+    setImportError(null);
+    setImportSummary(null);
+    setImportFileName(file.name);
+
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    let parsed: ParsedInvoice | null = null;
+
+    try {
+      if (isPdf) {
+        parsed = await extractInvoiceFromPdf(file);
+      }
+
+      const safeName = file.name.replace(/[^\w.-]+/g, "_");
+      const path = `${user.id}/${Date.now()}-${safeName}`;
+      const bucket = "invoice_files";
+
+      const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, {
+        upsert: false,
+        contentType: file.type || undefined,
+      });
+      if (uploadError) throw new Error(uploadError.message);
+
+      const payload = {
+        bucket,
+        path,
+        fileName: file.name,
+        fileType: file.type,
+        size: file.size,
+        destination,
+        incoterm,
+        currency,
+        parsed: parsed
+          ? {
+              invoiceNumber: parsed.invoiceNumber,
+              supplier: parsed.supplier,
+              date: parsed.date,
+              totalHT: parsed.totalHT,
+              totalTVA: parsed.totalTVA,
+              totalTTC: parsed.totalTTC,
+              transitFees: parsed.transitFees,
+              billingCountry: parsed.billingCountry,
+              vatExemptionMention: parsed.vatExemptionMention,
+              lineItems: parsed.lineItems,
+            }
+          : undefined,
+      };
+
+      const { data, error } = await supabase.functions.invoke("invoice-import", { body: payload });
+      if (error) throw error;
+
+      const normalized = normalizeSummary(data?.parsed || payload.parsed);
+      if (normalized) {
+        setImportSummary(normalized);
+        setLines(mapLinesFromParsed(normalized));
+        if (!destination && normalized.billingCountry) setDestination(normalized.billingCountry);
+      }
+
+      toast({ title: "Facture importee", description: "Le fichier est stocke et la synthese est disponible." });
+      setTimeout(scrollToResults, 120);
+    } catch (err: any) {
+      setImportError(err?.message || "Import impossible.");
+      toast({ title: "Erreur import", description: err?.message || "Import impossible." });
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const generateReport = async () => {
     try {
@@ -273,8 +397,15 @@ export default function InvoiceCheck() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-border bg-muted/40 p-4 grid gap-4 md:grid-cols-3">
-              <div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={scrollToResults}>
+                Voir la synthese
+              </Button>
+            </div>
+
+            <div ref={resultRef} className="space-y-4">
+              <div className="rounded-xl border border-border bg-muted/40 p-4 grid gap-4 md:grid-cols-3">
+                <div>
                 <div className="text-xs text-muted-foreground">Valeur totale</div>
                 <div className="text-2xl font-semibold">{formatMoney(totalValue, currency)}</div>
               </div>
@@ -308,16 +439,80 @@ export default function InvoiceCheck() {
                 NB : ce contrôle est un repérage rapide (MVP). Pour des cas sensibles, une revue experte est recommandée.
               </div>
             </div>
+            </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader>
-            <CardTitle>Upload (optionnel)</CardTitle>
+            <CardTitle>Importer une facture</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <Input type="file" />
-            <p>MVP : l’extraction automatique arrive bientôt. Utilisez la saisie manuelle pour le moment.</p>
+          <CardContent className="space-y-4">
+            <Input
+              type="file"
+              accept=".pdf,.xlsx,.xls,.csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleImportFile(file);
+                e.currentTarget.value = "";
+              }}
+              disabled={importing}
+            />
+
+            {importFileName ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                Fichier : {importFileName}
+              </div>
+            ) : null}
+
+            {importing ? (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                Import en cours...
+              </div>
+            ) : null}
+
+            {importError ? (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {importError}
+              </div>
+            ) : null}
+
+            {importSummary ? (
+              <div className="rounded-xl border border-border bg-white p-4 space-y-3">
+                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Synthese importee</div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Total HT</div>
+                    <div className="text-lg font-semibold">
+                      {importSummary.totalHT == null ? "???" : formatMoney(Number(importSummary.totalHT || 0), currency)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Total TVA</div>
+                    <div className="text-lg font-semibold">
+                      {importSummary.totalTVA == null ? "???" : formatMoney(Number(importSummary.totalTVA || 0), currency)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Total TTC</div>
+                    <div className="text-lg font-semibold">
+                      {importSummary.totalTTC == null ? "???" : formatMoney(Number(importSummary.totalTTC || 0), currency)}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  {importSummary.invoiceNumber ? <Badge variant="outline">Facture: {importSummary.invoiceNumber}</Badge> : null}
+                  {importSummary.billingCountry ? <Badge variant="outline">Pays: {importSummary.billingCountry}</Badge> : null}
+                  {importSummary.transitFees != null ? (
+                    <Badge variant="outline">Transit: {formatMoney(Number(importSummary.transitFees || 0), currency)}</Badge>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            <p className="text-xs text-muted-foreground">
+              Formats acceptes : PDF, Excel (XLSX/XLS) ou CSV. Le fichier est stocke dans Supabase et la synthese
+              est appliquee aux lignes ci-dessus.
+            </p>
           </CardContent>
         </Card>
       </div>

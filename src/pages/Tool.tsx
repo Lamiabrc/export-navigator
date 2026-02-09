@@ -364,6 +364,8 @@ export default function Tool() {
 
   const [error, setError] = React.useState<string | null>(null);
   const [submitted, setSubmitted] = React.useState(false);
+  const resultsRef = React.useRef<HTMLDivElement | null>(null);
+  const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   React.useEffect(() => {
     // si l'utilisateur revient, on restaure
@@ -674,7 +676,10 @@ export default function Tool() {
                 <Button variant="outline" onClick={() => navigate("/login")}>
                   Se connecter
                 </Button>
-              </div>
+              
+                <Button variant="secondary" onClick={scrollToResults}>
+                  Voir l'aper?u des r?sultats
+                </Button></div>
 
               {submitted ? (
                 <p className="text-xs text-muted-foreground">
@@ -685,7 +690,7 @@ export default function Tool() {
           </Card>
 
           {/* TEASER RESULTS (LOCKED) */}
-          <Card className="relative overflow-hidden">
+          <Card ref={resultsRef} className="relative overflow-hidden">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Lock className="h-4 w-4 text-slate-500" />

@@ -90,6 +90,8 @@ export default function TaxesOm() {
   const [insurancePercent, setInsurancePercent] = React.useState(0.3);
   const [brokerage, setBrokerage] = React.useState(0);
   const [misc, setMisc] = React.useState(0);
+  const resultsRef = React.useRef<HTMLDivElement | null>(null);
+  const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const effectiveDestination = destination === "__other__" ? customDestination.trim() : destination;
 
@@ -351,10 +353,16 @@ export default function TaxesOm() {
                   Assurance obligatoire pour {incoterm}. Renseigne un pourcentage minimum adapte au contrat.
                 </div>
               ) : null}
+
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={scrollToResults}>
+                  Voir le resultat
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="border-muted">
+          <Card ref={resultsRef} className="border-muted">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BadgePercent className="h-5 w-5 text-blue-600" />

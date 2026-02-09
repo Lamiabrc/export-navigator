@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -165,6 +165,8 @@ export default function Simulator() {
 
   const [manualPrice, setManualPrice] = useState<number | "">("");
   const [manualWeight, setManualWeight] = useState<number | "">("");
+  const resultsRef = useRef<HTMLDivElement | null>(null);
+  const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   // OM from Supabase
   const [omRow, setOmRow] = useState<OmRateRow | null>(null);
@@ -486,11 +488,18 @@ export default function Simulator() {
                   </Button>
                 </div>
               </div>
+            
+
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={scrollToResults}>
+                  Voir le resultat
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
           {/* Résultats */}
-          <Card>
+          <Card ref={resultsRef}>
             <CardHeader>
               <CardTitle className="text-sm">Résultat estimation</CardTitle>
               <CardDescription>Détail calcul + comparaison vendeur / acheteur</CardDescription>

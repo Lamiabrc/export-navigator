@@ -49,6 +49,8 @@ export default function ExportSimulator() {
   });
 
   const result = React.useMemo(() => computeLandedCost(form), [form]);
+  const resultsRef = React.useRef<HTMLDivElement | null>(null);
+  const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const onNum =
     (k: keyof typeof form) =>
@@ -313,11 +315,18 @@ export default function ExportSimulator() {
                   step="0.01"
                 />
               </div>
+
+
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={scrollToResults}>
+                  Voir le resultat
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
           {/* OUTPUTS + CHARTS */}
-          <div className="space-y-6 md:col-span-3">
+          <div ref={resultsRef} className="space-y-6 md:col-span-3">
             <div className="grid gap-4 md:grid-cols-3">
               <Card>
                 <CardHeader>

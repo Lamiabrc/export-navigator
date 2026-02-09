@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 
 import { Link } from "react-router-dom";
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
+import { Button } from "@/components/ui/button";
 import { RequirePlan } from "@/components/RequirePlan";
 import { useI18n } from "@/contexts/LanguageContext";
 import { usePlan } from "@/auth/PlanContext";
@@ -41,6 +42,8 @@ export default function ExportCostingPage() {
     salePrice: 18000,
   });
   const [status, setStatus] = useState<string | null>(null);
+  const resultsRef = useRef<HTMLDivElement | null>(null);
+  const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const baseCost = values.goods + values.transport + values.insurance + values.handling + values.other;
   const duties = (values.goods * (values.dutiesPercent || 0)) / 100;
@@ -158,9 +161,15 @@ export default function ExportCostingPage() {
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
                 />
               </label>
+
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={scrollToResults}>
+                  Voir le resultat
+                </Button>
+              </div>
             </div>
 
-            <div className="space-y-6 rounded-3xl border border-slate-200 bg-slate-900/95 p-6 text-white shadow-2xl">
+            <div ref={resultsRef} className="space-y-6 rounded-3xl border border-slate-200 bg-slate-900/95 p-6 text-white shadow-2xl">
               <div>
                 <p className="text-xs uppercase tracking-[0.5em] text-white/60">{meta.summaryLabel}</p>
                 <h2 className="mt-2 text-4xl font-semibold text-white">{landedCost.toFixed(0)} €</h2>
