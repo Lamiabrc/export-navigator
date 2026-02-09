@@ -9,6 +9,7 @@ import {
   Bot,
   Calculator,
   FileCheck2,
+  Home,
   LogOut,
   Package,
   Scale,
@@ -32,6 +33,17 @@ type NavSection = {
 };
 
 const navigation: NavSection[] = [
+  {
+    title: "Site public",
+    items: [
+      {
+        name: "Accueil public",
+        href: "/",
+        icon: Home,
+        aliases: ["/home", "/public"],
+      },
+    ],
+  },
   {
     title: "Accueil",
     items: [

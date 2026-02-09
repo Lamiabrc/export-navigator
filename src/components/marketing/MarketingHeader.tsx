@@ -4,6 +4,7 @@ import { Menu, X } from "lucide-react";
 
 import { BrandLogo } from "@/components/BrandLogo";
 import { useI18n } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import type { LanguageCode } from "@/i18n/translations";
 import { navLinks } from "@/config/navLinks";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ const FLAGS: Record<LanguageCode, string> = {
 
 export function MarketingHeader() {
   const { lang, t, setLang } = useI18n();
+  const { isAuthenticated } = useAuth();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const isEN = lang === "en";
@@ -26,6 +28,8 @@ export function MarketingHeader() {
   };
 
   const ctaLabel = isEN ? "Request a diagnostic" : "Demander un diagnostic";
+  const appLabel = isEN ? "My workspace" : "Mon espace";
+  const loginLabel = isEN ? "Sign in" : "Connexion";
 
   return (
     <header className="sticky top-0 z-50 border-b border-[hsl(var(--mkt-blue-100))] bg-white/95 backdrop-blur-md">
@@ -103,13 +107,22 @@ export function MarketingHeader() {
               {ctaLabel}
             </Link>
 
-            {/* Login */}
-            <Link
-              to="/login"
-              className="hidden text-sm font-medium text-[hsl(var(--mkt-ink-muted))] transition hover:text-[hsl(var(--mkt-ink))] lg:inline-flex"
-            >
-              {isEN ? "Sign in" : "Connexion"}
-            </Link>
+            {/* Login / App */}
+            {isAuthenticated ? (
+              <Link
+                to="/app/control-tower"
+                className="hidden text-sm font-medium text-[hsl(var(--mkt-ink-muted))] transition hover:text-[hsl(var(--mkt-ink))] lg:inline-flex"
+              >
+                {appLabel}
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                className="hidden text-sm font-medium text-[hsl(var(--mkt-ink-muted))] transition hover:text-[hsl(var(--mkt-ink))] lg:inline-flex"
+              >
+                {loginLabel}
+              </Link>
+            )}
 
             {/* Mobile menu button */}
             <button
@@ -190,14 +203,24 @@ export function MarketingHeader() {
               {ctaLabel}
             </Link>
 
-            {/* Login */}
-            <Link
-              to="/login"
-              onClick={() => setMobileOpen(false)}
-              className="mx-4 mt-2 rounded-lg py-3 text-center text-sm font-medium text-[hsl(var(--mkt-ink-muted))]"
-            >
-              {isEN ? "Sign in" : "Connexion"}
-            </Link>
+            {/* Login / App */}
+            {isAuthenticated ? (
+              <Link
+                to="/app/control-tower"
+                onClick={() => setMobileOpen(false)}
+                className="mx-4 mt-2 rounded-lg py-3 text-center text-sm font-medium text-[hsl(var(--mkt-ink-muted))]"
+              >
+                {appLabel}
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                onClick={() => setMobileOpen(false)}
+                className="mx-4 mt-2 rounded-lg py-3 text-center text-sm font-medium text-[hsl(var(--mkt-ink-muted))]"
+              >
+                {loginLabel}
+              </Link>
+            )}
           </nav>
         </div>
       )}

@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
-import { Mail, Phone, MapPin } from "lucide-react";
+﻿import { Link } from "react-router-dom";
+import { Mail, Phone } from "lucide-react";
 import { useI18n } from "@/contexts/LanguageContext";
 
 type FooterLink = {
@@ -39,8 +39,8 @@ export function MarketingFooter({ className = "" }: FooterProps) {
 
   const legalLinks: FooterLink[] = isFr
     ? [
-        { label: "Mentions légales", to: "/mentions-legales" },
-        { label: "Confidentialité", to: "/confidentialite" },
+        { label: "Mentions lÃ©gales", to: "/mentions-legales" },
+        { label: "ConfidentialitÃ©", to: "/confidentialite" },
         { label: "Cookies", to: "/cookies" },
       ]
     : [
@@ -48,6 +48,20 @@ export function MarketingFooter({ className = "" }: FooterProps) {
         { label: "Privacy", to: "/confidentialite" },
         { label: "Cookies", to: "/cookies" },
       ];
+  const socialLinks = [
+    {
+      label: "Facebook",
+      href: "https://www.facebook.com/profile.php?id=61587254986176",
+    },
+    {
+      label: "YouTube",
+      href: "https://www.youtube.com/channel/UCxRRjAnotPJahv9SzaPJsAw",
+    },
+    {
+      label: "LinkedIn",
+      href: "https://www.linkedin.com/company/mpl-conseil-export/?viewAsMember=true",
+    },
+  ];
 
   return (
     <footer className={`border-t border-[hsl(var(--mkt-blue-100))] bg-white ${className}`}>
@@ -62,7 +76,7 @@ export function MarketingFooter({ className = "" }: FooterProps) {
             </Link>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-[hsl(var(--mkt-ink-muted))]">
               {isFr
-                ? "Cockpit export pour PME. Coûts rendus, documents, risques et veille réglementaire dans un outil unifié."
+                ? "Cockpit export pour PME. CoÃ»ts rendus, documents, risques et veille rÃ©glementaire dans un outil unifiÃ©."
                 : "Export cockpit for SMEs. Landed cost, documents, risks, and regulatory watch in a unified tool."}
             </p>
 
@@ -104,7 +118,7 @@ export function MarketingFooter({ className = "" }: FooterProps) {
 
           {/* Legal */}
           <div>
-            <h4 className="mkt-label mb-4">{isFr ? "Légal" : "Legal"}</h4>
+            <h4 className="mkt-label mb-4">{isFr ? "LÃ©gal" : "Legal"}</h4>
             <ul className="space-y-2">
               {legalLinks.map((link) => (
                 <li key={link.to}>
@@ -117,6 +131,24 @@ export function MarketingFooter({ className = "" }: FooterProps) {
                 </li>
               ))}
             </ul>
+
+            <div className="mt-8">
+              <h4 className="mkt-label mb-4">{isFr ? "RÃ©seaux" : "Social"}</h4>
+              <ul className="space-y-2">
+                {socialLinks.map((link) => (
+                  <li key={link.href}>
+                    <a
+                      href={link.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm text-[hsl(var(--mkt-ink-muted))] transition hover:text-[hsl(var(--mkt-ink))]"
+                    >
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </div>
@@ -125,12 +157,12 @@ export function MarketingFooter({ className = "" }: FooterProps) {
       <div className="border-t border-[hsl(var(--mkt-blue-100))]">
         <div className="mkt-container flex flex-col items-center justify-between gap-4 py-6 sm:flex-row">
           <p className="text-xs text-[hsl(var(--mkt-ink-muted))]">
-            © {new Date().getFullYear()} MPL Export Conseil.{" "}
-            {isFr ? "Tous droits réservés." : "All rights reserved."}
+            Â© {new Date().getFullYear()} MPL Export Conseil.{" "}
+            {isFr ? "Tous droits rÃ©servÃ©s." : "All rights reserved."}
           </p>
           <p className="text-xs text-[hsl(var(--mkt-ink-muted))]">
             {isFr
-              ? "Cet outil aide à structurer vos décisions export. Il ne remplace pas un conseil réglementaire."
+              ? "Cet outil aide Ã  structurer vos dÃ©cisions export. Il ne remplace pas un conseil rÃ©glementaire."
               : "This tool helps structure your export decisions. It does not replace regulatory advice."}
           </p>
         </div>
@@ -138,3 +170,5 @@ export function MarketingFooter({ className = "" }: FooterProps) {
     </footer>
   );
 }
+
+
