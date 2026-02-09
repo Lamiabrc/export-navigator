@@ -22,13 +22,16 @@ function safeNextPath(candidate: unknown, fallback = "/app/control-tower") {
 }
 
 export default function Login() {
-  const { signIn, isLoading } = useAuth();
+  const { signIn, resendSignUpEmail, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+  const [resendPending, setResendPending] = useState(false);
   const [pending, setPending] = useState(false);
 
   const nextPath = useMemo(() => {
@@ -47,6 +50,7 @@ export default function Login() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNotice(null);
 
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) {
@@ -60,8 +64,9 @@ export default function Login() {
 
     try {
       setPending(true);
-      const { error: err } = await signIn(normalizedEmail, password);
+      const { error: err, needsEmailConfirmation } = await signIn(normalizedEmail, password);
       if (err) {
+        setNeedsConfirm(needsEmailConfirmation);
         setError(getErrorMessage(err));
         return;
       }
@@ -70,6 +75,34 @@ export default function Login() {
       setError(getErrorMessage(e2));
     } finally {
       setPending(false);
+    }
+  };
+
+  const handleResend = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setError("Ajoute ton email pour renvoyer le lien.");
+      return;
+    }
+    setResendPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const emailRedirectTo =
+        typeof window !== "undefined"
+          ? `${window.location.origin}/login?next=${encodeURIComponent(nextPath)}`
+          : undefined;
+      const { error: err } = await resendSignUpEmail(normalizedEmail, emailRedirectTo);
+      if (err) {
+        setError(getErrorMessage(err));
+        return;
+      }
+      setNeedsConfirm(true);
+      setNotice("Email de verification renvoye. Verifie aussi les spams.");
+    } catch (e2) {
+      setError(getErrorMessage(e2));
+    } finally {
+      setResendPending(false);
     }
   };
 
@@ -150,6 +183,30 @@ export default function Login() {
                   <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/30 border border-red-800/70 rounded-xl px-3 py-2">
                     <AlertCircle className="h-4 w-4 mt-0.5" />
                     <span>{error}</span>
+                  </div>
+                )}
+
+                {notice && (
+                  <div className="text-sm text-emerald-300 bg-emerald-900/30 border border-emerald-800/70 rounded-xl px-3 py-2">
+                    {notice}
+                  </div>
+                )}
+
+                {needsConfirm && (
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-200 space-y-2">
+                    <div className="font-semibold">Email non confirme</div>
+                    <div>1) Ouvre ta boite mail et clique sur "Confirmer".</div>
+                    <div>2) Puis reconnecte-toi.</div>
+                    <div>3) Si tu ne reçois rien: renvoie l'email.</div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={handleResend}
+                      disabled={resendPending}
+                    >
+                      {resendPending ? "Renvoi..." : "Renvoyer l'email de verification"}
+                    </Button>
                   </div>
                 )}
 

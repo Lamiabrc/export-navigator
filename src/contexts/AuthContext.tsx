@@ -12,7 +12,10 @@ type AuthCtx = {
     password: string,
     options?: { data?: Record<string, any>; emailRedirectTo?: string }
   ) => Promise<{ error: string | null; needsEmailConfirmation: boolean; userId: string | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signIn: (
+    email: string,
+    password: string
+  ) => Promise<{ error: string | null; needsEmailConfirmation: boolean; userId: string | null }>;
   signOut: () => Promise<void>;
   resendSignUpEmail: (email: string, emailRedirectTo?: string) => Promise<{ error: string | null }>;
   sendPasswordLink: (email: string) => Promise<{ error: string | null }>;
@@ -114,9 +117,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
 
       async signIn(email, password) {
-        if (!SUPABASE_ENV_OK) return { error: "Supabase non configure." };
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        return { error: error ? error.message : null };
+        if (!SUPABASE_ENV_OK)
+          return { error: "Supabase non configure.", needsEmailConfirmation: false, userId: null };
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const msg = error?.message || "";
+        const needsEmailConfirmation = msg.toLowerCase().includes("email not confirmed");
+        if (!error && data?.session?.user) {
+          setSession(data.session);
+          setUser(data.session.user);
+          setIsLoading(false);
+        }
+        return {
+          error: error ? error.message : null,
+          needsEmailConfirmation,
+          userId: data?.user?.id ?? data?.session?.user?.id ?? null,
+        };
       },
 
       async signOut() {
