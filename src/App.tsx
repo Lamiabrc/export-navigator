@@ -63,6 +63,7 @@ import ExportCostingPage from "@/pages/ExportCosting";
 import VipRentability from "@/pages/VipRentability";
 import Legal from "@/pages/Legal";
 import AdminKbDocs from "@/pages/AdminKbDocs";
+import TaxesOm from "@/pages/TaxesOm";
 
 const queryClient = new QueryClient();
 const LazyFallback = () => <div className="p-6 text-sm text-muted-foreground">Chargement…</div>;
@@ -218,11 +219,26 @@ export default function App() {
                           path="/app/droits-taxes"
                           element={
                             <ProtectedRoute>
-                              <Navigate to="/app/control-tower" replace />
+                              <TaxesOm />
                             </ProtectedRoute>
                           }
                         />
-                        <Route path="/app/taxes-om" element={<Navigate to="/app/droits-taxes" replace />} />
+                        <Route
+                          path="/app/taxes-om"
+                          element={
+                            <ProtectedRoute>
+                              <TaxesOm />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="/app/taxes"
+                          element={
+                            <ProtectedRoute>
+                              <Navigate to="/app/taxes-om" replace />
+                            </ProtectedRoute>
+                          }
+                        />
 
                         {/* ✅ simulateur */}
                         <Route
@@ -352,7 +368,8 @@ export default function App() {
                         <Route path="/explore" element={<Navigate to="/app/explore" replace />} />
                         <Route path="/sales" element={<Navigate to="/app/explore" replace />} />
 
-                        <Route path="/taxes-om" element={<Navigate to="/app/droits-taxes" replace />} />
+                        <Route path="/taxes-om" element={<Navigate to="/app/taxes-om" replace />} />
+                        <Route path="/taxes" element={<Navigate to="/app/taxes-om" replace />} />
 
                         <Route path="/simulator" element={<Navigate to="/app/simulator" replace />} />
                         <Route path="/watch/regulatory" element={<Navigate to="/app/centre-veille/reglementation" replace />} />
