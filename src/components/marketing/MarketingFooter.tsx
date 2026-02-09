@@ -52,14 +52,17 @@ export function MarketingFooter({ className = "" }: FooterProps) {
     {
       label: "Facebook",
       href: "https://www.facebook.com/profile.php?id=61587254986176",
+      icon: "/facebook.svg",
     },
     {
       label: "YouTube",
       href: "https://www.youtube.com/channel/UCxRRjAnotPJahv9SzaPJsAw",
+      icon: "/youtube.svg",
     },
     {
       label: "LinkedIn",
       href: "https://www.linkedin.com/company/mpl-conseil-export/?viewAsMember=true",
+      icon: "/linkedin.svg",
     },
   ];
 
@@ -141,8 +144,9 @@ export function MarketingFooter({ className = "" }: FooterProps) {
                       href={link.href}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-sm text-[hsl(var(--mkt-ink-muted))] transition hover:text-[hsl(var(--mkt-ink))]"
+                      className="inline-flex items-center gap-3 text-sm text-[hsl(var(--mkt-ink-muted))] transition hover:text-[hsl(var(--mkt-ink))]"
                     >
+                      <img src={link.icon} alt={link.label} className="h-4 w-4" />
                       {link.label}
                     </a>
                   </li>

@@ -52,14 +52,17 @@ function FooterSocial() {
     {
       label: "Facebook",
       href: "https://www.facebook.com/profile.php?id=61587254986176",
+      icon: "/facebook.svg",
     },
     {
       label: "YouTube",
       href: "https://www.youtube.com/channel/UCxRRjAnotPJahv9SzaPJsAw",
+      icon: "/youtube.svg",
     },
     {
       label: "LinkedIn",
       href: "https://www.linkedin.com/company/mpl-conseil-export/?viewAsMember=true",
+      icon: "/linkedin.svg",
     },
   ];
 
@@ -76,8 +79,9 @@ function FooterSocial() {
               href={link.href}
               target="_blank"
               rel="noreferrer"
-              className="text-sm font-medium text-foreground hover:text-primary hover:underline"
+              className="inline-flex items-center gap-3 text-sm font-medium text-foreground hover:text-primary hover:underline"
             >
+              <img src={link.icon} alt={link.label} className="h-5 w-5" />
               {link.label}
             </a>
           </li>
