@@ -464,6 +464,9 @@ export default function ControlTower() {
   const [rssItems, setRssItems] = React.useState<RssItem[]>([]);
   const [rssSources, setRssSources] = React.useState<RssSource[]>([]);
   const rssCacheRef = React.useRef<Map<string, { items: RssItem[]; at: number }>>(new Map());
+  const rssPanelRef = React.useRef<HTMLDivElement | null>(null);
+  const [activeNews, setActiveNews] = React.useState<RssItem | null>(null);
+  const [pendingCountry, setPendingCountry] = React.useState<string | null>(null);
 
   const [hovered, setHovered] = React.useState<{
     code: string;
@@ -916,6 +919,17 @@ export default function ControlTower() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWatchCountry]);
 
+  React.useEffect(() => {
+    if (!pendingCountry) return;
+    if (pendingCountry !== selectedWatchCountry) return;
+    if (rssItems.length) {
+      setActiveNews(rssItems[0]);
+    } else {
+      setActiveNews(null);
+    }
+    setPendingCountry(null);
+  }, [pendingCountry, selectedWatchCountry, rssItems]);
+
   const displayCurrency = currencyFilter !== "ALL" ? currencyFilter : (currencyList[0] || defaults.currency || "EUR");
 
   const selectedCountryLabel = territoryLabel(selectedWatchCountry);
@@ -964,10 +978,10 @@ export default function ControlTower() {
                 <MapPin className="h-4 w-4 text-blue-600" />
                 Flux par destination
               </CardTitle>
-              <CardDescription>Survole un point pour voir les volumes. Clic = filtre + veille RSS du pays.</CardDescription>
+              <CardDescription>Survole un point pour voir les volumes. Clic = filtre + actu du pays.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="relative h-[520px] w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-900 lg:h-[680px]">
+              <div className="relative h-[520px] w-full overflow-hidden rounded-2xl border border-blue-100 bg-white lg:h-[680px]">
                 <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="absolute inset-0 h-full w-full">
                   <image
                     href={worldMap}
@@ -975,8 +989,7 @@ export default function ControlTower() {
                     y="0"
                     width={MAP_WIDTH}
                     height={MAP_HEIGHT}
-                    opacity="0.45"
-                    style={{ filter: "invert(1) saturate(1.2) contrast(1.05)" }}
+                    opacity="0.75"
                   />
 
                   {/* Arcs depuis hub FR */}
@@ -990,9 +1003,9 @@ export default function ControlTower() {
                           key={`arc-${node.code}`}
                           d={path}
                           fill="none"
-                          stroke="#38bdf8"
+                          stroke="#2563eb"
                           strokeWidth={strokeWidth}
-                          strokeOpacity={0.35}
+                          strokeOpacity={0.25}
                           vectorEffect="non-scaling-stroke"
                         />
                       );
@@ -1009,13 +1022,13 @@ export default function ControlTower() {
 
                     return (
                       <g key={node.code}>
-                        <circle cx={node.x} cy={node.y} r={radius + 8} fill="#0f172a" opacity={0.35} />
+                        <circle cx={node.x} cy={node.y} r={radius + 8} fill="#93c5fd" opacity={0.2} />
                         <circle
                           cx={node.x}
                           cy={node.y}
                           r={radius}
-                          fill={node.code === "FR" ? "#22d3ee" : isSelected ? "#38bdf8" : "#22d3ee"}
-                          opacity={node.code === "FR" ? 0.95 : node.revenue > 0 ? 0.9 : 0.35}
+                          fill={node.code === "FR" ? "#2563eb" : isSelected ? "#1d4ed8" : "#3b82f6"}
+                          opacity={node.code === "FR" ? 0.95 : node.revenue > 0 ? 0.85 : 0.35}
                           className="cursor-pointer"
                           stroke={isWatch ? "#ffffff" : "none"}
                           strokeWidth={isWatch ? 2 : 0}
@@ -1037,12 +1050,16 @@ export default function ControlTower() {
                           onClick={() => {
                             setDestinationFilter(node.code);
                             setSelectedWatchCountry(node.code);
+                            setPendingCountry(node.code);
+                            if (rssPanelRef.current) {
+                              rssPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }
                           }}
                           onDoubleClick={() => setDestinationFilter("ALL")}
                         />
 
                         {node.code === "FR" ? (
-                          <text x={node.x + 14} y={node.y + 5} className="text-xs font-semibold fill-cyan-100">
+                          <text x={node.x + 14} y={node.y + 5} className="text-xs font-semibold fill-blue-800">
                             Hub France
                           </text>
                         ) : null}
@@ -1053,24 +1070,24 @@ export default function ControlTower() {
 
                 {hovered && tooltipPos ? (
                   <div
-                    className="pointer-events-none fixed z-50 rounded-lg border border-slate-700 bg-slate-900/95 px-3 py-2 text-xs text-slate-100 shadow-xl"
+                    className="pointer-events-none fixed z-50 rounded-lg border border-blue-200 bg-white/95 px-3 py-2 text-xs text-blue-900 shadow-xl"
                     style={{ left: tooltipPos.x + 12, top: tooltipPos.y + 12 }}
                   >
                     <div className="font-semibold">{hovered.name}</div>
-                    <div className="text-slate-400">{hovered.code}</div>
-                    <div className="mt-1 text-slate-200">CA: {formatMoney(hovered.revenue, displayCurrency)}</div>
+                    <div className="text-blue-600">{hovered.code}</div>
+                    <div className="mt-1 text-blue-900">CA: {formatMoney(hovered.revenue, displayCurrency)}</div>
                   </div>
                 ) : null}
 
                 {mapNodes.missing > 0 ? (
-                  <div className="absolute bottom-3 right-3 rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1 text-xs text-slate-200">
+                  <div className="absolute bottom-3 right-3 rounded-full border border-blue-200 bg-white/90 px-3 py-1 text-xs text-blue-700">
                     {mapNodes.missing} destinations hors carte
                   </div>
                 ) : null}
 
                 {!rowsAll.length ? (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 shadow-lg">
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-lg">
                       Importe un CSV pour afficher les flux.
                     </div>
                   </div>
@@ -1080,7 +1097,7 @@ export default function ControlTower() {
           </Card>
 
           <div className="space-y-3 lg:col-span-2">
-            <Card>
+            <Card ref={rssPanelRef}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Synthèse</CardTitle>
                 <CardDescription>Ventes et marges (filtres actifs)</CardDescription>
@@ -1122,7 +1139,13 @@ export default function ControlTower() {
                   value={destinationFilter}
                   onValueChange={(v) => {
                     setDestinationFilter(v);
-                    if (v !== "ALL") setSelectedWatchCountry(v);
+                    if (v !== "ALL") {
+                      setSelectedWatchCountry(v);
+                      setPendingCountry(v);
+                      if (rssPanelRef.current) {
+                        rssPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }
+                    }
                   }}
                 >
                   <SelectTrigger>
@@ -1194,6 +1217,24 @@ export default function ControlTower() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
+                {activeNews ? (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600">
+                      Actu du pays
+                    </div>
+                    <div className="mt-1 font-semibold">{activeNews.title}</div>
+                    <div className="mt-1 text-xs text-blue-700">
+                      {activeNews.sourceName} • {formatDate(activeNews.publishedAt)}
+                    </div>
+                    <div className="mt-2">
+                      <Button asChild size="sm" variant="outline" className="border-blue-200 text-blue-700">
+                        <a href={activeNews.link} target="_blank" rel="noreferrer">
+                          Ouvrir l&apos;actu
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
                   {rssSources.slice(0, 6).map((s) => (
                     <Badge key={s.url} variant="outline" className="max-w-full truncate">

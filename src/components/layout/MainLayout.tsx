@@ -5,6 +5,8 @@ import { Search, FileCheck2, Bot, LogOut, Newspaper, Calculator } from "lucide-r
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePlan } from "@/auth/PlanContext";
+import { Badge } from "@/components/ui/badge";
 import { BrandLogo } from "../BrandLogo";
 import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
 import { TricolorBanner } from "@/components/layout/TricolorBanner";
@@ -31,7 +33,8 @@ export function MainLayout({
   wrapperClassName,
   variant = "default",
 }: MainLayoutProps) {
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
+  const { plan } = usePlan();
   const navigate = useNavigate();
   const location = useLocation();
   const banner = getBannerContent(location.pathname);
@@ -42,6 +45,11 @@ export function MainLayout({
   const [q, setQ] = React.useState("");
 
   const showSidebar = variant !== "bare";
+  const displayName =
+    (user?.user_metadata?.company_name as string | undefined)?.trim() ||
+    user?.email?.split("@")[0] ||
+    "Compte";
+  const planLabel = plan === "FREE" ? "Free" : plan.replace(/_/g, " ");
 
   React.useEffect(() => {
     const handler = () => {
@@ -61,34 +69,17 @@ export function MainLayout({
   return (
     <div
       className={cn(
-        "min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))] relative overflow-hidden",
+        "min-h-screen bg-white text-foreground relative overflow-hidden",
         wrapperClassName
       )}
     >
-      <CinematicBackdrop variant="app" showMap={false} className="opacity-40" />
-
-      {/* Soft gradients */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-30"
-        style={{
-          background:
-            "radial-gradient(circle at 15% 10%, rgba(56,189,248,0.18), transparent 40%), radial-gradient(circle at 85% 0%, rgba(99,102,241,0.12), transparent 35%), radial-gradient(circle at 50% 70%, rgba(14,165,233,0.10), transparent 50%)",
-        }}
-      />
-      {/* Subtle grid */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-10"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.06) 1px, transparent 1px)",
-          backgroundSize: "56px 56px",
-        }}
-      />
+      <CinematicBackdrop variant="public" className="z-0 opacity-20" />
+      <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-white/85 via-white/90 to-white" />
 
       {showSidebar ? <Sidebar /> : null}
 
       <main className={cn("relative z-10", showSidebar ? "pl-64" : "")}>
-        <header className="sticky top-0 z-20 border-b border-border/70 bg-[hsl(var(--background))/0.88] backdrop-blur-xl">
+        <header className="sticky top-0 z-20 border-b border-blue-100 bg-white/85 backdrop-blur">
           <div className="flex flex-col gap-3 px-4 py-3 md:px-6">
             {/* Row 1 */}
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -138,6 +129,12 @@ export function MainLayout({
                 <AutoRefreshControl />
                 <RefreshNowButton />
                 <SavedViewsMenu />
+                <div className="flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-900 shadow-sm">
+                  <span className="truncate max-w-[150px]">{displayName}</span>
+                  <Badge variant="outline" className="border-blue-200 text-blue-700 text-[10px]">
+                    Plan {planLabel}
+                  </Badge>
+                </div>
               </div>
             </div>
 
@@ -202,7 +199,7 @@ export function MainLayout({
           </div>
 
           {/* Keep VariablesBar visually attached to header */}
-          <div className="border-t border-border/60 bg-[hsl(var(--background))/0.7] backdrop-blur">
+          <div className="border-t border-blue-100 bg-white/70 backdrop-blur">
             <VariablesBar />
           </div>
 
