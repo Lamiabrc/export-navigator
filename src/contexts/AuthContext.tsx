@@ -11,9 +11,10 @@ type AuthCtx = {
     email: string,
     password: string,
     options?: { data?: Record<string, any>; emailRedirectTo?: string }
-  ) => Promise<{ error: string | null }>;
+  ) => Promise<{ error: string | null; needsEmailConfirmation: boolean; userId: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  resendSignUpEmail: (email: string, emailRedirectTo?: string) => Promise<{ error: string | null }>;
   sendPasswordLink: (email: string) => Promise<{ error: string | null }>;
   setPassword: (newPassword: string) => Promise<{ error: string | null }>;
 };
@@ -87,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
 
       async signUp(email, password, options) {
-        if (!SUPABASE_ENV_OK) return { error: "Supabase non configure." };
+        if (!SUPABASE_ENV_OK) return { error: "Supabase non configure.", needsEmailConfirmation: false, userId: null };
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -96,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             emailRedirectTo: options?.emailRedirectTo,
           },
         });
+        const needsEmailConfirmation = Boolean(data?.user && !data?.session);
         if (!error && data?.user?.id) {
           // best-effort: ensure session refresh if immediate
           try {
@@ -104,7 +106,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // ignore
           }
         }
-        return { error: error ? error.message : null };
+        return {
+          error: error ? error.message : null,
+          needsEmailConfirmation,
+          userId: data?.user?.id ?? null,
+        };
       },
 
       async signIn(email, password) {
@@ -116,6 +122,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async signOut() {
         if (!SUPABASE_ENV_OK) return;
         await supabase.auth.signOut();
+      },
+
+      async resendSignUpEmail(email, emailRedirectTo) {
+        if (!SUPABASE_ENV_OK) return { error: "Supabase non configure." };
+        const { error } = await supabase.auth.resend({
+          type: "signup",
+          email,
+          options: emailRedirectTo ? { emailRedirectTo } : undefined,
+        });
+        return { error: error ? error.message : null };
       },
 
       async sendPasswordLink(email) {

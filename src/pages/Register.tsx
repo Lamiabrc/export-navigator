@@ -22,7 +22,7 @@ function safeNextPath(candidate: unknown, fallback = "/") {
 }
 
 export default function Register() {
-  const { signUp, isLoading } = useAuth();
+  const { signUp, resendSignUpEmail, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -34,6 +34,9 @@ export default function Register() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [awaitingEmail, setAwaitingEmail] = useState(false);
+  const [resendPending, setResendPending] = useState(false);
+  const [lastSignupEmail, setLastSignupEmail] = useState("");
 
   const nextPath = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -70,7 +73,7 @@ export default function Register() {
         typeof window !== "undefined"
           ? `${window.location.origin}/login?next=${encodeURIComponent(nextPath)}`
           : undefined;
-      const { error: err } = await signUp(normalizedEmail, password, {
+      const { error: err, needsEmailConfirmation } = await signUp(normalizedEmail, password, {
         data: {
           company_name: companyName.trim(),
           country: country.trim().toUpperCase(),
@@ -81,12 +84,43 @@ export default function Register() {
         setError(getErrorMessage(err));
         return;
       }
-      setSuccess("Compte cree. Verifie ta boite mail si la confirmation est activee.");
-      setTimeout(() => navigate(`/login?next=${encodeURIComponent(nextPath)}`), 1200);
+      setLastSignupEmail(normalizedEmail);
+      if (needsEmailConfirmation) {
+        setAwaitingEmail(true);
+        setSuccess(
+          "Compte cree. Un email de verification vient d'etre envoye. Ouvre-le pour activer ton compte."
+        );
+        return;
+      }
+      setSuccess("Compte cree. Connexion en cours...");
+      setTimeout(() => navigate(nextPath), 900);
     } catch (e2) {
       setError(getErrorMessage(e2));
     } finally {
       setPending(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!lastSignupEmail) return;
+    setResendPending(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const emailRedirectTo =
+        typeof window !== "undefined"
+          ? `${window.location.origin}/login?next=${encodeURIComponent(nextPath)}`
+          : undefined;
+      const { error: err } = await resendSignUpEmail(lastSignupEmail, emailRedirectTo);
+      if (err) {
+        setError(getErrorMessage(err));
+        return;
+      }
+      setSuccess("Email de verification renvoye. Verifie aussi les spams.");
+    } catch (e2) {
+      setError(getErrorMessage(e2));
+    } finally {
+      setResendPending(false);
     }
   };
 
@@ -201,6 +235,24 @@ export default function Register() {
               <Button type="submit" className="w-full h-11 font-semibold" disabled={pending || isLoading}>
                 {pending || isLoading ? "Creation..." : "Creer un compte"}
               </Button>
+
+              {awaitingEmail && (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-200 space-y-2">
+                  <div className="font-semibold">Etape suivante</div>
+                  <div>1) Ouvre ta boite mail et clique sur "Confirmer".</div>
+                  <div>2) Puis reconnecte-toi.</div>
+                  <div>3) Si tu ne reçois rien: renvoie l'email ci-dessous.</div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleResend}
+                    disabled={resendPending}
+                  >
+                    {resendPending ? "Renvoi..." : "Renvoyer l'email de verification"}
+                  </Button>
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>
