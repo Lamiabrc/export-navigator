@@ -17,64 +17,52 @@ import { CompanyProfileGuard } from "@/components/CompanyProfileGuard";
 import { CookieConsent } from "@/components/CookieConsent";
 import { LanguageChooser } from "@/components/LanguageChooser";
 
-const Home = React.lazy(() => import("@/pages/Home"));
-const ToolPage = React.lazy(() => import("@/pages/Tool"));
-const ServicesPage = React.lazy(() => import("@/pages/Services"));
-const AboutPage = React.lazy(() => import("@/pages/About"));
-const Analyse = React.lazy(() => import("@/pages/Analyse"));
-const ShareDecision = React.lazy(() => import("@/pages/ShareDecision"));
-const Methodologie = React.lazy(() => import("@/pages/Methodologie"));
-const Guide = React.lazy(() => import("@/pages/Guide"));
-const Incoterms = React.lazy(() => import("@/pages/Incoterms"));
-const IncotermDetail = React.lazy(() => import("@/pages/IncotermDetail"));
-const InfoParameter = React.lazy(() => import("@/pages/InfoParameter"));
-
-const WatchCenter = React.lazy(() => import("@/pages/WatchCenter"));
-const WatchRegulatory = React.lazy(() => import("@/pages/WatchRegulatory"));
-const WatchCommercial = React.lazy(() => import("@/pages/WatchCommercial"));
-
-const InvoiceCheck = React.lazy(() => import("@/pages/InvoiceCheck"));
-const Newsletter = React.lazy(() => import("@/pages/Newsletter"));
-const Login = React.lazy(() => import("@/pages/Login"));
-const Register = React.lazy(() => import("@/pages/Register"));
-const ForgotPassword = React.lazy(() => import("@/pages/ForgotPassword"));
-const SetPassword = React.lazy(() => import("@/pages/SetPassword"));
-
-const ControlTower = React.lazy(() => import("@/pages/ControlTower"));
-
-// ✅ Nouveau simulateur “opérationnel + graphiques”
-const ExportSimulator = React.lazy(() => import("@/pages/ExportSimulator"));
-// ✅ Ancien simulateur (legacy)
-const Simulator = React.lazy(() => import("@/pages/Simulator"));
-
-const Products = React.lazy(() => import("@/pages/Products"));
-const Sales = React.lazy(() => import("@/pages/Sales"));
-const InvoiceDetail = React.lazy(() => import("@/pages/InvoiceDetail"));
-
-const Admin = React.lazy(() => import("@/pages/Admin"));
-const Assistant = React.lazy(() => import("@/pages/Assistant"));
-const Settings = React.lazy(() => import("@/pages/Settings"));
-const NotFound = React.lazy(() => import("@/pages/NotFound"));
-const Solutions = React.lazy(() => import("@/pages/Solutions"));
-const Veille = React.lazy(() => import("@/pages/Veille"));
-const Resources = React.lazy(() => import("@/pages/Resources"));
-const Contact = React.lazy(() => import("@/pages/Contact"));
-const Compliance = React.lazy(() => import("@/pages/Compliance"));
-const InternalResources = React.lazy(() => import("@/pages/InternalResources"));
-const ExportToFrance = React.lazy(() => import("@/pages/ExportToFrance"));
-const BillingSuccess = React.lazy(() => import("@/pages/BillingSuccess"));
-const Account = React.lazy(() => import("@/pages/Account"));
-
-const Pricing = React.lazy(() => import("@/pages/Pricing"));
-const HistoryPage = React.lazy(() => import("@/pages/History"));
-const ImportCheckInvoice = React.lazy(() => import("@/pages/ImportCheckInvoice"));
-const ExportCostingPage = React.lazy(() => import("@/pages/ExportCosting"));
-const VipRentability = React.lazy(() => import("@/pages/VipRentability"));
-
-const Legal = React.lazy(() => import("@/pages/Legal"));
-
-// ✅ NOUVEAU : page admin upload PDFs (Base documentaire)
-const AdminKbDocs = React.lazy(() => import("@/pages/AdminKbDocs"));
+import Home from "@/pages/Home";
+import ToolPage from "@/pages/Tool";
+import ServicesPage from "@/pages/Services";
+import AboutPage from "@/pages/About";
+import Analyse from "@/pages/Analyse";
+import ShareDecision from "@/pages/ShareDecision";
+import Methodologie from "@/pages/Methodologie";
+import Guide from "@/pages/Guide";
+import Incoterms from "@/pages/Incoterms";
+import IncotermDetail from "@/pages/IncotermDetail";
+import InfoParameter from "@/pages/InfoParameter";
+import WatchCenter from "@/pages/WatchCenter";
+import WatchRegulatory from "@/pages/WatchRegulatory";
+import WatchCommercial from "@/pages/WatchCommercial";
+import InvoiceCheck from "@/pages/InvoiceCheck";
+import Newsletter from "@/pages/Newsletter";
+import Login from "@/pages/Login";
+import Register from "@/pages/Register";
+import ForgotPassword from "@/pages/ForgotPassword";
+import SetPassword from "@/pages/SetPassword";
+import ControlTower from "@/pages/ControlTower";
+import ExportSimulator from "@/pages/ExportSimulator";
+import Simulator from "@/pages/Simulator";
+import Products from "@/pages/Products";
+import Sales from "@/pages/Sales";
+import InvoiceDetail from "@/pages/InvoiceDetail";
+import Admin from "@/pages/Admin";
+import Assistant from "@/pages/Assistant";
+import Settings from "@/pages/Settings";
+import NotFound from "@/pages/NotFound";
+import Solutions from "@/pages/Solutions";
+import Veille from "@/pages/Veille";
+import Resources from "@/pages/Resources";
+import Contact from "@/pages/Contact";
+import Compliance from "@/pages/Compliance";
+import InternalResources from "@/pages/InternalResources";
+import ExportToFrance from "@/pages/ExportToFrance";
+import BillingSuccess from "@/pages/BillingSuccess";
+import Account from "@/pages/Account";
+import Pricing from "@/pages/Pricing";
+import HistoryPage from "@/pages/History";
+import ImportCheckInvoice from "@/pages/ImportCheckInvoice";
+import ExportCostingPage from "@/pages/ExportCosting";
+import VipRentability from "@/pages/VipRentability";
+import Legal from "@/pages/Legal";
+import AdminKbDocs from "@/pages/AdminKbDocs";
 
 const queryClient = new QueryClient();
 const LazyFallback = () => <div className="p-6 text-sm text-muted-foreground">Chargement…</div>;

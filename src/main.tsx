@@ -3,6 +3,40 @@ import App from "./App.tsx";
 import "./index.css";
 import "@/styles/svgmap.css";
 
+// Auto-reload once if a lazy chunk fails to load (common after new deploy)
+const CHUNK_RETRY_KEY = "mpl_chunk_retry_at";
+const shouldReloadForChunkError = (reason: unknown) => {
+  const msg = String((reason as any)?.message || reason || "");
+  return /Failed to fetch dynamically imported module|ChunkLoadError|Loading chunk \d+ failed/i.test(msg);
+};
+
+const tryReloadForChunkError = () => {
+  try {
+    const last = Number(sessionStorage.getItem(CHUNK_RETRY_KEY) || 0);
+    const now = Date.now();
+    // prevent infinite reload loops
+    if (now - last < 10_000) return false;
+    sessionStorage.setItem(CHUNK_RETRY_KEY, String(now));
+    window.location.reload();
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+window.addEventListener("unhandledrejection", (event) => {
+  if (shouldReloadForChunkError(event.reason)) {
+    tryReloadForChunkError();
+  }
+});
+
+window.addEventListener("error", (event) => {
+  const err = (event as ErrorEvent).error || (event as ErrorEvent).message;
+  if (shouldReloadForChunkError(err)) {
+    tryReloadForChunkError();
+  }
+});
+
 /**
  * IMPORTANT:
  * Doit matcher le storageKey du ThemeProvider dans App.tsx :
