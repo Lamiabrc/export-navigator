@@ -48,6 +48,8 @@ function isActivePath(pathname: string, to: string) {
 }
 
 function FooterSocial() {
+  const { lang } = useI18n();
+  const isFr = lang === "fr";
   const links = [
     {
       label: "Facebook",
@@ -68,9 +70,13 @@ function FooterSocial() {
 
   return (
     <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
-      <div className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">Reseaux sociaux</div>
+      <div className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+        {isFr ? "Reseaux sociaux" : "Social networks"}
+      </div>
       <div className="mt-2 text-sm text-muted-foreground">
-        Suivez MPL Export Conseil pour les actualites et contenus export.
+        {isFr
+          ? "Suivez MPL Export Conseil pour les actualites et contenus export."
+          : "Follow MPL Export Conseil for export updates and insights."}
       </div>
       <ul className="mt-4 space-y-3">
         {links.map((link) => (
@@ -89,7 +95,9 @@ function FooterSocial() {
       </ul>
       <div className="mt-5">
         <Button asChild className="bg-[#DC2626] text-white hover:bg-[#B0231D]">
-          <Link to="/contact?offer=diagnostic">Demander un diagnostic</Link>
+          <Link to="/contact?offer=diagnostic">
+            {isFr ? "Demander un diagnostic" : "Request a diagnostic"}
+          </Link>
         </Button>
       </div>
     </div>
@@ -99,6 +107,7 @@ function FooterSocial() {
 export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const { t, lang, setLang } = useI18n();
+  const isFr = lang === "fr";
   const banner = getBannerContent(location.pathname);
   const siteDisclaimers = (t("disclaimers") as string[]) ?? [];
   const nextPath = `${location.pathname}${location.search}` || "/";
@@ -325,9 +334,9 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             setSupportOpen(true);
           }}
           className="fixed bottom-6 right-6 z-[90] inline-flex items-center gap-2 rounded-full bg-[#0B1220] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-[#16233a]"
-          aria-label="Ouvrir l'aide IA"
+          aria-label={isFr ? "Ouvrir l'aide IA" : "Open AI support"}
         >
-          Aide IA
+          {isFr ? "Aide IA" : "AI support"}
         </button>
       )}
     </div>
