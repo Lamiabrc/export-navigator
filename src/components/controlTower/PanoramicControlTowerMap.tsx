@@ -303,7 +303,7 @@ export function PanoramicControlTowerMap({
             }}
           >
             {/* fond transparent */}
-            <rect x="0" y="0" width="100%" height="100%" fill="transparent" />
+            <rect x="0" y="0" width="100%" height="100%" fill="transparent" pointerEvents="none" />
 
             {/* Pays (chargés dynamiquement depuis world-map.svg) */}
             <g aria-label="Pays">

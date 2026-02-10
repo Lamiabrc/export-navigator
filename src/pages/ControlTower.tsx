@@ -5,10 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, ExternalLink, FileSpreadsheet, MapPin, RotateCcw, Rss, Upload } from "lucide-react";
-import worldMap from "@/assets/world-map.svg";
+import { Download, ExternalLink, FileSpreadsheet, RotateCcw, Rss, Upload } from "lucide-react";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
-import { TERRITORY_PCT } from "@/domain/geo/territoryPct";
+import { PanoramicControlTowerMap } from "@/components/controlTower/PanoramicControlTowerMap";
 
 type CsvState = {
   headers: string[];
@@ -56,10 +55,6 @@ type RssItem = {
   sourceName: string;
   publishedAt: number | null;
 };
-
-const MAP_WIDTH = 1010;
-const MAP_HEIGHT = 666;
-const MAP_INSET = { left: 0, right: 0, top: 0, bottom: 0 };
 
 const COUNTRY_COORDS: Record<string, { name: string; lat: number; lon: number }> = {
   FR: { name: "France", lat: 46.2276, lon: 2.2137 },
@@ -294,39 +289,6 @@ function downloadTextFile(filename: string, content: string) {
   }
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
-/** Equirectangular projection on the SVG world map (works well to place FR correctly). */
-function projectLatLon(lat: number, lon: number) {
-  const x = ((lon + 180) / 360) * (MAP_WIDTH - MAP_INSET.left - MAP_INSET.right) + MAP_INSET.left;
-  const y = ((90 - lat) / 180) * (MAP_HEIGHT - MAP_INSET.top - MAP_INSET.bottom) + MAP_INSET.top;
-  return { x, y };
-}
-
-function projectOnMap(code: string, lat: number, lon: number) {
-  const pct = (TERRITORY_PCT as Record<string, { x: number; y: number }>)[code];
-  if (pct?.x != null && pct?.y != null) {
-    return { x: (pct.x / 100) * MAP_WIDTH, y: (pct.y / 100) * MAP_HEIGHT };
-  }
-  return projectLatLon(lat, lon);
-}
-
-function buildArc(a: { x: number; y: number }, b: { x: number; y: number }) {
-  const mx = (a.x + b.x) / 2;
-  const my = (a.y + b.y) / 2;
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const nx = -dy / len;
-  const ny = dx / len;
-  const bend = clamp(len * 0.14, 16, 140);
-  const cx = mx + nx * bend;
-  const cy = my + ny * bend;
-  return `M ${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`;
-}
-
 function readUserHsPrefs() {
   try {
     if (typeof window === "undefined") return [];
@@ -478,15 +440,6 @@ export default function ControlTower() {
   const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   const [activeNews, setActiveNews] = React.useState<RssItem | null>(null);
   const [pendingCountry, setPendingCountry] = React.useState<string | null>(null);
-
-  const [hovered, setHovered] = React.useState<{
-    code: string;
-    name: string;
-    revenue: number;
-    x: number;
-    y: number;
-  } | null>(null);
-  const [tooltipPos, setTooltipPos] = React.useState<{ x: number; y: number } | null>(null);
 
   React.useEffect(() => {
     const hs = readUserHsPrefs();
@@ -820,47 +773,37 @@ export default function ControlTower() {
     return Array.from(map.values()).sort((a, b) => b.margin - a.margin);
   }, [filteredRows]);
 
-  const mapNodes = React.useMemo(() => {
-    const nodes: Array<{ code: string; name: string; x: number; y: number; revenue: number }> = [];
-    let missing = 0;
-
+  const countryStats = React.useMemo(() => {
+    const stats: Record<string, { label?: string; total?: number; updates?: number; alerts?: number }> = {};
     destinationAggAll.forEach((entry) => {
-      const meta = COUNTRY_COORDS[entry.code];
-      const pct = (TERRITORY_PCT as Record<string, { x: number; y: number }>)[entry.code];
-      if (!meta && !pct) {
-        missing += 1;
-        return;
-      }
-      const point = pct
-        ? { x: (pct.x / 100) * MAP_WIDTH, y: (pct.y / 100) * MAP_HEIGHT }
-        : projectOnMap(entry.code, meta.lat, meta.lon);
-      nodes.push({ code: entry.code, name: entry.name, x: point.x, y: point.y, revenue: entry.revenue });
+      if (!entry.code) return;
+      stats[entry.code] = {
+        label: entry.name,
+        total: Math.round(entry.revenue || 0),
+        updates: entry.lines,
+        alerts: 0,
+      };
     });
-
-    // ✅ Hub France: position fiable via projection lat/lon (évite un mauvais TERRITORY_PCT/HUB_FR)
-    const fr = COUNTRY_COORDS.FR;
-    const hubPoint = projectLatLon(fr.lat, fr.lon);
-    if (!nodes.some((n) => n.code === "FR")) {
-      nodes.push({ code: "FR", name: territoryLabel("FR"), x: hubPoint.x, y: hubPoint.y, revenue: 0 });
-    } else {
-      // si FR existe déjà mais est mal placé via pct, on force la position hub (plus fiable)
-      nodes.forEach((n) => {
-        if (n.code === "FR") {
-          n.x = hubPoint.x;
-          n.y = hubPoint.y;
-        }
-      });
-    }
-
-    return { nodes, missing, hubPoint };
+    return stats;
   }, [destinationAggAll]);
 
-  const hubNode = React.useMemo(() => {
-    const frName = territoryLabel("FR");
-    return { code: "FR", name: frName, x: mapNodes.hubPoint.x, y: mapNodes.hubPoint.y, revenue: 0 };
-  }, [mapNodes.hubPoint.x, mapNodes.hubPoint.y]);
+  const handleCountrySelect = React.useCallback(
+    (iso: string) => {
+      setDestinationFilter(iso);
+      setSelectedWatchCountry(iso);
+      setPendingCountry(iso);
+      if (rssPanelRef.current) {
+        rssPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    },
+    [rssPanelRef],
+  );
 
-  const maxRevenue = Math.max(0, ...mapNodes.nodes.map((n) => n.revenue || 0));
+  const handleCountryReset = React.useCallback(() => {
+    setDestinationFilter("ALL");
+    setSelectedWatchCountry("FR");
+    setPendingCountry("FR");
+  }, []);
 
   const setDefaultsField = (key: keyof typeof defaults) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const raw = event.target.value;
@@ -991,129 +934,13 @@ export default function ControlTower() {
 
         {/* ✅ Carte pleine largeur + RSS en dessous */}
         <section className="space-y-4">
-          <Card className="w-full overflow-hidden">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <MapPin className="h-4 w-4 text-blue-600" />
-                Flux par destination
-              </CardTitle>
-              <CardDescription>Survole un point pour voir les volumes. Clic = filtre + actu du pays.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="relative h-[60vh] min-h-[520px] w-full overflow-hidden rounded-2xl border border-blue-100 bg-white lg:min-h-[720px]">
-                <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="absolute inset-0 h-full w-full">
-                  <image
-                    href={worldMap}
-                    x="0"
-                    y="0"
-                    width={MAP_WIDTH}
-                    height={MAP_HEIGHT}
-                    opacity="0.75"
-                  />
-
-                  {/* Arcs depuis hub FR */}
-                  {mapNodes.nodes
-                    .filter((n) => n.code !== "FR" && n.revenue > 0)
-                    .map((node) => {
-                      const path = buildArc(hubNode, node);
-                      const strokeWidth = clamp(1.5 + (node.revenue / Math.max(1, maxRevenue)) * 4, 1.5, 6);
-                      return (
-                        <path
-                          key={`arc-${node.code}`}
-                          d={path}
-                          fill="none"
-                          stroke="#2563eb"
-                          strokeWidth={strokeWidth}
-                          strokeOpacity={0.25}
-                          vectorEffect="non-scaling-stroke"
-                        />
-                      );
-                    })}
-
-                  {/* Nodes */}
-                  {mapNodes.nodes.map((node) => {
-                    const radius = node.code === "FR"
-                      ? 14
-                      : clamp(6 + (node.revenue / Math.max(1, maxRevenue)) * 10, 6, 14);
-
-                    const isSelected = destinationFilter === node.code;
-                    const isWatch = selectedWatchCountry === node.code;
-
-                    return (
-                      <g key={node.code}>
-                        <circle cx={node.x} cy={node.y} r={radius + 8} fill="#93c5fd" opacity={0.2} />
-                        <circle
-                          cx={node.x}
-                          cy={node.y}
-                          r={radius}
-                          fill={node.code === "FR" ? "#2563eb" : isSelected ? "#1d4ed8" : "#3b82f6"}
-                          opacity={node.code === "FR" ? 0.95 : node.revenue > 0 ? 0.85 : 0.35}
-                          className="cursor-pointer"
-                          stroke={isWatch ? "#ffffff" : "none"}
-                          strokeWidth={isWatch ? 2 : 0}
-                          onMouseEnter={(evt) => {
-                            setHovered({
-                              code: node.code,
-                              name: node.code === "FR" ? "Hub France" : node.name,
-                              revenue: node.revenue,
-                              x: node.x,
-                              y: node.y,
-                            });
-                            setTooltipPos({ x: evt.clientX, y: evt.clientY });
-                          }}
-                          onMouseMove={(evt) => setTooltipPos({ x: evt.clientX, y: evt.clientY })}
-                          onMouseLeave={() => {
-                            setHovered(null);
-                            setTooltipPos(null);
-                          }}
-                          onClick={() => {
-                            setDestinationFilter(node.code);
-                            setSelectedWatchCountry(node.code);
-                            setPendingCountry(node.code);
-                            if (rssPanelRef.current) {
-                              rssPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-                            }
-                          }}
-                          onDoubleClick={() => setDestinationFilter("ALL")}
-                        />
-
-                        {node.code === "FR" ? (
-                          <text x={node.x + 14} y={node.y + 5} className="text-xs font-semibold fill-blue-800">
-                            Hub France
-                          </text>
-                        ) : null}
-                      </g>
-                    );
-                  })}
-                </svg>
-
-                {hovered && tooltipPos ? (
-                  <div
-                    className="pointer-events-none fixed z-50 rounded-lg border border-blue-200 bg-white/95 px-3 py-2 text-xs text-blue-900 shadow-xl"
-                    style={{ left: tooltipPos.x + 12, top: tooltipPos.y + 12 }}
-                  >
-                    <div className="font-semibold">{hovered.name}</div>
-                    <div className="text-blue-600">{hovered.code}</div>
-                    <div className="mt-1 text-blue-900">CA: {formatMoney(hovered.revenue, displayCurrency)}</div>
-                  </div>
-                ) : null}
-
-                {mapNodes.missing > 0 ? (
-                  <div className="absolute bottom-3 right-3 rounded-full border border-blue-200 bg-white/90 px-3 py-1 text-xs text-blue-700">
-                    {mapNodes.missing} destinations hors carte
-                  </div>
-                ) : null}
-
-                {!rowsAll.length ? (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-lg">
-                      Importe un CSV pour afficher les flux.
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
+          <PanoramicControlTowerMap
+            selectedCountry={selectedWatchCountry}
+            selectedLabel={selectedCountryLabel}
+            countryStats={countryStats}
+            onCountrySelect={handleCountrySelect}
+            onReset={handleCountryReset}
+          />
           {/* ✅ Veille RSS (au clic sur pays) */}
           <Card ref={rssPanelRef}>
             <CardHeader className="pb-2">
@@ -1254,14 +1081,11 @@ export default function ControlTower() {
                 <Select
                   value={destinationFilter}
                   onValueChange={(v) => {
-                    setDestinationFilter(v);
-                    if (v !== "ALL") {
-                      setSelectedWatchCountry(v);
-                      setPendingCountry(v);
-                      if (rssPanelRef.current) {
-                        rssPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-                      }
+                    if (v === "ALL") {
+                      handleCountryReset();
+                      return;
                     }
+                    handleCountrySelect(v);
                   }}
                 >
                   <SelectTrigger>
