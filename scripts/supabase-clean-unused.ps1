@@ -214,10 +214,10 @@ Invoke-Supabase "supabase:db-dump" $dumpArgs -Interactive
 
 $dumpText = Get-Content -LiteralPath $dumpPath -Raw
 
-$tables = Get-ObjectNames $dumpText '(?im)^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:public\.)?([a-zA-Z0-9_]+)\b'
-$views = Get-ObjectNames $dumpText '(?im)^\s*CREATE\s+VIEW\s+(?:public\.)?([a-zA-Z0-9_]+)\b'
-$matviews = Get-ObjectNames $dumpText '(?im)^\s*CREATE\s+MATERIALIZED\s+VIEW\s+(?:public\.)?([a-zA-Z0-9_]+)\b'
-$functions = Get-ObjectNames $dumpText '(?im)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?([a-zA-Z0-9_]+)\b'
+$tables = Get-ObjectNames $dumpText '(?im)^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:(?:"public"|public)\.)?"?([a-zA-Z0-9_]+)"?\b'
+$views = Get-ObjectNames $dumpText '(?im)^\s*CREATE\s+VIEW\s+(?:(?:"public"|public)\.)?"?([a-zA-Z0-9_]+)"?\b'
+$matviews = Get-ObjectNames $dumpText '(?im)^\s*CREATE\s+MATERIALIZED\s+VIEW\s+(?:(?:"public"|public)\.)?"?([a-zA-Z0-9_]+)"?\b'
+$functions = Get-ObjectNames $dumpText '(?im)^\s*CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:(?:"public"|public)\.)?"?([a-zA-Z0-9_]+)"?\b'
 
 $allRelations = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 foreach ($n in $tables) { $null = $allRelations.Add($n) }
@@ -246,7 +246,7 @@ foreach ($t in $tables) { if ($keepRelations.Contains($t)) { $null = $keepTables
 
 foreach ($v in $views) {
   if (-not $keepRelations.Contains($v)) { continue }
-  $pattern = "(?is)CREATE\\s+VIEW\\s+(?:public\\.)?$([regex]::Escape($v))\\b.*?;"
+  $pattern = '(?is)CREATE\s+VIEW\s+(?:(?:"public"|public)\.)?"?{0}"?\b.*?;' -f [regex]::Escape($v)
   $def = Extract-Definition $dumpText $pattern
   if ($def) {
     foreach ($t in $tables) {
@@ -257,7 +257,7 @@ foreach ($v in $views) {
 
 foreach ($v in $matviews) {
   if (-not $keepRelations.Contains($v)) { continue }
-  $pattern = "(?is)CREATE\\s+MATERIALIZED\\s+VIEW\\s+(?:public\\.)?$([regex]::Escape($v))\\b.*?;"
+  $pattern = '(?is)CREATE\s+MATERIALIZED\s+VIEW\s+(?:(?:"public"|public)\.)?"?{0}"?\b.*?;' -f [regex]::Escape($v)
   $def = Extract-Definition $dumpText $pattern
   if ($def) {
     foreach ($t in $tables) {
@@ -268,7 +268,7 @@ foreach ($v in $matviews) {
 
 foreach ($fn in $functions) {
   if (-not $keepFunctions.Contains($fn)) { continue }
-  $pattern = "(?is)CREATE\\s+(?:OR\\s+REPLACE\\s+)?FUNCTION\\s+(?:public\\.)?$([regex]::Escape($fn))\\b.*?\\$\\$.*?\\$\\$;"
+  $pattern = '(?is)CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:(?:"public"|public)\.)?"?{0}"?\b.*?\$\$.*?\$\$;' -f [regex]::Escape($fn)
   $def = Extract-Definition $dumpText $pattern
   if ($def) {
     foreach ($t in $tables) {
