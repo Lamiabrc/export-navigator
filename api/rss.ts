@@ -22,6 +22,7 @@ type FeedItem = {
 };
 
 const PROXY_ALLOWED_HOSTS = new Set([
+  "news.google.com",
   "policy.trade.ec.europa.eu",
   "www.wto.org",
   "www.economie.gouv.fr",
