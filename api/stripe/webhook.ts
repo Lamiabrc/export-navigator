@@ -62,6 +62,29 @@ async function findUserIdByCustomer(customerId: string) {
   return data?.user_id || null;
 }
 
+async function findUserIdByEmail(email: string) {
+  const admin = supabaseAdmin();
+  const { data, error } = await admin.auth.admin.getUserByEmail(email);
+  if (error) return null;
+  return data?.user?.id || null;
+}
+
+async function upsertBillingCustomer(userId: string, customerId: string, email?: string | null) {
+  const admin = supabaseAdmin();
+  const { error } = await admin.from("billing_customers").upsert(
+    {
+      user_id: userId,
+      stripe_customer_id: customerId,
+      email: email || null,
+    },
+    { onConflict: "user_id" }
+  );
+
+  if (error) {
+    console.error("billing_customers upsert error:", error.message);
+  }
+}
+
 async function upsertSubscription(subscription: Stripe.Subscription) {
   const customerId = subscription.customer as string | null;
   if (!customerId) return;
@@ -82,8 +105,32 @@ async function upsertSubscription(subscription: Stripe.Subscription) {
     });
   }
 
-  const userId = await findUserIdByCustomer(customerId);
+  let userId = await findUserIdByCustomer(customerId);
+  const metaUserId = String(subscription.metadata?.supabase_user_id || subscription.metadata?.user_id || "").trim();
+  if (!userId && metaUserId) {
+    userId = metaUserId;
+  }
+
+  if (!userId) {
+    try {
+      const customer = await stripe.customers.retrieve(customerId);
+      if (customer && typeof customer === "object" && !("deleted" in customer)) {
+        const email = String(customer.email || "").trim();
+        if (email) {
+          userId = await findUserIdByEmail(email);
+          if (userId) {
+            await upsertBillingCustomer(userId, customerId, email);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn("stripe customer lookup failed:", err?.message || String(err));
+    }
+  }
+
   if (!userId) return;
+
+  await upsertBillingCustomer(userId, customerId, null);
 
   const admin = supabaseAdmin();
   const { error: upsertErr } = await admin.from("billing_subscriptions").upsert(
