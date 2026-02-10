@@ -68,6 +68,26 @@ function Resolve-SupabaseCli() {
   Fail "check:supabase" "Supabase CLI not found. Install via 'npm install supabase --save-dev' or use npx."
 }
 
+function Format-Command([string]$Exe, [string[]]$CmdArgs) {
+  if (-not $CmdArgs) { return $Exe }
+  $display = @()
+  $skipNext = $false
+  foreach ($a in $CmdArgs) {
+    if ($skipNext) {
+      $display += "****"
+      $skipNext = $false
+      continue
+    }
+    if ($a -eq "--password") {
+      $display += $a
+      $skipNext = $true
+      continue
+    }
+    $display += $a
+  }
+  return $Exe + " " + ($display -join " ")
+}
+
 function Invoke-Step(
   [string]$Step,
   [string]$Exe,
@@ -75,7 +95,7 @@ function Invoke-Step(
   [string]$Stdin = $null,
   [switch]$Interactive
 ) {
-  Write-Status "RUN" $Step ($Exe + " " + ($CmdArgs -join " "))
+  Write-Status "RUN" $Step (Format-Command $Exe $CmdArgs)
   if ($Interactive) {
     if ($null -ne $Stdin) {
       $null = $Stdin | & $Exe @CmdArgs

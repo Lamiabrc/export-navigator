@@ -63,6 +63,26 @@ function Resolve-SupabaseCli() {
   Fail "check:supabase" "Supabase CLI not found. Install via 'npm install supabase --save-dev' or use npx."
 }
 
+function Format-Command([string]$Exe, [string[]]$CmdArgs) {
+  if (-not $CmdArgs) { return $Exe }
+  $display = @()
+  $skipNext = $false
+  foreach ($a in $CmdArgs) {
+    if ($skipNext) {
+      $display += "****"
+      $skipNext = $false
+      continue
+    }
+    if ($a -eq "--password") {
+      $display += $a
+      $skipNext = $true
+      continue
+    }
+    $display += $a
+  }
+  return $Exe + " " + ($display -join " ")
+}
+
 function Invoke-Step(
   [string]$Step,
   [string]$Exe,
@@ -70,7 +90,7 @@ function Invoke-Step(
   [string]$Stdin = $null,
   [switch]$Interactive
 ) {
-  Write-Status "RUN" $Step ($Exe + " " + ($CmdArgs -join " "))
+  Write-Status "RUN" $Step (Format-Command $Exe $CmdArgs)
   if ($Interactive) {
     if ($null -ne $Stdin) {
       $null = $Stdin | & $Exe @CmdArgs
@@ -178,6 +198,8 @@ Resolve-SupabaseCli
 
 if (-not $env:SUPABASE_DB_PASSWORD) {
   Write-Status "WARN" "check:db-password" "SUPABASE_DB_PASSWORD not set; you may be prompted."
+} elseif ($env:SUPABASE_DB_PASSWORD -match 'ton_mot_de_passe_db|<.*>') {
+  Write-Status "WARN" "check:db-password" "SUPABASE_DB_PASSWORD looks like a placeholder. Use the real DB password from Supabase dashboard."
 }
 
 Invoke-Supabase "supabase:link" @("link","--project-ref",$ProjectRef) -Interactive
