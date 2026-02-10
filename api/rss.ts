@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { supabaseAdmin } from "../src/server/supabaseAdmin.js";
 
 type ApiItem = {
   title: string;
@@ -70,6 +69,14 @@ function allowCors(req: VercelRequest, res: VercelResponse) {
     return true;
   }
   return false;
+}
+
+function createAbortController() {
+  try {
+    return typeof AbortController !== "undefined" ? new AbortController() : null;
+  } catch {
+    return null;
+  }
 }
 
 function escapeXml(input: string) {
@@ -226,8 +233,8 @@ function parseAtomItems(xml: string) {
 }
 
 async function fetchFallbackItems(limit: number) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const controller = createAbortController();
+  const timeout = setTimeout(() => controller?.abort?.(), 10_000);
 
   try {
     const fetched = await Promise.all(
@@ -236,7 +243,7 @@ async function fetchFallbackItems(limit: number) {
           const res = await fetch(src.url, {
             method: "GET",
             headers: { Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*" },
-            signal: controller.signal,
+            signal: controller?.signal,
             redirect: "follow",
           });
           const text = await res.text();
@@ -357,15 +364,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return;
       }
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8_000);
+      const controller = createAbortController();
+      const timeout = setTimeout(() => controller?.abort?.(), 8_000);
       try {
         const upstream = await fetch(proxyUrl, {
           method: "GET",
           headers: {
             Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
           },
-          signal: controller.signal,
+          signal: controller?.signal,
           redirect: "follow",
         });
         const text = await upstream.text();
@@ -398,6 +405,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let degraded = false;
 
     try {
+      const { supabaseAdmin } = await import("../src/server/supabaseAdmin.js");
       const admin = supabaseAdmin();
 
       let q = admin
