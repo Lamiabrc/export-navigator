@@ -110,6 +110,7 @@ const CSV_TEMPLATE = [
 
 /** RSS sources (country-specific + global). */
 const GLOBAL_RSS_SOURCES: RssSource[] = [
+  { name: "Le Moci – Actualités", url: "https://www.lemoci.com/feed/" },
   { name: "UE – Actualités commerce", url: "https://policy.trade.ec.europa.eu/node/2/rss_en" },
   { name: "OMC – Dernières nouvelles", url: "https://www.wto.org/library/rss/latest_news_e.xml" },
 ];

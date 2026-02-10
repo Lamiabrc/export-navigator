@@ -5,29 +5,15 @@ export type WatchItem = {
   source?: string;
 };
 
+import { DEFAULT_FEEDS as RSS_DEFAULT_FEEDS } from "@/lib/rss/feeds";
+
 type RssSource = {
   id: string;
   name: string;
   url: string;
 };
 
-const DEFAULT_FEEDS: RssSource[] = [
-  {
-    id: "economie-gouv-actu",
-    name: "Economie.gouv.fr",
-    url: "https://www.economie.gouv.fr/rss/toutesactualites",
-  },
-  {
-    id: "service-public-pro",
-    name: "Service-Public Pro",
-    url: "https://www.service-public.gouv.fr/abonnements/rss/actu-actu-pro.rss",
-  },
-  {
-    id: "wto-news",
-    name: "OMC",
-    url: "http://www.wto.org/library/rss/latest_news_e.xml",
-  },
-];
+const DEFAULT_FEEDS: RssSource[] = RSS_DEFAULT_FEEDS;
 
 const COUNTRY_FEEDS: Record<string, RssSource[]> = {
   FR: DEFAULT_FEEDS,

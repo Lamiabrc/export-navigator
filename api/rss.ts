@@ -23,6 +23,10 @@ type FeedItem = {
 
 const PROXY_ALLOWED_HOSTS = new Set([
   "news.google.com",
+  "www.lemoci.com",
+  "www.tresor.economie.gouv.fr",
+  "finance.ec.europa.eu",
+  "ofsi.blog.gov.uk",
   "policy.trade.ec.europa.eu",
   "www.wto.org",
   "www.economie.gouv.fr",
