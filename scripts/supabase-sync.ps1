@@ -62,12 +62,12 @@ function Resolve-SupabaseCli() {
   Fail "check:supabase" "Supabase CLI not found. Install via 'npm install supabase --save-dev' or use npx."
 }
 
-function Invoke-Step([string]$Step, [string]$Exe, [string[]]$Args, [string]$Stdin = $null) {
-  Write-Status "RUN" $Step ($Exe + " " + ($Args -join " "))
+function Invoke-Step([string]$Step, [string]$Exe, [string[]]$CmdArgs, [string]$Stdin = $null) {
+  Write-Status "RUN" $Step ($Exe + " " + ($CmdArgs -join " "))
   if ($null -ne $Stdin) {
-    $output = $Stdin | & $Exe @Args 2>&1
+    $output = $Stdin | & $Exe @CmdArgs 2>&1
   } else {
-    $output = & $Exe @Args 2>&1
+    $output = & $Exe @CmdArgs 2>&1
   }
   $code = $LASTEXITCODE
   if ($code -ne 0) {
@@ -79,10 +79,10 @@ function Invoke-Step([string]$Step, [string]$Exe, [string[]]$Args, [string]$Stdi
   if ($output) { $output | ForEach-Object { Write-Host $_ } }
 }
 
-function Invoke-Supabase([string]$Step, [string[]]$Args, [string]$Stdin = $null) {
+function Invoke-Supabase([string]$Step, [string[]]$CmdArgs, [string]$Stdin = $null) {
   $allArgs = @()
   if ($SupabaseArgsPrefix.Count -gt 0) { $allArgs += $SupabaseArgsPrefix }
-  $allArgs += $Args
+  $allArgs += $CmdArgs
   Invoke-Step $Step $SupabaseExe $allArgs $Stdin
 }
 
