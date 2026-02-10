@@ -10,6 +10,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$ScriptDir = Split-Path -Parent $PSCommandPath
+$RepoRoot = Split-Path -Parent $ScriptDir
+
 function Write-Status([string]$Level, [string]$Step, [string]$Detail = "") {
   $ts = (Get-Date).ToString("s")
   if ($Detail) {
@@ -30,6 +33,35 @@ function Require-Cmd([string]$Name) {
   }
 }
 
+$SupabaseExe = $null
+$SupabaseArgsPrefix = @()
+
+function Resolve-SupabaseCli() {
+  if (Get-Command "supabase" -ErrorAction SilentlyContinue) {
+    $script:SupabaseExe = "supabase"
+    $script:SupabaseArgsPrefix = @()
+    Write-Status "OK" "check:supabase" "found in PATH"
+    return
+  }
+
+  $localCmd = Join-Path $RepoRoot "node_modules\\.bin\\supabase.cmd"
+  if (Test-Path $localCmd) {
+    $script:SupabaseExe = $localCmd
+    $script:SupabaseArgsPrefix = @()
+    Write-Status "OK" "check:supabase" "found in node_modules\\.bin"
+    return
+  }
+
+  if (Get-Command "npx" -ErrorAction SilentlyContinue) {
+    $script:SupabaseExe = "npx"
+    $script:SupabaseArgsPrefix = @("--yes", "supabase")
+    Write-Status "OK" "check:supabase" "using npx"
+    return
+  }
+
+  Fail "check:supabase" "Supabase CLI not found. Install via 'npm install supabase --save-dev' or use npx."
+}
+
 function Invoke-Step([string]$Step, [string]$Exe, [string[]]$Args, [string]$Stdin = $null) {
   Write-Status "RUN" $Step ($Exe + " " + ($Args -join " "))
   if ($null -ne $Stdin) {
@@ -47,11 +79,16 @@ function Invoke-Step([string]$Step, [string]$Exe, [string[]]$Args, [string]$Stdi
   if ($output) { $output | ForEach-Object { Write-Host $_ } }
 }
 
-# 1) Verify tools
-Require-Cmd "supabase"
-Write-Status "OK" "check:supabase" "found"
+function Invoke-Supabase([string]$Step, [string[]]$Args, [string]$Stdin = $null) {
+  $allArgs = @()
+  if ($SupabaseArgsPrefix.Count -gt 0) { $allArgs += $SupabaseArgsPrefix }
+  $allArgs += $Args
+  Invoke-Step $Step $SupabaseExe $allArgs $Stdin
+}
 
+# 1) Verify tools
 Require-Cmd "docker"
+Resolve-SupabaseCli
 try {
   $null = & docker info 2>$null
   if ($LASTEXITCODE -ne 0) { throw "docker info failed" }
@@ -62,7 +99,7 @@ try {
 
 # 2) Init Supabase locally if needed
 if (-not (Test-Path "supabase\\config.toml")) {
-  Invoke-Step "supabase:init" "supabase" @("init")
+  Invoke-Supabase "supabase:init" @("init")
 } else {
   Write-Status "OK" "supabase:init" "already initialized"
 }
@@ -98,7 +135,7 @@ if ($sourceDirs.Count -eq 0) {
       $safeName = ($file.BaseName -replace '[^a-zA-Z0-9_]+','_').Trim('_')
       if ([string]::IsNullOrWhiteSpace($safeName)) { $safeName = "import_sql" }
       $content = Get-Content -Raw -LiteralPath $file.FullName
-      Invoke-Step ("migrations:import:" + $file.Name) "supabase" @("migration","new",$safeName) $content
+      Invoke-Supabase ("migrations:import:" + $file.Name) @("migration","new",$safeName) $content
       $existingHashes[$hash] = $file.Name
     }
   }
@@ -107,14 +144,14 @@ if ($sourceDirs.Count -eq 0) {
 # 4) Link project
 $linkArgs = @("link","--project-ref",$ProjectRef)
 if ($env:SUPABASE_DB_PASSWORD) { $linkArgs += @("--password",$env:SUPABASE_DB_PASSWORD) }
-Invoke-Step "supabase:link" "supabase" $linkArgs
+Invoke-Supabase "supabase:link" $linkArgs
 
 # 5) Generate diff migration
 $diffArgs = @("db","diff","-f",$DiffName)
 if ($DiffTarget -eq "linked") { $diffArgs += "--linked" }
-Invoke-Step "supabase:db-diff" "supabase" $diffArgs
+Invoke-Supabase "supabase:db-diff" $diffArgs
 
 # 6) Push migrations
-Invoke-Step "supabase:db-push" "supabase" @("db","push")
+Invoke-Supabase "supabase:db-push" @("db","push")
 
 Write-Status "OK" "done" "migrations pushed"
