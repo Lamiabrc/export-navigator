@@ -100,6 +100,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             emailRedirectTo: options?.emailRedirectTo,
           },
         });
+        const user = data?.user;
+        const identities = Array.isArray(user?.identities) ? user?.identities : null;
+        const createdAtMs = user?.created_at ? new Date(user.created_at).getTime() : null;
+        const isOlderThan5Min = createdAtMs ? Date.now() - createdAtMs > 5 * 60 * 1000 : false;
+        const emailConfirmed = Boolean((user as any)?.email_confirmed_at || (user as any)?.confirmed_at);
+        const hasSignedInBefore = Boolean((user as any)?.last_sign_in_at);
+        const looksLikeExistingUser =
+          Boolean(user) &&
+          !data?.session &&
+          (identities?.length === 0 || emailConfirmed || hasSignedInBefore || isOlderThan5Min);
+
+        if (!error && looksLikeExistingUser) {
+          return {
+            error: "Cet email est deja utilise. Connecte-toi ou reinitialise ton mot de passe.",
+            needsEmailConfirmation: false,
+            userId: null,
+          };
+        }
         const needsEmailConfirmation = Boolean(data?.user && !data?.session);
         if (!error && data?.user?.id) {
           // best-effort: ensure session refresh if immediate
