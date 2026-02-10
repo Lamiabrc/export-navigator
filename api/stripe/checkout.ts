@@ -237,8 +237,8 @@ export default allowCors(async (req: VercelRequest, res: VercelResponse) => {
         allow_promotion_codes: true,
         success_url: `${appUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${appUrl}/offre?canceled=1`,
-        metadata: { supabase_user_id: user.id, plan: "online" },
-        subscription_data: { metadata: { supabase_user_id: user.id, plan: "online" } },
+        metadata: { supabase_user_id: user.id, plan: "PRO_ONLINE" },
+        subscription_data: { metadata: { supabase_user_id: user.id, plan: "PRO_ONLINE" } },
       });
 
     try {

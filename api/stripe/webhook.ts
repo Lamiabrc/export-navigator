@@ -18,10 +18,36 @@ async function readRawBody(req: VercelRequest): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+function parsePriceList(raw?: string | null) {
+  if (!raw) return [];
+  return raw
+    .split(/[,\s]+/)
+    .map((v) => v.trim())
+    .filter((v) => v.startsWith("price_"));
+}
+
+function buildPricePlanMap() {
+  const map = new Map<string, string>();
+  const add = (raw: string | undefined, plan: string) => {
+    for (const id of parsePriceList(raw)) map.set(id, plan);
+  };
+
+  add(process.env.STRIPE_PRICE_ONLINE, "PRO_ONLINE");
+  add(process.env.STRIPE_PRICE_VISIO, "PRO_VISIO");
+  add(process.env.STRIPE_PRICE_PROSPECTION, "PROSPECTION");
+  add(process.env.STRIPE_PRICE_PILOTAGE_HEBDO, "PILOTAGE_HEBDO");
+  add(process.env.STRIPE_PRICE_PILOTAGE, "PILOTAGE_HEBDO");
+
+  return map;
+}
+
 function resolvePlan(status: string | null, priceId: string | null) {
-  if (!status || !priceId) return "free";
+  if (!status || !priceId) return "FREE";
   const active = status === "active" || status === "trialing";
-  return active && priceId === process.env.STRIPE_PRICE_ONLINE ? "online" : "free";
+  if (!active) return "FREE";
+
+  const map = buildPricePlanMap();
+  return map.get(priceId) ?? "FREE";
 }
 
 async function findUserIdByCustomer(customerId: string) {
@@ -49,6 +75,12 @@ async function upsertSubscription(subscription: Stripe.Subscription) {
     : null;
 
   const plan = resolvePlan(status, priceId);
+  if ((status === "active" || status === "trialing") && plan === "FREE") {
+    console.warn("billing_subscriptions: unknown priceId, defaulting to FREE", {
+      priceId,
+      status,
+    });
+  }
 
   const userId = await findUserIdByCustomer(customerId);
   if (!userId) return;
@@ -83,7 +115,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const missing: string[] = [];
     if (!process.env.STRIPE_SECRET_KEY) missing.push("STRIPE_SECRET_KEY");
     if (!process.env.STRIPE_WEBHOOK_SECRET) missing.push("STRIPE_WEBHOOK_SECRET");
-    if (!process.env.STRIPE_PRICE_ONLINE) missing.push("STRIPE_PRICE_ONLINE");
 
     if (missing.length) {
       json(res, 500, { ok: false, error: "missing_env", missing });

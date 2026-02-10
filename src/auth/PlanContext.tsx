@@ -10,7 +10,7 @@ import {
 import type { ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
 
-export type SubscriptionPlan = "FREE" | "PRO_ONLINE" | "PRO_VISIO" | "PILOTAGE_HEBDO";
+export type SubscriptionPlan = "FREE" | "PRO_ONLINE" | "PROSPECTION" | "PRO_VISIO" | "PILOTAGE_HEBDO";
 
 const STORAGE_KEY = "export-navigator-plan";
 const PLAN_QUERY_PARAM = "plan";
@@ -18,11 +18,18 @@ const PLAN_QUERY_PARAM = "plan";
 const rank: Record<SubscriptionPlan, number> = {
   FREE: 0,
   PRO_ONLINE: 1,
+  PROSPECTION: 1,
   PRO_VISIO: 2,
   PILOTAGE_HEBDO: 3,
 };
 
-const SUPPORTED_PLANS: SubscriptionPlan[] = ["FREE", "PRO_ONLINE", "PRO_VISIO", "PILOTAGE_HEBDO"];
+const SUPPORTED_PLANS: SubscriptionPlan[] = [
+  "FREE",
+  "PRO_ONLINE",
+  "PROSPECTION",
+  "PRO_VISIO",
+  "PILOTAGE_HEBDO",
+];
 
 function safeStorageGet(key: string) {
   try {
@@ -65,6 +72,9 @@ const mapBillingPlan = (planValue: unknown): SubscriptionPlan | null => {
 
   // exemples : "visio", "pro_visio"
   if (token === "VISIO" || token === "PRO_VISIO") return "PRO_VISIO";
+
+  // exemples : "prospection"
+  if (token === "PROSPECTION" || token === "PROSPECTING") return "PROSPECTION";
 
   // exemples : "pilotage", "pilotage_hebdo", "PILOTAGE-HEBDO"
   if (token === "PILOTAGE" || token === "PILOTAGE_HEBDO") return "PILOTAGE_HEBDO";

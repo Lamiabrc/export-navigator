@@ -184,8 +184,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const provided = String(req.headers["x-cron-secret"] || "");
-    if (provided !== expected) {
+    const providedHeader = String(req.headers["x-cron-secret"] || "");
+    const providedQuery = String(req.query?.key || "");
+    const provided = (providedHeader || providedQuery || "").trim();
+
+    if (!provided || provided !== expected) {
       res.status(401).json({ ok: false, error: "unauthorized" });
       return;
     }

@@ -21,6 +21,13 @@ type FeedItem = {
   imageUrl?: string | null;
 };
 
+const FALLBACK_SOURCES: Array<{ name: string; url: string }> = [
+  { name: "Economie.gouv.fr", url: "https://www.economie.gouv.fr/rss/toutesactualites" },
+  { name: "Service-Public Pro", url: "https://www.service-public.gouv.fr/abonnements/rss/actu-actu-pro.rss" },
+  { name: "UE DG Trade", url: "https://policy.trade.ec.europa.eu/node/2/rss_en" },
+  { name: "OMC (WTO)", url: "https://www.wto.org/library/rss/latest_news_e.xml" },
+];
+
 const PROXY_ALLOWED_HOSTS = new Set([
   "news.google.com",
   "www.lemoci.com",
@@ -105,6 +112,166 @@ function toUtcDate(value?: string | null) {
     return dt.toUTCString();
   } catch {
     return new Date().toUTCString();
+  }
+}
+
+function stripHtml(html: string) {
+  return (html || "")
+    .replace(/<!\[CDATA\[/g, "")
+    .replace(/\]\]>/g, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractTag(block: string, tag: string) {
+  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, "i");
+  const m = block.match(re);
+  return m?.[1]?.trim() || "";
+}
+
+function extractAttr(block: string, tag: string, attr: string) {
+  const re = new RegExp(`<${tag}[^>]*\\s${attr}="([^"]+)"[^>]*\\/?>(?:<\\/${tag}>)?`, "i");
+  const m = block.match(re);
+  return m?.[1]?.trim() || "";
+}
+
+function extractFirstImgSrc(html: string) {
+  const m = (html || "").match(/<img[^>]+src=["']([^"']+)["']/i);
+  return m?.[1]?.trim() || "";
+}
+
+function normalizeLink(link: string) {
+  const l = (link || "").trim();
+  if (!l) return "";
+  return l.replace(/\s+/g, "");
+}
+
+function isAtom(xml: string) {
+  return /<feed[\s>]/i.test(xml) && /xmlns=["']http:\/\/www\.w3\.org\/2005\/Atom["']/i.test(xml);
+}
+
+function parseRssItems(xml: string) {
+  const items: FeedItem[] = [];
+  const blocks = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
+
+  for (const b of blocks.slice(0, 50)) {
+    const titleRaw = extractTag(b, "title");
+    const linkRaw = extractTag(b, "link") || extractTag(b, "guid");
+    const descRaw = extractTag(b, "description") || extractTag(b, "content:encoded");
+    const pubRaw = extractTag(b, "pubDate") || extractTag(b, "dc:date");
+
+    const mediaImg =
+      extractAttr(b, "media:content", "url") ||
+      extractAttr(b, "media:thumbnail", "url") ||
+      extractAttr(b, "enclosure", "url");
+
+    const imgFromDesc = extractFirstImgSrc(descRaw);
+
+    const title = stripHtml(titleRaw) || "Sans titre";
+    const link = normalizeLink(stripHtml(linkRaw)) || "";
+    if (!link) continue;
+
+    const summary = descRaw ? truncate(stripHtml(descRaw), 320) : null;
+    const publishedAt = toIsoDate(stripHtml(pubRaw)) || null;
+
+    items.push({
+      title,
+      link,
+      description: summary,
+      pubDate: publishedAt,
+      imageUrl: mediaImg || imgFromDesc || null,
+    });
+  }
+
+  return items;
+}
+
+function parseAtomItems(xml: string) {
+  const items: FeedItem[] = [];
+  const blocks = xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
+
+  for (const b of blocks.slice(0, 50)) {
+    const titleRaw = extractTag(b, "title");
+    const summaryRaw = extractTag(b, "summary") || extractTag(b, "content");
+    const pubRaw = extractTag(b, "updated") || extractTag(b, "published");
+    const linkHref = extractAttr(b, "link", "href");
+
+    const mediaImg =
+      extractAttr(b, "media:content", "url") ||
+      extractAttr(b, "media:thumbnail", "url") ||
+      extractAttr(b, "enclosure", "url");
+
+    const imgFromSummary = extractFirstImgSrc(summaryRaw);
+
+    const title = stripHtml(titleRaw) || "Sans titre";
+    const link = normalizeLink(linkHref) || "";
+    if (!link) continue;
+
+    const summary = summaryRaw ? truncate(stripHtml(summaryRaw), 320) : null;
+    const publishedAt = toIsoDate(stripHtml(pubRaw)) || null;
+
+    items.push({
+      title,
+      link,
+      description: summary,
+      pubDate: publishedAt,
+      imageUrl: mediaImg || imgFromSummary || null,
+    });
+  }
+
+  return items;
+}
+
+async function fetchFallbackItems(limit: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+
+  try {
+    const fetched = await Promise.all(
+      FALLBACK_SOURCES.map(async (src) => {
+        try {
+          const res = await fetch(src.url, {
+            method: "GET",
+            headers: { Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*" },
+            signal: controller.signal,
+            redirect: "follow",
+          });
+          const text = await res.text();
+          if (!res.ok || !text) return [] as ApiItem[];
+          const parsed = isAtom(text) ? parseAtomItems(text) : parseRssItems(text);
+          return parsed.map((it) => ({
+            title: it.title,
+            link: it.link,
+            summary: it.description ?? null,
+            publishedAt: it.pubDate ?? null,
+            source: src.name,
+            zone: null,
+            category: null,
+            imageUrl: it.imageUrl ?? null,
+          })) as ApiItem[];
+        } catch {
+          return [] as ApiItem[];
+        }
+      })
+    );
+
+    const flat = fetched.flat();
+    const dedup = new Map<string, ApiItem>();
+    for (const it of flat) if (!dedup.has(it.link)) dedup.set(it.link, it);
+
+    const items = Array.from(dedup.values());
+    items.sort((a, b) => {
+      const ad = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+      const bd = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+      return bd - ad;
+    });
+
+    return items.slice(0, limit);
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -226,31 +393,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const categoryQ = String(req.query?.category || "").trim();
     const zoneQ = String(req.query?.zone || req.query?.territory || "").trim(); // compat
 
-    const admin = supabaseAdmin();
+    let items: ApiItem[] = [];
+    let updatedAt: string | null = null;
+    let degraded = false;
 
-    let q = admin
-      .from("regulatory_items")
-      .select("id,title,summary,link,published_at,category,territory,image_url,created_at, regulatory_feeds(name,source_name,source_url,logo_url,enabled,is_public,territory,category)")
-      .order("published_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(queryLimit);
+    try {
+      const admin = supabaseAdmin();
 
-    if (categoryQ) q = q.eq("category", categoryQ);
-    if (zoneQ) q = q.eq("territory", zoneQ);
+      let q = admin
+        .from("regulatory_items")
+        .select("id,title,summary,link,published_at,category,territory,image_url,created_at, regulatory_feeds(name,source_name,source_url,logo_url,enabled,is_public,territory,category)")
+        .order("published_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .limit(queryLimit);
 
-    const { data, error } = await q;
+      if (categoryQ) q = q.eq("category", categoryQ);
+      if (zoneQ) q = q.eq("territory", zoneQ);
 
-    if (error) {
-      console.error("[api/rss] supabase error:", error.message);
+      const { data, error } = await q;
+
+      if (error) {
+        console.error("[api/rss] supabase error:", error.message);
+      }
+
+      const mapped = (data || []).map(mapRowToItem).filter(Boolean) as ApiItem[];
+
+      const dedup = new Map<string, ApiItem>();
+      for (const it of mapped) if (!dedup.has(it.link)) dedup.set(it.link, it);
+
+      items = Array.from(dedup.values()).slice(0, limit);
+      updatedAt = items[0]?.publishedAt || null;
+    } catch (err: any) {
+      degraded = true;
+      console.error("[api/rss] supabase init error:", err?.message || String(err));
     }
 
-    const mapped = (data || []).map(mapRowToItem).filter(Boolean) as ApiItem[];
-
-    const dedup = new Map<string, ApiItem>();
-    for (const it of mapped) if (!dedup.has(it.link)) dedup.set(it.link, it);
-
-    const items = Array.from(dedup.values()).slice(0, limit);
-    const updatedAt = items[0]?.publishedAt || null;
+    if (!items.length) {
+      const fallback = await fetchFallbackItems(limit);
+      if (fallback.length) {
+        items = fallback;
+        updatedAt = items[0]?.publishedAt || null;
+        degraded = true;
+      }
+    }
 
     res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
 
@@ -275,7 +460,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.status(200).json({ ok: true, degraded: false, updatedAt, items });
+    res.status(200).json({ ok: true, degraded, updatedAt, items });
   } catch (err: any) {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
