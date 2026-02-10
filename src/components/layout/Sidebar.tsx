@@ -5,16 +5,21 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Activity,
+  BadgeDollarSign,
   BookOpen,
   Bot,
   Calculator,
   FileCheck2,
   Home,
   LogOut,
+  Mail,
+  Newspaper,
   Package,
   Scale,
   Settings,
   ShieldCheck,
+  Target,
+  Users,
 } from "lucide-react";
 
 type NavItem = {
@@ -41,6 +46,49 @@ const navigation: NavSection[] = [
         href: "/",
         icon: Home,
         aliases: ["/home", "/public"],
+      },
+      {
+        name: "Offre & services",
+        href: "/services",
+        icon: ShieldCheck,
+        aliases: ["/offre"],
+      },
+      {
+        name: "Tarifs",
+        href: "/pricing",
+        icon: BadgeDollarSign,
+        aliases: ["/tarifs"],
+      },
+      {
+        name: "Prospection",
+        href: "/prospection",
+        icon: Target,
+      },
+      {
+        name: "Veille (site)",
+        href: "/veille",
+        icon: Newspaper,
+        aliases: ["/watch"],
+      },
+      {
+        name: "Guides",
+        href: "/guides",
+        icon: BookOpen,
+      },
+      {
+        name: "Méthodologie",
+        href: "/methodologie",
+        icon: BookOpen,
+      },
+      {
+        name: "À propos",
+        href: "/about",
+        icon: Users,
+      },
+      {
+        name: "Contact",
+        href: "/contact",
+        icon: Mail,
       },
     ],
   },

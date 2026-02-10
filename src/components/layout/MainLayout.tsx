@@ -11,13 +11,6 @@ import { BrandLogo } from "../BrandLogo";
 import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
 import { TricolorBanner } from "@/components/layout/TricolorBanner";
 import { getBannerContent } from "@/config/bannerContent";
-import {
-  TimeRangePicker,
-  AutoRefreshControl,
-  RefreshNowButton,
-  SavedViewsMenu,
-  VariablesBar,
-} from "./GlobalFilterControls";
 import SupportChatWidget from "@/components/support/SupportChatWidget";
 
 interface MainLayoutProps {
@@ -123,12 +116,7 @@ export function MainLayout({
                 </div>
               </div>
 
-              {/* Filters */}
               <div className="flex flex-wrap items-center gap-2 justify-start lg:justify-end">
-                <TimeRangePicker />
-                <AutoRefreshControl />
-                <RefreshNowButton />
-                <SavedViewsMenu />
                 <div className="flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-900 shadow-sm">
                   <span className="truncate max-w-[150px]">{displayName}</span>
                   <Badge variant="outline" className="border-blue-200 text-blue-700 text-[10px]">
@@ -196,11 +184,6 @@ export function MainLayout({
                 Déconnexion
               </button>
             </div>
-          </div>
-
-          {/* Keep VariablesBar visually attached to header */}
-          <div className="border-t border-blue-100 bg-white/70 backdrop-blur">
-            <VariablesBar />
           </div>
 
           <div className="h-1 bg-gradient-to-r from-blue-700 via-white to-red-600" />
