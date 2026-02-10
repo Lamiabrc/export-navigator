@@ -47,6 +47,9 @@ const PROXY_ALLOWED_HOSTS = new Set([
   "ustr.gov",
 ]);
 
+const RSS_USER_AGENT =
+  "Mozilla/5.0 (compatible; ExportNavigatorBot/1.0; +https://www.exportfrancefacile.com)";
+
 function isAllowedProxyUrl(raw: string) {
   try {
     const url = new URL(raw);
@@ -234,7 +237,7 @@ function parseAtomItems(xml: string) {
 
 async function fetchFallbackItems(limit: number) {
   const controller = createAbortController();
-  const timeout = setTimeout(() => controller?.abort?.(), 10_000);
+  const timeout = setTimeout(() => controller?.abort?.(), 12_000);
 
   try {
     const fetched = await Promise.all(
@@ -242,7 +245,11 @@ async function fetchFallbackItems(limit: number) {
         try {
           const res = await fetch(src.url, {
             method: "GET",
-            headers: { Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*" },
+            headers: {
+              Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+              "User-Agent": RSS_USER_AGENT,
+              "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+            },
             signal: controller?.signal,
             redirect: "follow",
           });
@@ -365,12 +372,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const controller = createAbortController();
-      const timeout = setTimeout(() => controller?.abort?.(), 8_000);
+      const timeout = setTimeout(() => controller?.abort?.(), 12_000);
       try {
         const upstream = await fetch(proxyUrl, {
           method: "GET",
           headers: {
             Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+            "User-Agent": RSS_USER_AGENT,
+            "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
           },
           signal: controller?.signal,
           redirect: "follow",
