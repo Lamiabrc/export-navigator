@@ -68,8 +68,29 @@ function Resolve-SupabaseCli() {
   Fail "check:supabase" "Supabase CLI not found. Install via 'npm install supabase --save-dev' or use npx."
 }
 
-function Invoke-Step([string]$Step, [string]$Exe, [string[]]$CmdArgs, [string]$Stdin = $null) {
+function Invoke-Step(
+  [string]$Step,
+  [string]$Exe,
+  [string[]]$CmdArgs,
+  [string]$Stdin = $null,
+  [switch]$Interactive
+) {
   Write-Status "RUN" $Step ($Exe + " " + ($CmdArgs -join " "))
+  if ($Interactive) {
+    if ($null -ne $Stdin) {
+      $null = $Stdin | & $Exe @CmdArgs
+    } else {
+      $null = & $Exe @CmdArgs
+    }
+    $code = $LASTEXITCODE
+    if ($code -ne 0) {
+      Write-Status "ERR" $Step ("exit " + $code)
+      exit $code
+    }
+    Write-Status "OK" $Step
+    return
+  }
+
   if ($null -ne $Stdin) {
     $output = $Stdin | & $Exe @CmdArgs 2>&1
   } else {
@@ -85,11 +106,11 @@ function Invoke-Step([string]$Step, [string]$Exe, [string[]]$CmdArgs, [string]$S
   if ($output) { $output | ForEach-Object { Write-Host $_ } }
 }
 
-function Invoke-Supabase([string]$Step, [string[]]$CmdArgs, [string]$Stdin = $null) {
+function Invoke-Supabase([string]$Step, [string[]]$CmdArgs, [string]$Stdin = $null, [switch]$Interactive) {
   $allArgs = @()
   if ($SupabaseArgsPrefix.Count -gt 0) { $allArgs += $SupabaseArgsPrefix }
   $allArgs += $CmdArgs
-  Invoke-Step $Step $SupabaseExe $allArgs $Stdin
+  Invoke-Step $Step $SupabaseExe $allArgs $Stdin -Interactive:$Interactive
 }
 
 # 1) Verify tools
@@ -151,14 +172,17 @@ if ($sourceDirs.Count -eq 0) {
 Validate-ProjectRef $ProjectRef
 $linkArgs = @("link","--project-ref",$ProjectRef)
 if ($env:SUPABASE_DB_PASSWORD) { $linkArgs += @("--password",$env:SUPABASE_DB_PASSWORD) }
-Invoke-Supabase "supabase:link" $linkArgs
+if (-not $env:SUPABASE_DB_PASSWORD) {
+  Write-Status "WARN" "check:db-password" "SUPABASE_DB_PASSWORD not set; you may be prompted during db diff/push."
+}
+Invoke-Supabase "supabase:link" $linkArgs -Interactive
 
 # 5) Generate diff migration
 $diffArgs = @("db","diff","-f",$DiffName)
 if ($DiffTarget -eq "linked") { $diffArgs += "--linked" }
-Invoke-Supabase "supabase:db-diff" $diffArgs
+Invoke-Supabase "supabase:db-diff" $diffArgs -Interactive
 
 # 6) Push migrations
-Invoke-Supabase "supabase:db-push" @("db","push")
+Invoke-Supabase "supabase:db-push" @("db","push") -Interactive
 
 Write-Status "OK" "done" "migrations pushed"
