@@ -419,9 +419,18 @@ async function fetchRssRaw(url: string) {
 
 function getWatchSourcesForCountry(code: string): RssSource[] {
   const upper = (code || "").toUpperCase();
+  const countryLabel = territoryLabel(upper);
+  const querySources: RssSource[] = countryLabel
+    ? [
+        {
+          name: `Google News – ${countryLabel}`,
+          url: `https://news.google.com/rss/search?q=${encodeURIComponent(countryLabel)}&hl=fr&gl=FR&ceid=FR:fr`,
+        },
+      ]
+    : [];
   const specific = COUNTRY_RSS_SOURCES[upper] ?? [];
   // Toujours garder UE/OMC en fond de panier pour que “tous les pays” aient une veille minimale
-  return [...specific, ...GLOBAL_RSS_SOURCES];
+  return [...querySources, ...specific, ...GLOBAL_RSS_SOURCES];
 }
 
 function formatDate(ts: number | null) {
@@ -900,14 +909,22 @@ export default function ControlTower() {
       items.forEach((it) => uniq.set(it.id, it));
       const merged = Array.from(uniq.values()).sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0));
 
-      if (!merged.length) {
+      // Prioriser les sources pays si on en a (Google News + sources nationales)
+      const globalUrls = new Set(GLOBAL_RSS_SOURCES.map((s) => s.url));
+      const countrySourceNames = new Set(
+        sources.filter((s) => !globalUrls.has(s.url)).map((s) => s.name)
+      );
+      const countryItems = merged.filter((it) => countrySourceNames.has(it.sourceName));
+      const finalItems = countryItems.length ? countryItems : merged;
+
+      if (!finalItems.length) {
         setRssError(okCount ? "Aucun item RSS trouvé (sources vides ou format non reconnu)." : "Impossible de récupérer les flux RSS (blocage réseau/CORS).");
       } else {
         setRssError(null);
       }
 
-      setRssItems(merged);
-      rssCacheRef.current.set(cacheKey, { items: merged, at: now });
+      setRssItems(finalItems);
+      rssCacheRef.current.set(cacheKey, { items: finalItems, at: now });
     } catch (e: any) {
       setRssItems([]);
       setRssError(e?.message || "Erreur lors du chargement RSS.");
@@ -972,9 +989,9 @@ export default function ControlTower() {
           </div>
         </header>
 
-        {/* ✅ Carte + sidebar : plus grand */}
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-          <Card className="lg:col-span-3 overflow-hidden">
+        {/* ✅ Carte pleine largeur + RSS en dessous */}
+        <section className="space-y-4">
+          <Card className="w-full overflow-hidden">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <MapPin className="h-4 w-4 text-blue-600" />
@@ -983,7 +1000,7 @@ export default function ControlTower() {
               <CardDescription>Survole un point pour voir les volumes. Clic = filtre + actu du pays.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="relative h-[520px] w-full overflow-hidden rounded-2xl border border-blue-100 bg-white lg:h-[680px]">
+              <div className="relative h-[60vh] min-h-[520px] w-full overflow-hidden rounded-2xl border border-blue-100 bg-white lg:min-h-[720px]">
                 <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="absolute inset-0 h-full w-full">
                   <image
                     href={worldMap}
@@ -1097,9 +1114,106 @@ export default function ControlTower() {
               </div>
             </CardContent>
           </Card>
+          {/* ✅ Veille RSS (au clic sur pays) */}
+          <Card ref={rssPanelRef}>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2">
+                  <Rss className="h-4 w-4 text-blue-600" />
+                  Veille RSS – {selectedCountryLabel} ({selectedWatchCountry})
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => void loadRssForCountry(selectedWatchCountry, true)}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Rafraîchir
+                </Button>
+              </CardTitle>
+              <CardDescription>
+                Sources pays + UE/OMC (fallback). Si certains flux bloquent (CORS), le proxy est utilisé.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {activeNews ? (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600">
+                    Actu du pays
+                  </div>
+                  <div className="mt-1 font-semibold">{activeNews.title}</div>
+                  <div className="mt-1 text-xs text-blue-700">
+                    {activeNews.sourceName} • {formatDate(activeNews.publishedAt)}
+                  </div>
+                  <div className="mt-2">
+                    <Button asChild size="sm" variant="outline" className="border-blue-200 text-blue-700">
+                      <a href={activeNews.link} target="_blank" rel="noreferrer">
+                        Ouvrir l&apos;actu
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {rssSources.slice(0, 6).map((s) => (
+                  <Badge key={s.url} variant="outline" className="max-w-full truncate">
+                    {s.name}
+                  </Badge>
+                ))}
+                {rssSources.length > 6 ? <Badge variant="outline">+{rssSources.length - 6}</Badge> : null}
+              </div>
 
-          <div className="space-y-3 lg:col-span-2">
-            <Card ref={rssPanelRef}>
+              {rssLoading ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  Chargement des flux RSS…
+                </div>
+              ) : null}
+
+              {rssError ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  {rssError}
+                  <div className="mt-2 text-xs text-amber-800">
+                    Astuce : si un pays n’a pas encore de source dédiée, ajoute un flux national dans ta config plus tard.
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="max-h-[340px] overflow-auto rounded-xl border border-slate-200">
+                <ul className="divide-y">
+                  {rssItems.slice(0, 20).map((it) => (
+                    <li key={it.id} className="p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-slate-900 line-clamp-2">{it.title}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                            <span>{it.sourceName}</span>
+                            <span>•</span>
+                            <span>{formatDate(it.publishedAt)}</span>
+                          </div>
+                        </div>
+                        <a
+                          href={it.link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900"
+                        >
+                          Ouvrir <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </div>
+                    </li>
+                  ))}
+                  {!rssItems.length && !rssLoading ? (
+                    <li className="p-4 text-sm text-slate-500">Aucun item à afficher pour le moment.</li>
+                  ) : null}
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Synthèse</CardTitle>
                 <CardDescription>Ventes et marges (filtres actifs)</CardDescription>
@@ -1192,104 +1306,6 @@ export default function ControlTower() {
                 ) : (
                   <div className="text-xs text-muted-foreground">Aucun HS préféré détecté (profil non configuré).</div>
                 )}
-              </CardContent>
-            </Card>
-
-            {/* ✅ Veille RSS (au clic sur pays) */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2">
-                    <Rss className="h-4 w-4 text-blue-600" />
-                    Veille RSS – {selectedCountryLabel} ({selectedWatchCountry})
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => void loadRssForCountry(selectedWatchCountry, true)}
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                    Rafraîchir
-                  </Button>
-                </CardTitle>
-                <CardDescription>
-                  Sources pays + UE/OMC (fallback). Si certains flux bloquent (CORS), le proxy est utilisé.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {activeNews ? (
-                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600">
-                      Actu du pays
-                    </div>
-                    <div className="mt-1 font-semibold">{activeNews.title}</div>
-                    <div className="mt-1 text-xs text-blue-700">
-                      {activeNews.sourceName} • {formatDate(activeNews.publishedAt)}
-                    </div>
-                    <div className="mt-2">
-                      <Button asChild size="sm" variant="outline" className="border-blue-200 text-blue-700">
-                        <a href={activeNews.link} target="_blank" rel="noreferrer">
-                          Ouvrir l&apos;actu
-                        </a>
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  {rssSources.slice(0, 6).map((s) => (
-                    <Badge key={s.url} variant="outline" className="max-w-full truncate">
-                      {s.name}
-                    </Badge>
-                  ))}
-                  {rssSources.length > 6 ? <Badge variant="outline">+{rssSources.length - 6}</Badge> : null}
-                </div>
-
-                {rssLoading ? (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                    Chargement des flux RSS…
-                  </div>
-                ) : null}
-
-                {rssError ? (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    {rssError}
-                    <div className="mt-2 text-xs text-amber-800">
-                      Astuce : si un pays n’a pas encore de source dédiée, ajoute un flux national dans ta config plus tard.
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="max-h-[340px] overflow-auto rounded-xl border border-slate-200">
-                  <ul className="divide-y">
-                    {rssItems.slice(0, 20).map((it) => (
-                      <li key={it.id} className="p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium text-slate-900 line-clamp-2">{it.title}</div>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                              <span>{it.sourceName}</span>
-                              <span>•</span>
-                              <span>{formatDate(it.publishedAt)}</span>
-                            </div>
-                          </div>
-                          <a
-                            href={it.link}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900"
-                          >
-                            Ouvrir <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                        </div>
-                      </li>
-                    ))}
-                    {!rssItems.length && !rssLoading ? (
-                      <li className="p-4 text-sm text-slate-500">Aucun item à afficher pour le moment.</li>
-                    ) : null}
-                  </ul>
-                </div>
               </CardContent>
             </Card>
           </div>
