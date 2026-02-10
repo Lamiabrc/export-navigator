@@ -18,6 +18,7 @@ interface MainLayoutProps {
   contentClassName?: string;
   wrapperClassName?: string;
   variant?: "default" | "bare";
+  backdropVariant?: "public" | "app";
 }
 
 export function MainLayout({
@@ -25,6 +26,7 @@ export function MainLayout({
   contentClassName,
   wrapperClassName,
   variant = "default",
+  backdropVariant = "public",
 }: MainLayoutProps) {
   const { signOut, user } = useAuth();
   const { plan } = usePlan();
@@ -66,8 +68,18 @@ export function MainLayout({
         wrapperClassName
       )}
     >
-      <CinematicBackdrop variant="public" className="z-0 opacity-20" />
-      <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-white/85 via-white/90 to-white" />
+      <CinematicBackdrop
+        variant={backdropVariant}
+        className={cn("z-0", backdropVariant === "app" ? "opacity-45" : "opacity-20")}
+      />
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-0 -z-0",
+          backdropVariant === "app"
+            ? "bg-gradient-to-br from-blue-50/70 via-white to-red-50/60"
+            : "bg-gradient-to-b from-white/85 via-white/90 to-white"
+        )}
+      />
 
       {showSidebar ? <Sidebar /> : null}
 

@@ -18,10 +18,8 @@ import { CookieConsent } from "@/components/CookieConsent";
 import { LanguageChooser } from "@/components/LanguageChooser";
 
 import Home from "@/pages/Home";
-import ToolPage from "@/pages/Tool";
 import ServicesPage from "@/pages/Services";
 import AboutPage from "@/pages/About";
-import Analyse from "@/pages/Analyse";
 import ShareDecision from "@/pages/ShareDecision";
 import Methodologie from "@/pages/Methodologie";
 import Guide from "@/pages/Guide";
@@ -48,7 +46,6 @@ import Assistant from "@/pages/Assistant";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/NotFound";
 import Solutions from "@/pages/Solutions";
-import Veille from "@/pages/Veille";
 import Resources from "@/pages/Resources";
 import Contact from "@/pages/Contact";
 import Compliance from "@/pages/Compliance";
@@ -59,7 +56,7 @@ import Account from "@/pages/Account";
 import Pricing from "@/pages/Pricing";
 import HistoryPage from "@/pages/History";
 import ImportCheckInvoice from "@/pages/ImportCheckInvoice";
-import ExportCostingPage from "@/pages/ExportCosting";
+import PublicAppGate from "@/pages/PublicAppGate";
 import VipRentability from "@/pages/VipRentability";
 import Legal from "@/pages/Legal";
 import AdminKbDocs from "@/pages/AdminKbDocs";
@@ -90,8 +87,8 @@ export default function App() {
                         {/* ===================== Marketing / Public ===================== */}
                         <Route path="/" element={<Home />} />
 
-                        {/* ✅ Tool devient un “lead magnet” canonique */}
-                        <Route path="/verifier-facture" element={<ToolPage />} />
+                        {/* ✅ Outils publics => accès app uniquement */}
+                        <Route path="/verifier-facture" element={<PublicAppGate mode="invoice-check" />} />
                         <Route path="/tool" element={<Navigate to="/verifier-facture" replace />} />
 
                         <Route path="/services" element={<ServicesPage />} />
@@ -99,14 +96,14 @@ export default function App() {
                         {/* ✅ EN/legacy marketing (Watch supprimée => redirect) */}
                         <Route path="/watch" element={<Navigate to="/veille" replace />} />
                         {/* ✅ FR canonique */}
-                        <Route path="/veille" element={<Veille />} />
+                        <Route path="/veille" element={<PublicAppGate mode="watch" />} />
 
                         <Route path="/about" element={<AboutPage />} />
                         <Route path="/pricing" element={<Pricing />} />
                         <Route path="/prospection" element={<Prospection />} />
 
                         {/* ✅ pages publiques */}
-                        <Route path="/analyse" element={<Analyse />} />
+                        <Route path="/analyse" element={<PublicAppGate mode="analyse" />} />
                         <Route path="/share/:id" element={<ShareDecision />} />
                         <Route path="/methodologie" element={<Methodologie />} />
 
@@ -127,7 +124,7 @@ export default function App() {
                         <Route path="/newsletter" element={<Newsletter />} />
 
                         {/* ✅ outil gratuit (public) */}
-                        <Route path="/export/costing" element={<ExportCostingPage />} />
+                        <Route path="/export/costing" element={<PublicAppGate mode="costing" />} />
 
                         {/* ===================== PRO/VIP (derrière login) ===================== */}
                         <Route

@@ -5,5 +5,11 @@ import { cn } from "@/lib/utils";
 type AppLayoutProps = React.ComponentProps<typeof MainLayout>;
 
 export function AppLayout({ wrapperClassName, ...props }: AppLayoutProps) {
-  return <MainLayout {...props} wrapperClassName={cn("control-tower-world", wrapperClassName)} />;
+  return (
+    <MainLayout
+      {...props}
+      backdropVariant="app"
+      wrapperClassName={cn("control-tower-world", wrapperClassName)}
+    />
+  );
 }

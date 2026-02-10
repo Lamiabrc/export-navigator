@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, ExternalLink, FileSpreadsheet, RotateCcw, Rss, Upload } from "lucide-react";
+import { ExternalLink, FileSpreadsheet, RotateCcw, Rss, Upload } from "lucide-react";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { PanoramicControlTowerMap } from "@/components/controlTower/PanoramicControlTowerMap";
 
@@ -99,14 +99,6 @@ const COLUMN_ALIASES = {
   invoiceNumber: ["invoice_number", "numero_facture", "facture", "invoice_no"],
   invoiceDate: ["invoice_date", "date_facture", "date"],
 };
-
-const CSV_TEMPLATE = [
-  // ✅ Template PME-friendly (simple + extensible, séparateur ;)
-  // Colonnes obligatoires: hs_code, destination_country, quantity, (unit_price OU total_price)
-  "invoice_number;invoice_date;destination_country;hs_code;product_label;quantity;unit_price;total_price;currency;incoterm;unit_cost;transport_cost;packaging_cost;dossier_fee;other_costs;notes",
-  "INV-2026-0001;2026-01-15;DE;85044090;Alimentation électrique industrielle;120;89;;EUR;DAP;35;180;40;25;10;Commande B2B",
-  "INV-2026-0002;2026-01-18;US;94036090;Mobilier en bois (lot);80;920;;EUR;CIF;540;220;60;30;12;Export salon",
-].join("\n");
 
 /** RSS sources (country-specific + global). */
 const GLOBAL_RSS_SOURCES: RssSource[] = [
@@ -272,22 +264,6 @@ function parseCsvText(text: string): CsvState {
   const rows = parseCsvRows(clean, delimiter);
   const headers = rows.shift() || [];
   return { headers, rows, delimiter };
-}
-
-function downloadTextFile(filename: string, content: string) {
-  try {
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  } catch {
-    // noop
-  }
 }
 
 function readUserHsPrefs() {
@@ -908,14 +884,6 @@ export default function ControlTower() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="secondary"
-              className="gap-2"
-              onClick={() => downloadTextFile("template-ventes-pme.csv", CSV_TEMPLATE)}
-            >
-              <Download className="h-4 w-4" />
-              Template CSV (PME)
-            </Button>
-            <Button
               variant="outline"
               className="gap-2"
               onClick={() => {
@@ -1245,23 +1213,6 @@ export default function ControlTower() {
             </CardContent>
           </Card>
         </section>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileSpreadsheet className="h-4 w-4 text-blue-600" />
-              Template CSV (PME)
-            </CardTitle>
-            <CardDescription>
-              Modèle standard : facture, destination, HS, quantités, prix, devise, incoterm (optionnel), coûts.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <pre className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-900/90 p-3 text-xs text-slate-100">
-{CSV_TEMPLATE}
-            </pre>
-          </CardContent>
-        </Card>
 
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
