@@ -161,14 +161,68 @@ export default function PublicAppGate({ mode }: { mode: GateMode }) {
           </div>
 
             <Card className="border-slate-200 bg-white/90">
-              <CardContent className="p-4 md:p-6">
-                <PanoramicControlTowerMap
-                  selectedCountry={selected}
-                  selectedLabel={selected ?? undefined}
-                  countryStats={PREVIEW_STATS}
-                  onCountrySelect={(iso) => setSelected(iso)}
-                  onReset={() => setSelected(null)}
-                />
+              <CardContent className="p-0">
+                <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)]">
+                  <aside className="border-b border-slate-200 bg-white/95 px-4 py-5 text-slate-700 lg:border-b-0 lg:border-r">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">
+                      Accueil
+                    </div>
+                    <div className="mt-3 flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-900 shadow-sm">
+                      <span>Tour de controle</span>
+                      <Badge className="bg-blue-600 text-white hover:bg-blue-600">Live</Badge>
+                    </div>
+
+                    <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">
+                      Decider vite
+                    </div>
+                    <div className="mt-2 space-y-2 text-sm">
+                      {["Analyse couts", "Controle facture", "Taxes & OM"].map((item) => (
+                        <div key={item} className="flex items-center gap-2 text-slate-600">
+                          <span className="h-2 w-2 rounded-full bg-slate-300" />
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">
+                      Conformite
+                    </div>
+                    <div className="mt-2 space-y-2 text-sm">
+                      {["Centre conformite", "Guides (Incoterms, TVA)", "Veille reglementaire"].map((item) => (
+                        <div key={item} className="flex items-center gap-2 text-slate-600">
+                          <span className="h-2 w-2 rounded-full bg-slate-300" />
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">
+                      Referentiels
+                    </div>
+                    <div className="mt-2 space-y-2 text-sm">
+                      {["Produits (HS code)", "Clients & fournisseurs"].map((item) => (
+                        <div key={item} className="flex items-center gap-2 text-slate-600">
+                          <span className="h-2 w-2 rounded-full bg-slate-300" />
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+                      Apercu interface — connectez-vous pour tout debloquer.
+                    </div>
+                  </aside>
+
+                  <div className="p-4 md:p-6">
+                    <PanoramicControlTowerMap
+                      selectedCountry={selected}
+                      selectedLabel={selected ?? undefined}
+                      countryStats={PREVIEW_STATS}
+                      onCountrySelect={(iso) => setSelected(iso)}
+                      onReset={() => setSelected(null)}
+                    />
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </section>
