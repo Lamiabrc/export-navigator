@@ -70,7 +70,7 @@ export default function Login() {
 
     try {
       setPending(true);
-      const { error: err, needsEmailConfirmation } = await signIn(normalizedEmail, password);
+      const { error: err, needsEmailConfirmation, userId } = await signIn(normalizedEmail, password);
       if (err) {
         setNeedsConfirm(needsEmailConfirmation);
         const msg = getErrorMessage(err).trim();
