@@ -13,6 +13,12 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $RepoRoot = Split-Path -Parent $ScriptDir
 
+function Validate-ProjectRef([string]$Ref) {
+  if ($Ref -notmatch '^[a-z0-9]{20}$') {
+    Fail "check:project-ref" "Invalid project ref format. Expected 20 lowercase letters/numbers like 'abcdefghijklmnopqrst'."
+  }
+}
+
 function Write-Status([string]$Level, [string]$Step, [string]$Detail = "") {
   $ts = (Get-Date).ToString("s")
   if ($Detail) {
@@ -142,6 +148,7 @@ if ($sourceDirs.Count -eq 0) {
 }
 
 # 4) Link project
+Validate-ProjectRef $ProjectRef
 $linkArgs = @("link","--project-ref",$ProjectRef)
 if ($env:SUPABASE_DB_PASSWORD) { $linkArgs += @("--password",$env:SUPABASE_DB_PASSWORD) }
 Invoke-Supabase "supabase:link" $linkArgs
