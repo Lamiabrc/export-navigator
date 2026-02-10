@@ -112,6 +112,8 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const siteDisclaimers = (t("disclaimers") as string[]) ?? [];
   const nextPath = `${location.pathname}${location.search}` || "/";
   const nextParam = encodeURIComponent(nextPath);
+  const authNext = nextPath === "/" ? "/app/control-tower" : nextPath;
+  const authNextParam = encodeURIComponent(authNext);
   const [supportReady, setSupportReady] = React.useState(false);
   const [supportOpen, setSupportOpen] = React.useState(false);
 
@@ -220,14 +222,14 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
             {/* CTA */}
             <Link
-              to={`/register?next=${nextParam}`}
+              to={`/register?next=${authNextParam}`}
               className="inline-flex rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#B0231D]"
             >
               {ctaLabel}
             </Link>
 
             <Link
-              to={`/login?next=${nextParam}`}
+              to={`/login?next=${authNextParam}`}
               className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-blue-900/70 transition hover:text-blue-900 md:inline-flex"
             >
               Connexion

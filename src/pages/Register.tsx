@@ -9,16 +9,22 @@ import { BrandLogo } from "@/components/BrandLogo";
 
 function getErrorMessage(err: unknown): string {
   if (!err) return "Une erreur inconnue est survenue.";
-  if (typeof err === "string") return err;
-  if (err instanceof Error) return err.message;
-  const anyErr = err as { message?: string };
-  if (typeof anyErr?.message === "string") return anyErr.message;
-  return "Une erreur est survenue. Reessaie.";
+  let msg = "";
+  if (typeof err === "string") msg = err;
+  else if (err instanceof Error) msg = err.message;
+  else {
+    const anyErr = err as { message?: string };
+    if (typeof anyErr?.message === "string") msg = anyErr.message;
+  }
+  msg = msg.trim();
+  return msg || "Une erreur est survenue. Reessaie.";
 }
 
-function safeNextPath(candidate: unknown, fallback = "/") {
+function safeNextPath(candidate: unknown, fallback = "/app/control-tower") {
   const v = typeof candidate === "string" ? candidate : "";
-  return v && v.startsWith("/") ? v : fallback;
+  if (!v || !v.startsWith("/")) return fallback;
+  if (v === "/" || v === "/register" || v === "/login") return fallback;
+  return v;
 }
 
 export default function Register() {

@@ -514,7 +514,7 @@ export default function Home() {
 
               <div className="flex flex-wrap gap-3">
                 <Button asChild size="lg" className="bg-white text-slate-900 hover:bg-slate-100">
-                  <Link to="/register?next=/">Créer un compte gratuit</Link>
+                  <Link to="/register?next=/app/control-tower">Créer un compte gratuit</Link>
                 </Button>
                 <Button
                   size="lg"
@@ -694,7 +694,7 @@ export default function Home() {
                   <Link to="/contact">{isFr ? "Nous contacter" : "Contact us"}</Link>
                 </Button>
                 <Button variant="outline" asChild>
-                  <Link to="/register?next=/">{isFr ? "Creer un compte gratuit" : "Create free account"}</Link>
+                  <Link to="/register?next=/app/control-tower">{isFr ? "Creer un compte gratuit" : "Create free account"}</Link>
                 </Button>
               </div>
             </CardContent>
@@ -887,7 +887,7 @@ export default function Home() {
                   </Button>
                   {!isAuthenticated ? (
                     <Button variant="outline" asChild>
-                      <Link to="/register?next=/">Créer un compte gratuit</Link>
+                      <Link to="/register?next=/app/control-tower">Créer un compte gratuit</Link>
                     </Button>
                   ) : null}
                 </div>
@@ -1056,7 +1056,7 @@ export default function Home() {
                     </CardHeader>
                     <CardContent>
                       <Button asChild className="w-full">
-                        <Link to="/register?next=/">Créer un compte gratuit</Link>
+                        <Link to="/register?next=/app/control-tower">Créer un compte gratuit</Link>
                       </Button>
                     </CardContent>
                   </Card>
@@ -1248,7 +1248,7 @@ export default function Home() {
                   <li>• Historique des analyses</li>
                 </ul>
                 <Button asChild className="w-full">
-                  <Link to="/register?next=/">Créer un compte gratuit</Link>
+                  <Link to="/register?next=/app/control-tower">Créer un compte gratuit</Link>
                 </Button>
                 <Button asChild variant="outline" className="w-full">
                   <Link to="/pricing">Découvrir les plans</Link>
@@ -1297,10 +1297,10 @@ export default function Home() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button variant="outline" onClick={() => navigate(`/login?next=${encodeURIComponent("/")}`)}>
+            <Button variant="outline" onClick={() => navigate(`/login?next=${encodeURIComponent("/app/control-tower")}`)}>
               Se connecter
             </Button>
-            <Button onClick={() => navigate(`/register?next=${encodeURIComponent("/")}`)}>
+            <Button onClick={() => navigate(`/register?next=${encodeURIComponent("/app/control-tower")}`)}>
               Créer un compte gratuit
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
@@ -1310,3 +1310,5 @@ export default function Home() {
     </PublicLayout>
   );
 }
+
+
