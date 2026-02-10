@@ -290,18 +290,18 @@ export default function SupportChatWidget({
           type="button"
           onClick={() => setOpen(true)}
           className="group inline-flex items-center gap-2 rounded-full bg-[#0B1220] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-[#16233a]"
-          aria-label="Ouvrir l'aide IA"
+          aria-label="Ouvrir ton conseiller export"
           aria-expanded="false"
         >
           <MessageCircle className="h-4 w-4" />
-          Aide IA
+          Ton conseiller export
         </button>
       ) : (
         <div
           className="w-[92vw] max-w-[380px] overflow-hidden rounded-2xl border border-border bg-white shadow-2xl"
           role="dialog"
           aria-modal="false"
-          aria-label="Support IA"
+          aria-label="Ton conseiller export"
         >
           <div className="flex items-start justify-between gap-2 border-b border-border bg-slate-900 px-4 py-3 text-white">
             <div className="flex items-center gap-2">
@@ -309,7 +309,7 @@ export default function SupportChatWidget({
                 <Bot className="h-4 w-4" />
               </div>
               <div>
-                <div className="text-sm font-semibold">Support IA</div>
+                <div className="text-sm font-semibold">Ton conseiller export</div>
                 <div className="text-[11px] text-white/70">
                   Conseils rapides export/import
                 </div>

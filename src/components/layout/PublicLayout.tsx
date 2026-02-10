@@ -334,9 +334,9 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             setSupportOpen(true);
           }}
           className="fixed bottom-6 right-6 z-[90] inline-flex items-center gap-2 rounded-full bg-[#0B1220] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-[#16233a]"
-          aria-label={isFr ? "Ouvrir l'aide IA" : "Open AI support"}
+          aria-label={isFr ? "Ouvrir ton conseiller export" : "Open your export advisor"}
         >
-          {isFr ? "Aide IA" : "AI support"}
+          {isFr ? "Ton conseiller export" : "Your export advisor"}
         </button>
       )}
     </div>

@@ -44,3 +44,30 @@ export const TRANSPORT_MARKET_LINKS = [
   { id: "shipandbunker-rss", name: "Ship & Bunker — RSS (bunker / marine fuel & news)", url: "https://feeds.feedburner.com/shipandbunker" },
   { id: "eia-gasdiesel-rss", name: "EIA — Gasoline & Diesel Fuel Update (RSS data)", url: "https://www.eia.gov/petroleum/gasdiesel/includes/gas_diesel_rss.xml" },
 ];
+
+// COMMODITIES — bourses & cotations
+export const COMMODITIES_MARKET_LINKS = [
+  // Euronext (France / MATIF)
+  { id: "euronext-wheat", name: "Euronext — Blé meunier (EBM-DPAR) cotations", url: "https://live.euronext.com/en/product/commodities-futures/EBM-DPAR" },
+  { id: "euronext-corn", name: "Euronext — Maïs (EMA-DPAR) cotations", url: "https://live.euronext.com/en/product/commodities-futures/EMA-DPAR" },
+  { id: "euronext-rapeseed", name: "Euronext — Colza (ECO-DPAR) cotations", url: "https://live.euronext.com/en/product/commodities-futures/ECO-DPAR" },
+  { id: "euronext-commodities-snapshot", name: "Euronext — Commodities (vue d’ensemble)", url: "https://live.euronext.com/en/products/commodities" },
+
+  // CME (benchmarks mondiaux grains)
+  { id: "cme-wheat", name: "CME — Chicago SRW Wheat (quotes)", url: "https://www.cmegroup.com/markets/agriculture/grains/wheat.quotes.html" },
+  { id: "cme-corn", name: "CME — Corn (quotes)", url: "https://www.cmegroup.com/markets/agriculture/grains/corn.quotes.html" },
+
+  // Métaux
+  { id: "lme-copper", name: "LME — Copper (référence mondiale)", url: "https://www.lme.com/metals/non-ferrous/lme-copper" },
+
+  // Énergie (bourse)
+  { id: "ice-brent", name: "ICE — Brent Crude Futures (page produit)", url: "https://www.ice.com/products/219/Brent-Crude-Futures" },
+];
+
+// FX — ECB RSS
+export const FX_RSS_ECB = [
+  { id: "ecb-fx-usd-rss", name: "ECB — EUR/USD (RSS)", url: "https://www.ecb.europa.eu/rss/fxref-usd.html" },
+  { id: "ecb-fx-gbp-rss", name: "ECB — EUR/GBP (RSS)", url: "https://www.ecb.europa.eu/rss/fxref-gbp.html" },
+  { id: "ecb-fx-chf-rss", name: "ECB — EUR/CHF (RSS)", url: "https://www.ecb.europa.eu/rss/fxref-chf.html" },
+  { id: "ecb-fx-cny-rss", name: "ECB — EUR/CNY (RSS)", url: "https://www.ecb.europa.eu/rss/fxref-cny.html" },
+];

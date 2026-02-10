@@ -27,6 +27,7 @@ const PROXY_ALLOWED_HOSTS = new Set([
   "www.tresor.economie.gouv.fr",
   "finance.ec.europa.eu",
   "ofsi.blog.gov.uk",
+  "www.ecb.europa.eu",
   "policy.trade.ec.europa.eu",
   "www.wto.org",
   "www.economie.gouv.fr",
