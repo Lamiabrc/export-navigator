@@ -39,60 +39,6 @@ type NavSection = {
 
 const navigation: NavSection[] = [
   {
-    title: "Site public",
-    items: [
-      {
-        name: "Accueil public",
-        href: "/",
-        icon: Home,
-        aliases: ["/home", "/public"],
-      },
-      {
-        name: "Offre & services",
-        href: "/services",
-        icon: ShieldCheck,
-        aliases: ["/offre"],
-      },
-      {
-        name: "Tarifs",
-        href: "/pricing",
-        icon: BadgeDollarSign,
-        aliases: ["/tarifs"],
-      },
-      {
-        name: "Prospection",
-        href: "/prospection",
-        icon: Target,
-      },
-      {
-        name: "Veille (site)",
-        href: "/veille",
-        icon: Newspaper,
-        aliases: ["/watch"],
-      },
-      {
-        name: "Guides",
-        href: "/guides",
-        icon: BookOpen,
-      },
-      {
-        name: "Méthodologie",
-        href: "/methodologie",
-        icon: BookOpen,
-      },
-      {
-        name: "À propos",
-        href: "/about",
-        icon: Users,
-      },
-      {
-        name: "Contact",
-        href: "/contact",
-        icon: Mail,
-      },
-    ],
-  },
-  {
     title: "Accueil",
     items: [
       {
@@ -180,6 +126,60 @@ const navigation: NavSection[] = [
   {
     title: "Admin",
     items: [{ name: "Admin", href: "/app/admin", icon: Settings, adminOnly: true }],
+  },
+  {
+    title: "Site public",
+    items: [
+      {
+        name: "Accueil public",
+        href: "/",
+        icon: Home,
+        aliases: ["/home", "/public"],
+      },
+      {
+        name: "Offre & services",
+        href: "/services",
+        icon: ShieldCheck,
+        aliases: ["/offre"],
+      },
+      {
+        name: "Tarifs",
+        href: "/pricing",
+        icon: BadgeDollarSign,
+        aliases: ["/tarifs"],
+      },
+      {
+        name: "Prospection",
+        href: "/prospection",
+        icon: Target,
+      },
+      {
+        name: "Veille (site)",
+        href: "/veille",
+        icon: Newspaper,
+        aliases: ["/watch"],
+      },
+      {
+        name: "Guides",
+        href: "/guides",
+        icon: BookOpen,
+      },
+      {
+        name: "Méthodologie",
+        href: "/methodologie",
+        icon: BookOpen,
+      },
+      {
+        name: "À propos",
+        href: "/about",
+        icon: Users,
+      },
+      {
+        name: "Contact",
+        href: "/contact",
+        icon: Mail,
+      },
+    ],
   },
 ];
 
