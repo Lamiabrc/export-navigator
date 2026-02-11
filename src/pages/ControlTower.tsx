@@ -450,6 +450,8 @@ export default function ControlTower() {
   const [csvState, setCsvState] = React.useState<CsvState | null>(null);
   const [csvError, setCsvError] = React.useState<string | null>(null);
   const [csvName, setCsvName] = React.useState<string | null>(null);
+  const [objectiveFiles, setObjectiveFiles] = React.useState<File[]>([]);
+  const [knowledgeFiles, setKnowledgeFiles] = React.useState<File[]>([]);
 
   const [defaults, setDefaults] = React.useState({
     currency: "EUR",
@@ -1025,9 +1027,12 @@ export default function ControlTower() {
       <div className="space-y-6">
         <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.35em] text-blue-600">Tour de contrÃ´le</p>
-            <h1 className="text-3xl font-bold text-slate-900">Pilotage ventes & marges</h1>
-            <p className="text-sm text-slate-600">Tableau de bord connectÃ© pour {companyName} : suivi par HS code et destination.</p>
+            <p className="text-xs uppercase tracking-[0.35em] text-blue-600">Bienvenue sur votre tour de controle import export</p>
+            <h1 className="text-3xl font-bold text-slate-900">L&apos;assistant</h1>
+            <p className="text-sm text-slate-600">Avez-vous une question precise ?</p>
+            <p className="text-sm text-slate-500">
+              Tableau de bord connecte pour {companyName}. Import, export, prospection et suivi commercial.
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -1048,13 +1053,96 @@ export default function ControlTower() {
           </div>
         </header>
 
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Assistant export</CardTitle>
+              <CardDescription>Posez une question precise, l&apos;assistant repond.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Input placeholder="Ex: Comment trouver des distributeurs en Allemagne ?" />
+              <Button type="button" className="w-full">
+                Poser la question
+              </Button>
+              <div className="text-xs text-slate-500">
+                L&apos;assistant couvre prospection, techniques de vente, incoterms, douane, paiement, risques pays.
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Objectifs & plan</CardTitle>
+              <CardDescription>Chargez un fichier d&apos;objectifs. On etablira un plan et un suivi.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.csv,.xlsx"
+                onChange={(e) => setObjectiveFiles(Array.from(e.target.files || []))}
+                className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-800"
+              />
+              {objectiveFiles.length ? (
+                <div className="space-y-1 text-xs text-slate-600">
+                  {objectiveFiles.map((file) => (
+                    <div key={file.name} className="truncate">
+                      {file.name}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  Aucun objectif charge pour le moment.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Base de connaissance</CardTitle>
+              <CardDescription>Ajoutez des documents pour enrichir l&apos;IA prospection & commerce international.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.csv,.txt"
+                onChange={(e) => setKnowledgeFiles(Array.from(e.target.files || []))}
+                className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-800"
+              />
+              {knowledgeFiles.length ? (
+                <div className="space-y-1 text-xs text-slate-600">
+                  {knowledgeFiles.map((file) => (
+                    <div key={`${file.name}-${file.size}`} className="truncate">
+                      {file.name}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  Vous n&apos;avez pas encore ajoute de documents.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
         {/* Carte + panneaux lateraux */}
         <section className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[260px_minmax(0,1fr)_260px]">
-            <Card className="order-2 xl:order-none">
+          <div className="relative">
+            <PanoramicControlTowerMap
+              selectedCountry={selectedWatchCountry}
+              selectedLabel={selectedCountryLabel}
+              countryStats={countryStats}
+              onCountrySelect={handleCountrySelect}
+              onReset={handleCountryReset}
+            />
+
+            <Card className="mt-4 md:mt-0 md:absolute md:top-4 md:left-4 md:z-10 md:w-[260px] md:bg-white/95 md:backdrop-blur">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Fiche pays</CardTitle>
-                <CardDescription>Indicateurs rapides</CardDescription>
+                <CardTitle className="text-sm">Aspect general</CardTitle>
+                <CardDescription>Contexte pays et veille</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
@@ -1079,14 +1167,6 @@ export default function ControlTower() {
                     <span className="font-semibold text-slate-900">{selectedProfile.currency}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Devise ventes</span>
-                    <span className="font-semibold text-slate-900">{selectedCurrency}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Derniere facture</span>
-                    <span className="font-semibold text-slate-900">{formatDateShort(lastInvoiceAt)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
                     <span>Sources veille</span>
                     <span className="font-semibold text-slate-900">{rssSources.length}</span>
                   </div>
@@ -1095,23 +1175,22 @@ export default function ControlTower() {
                 <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
                   {selectedProfile.note}
                 </div>
+
+                {activeNews ? (
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Actu a la une</div>
+                    <div className="mt-1 line-clamp-2 font-medium">{activeNews.title}</div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500">Aucune actu recente pour le moment.</div>
+                )}
               </CardContent>
             </Card>
 
-            <div className="order-1 xl:order-none">
-              <PanoramicControlTowerMap
-                selectedCountry={selectedWatchCountry}
-                selectedLabel={selectedCountryLabel}
-                countryStats={countryStats}
-                onCountrySelect={handleCountrySelect}
-                onReset={handleCountryReset}
-              />
-            </div>
-
-            <Card className="order-3 xl:order-none">
+            <Card className="mt-4 md:mt-0 md:absolute md:top-4 md:right-4 md:z-10 md:w-[260px] md:bg-white/95 md:backdrop-blur">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Activite export</CardTitle>
-                <CardDescription>Ventes du pays selectionne</CardDescription>
+                <CardTitle className="text-sm">Aspect client</CardTitle>
+                <CardDescription>Vos ventes sur ce pays</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 {selectedAgg ? (
@@ -1152,10 +1231,14 @@ export default function ControlTower() {
                         {selectedAgg.lines ? selectedAgg.lines.toLocaleString("fr-FR") : "0"}
                       </span>
                     </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Derniere facture</span>
+                      <span className="text-base font-semibold text-slate-900">{formatDateShort(lastInvoiceAt)}</span>
+                    </div>
                   </div>
                 ) : (
                   <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                    Aucune vente enregistree pour ce pays pour le moment.
+                    Vous n&apos;avez pas de vente sur ce secteur.
                   </div>
                 )}
               </CardContent>
@@ -1353,6 +1436,42 @@ export default function ControlTower() {
               </CardContent>
             </Card>
           </div>
+        </section>
+
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Techniques de vente</CardTitle>
+              <CardDescription>Reponses rapides pour convertir.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="list-disc space-y-1 pl-4 text-sm text-slate-700">
+                <li>Qualifier le besoin avec des questions ouvertes et un diagnostic court.</li>
+                <li>Formuler la valeur en 1 phrase: probleme, solution, benefice mesurable.</li>
+                <li>Proposer une preuve: cas client, chiffres, delais, resultats.</li>
+                <li>Structurer l&apos;offre: options claires, conditions, prochain pas.</li>
+                <li>Traiter les objections: prix, delai, risque, conformite.</li>
+                <li>Relancer avec un plan d&apos;action et une date precise.</li>
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Prospection & recherche clients</CardTitle>
+              <CardDescription>Meilleures facons de trouver des clients.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="list-disc space-y-1 pl-4 text-sm text-slate-700">
+                <li>LinkedIn + Sales Navigator: ciblage par secteur, taille, pays.</li>
+                <li>Annuaires export: Kompass, Europages, CCI, Business France.</li>
+                <li>Salons internationaux et federations professionnelles.</li>
+                <li>Recherche par codes HS pour identifier importateurs et distributeurs.</li>
+                <li>Alertes appels d&apos;offres et plateformes B2B.</li>
+                <li>Partenariats locaux: agents commerciaux et reps pays.</li>
+              </ul>
+            </CardContent>
+          </Card>
         </section>
 
         <section ref={resultsRef} className="grid grid-cols-1 gap-4 lg:grid-cols-2">
