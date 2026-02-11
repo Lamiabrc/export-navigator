@@ -113,19 +113,19 @@ const COUNTRY_COORDS: Record<string, { name: string; lat: number; lon: number }>
   BE: { name: "Belgique", lat: 50.5039, lon: 4.4699 },
   NL: { name: "Pays-Bas", lat: 52.1326, lon: 5.2913 },
   CH: { name: "Suisse", lat: 46.8182, lon: 8.2275 },
-  US: { name: "Ã‰tats-Unis", lat: 37.0902, lon: -95.7129 },
+  US: { name: "États-Unis", lat: 37.0902, lon: -95.7129 },
   CA: { name: "Canada", lat: 56.1304, lon: -106.3468 },
   MX: { name: "Mexique", lat: 23.6345, lon: -102.5528 },
-  BR: { name: "BrÃ©sil", lat: -14.235, lon: -51.9253 },
+  BR: { name: "Brésil", lat: -14.235, lon: -51.9253 },
   CN: { name: "Chine", lat: 35.8617, lon: 104.1954 },
   JP: { name: "Japon", lat: 36.2048, lon: 138.2529 },
-  KR: { name: "CorÃ©e du Sud", lat: 35.9078, lon: 127.7669 },
+  KR: { name: "Corée du Sud", lat: 35.9078, lon: 127.7669 },
   IN: { name: "Inde", lat: 20.5937, lon: 78.9629 },
-  AE: { name: "Ã‰mirats arabes unis", lat: 23.4241, lon: 53.8478 },
+  AE: { name: "Émirats arabes unis", lat: 23.4241, lon: 53.8478 },
   SA: { name: "Arabie saoudite", lat: 23.8859, lon: 45.0792 },
   TR: { name: "Turquie", lat: 38.9637, lon: 35.2433 },
   MA: { name: "Maroc", lat: 31.7917, lon: -7.0926 },
-  DZ: { name: "AlgÃ©rie", lat: 28.0339, lon: 1.6596 },
+  DZ: { name: "Algérie", lat: 28.0339, lon: 1.6596 },
   TN: { name: "Tunisie", lat: 33.8869, lon: 9.5375 },
   ZA: { name: "Afrique du Sud", lat: -30.5595, lon: 22.9375 },
   AU: { name: "Australie", lat: -25.2744, lon: 133.7751 },
@@ -176,33 +176,33 @@ const COLUMN_ALIASES = {
 
 /** RSS sources (country-specific + global). */
 const GLOBAL_RSS_SOURCES: RssSource[] = [
-  { name: "Le Moci â€“ ActualitÃ©s", url: "https://www.lemoci.com/feed/" },
-  { name: "UE â€“ ActualitÃ©s commerce", url: "https://policy.trade.ec.europa.eu/node/2/rss_en" },
-  { name: "OMC â€“ DerniÃ¨res nouvelles", url: "https://www.wto.org/library/rss/latest_news_e.xml" },
+  { name: "Le Moci – Actualités", url: "https://www.lemoci.com/feed/" },
+  { name: "UE – Actualités commerce", url: "https://policy.trade.ec.europa.eu/node/2/rss_en" },
+  { name: "OMC – Dernières nouvelles", url: "https://www.wto.org/library/rss/latest_news_e.xml" },
 ];
 
 const COUNTRY_RSS_SOURCES: Record<string, RssSource[]> = {
   FR: [
-    { name: "Economie.gouv.fr â€“ ActualitÃ©s", url: "https://www.economie.gouv.fr/rss/toutesactualites" },
-    { name: "Service-Public Pro â€“ ActualitÃ©s", url: "https://www.service-public.gouv.fr/abonnements/rss/actu-actu-pro.rss" },
-    { name: "France Diplomatie â€“ News", url: "https://www.diplomatie.gouv.fr/en/backend-fd.php3" },
+    { name: "Economie.gouv.fr – Actualités", url: "https://www.economie.gouv.fr/rss/toutesactualites" },
+    { name: "Service-Public Pro – Actualités", url: "https://www.service-public.gouv.fr/abonnements/rss/actu-actu-pro.rss" },
+    { name: "France Diplomatie – News", url: "https://www.diplomatie.gouv.fr/en/backend-fd.php3" },
   ],
-  DE: [{ name: "BMWK â€“ Pressemitteilungen", url: "https://www.bmwk.de/SiteGlobals/Functions/RSSFeed/RSSFeed-Pressemitteilung.xml" }],
-  BE: [{ name: "news.belgium.be â€“ All news", url: "https://news.belgium.be/en/feeds/all" }],
-  NL: [{ name: "Government.nl â€“ All news", url: "https://feeds.government.nl/news.rss" }],
+  DE: [{ name: "BMWK – Pressemitteilungen", url: "https://www.bmwk.de/SiteGlobals/Functions/RSSFeed/RSSFeed-Pressemitteilung.xml" }],
+  BE: [{ name: "news.belgium.be – All news", url: "https://news.belgium.be/en/feeds/all" }],
+  NL: [{ name: "Government.nl – All news", url: "https://feeds.government.nl/news.rss" }],
   CH: [
-    { name: "FINMA â€“ International sanctions", url: "https://www.finma.ch/en/rss/rss-internationale-sanktionen.xml" },
-    { name: "FINMA â€“ News", url: "https://www.finma.ch/en/rss/rss-finma-news.xml" },
+    { name: "FINMA – International sanctions", url: "https://www.finma.ch/en/rss/rss-internationale-sanktionen.xml" },
+    { name: "FINMA – News", url: "https://www.finma.ch/en/rss/rss-finma-news.xml" },
   ],
   CA: [
     {
-      name: "Global Affairs Canada â€“ News releases (Atom)",
+      name: "Global Affairs Canada – News releases (Atom)",
       url: "https://api.io.canada.ca/io-server/gc/news/en/v2?atomtitle=Global+Affairs+Canada+news+releases&dept=departmentofforeignaffairstradeanddevelopment&format=atom&orderBy=desc&pick=1000&publishedDate%3E=2015-01-01&sort=publishedDate&type=newsreleases",
     },
   ],
   US: [
-    { name: "USTR â€“ Press releases", url: "https://ustr.gov/archive/Meta_Content/RSS/ustr_press_releases_10475.xml" },
-    { name: "USTR â€“ Recent news", url: "https://ustr.gov/archive/Meta_Content/RSS/ustr_recent_news_10495.xml" },
+    { name: "USTR – Press releases", url: "https://ustr.gov/archive/Meta_Content/RSS/ustr_press_releases_10475.xml" },
+    { name: "USTR – Recent news", url: "https://ustr.gov/archive/Meta_Content/RSS/ustr_recent_news_10495.xml" },
   ],
 };
 
@@ -257,7 +257,7 @@ function formatMoney(value: number, currency: string) {
 }
 
 function formatPercent(value: number | null) {
-  if (value === null || !Number.isFinite(value)) return "â€”";
+  if (value === null || !Number.isFinite(value)) return "—";
   return `${Math.round(value * 1000) / 10}%`;
 }
 
@@ -276,7 +276,7 @@ function parseDateFlexible(raw?: string | null) {
   if (!s) return null;
   const direct = Date.parse(s);
   if (!Number.isNaN(direct)) return direct;
-  const m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+  const m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
   if (!m) return null;
   const day = Number(m[1]);
   const month = Number(m[2]);
@@ -298,7 +298,7 @@ function formatDateShort(value: number | null) {
 }
 
 function territoryLabel(code: string) {
-  if (!code) return "â€”";
+  if (!code) return "—";
   const upper = code.toUpperCase();
   if (COUNTRY_COORDS[upper]?.name) return COUNTRY_COORDS[upper].name;
   try {
@@ -472,22 +472,22 @@ function getWatchSourcesForCountry(code: string): RssSource[] {
   const querySources: RssSource[] = countryLabel
     ? [
         {
-          name: `Google News â€“ ${countryLabel}`,
+          name: `Google News – ${countryLabel}`,
           url: `https://news.google.com/rss/search?q=${encodeURIComponent(countryLabel)}&hl=fr&gl=FR&ceid=FR:fr`,
         },
       ]
     : [];
   const specific = COUNTRY_RSS_SOURCES[upper] ?? [];
-  // Toujours garder UE/OMC en fond de panier pour que â€œtous les paysâ€ aient une veille minimale
+  // Toujours garder UE/OMC en fond de panier pour que "œtous les pays" aient une veille minimale
   return [...querySources, ...specific, ...GLOBAL_RSS_SOURCES];
 }
 
 function formatDate(ts: number | null) {
-  if (!ts) return "â€”";
+  if (!ts) return "—";
   try {
     return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(new Date(ts));
   } catch {
-    return "â€”";
+    return "—";
   }
 }
 
@@ -805,7 +805,7 @@ export default function ControlTower() {
       ["Message client", goNoGoResult.messages.client.replace(/\n/g, " ")],
       ["Message interne", goNoGoResult.messages.internal.replace(/\n/g, " ")],
     ];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/\"/g, '""')}"`).join(";")).join("\n");
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
     downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "go-no-go-export.csv");
   };
 
@@ -847,7 +847,8 @@ export default function ControlTower() {
     }
 
     const bytes = await pdf.save();
-    downloadBlob(new Blob([bytes], { type: "application/pdf" }), "go-no-go-export.pdf");
+    const safeBytes = new Uint8Array(bytes);
+    downloadBlob(new Blob([safeBytes], { type: "application/pdf" }), "go-no-go-export.pdf");
   };
 
   const handleDeleteData = async () => {
@@ -970,7 +971,7 @@ export default function ControlTower() {
 
       const quantity = parseNumber(getValue(cells, idx.quantity));
       if (!quantity || quantity <= 0) {
-        warnings.push(`Ligne ${lineNumber} : quantitÃ© invalide.`);
+        warnings.push(`Ligne ${lineNumber} : quantité invalide.`);
         return;
       }
 
@@ -1038,7 +1039,7 @@ export default function ControlTower() {
   const currencyList = computed.currencies.length ? computed.currencies : [defaults.currency];
 
   React.useEffect(() => {
-    // Si plusieurs devises: on force un filtre pour Ã©viter de mÃ©langer sans conversion.
+    // Si plusieurs devises: on force un filtre pour éviter de mélanger sans conversion.
     if (currencyList.length > 1) {
       if (currencyFilter === "ALL") setCurrencyFilter(currencyList[0] || "EUR");
     } else {
@@ -1113,7 +1114,7 @@ export default function ControlTower() {
   const destinationAggAll = React.useMemo(() => {
     const map = new Map<string, Agg>();
     rowsAll.forEach((row) => {
-      // âœ… on agrÃ¨ge seulement sur la devise courante si filtrÃ©e
+      // ✅ on agrège seulement sur la devise courante si filtrée
       if (currencyFilter !== "ALL" && row.currency !== currencyFilter) return;
 
       const existing = map.get(row.destination);
@@ -1309,7 +1310,7 @@ export default function ControlTower() {
       const countryItems = merged.filter((it) => countrySourceNames.has(it.sourceName));
       const pool = countryItems.length ? countryItems : merged;
 
-      // âœ… Limiter Google News et mieux rÃ©partir les autres sources
+      // ✅ Limiter Google News et mieux répartir les autres sources
       const sourceMeta = new Map<string, { isGoogle: boolean }>();
       sources.forEach((s) => {
         let host = "";
@@ -1365,7 +1366,7 @@ export default function ControlTower() {
       }
 
       if (!finalItems.length) {
-        setRssError(okCount ? "Aucun item RSS trouvÃ© (sources vides ou format non reconnu)." : "Impossible de rÃ©cupÃ©rer les flux RSS (blocage rÃ©seau/CORS).");
+        setRssError(okCount ? "Aucun item RSS trouvé (sources vides ou format non reconnu)." : "Impossible de récupérer les flux RSS (blocage réseau/CORS).");
       } else {
         setRssError(null);
       }
@@ -1401,17 +1402,17 @@ export default function ControlTower() {
   const selectedCountryLabel = territoryLabel(selectedWatchCountry);
 
   return (
-    <AppLayout contentClassName="md:p-6">
-      <div className="space-y-6">
-        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <AppLayout contentClassName="md:p-4 lg:p-6">
+      <div className="space-y-5">
+        <header className="rounded-2xl border border-blue-100 bg-gradient-to-br from-white via-blue-50/50 to-red-50/40 p-5 shadow-sm flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.35em] text-blue-600">
-              Bienvenue sur votre tour de contrÃ´le import export
+              Bienvenue sur votre tour de contrôle import export
             </p>
-            <h1 className="text-3xl font-bold text-slate-900">L&apos;assistant</h1>
-            <p className="text-sm text-slate-600">Avez-vous une question prÃ©cise ?</p>
+            <h1 className="text-3xl font-bold text-slate-900">Tour de contrôle export</h1>
+            <p className="text-sm text-slate-600">Pilotage unifié: conformité, coûts, veille et décision rapide.</p>
             <p className="text-sm text-slate-500">
-              Tableau de bord connectÃ© pour {companyName}. Import, export, prospection et suivi commercial.
+              Tableau de bord connecté pour {companyName}. Import, export, prospection et suivi commercial.
             </p>
           </div>
           <div className="flex flex-col items-start gap-2 lg:items-end">
@@ -1431,7 +1432,7 @@ export default function ControlTower() {
                     }
                   }}
                 >
-                  DÃ©bloquer Pro
+                  Débloquer Pro
                 </Button>
               ) : null}
             </div>
@@ -1439,27 +1440,27 @@ export default function ControlTower() {
           </div>
         </header>
 
-        <section className="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
+        <section className="rounded-2xl border border-blue-100 bg-white/95 p-4 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                 <Sparkles className="h-4 w-4 text-blue-600" />
-                DÃ©cision du jour
+                Décision du jour
               </div>
               <div className="text-xs text-slate-500">Mini-diagnostics express pour agir tout de suite.</div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" className="rounded-full" onClick={() => openDecision("go-no-go")}>
+              <Button variant="secondary" className="rounded-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" onClick={() => openDecision("go-no-go")}>
                 Go/No-Go pays
               </Button>
-              <Button variant="secondary" className="rounded-full" onClick={() => openDecision("payment")}>
-                SÃ©curiser le paiement
+              <Button variant="secondary" className="rounded-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" onClick={() => openDecision("payment")}>
+                Sécuriser le paiement
               </Button>
-              <Button variant="secondary" className="rounded-full" onClick={() => openDecision("pricing")}>
+              <Button variant="secondary" className="rounded-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" onClick={() => openDecision("pricing")}>
                 Calculer mon prix export
               </Button>
-              <Button variant="secondary" className="rounded-full" onClick={() => openDecision("documents")}>
-                ContrÃ´ler mes documents
+              <Button variant="secondary" className="rounded-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" onClick={() => openDecision("documents")}>
+                Contrôler mes documents
               </Button>
             </div>
           </div>
@@ -1470,15 +1471,15 @@ export default function ControlTower() {
             <DrawerHeader>
               <DrawerTitle>
                 {decisionOpen === "go-no-go" && "Go/No-Go Export en 60 sec"}
-                {decisionOpen === "payment" && "SÃ©curiser le paiement"}
+                {decisionOpen === "payment" && "Sécuriser le paiement"}
                 {decisionOpen === "pricing" && "Calculer mon prix export"}
-                {decisionOpen === "documents" && "ContrÃ´ler mes documents"}
+                {decisionOpen === "documents" && "Contrôler mes documents"}
               </DrawerTitle>
               <DrawerDescription>
-                {decisionOpen === "go-no-go" && "Renseignez les infos clÃ©s pour un diagnostic rapide."}
+                {decisionOpen === "go-no-go" && "Renseignez les infos clés pour un diagnostic rapide."}
                 {decisionOpen === "payment" && "Mini-formulaire pour limiter le risque de paiement."}
-                {decisionOpen === "pricing" && "DonnÃ©es minimum pour cadrer le prix export."}
-                {decisionOpen === "documents" && "Liste documentaire personnalisÃ©e en 1 minute."}
+                {decisionOpen === "pricing" && "Données minimum pour cadrer le prix export."}
+                {decisionOpen === "documents" && "Liste documentaire personnalisée en 1 minute."}
               </DrawerDescription>
             </DrawerHeader>
 
@@ -1499,7 +1500,7 @@ export default function ControlTower() {
                       <Input
                         value={goNoGoForm.product_desc}
                         onChange={(e) => setGoNoGoForm((prev) => ({ ...prev, product_desc: e.target.value }))}
-                        placeholder="Ex: appareils mÃ©dicaux"
+                        placeholder="Ex: appareils médicaux"
                       />
                     </div>
                     <div className="space-y-1">
@@ -1602,7 +1603,7 @@ export default function ControlTower() {
 
                       <div>
                         <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                          Recommandations immÃ©diates
+                          Recommandations immédiates
                         </div>
                         <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-slate-700">
                           {goNoGoResult.recommendations.map((rec) => (
@@ -1649,7 +1650,7 @@ export default function ControlTower() {
                         </div>
                       ) : (
                         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                          Export rÃ©servÃ© aux comptes Pro.
+                          Export réservé aux comptes Pro.
                           <Button
                             size="sm"
                             className="ml-2"
@@ -1662,7 +1663,7 @@ export default function ControlTower() {
                               }
                             }}
                           >
-                            DÃ©bloquer Pro
+                            Débloquer Pro
                           </Button>
                         </div>
                       )}
@@ -1836,7 +1837,7 @@ export default function ControlTower() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Assistant export</CardTitle>
-              <CardDescription>Posez une question prÃ©cise, lâ€™assistant rÃ©pond.</CardDescription>
+              <CardDescription>Posez une question précise, l’assistant répond.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -1845,9 +1846,18 @@ export default function ControlTower() {
                   onChange={(e) => setAssistantQuestion(e.target.value)}
                   placeholder="Ex: Comment trouver des distributeurs en Allemagne ?"
                 />
-                <Button type="button" className="w-full" onClick={handleAssistantAsk} disabled={assistantLoading}>
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => void handleAssistantAsk()}
+                  disabled={assistantLoading}
+                >
                   {assistantLoading ? "Analyse..." : "Poser la question"}
                 </Button>
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800">
+                  Vos données outils sont confidentielles, stockées de manière sécurisée et supprimées automatiquement
+                  après la période de rétention.
+                </div>
                 {assistantError ? <div className="text-xs text-rose-600">{assistantError}</div> : null}
               </div>
 
@@ -1895,25 +1905,25 @@ export default function ControlTower() {
                     <ul className="list-disc space-y-1 pl-4 text-sm text-slate-700">
                       <li>LinkedIn + Sales Navigator: ciblage par secteur, taille, pays.</li>
                       <li>Annuaires export: Kompass, Europages, CCI, Business France.</li>
-                      <li>Salons internationaux et fÃ©dÃ©rations professionnelles.</li>
+                      <li>Salons internationaux et fédérations professionnelles.</li>
                       <li>Recherche par codes HS pour identifier importateurs et distributeurs.</li>
-                      <li>Alertes appels dâ€™offres et plateformes B2B.</li>
+                      <li>Alertes appels d’offres et plateformes B2B.</li>
                     </ul>
                   </TabsContent>
                   <TabsContent value="prospection">
                     <ul className="list-disc space-y-1 pl-4 text-sm text-slate-700">
-                      <li>DÃ©finir lâ€™ICP: secteur, taille, zones, pain points.</li>
-                      <li>SÃ©quence 3 relances: J+2, J+7, J+14 avec valeur ajoutÃ©e.</li>
+                      <li>Définir l’ICP: secteur, taille, zones, pain points.</li>
+                      <li>Séquence 3 relances: J+2, J+7, J+14 avec valeur ajoutée.</li>
                       <li>Offrir un diagnostic rapide (incoterm, paiement, risques).</li>
-                      <li>Structurer la valeur: problÃ¨me + solution + preuve + prochain pas.</li>
+                      <li>Structurer la valeur: problème + solution + preuve + prochain pas.</li>
                     </ul>
                   </TabsContent>
                   <TabsContent value="vente">
                     <ul className="list-disc space-y-1 pl-4 text-sm text-slate-700">
-                      <li>SPIN: Situation, ProblÃ¨me, Implication, Besoin-payoff.</li>
-                      <li>SONCAS: sÃ©curitÃ©, orgueil, nouveautÃ©, confort, argent, simplicitÃ©.</li>
-                      <li>Traiter les objections: prix, dÃ©lai, risque, conformitÃ©.</li>
-                      <li>ClÃ´turer avec un plan dâ€™action et une date prÃ©cise.</li>
+                      <li>SPIN: Situation, Problème, Implication, Besoin-payoff.</li>
+                      <li>SONCAS: sécurité, orgueil, nouveauté, confort, argent, simplicité.</li>
+                      <li>Traiter les objections: prix, délai, risque, conformité.</li>
+                      <li>Clôturer avec un plan d’action et une date précise.</li>
                     </ul>
                   </TabsContent>
                 </Tabs>
@@ -1925,8 +1935,8 @@ export default function ControlTower() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Objectifs & plan</CardTitle>
               <CardDescription>
-                Chargez un fichier avec vos objectifs. On Ã©tablira un plan et un suivi pour les atteindre. Tous les
-                autres outils contribueront Ã  ces objectifs.
+                Chargez un fichier avec vos objectifs. On établira un plan et un suivi pour les atteindre. Tous les
+                autres outils contribueront à ces objectifs.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1949,7 +1959,7 @@ export default function ControlTower() {
                 </div>
               ) : (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                  Aucun objectif chargÃ© pour le moment.
+                  Aucun objectif chargé pour le moment.
                 </div>
               )}
 
@@ -1981,7 +1991,7 @@ export default function ControlTower() {
               ) : null}
 
               <Button type="button" onClick={handleGeneratePlan} disabled={!objectiveCsv}>
-                GÃ©nÃ©rer mon plan
+                Générer mon plan
               </Button>
 
               {objectivePlan ? (
@@ -2114,13 +2124,13 @@ export default function ControlTower() {
               </CardContent>
             </Card>
           </div>
-          {/* âœ… Veille RSS (au clic sur pays) */}
+          {/* ✅ Veille RSS (au clic sur pays) */}
           <Card ref={rssPanelRef}>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between text-sm">
                 <span className="flex items-center gap-2">
                   <Rss className="h-4 w-4 text-blue-600" />
-                  Veille RSS â€“ {selectedCountryLabel} ({selectedWatchCountry})
+                  Veille RSS – {selectedCountryLabel} ({selectedWatchCountry})
                 </span>
                 <Button
                   type="button"
@@ -2130,11 +2140,11 @@ export default function ControlTower() {
                   onClick={() => void loadRssForCountry(selectedWatchCountry, true)}
                 >
                   <RotateCcw className="h-4 w-4" />
-                  RafraÃ®chir
+                  Rafraîchir
                 </Button>
               </CardTitle>
               <CardDescription>
-                Sources pays + UE/OMC (fallback). Si certains flux bloquent (CORS), le proxy est utilisÃ©.
+                Sources pays + UE/OMC (fallback). Si certains flux bloquent (CORS), le proxy est utilisé.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -2145,7 +2155,7 @@ export default function ControlTower() {
                   </div>
                   <div className="mt-1 font-semibold">{activeNews.title}</div>
                   <div className="mt-1 text-xs text-blue-700">
-                    {activeNews.sourceName} â€¢ {formatDate(activeNews.publishedAt)}
+                    {activeNews.sourceName} "¢ {formatDate(activeNews.publishedAt)}
                   </div>
                   <div className="mt-2">
                     <Button asChild size="sm" variant="outline" className="border-blue-200 text-blue-700">
@@ -2167,7 +2177,7 @@ export default function ControlTower() {
 
               {rssLoading ? (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                  Chargement des flux RSSâ€¦
+                  Chargement des flux RSS"¦
                 </div>
               ) : null}
 
@@ -2175,7 +2185,7 @@ export default function ControlTower() {
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                   {rssError}
                   <div className="mt-2 text-xs text-amber-800">
-                    Astuce : si un pays nâ€™a pas encore de source dÃ©diÃ©e, ajoute un flux national dans ta config plus tard.
+                    Astuce : si un pays n’a pas encore de source dédiée, ajoute un flux national dans ta config plus tard.
                   </div>
                 </div>
               ) : null}
@@ -2189,7 +2199,7 @@ export default function ControlTower() {
                           <div className="text-sm font-medium text-slate-900 line-clamp-2">{it.title}</div>
                           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                             <span>{it.sourceName}</span>
-                            <span>â€¢</span>
+                            <span>"¢</span>
                             <span>{formatDate(it.publishedAt)}</span>
                           </div>
                         </div>
@@ -2205,7 +2215,7 @@ export default function ControlTower() {
                     </li>
                   ))}
                   {!rssItems.length && !rssLoading ? (
-                    <li className="p-4 text-sm text-slate-500">Aucun item Ã  afficher pour le moment.</li>
+                    <li className="p-4 text-sm text-slate-500">Aucun item à afficher pour le moment.</li>
                   ) : null}
                 </ul>
               </div>
@@ -2215,7 +2225,7 @@ export default function ControlTower() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">SynthÃ¨se</CardTitle>
+                <CardTitle className="text-sm">Synthèse</CardTitle>
                 <CardDescription>Ventes et marges (filtres actifs)</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -2224,7 +2234,7 @@ export default function ControlTower() {
                   <span className="text-lg font-semibold text-slate-900">{formatMoney(totals.revenue, displayCurrency)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">CoÃ»ts totaux</span>
+                  <span className="text-xs text-muted-foreground">Coûts totaux</span>
                   <span className="text-lg font-semibold text-slate-900">{formatMoney(totals.costs, displayCurrency)}</span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -2248,7 +2258,7 @@ export default function ControlTower() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Filtres rapides</CardTitle>
-                <CardDescription>Affiche un sous-ensemble cohÃ©rent (devise incluse).</CardDescription>
+                <CardDescription>Affiche un sous-ensemble cohérent (devise incluse).</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Select
@@ -2289,7 +2299,7 @@ export default function ControlTower() {
                   </Select>
                 ) : null}
 
-                <Input value={hsQuery} onChange={(e) => setHsQuery(e.target.value)} placeholder="Filtrer par HS ou libellÃ©" />
+                <Input value={hsQuery} onChange={(e) => setHsQuery(e.target.value)} placeholder="Filtrer par HS ou libellé" />
 
                 {preferredHs.length ? (
                   <Button
@@ -2301,7 +2311,7 @@ export default function ControlTower() {
                     {focusPreferred ? "Mes HS uniquement" : "Tous les HS"}
                   </Button>
                 ) : (
-                  <div className="text-xs text-muted-foreground">Aucun HS prÃ©fÃ©rÃ© dÃ©tectÃ© (profil non configurÃ©).</div>
+                  <div className="text-xs text-muted-foreground">Aucun HS préféré détecté (profil non configuré).</div>
                 )}
               </CardContent>
             </Card>
@@ -2352,8 +2362,8 @@ export default function ControlTower() {
                 Import CSV
               </CardTitle>
               <CardDescription>
-                HS code obligatoire. Prix (unit_price ou total_price) + quantitÃ© requis. Les frais peuvent Ãªtre fournis
-                ou complÃ©tÃ©s par les valeurs manuelles.
+                HS code obligatoire. Prix (unit_price ou total_price) + quantité requis. Les frais peuvent être fournis
+                ou complétés par les valeurs manuelles.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -2395,13 +2405,13 @@ export default function ControlTower() {
 
               {currencyList.length > 1 ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Plusieurs devises dÃ©tectÃ©es ({currencyList.join(", ")}). Pour Ã©viter de mÃ©langer sans conversion,
-                  un filtre devise est appliquÃ©.
+                  Plusieurs devises détectées ({currencyList.join(", ")}). Pour éviter de mélanger sans conversion,
+                  un filtre devise est appliqué.
                 </div>
               ) : null}
 
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                SÃ©parateurs acceptÃ©s : <b>;</b> ou <b>,</b>. DÃ©cimales : virgule ou point.
+                Séparateurs acceptés : <b>;</b> ou <b>,</b>. Décimales : virgule ou point.
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -2419,16 +2429,16 @@ export default function ControlTower() {
                 Valeurs manuelles (fallback)
               </CardTitle>
               <CardDescription>
-                UtilisÃ©es si le CSV ne fournit pas les frais (transport, packaging, dossier, autres).
+                Utilisées si le CSV ne fournit pas les frais (transport, packaging, dossier, autres).
               </CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <div className="text-xs text-muted-foreground">Devise par dÃ©faut</div>
+                <div className="text-xs text-muted-foreground">Devise par défaut</div>
                 <Input value={defaults.currency} onChange={setDefaultsField("currency")} />
               </div>
               <div className="space-y-1">
-                <div className="text-xs text-muted-foreground">CoÃ»t unitaire produit</div>
+                <div className="text-xs text-muted-foreground">Coût unitaire produit</div>
                 <Input type="number" value={defaults.unitCost} onChange={setDefaultsField("unitCost")} />
               </div>
               <div className="space-y-1">
@@ -2448,7 +2458,7 @@ export default function ControlTower() {
                 <Input type="number" value={defaults.other} onChange={setDefaultsField("other")} />
               </div>
               <div className="sm:col-span-2 text-xs text-muted-foreground">
-                Les valeurs sont appliquÃ©es par ligne si la colonne correspondante est vide.
+                Les valeurs sont appliquées par ligne si la colonne correspondante est vide.
               </div>
             </CardContent>
           </Card>
@@ -2458,7 +2468,7 @@ export default function ControlTower() {
           <Card>
             <CardHeader>
               <CardTitle>Ventes par destination</CardTitle>
-              <CardDescription>CA, coÃ»ts et marges par pays (devise filtrÃ©e si nÃ©cessaire).</CardDescription>
+              <CardDescription>CA, coûts et marges par pays (devise filtrée si nécessaire).</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-auto rounded-xl border border-slate-200">
@@ -2467,7 +2477,7 @@ export default function ControlTower() {
                     <tr>
                       <th className="px-3 py-2 text-left">Destination</th>
                       <th className="px-3 py-2 text-right">CA</th>
-                      <th className="px-3 py-2 text-right">CoÃ»ts</th>
+                      <th className="px-3 py-2 text-right">Coûts</th>
                       <th className="px-3 py-2 text-right">Marge</th>
                       <th className="px-3 py-2 text-right">Marge %</th>
                     </tr>
@@ -2488,7 +2498,7 @@ export default function ControlTower() {
                     {!destinationAgg.length ? (
                       <tr>
                         <td colSpan={5} className="px-3 py-6 text-center text-sm text-slate-500">
-                          Aucune donnÃ©e. Importe un CSV ou ajuste les filtres.
+                          Aucune donnée. Importe un CSV ou ajuste les filtres.
                         </td>
                       </tr>
                     ) : null}
@@ -2510,7 +2520,7 @@ export default function ControlTower() {
                     <tr>
                       <th className="px-3 py-2 text-left">HS</th>
                       <th className="px-3 py-2 text-right">CA</th>
-                      <th className="px-3 py-2 text-right">CoÃ»ts</th>
+                      <th className="px-3 py-2 text-right">Coûts</th>
                       <th className="px-3 py-2 text-right">Marge</th>
                       <th className="px-3 py-2 text-right">Marge %</th>
                     </tr>
@@ -2531,7 +2541,7 @@ export default function ControlTower() {
                     {!productAgg.length ? (
                       <tr>
                         <td colSpan={5} className="px-3 py-6 text-center text-sm text-slate-500">
-                          Aucune donnÃ©e. Importe un CSV ou ajuste les filtres.
+                          Aucune donnée. Importe un CSV ou ajuste les filtres.
                         </td>
                       </tr>
                     ) : null}
@@ -2544,7 +2554,7 @@ export default function ControlTower() {
 
         <Card>
           <CardHeader>
-            <CardTitle>DÃ©tail par destination + produit</CardTitle>
+            <CardTitle>Détail par destination + produit</CardTitle>
             <CardDescription>Pour prioriser les actions marge produit/destination.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -2555,7 +2565,7 @@ export default function ControlTower() {
                     <th className="px-3 py-2 text-left">Destination</th>
                     <th className="px-3 py-2 text-left">HS</th>
                     <th className="px-3 py-2 text-right">CA</th>
-                    <th className="px-3 py-2 text-right">CoÃ»ts</th>
+                    <th className="px-3 py-2 text-right">Coûts</th>
                     <th className="px-3 py-2 text-right">Marge</th>
                     <th className="px-3 py-2 text-right">Marge %</th>
                   </tr>
@@ -2580,7 +2590,7 @@ export default function ControlTower() {
                   {!byDestinationProduct.length ? (
                     <tr>
                       <td colSpan={6} className="px-3 py-6 text-center text-sm text-slate-500">
-                        Aucune donnÃ©e. Importe un CSV ou ajuste les filtres.
+                        Aucune donnée. Importe un CSV ou ajuste les filtres.
                       </td>
                     </tr>
                   ) : null}
@@ -2589,7 +2599,7 @@ export default function ControlTower() {
             </div>
             {byDestinationProduct.length > 400 ? (
               <div className="mt-2 text-xs text-muted-foreground">
-                Affichage limitÃ© Ã  400 lignes. Utilise les filtres pour rÃ©duire la liste.
+                Affichage limité à 400 lignes. Utilise les filtres pour réduire la liste.
               </div>
             ) : null}
           </CardContent>
@@ -2598,5 +2608,4 @@ export default function ControlTower() {
     </AppLayout>
   );
 }
-
 

@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       session,
-      isAuthenticated: !!session?.user,
+      isAuthenticated: !!(session?.user || user),
       isLoading,
 
       async signUp(email, password, options) {
