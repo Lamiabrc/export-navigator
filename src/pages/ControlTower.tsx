@@ -1658,7 +1658,7 @@ export default function ControlTower() {
                               try {
                                 await startOnlineCheckout();
                               } catch (err: any) {
-                                setPlanCtaError(err?.message || \"Impossible d'ouvrir le checkout.\");
+                                setPlanCtaError(err?.message || "Impossible d'ouvrir le checkout.");
                               }
                             }}
                           >
@@ -1700,7 +1700,7 @@ export default function ControlTower() {
                   <Button
                     onClick={() =>
                       handleDecisionAsk(
-                        `Securiser le paiement pour un export vers ${paymentForm.country}. Mode: ${paymentForm.payment_method || \"a definir\"}. Client: ${paymentForm.client || \"non renseigne\"}. Donne un plan d'action.`,
+                        `Securiser le paiement pour un export vers ${paymentForm.country}. Mode: ${paymentForm.payment_method || "a definir"}. Client: ${paymentForm.client || "non renseigne"}. Donne un plan d'action.`,
                         paymentForm
                       )
                     }
@@ -1755,7 +1755,7 @@ export default function ControlTower() {
                   <Button
                     onClick={() =>
                       handleDecisionAsk(
-                        `Calculer un prix export vers ${pricingForm.country} pour ${pricingForm.product_desc || \"un produit\"}, incoterm ${pricingForm.incoterm || \"a definir\"}, valeur ${pricingForm.value_amount || \"n/a\"} ${pricingForm.currency || \"\"}.`,
+                        `Calculer un prix export vers ${pricingForm.country} pour ${pricingForm.product_desc || "un produit"}, incoterm ${pricingForm.incoterm || "a definir"}, valeur ${pricingForm.value_amount || "n/a"} ${pricingForm.currency || ""}.`,
                         pricingForm
                       )
                     }
@@ -1794,7 +1794,7 @@ export default function ControlTower() {
                   <Button
                     onClick={() =>
                       handleDecisionAsk(
-                        `Quels documents exporter pour ${documentsForm.product_desc || \"un produit\"} vers ${documentsForm.country} avec incoterm ${documentsForm.incoterm || \"a definir\"} ?`,
+                        `Quels documents exporter pour ${documentsForm.product_desc || "un produit"} vers ${documentsForm.country} avec incoterm ${documentsForm.incoterm || "a definir"} ?`,
                         documentsForm
                       )
                     }
