@@ -190,7 +190,7 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
 
     await admin
       .from("kb_documents")
-      .update({ status: "indexed", created_by: auth.user.id })
+      .update({ status: "ready", created_by: auth.user.id })
       .eq("id", doc.id);
 
     return json(res, 200, {
