@@ -536,8 +536,8 @@ Deno.serve(async (req) => {
           : ["Destination country?", "Product (material + use)?", "Value and Incoterm?"],
       actionsSuggested:
         language === "fr"
-          ? ["Ajouter des guides (fiches pays/produits) dans kb_articles.", "Indexer des documents dans document_chunks."]
-          : ["Add guides (country/product sheets) to kb_articles.", "Index documents into document_chunks."],
+          ? ["Ajouter des guides (fiches pays/produits) dans kb_articles.", "Indexer des documents dans kb_documents/kb_chunks."]
+          : ["Add guides (country/product sheets) to kb_articles.", "Index documents into kb_documents/kb_chunks."],
       citations: [],
       debug: { kb_error: kb.error ?? null, docs_error: docs.error ?? null },
       privacy_notice: privacyNotice,
