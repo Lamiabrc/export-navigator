@@ -1854,6 +1854,10 @@ export default function ControlTower() {
                 >
                   {assistantLoading ? "Analyse..." : "Poser la question"}
                 </Button>
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800">
+                  Vos données outils sont confidentielles, stockées de manière sécurisée et supprimées automatiquement
+                  après la période de rétention.
+                </div>
                 {assistantError ? <div className="text-xs text-rose-600">{assistantError}</div> : null}
               </div>
 
@@ -2604,5 +2608,4 @@ export default function ControlTower() {
     </AppLayout>
   );
 }
-
 
