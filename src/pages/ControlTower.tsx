@@ -1402,9 +1402,9 @@ export default function ControlTower() {
   const selectedCountryLabel = territoryLabel(selectedWatchCountry);
 
   return (
-    <AppLayout contentClassName="md:p-6">
-      <div className="space-y-6">
-        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <AppLayout contentClassName="md:p-4 lg:p-6">
+      <div className="space-y-5">
+        <header className="rounded-2xl border border-blue-100 bg-gradient-to-br from-white via-blue-50/50 to-red-50/40 p-5 shadow-sm flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.35em] text-blue-600">
               Bienvenue sur votre tour de contrôle import export
@@ -1440,7 +1440,7 @@ export default function ControlTower() {
           </div>
         </header>
 
-        <section className="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
+        <section className="rounded-2xl border border-blue-100 bg-white/95 p-4 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
@@ -1450,13 +1450,13 @@ export default function ControlTower() {
               <div className="text-xs text-slate-500">Mini-diagnostics express pour agir tout de suite.</div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" className="rounded-full" onClick={() => openDecision("go-no-go")}>
+              <Button variant="secondary" className="rounded-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" onClick={() => openDecision("go-no-go")}>
                 Go/No-Go pays
               </Button>
               <Button variant="secondary" className="rounded-full" onClick={() => openDecision("payment")}>
                 Sécuriser le paiement
               </Button>
-              <Button variant="secondary" className="rounded-full" onClick={() => openDecision("pricing")}>
+              <Button variant="secondary" className="rounded-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" onClick={() => openDecision("pricing")}>
                 Calculer mon prix export
               </Button>
               <Button variant="secondary" className="rounded-full" onClick={() => openDecision("documents")}>
