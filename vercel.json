@@ -71,7 +71,12 @@
     }
   ],
   "rewrites": [
-    { "source": "/api/hs/search", "destination": "/api/prefs?mode=hs_search" },
+    { "source": "/api/hs/search", "destination": "/api/lead-magnet?mode=hs_search" },
+    { "source": "/api/lead", "destination": "/api/lead-magnet?mode=lead" },
+    { "source": "/api/pdf", "destination": "/api/lead-magnet?mode=pdf" },
+    { "source": "/api/alerts", "destination": "/api/lead-magnet?mode=alerts" },
+    { "source": "/api/prefs", "destination": "/api/lead-magnet?mode=prefs" },
+    { "source": "/api/export/brief", "destination": "/api/lead-magnet?mode=export-brief" },
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/:path*", "destination": "/index.html" }
   ]

@@ -1,3 +1,10 @@
 api/hs/search.ts
 api/rss-proxy.ts
 api/_supabase.ts
+api/_lib/http.ts
+api/alerts.ts
+api/lead.ts
+api/pdf.ts
+api/prefs.ts
+api/export/brief.ts
+api/ingest/feeds.ts
