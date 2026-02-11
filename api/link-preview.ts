@@ -131,9 +131,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const body = await readJson<LinkPreviewRequest>(req);
-    const rawUrls = Array.isArray(body?.urls) ? body.urls : [];
-    const urls = rawUrls.map((x) => String(x ?? "").trim()).filter((x) => x.length > 0);
-    const clean: string[] = Array.from(new Set(urls)).filter(isHttpUrl).slice(0, 30);
+    const rawUrls = Array.isArray(body?.urls) ? (body.urls as unknown[]) : [];
+    const urls: string[] = rawUrls.map((x) => String(x ?? "").trim()).filter((x) => x.length > 0);
+    const clean = Array.from(new Set(urls)).filter(isHttpUrl).slice(0, 30);
 
     if (!clean.length) {
       res.status(200).json({ ok: true, items: {} });

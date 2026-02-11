@@ -62,7 +62,7 @@ async function openaiEmbedBatch(inputs: string[]) {
 
 async function extractTextFromPdf(buffer: Buffer) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const loadingTask = pdfjs.getDocument({ data: buffer, disableWorker: true });
+  const loadingTask = pdfjs.getDocument({ data: buffer });
   const pdf = await loadingTask.promise;
   let fullText = "";
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
