@@ -835,7 +835,62 @@ export default function ControlTower() {
         sources.filter((s) => !globalUrls.has(s.url)).map((s) => s.name)
       );
       const countryItems = merged.filter((it) => countrySourceNames.has(it.sourceName));
-      const finalItems = countryItems.length ? countryItems : merged;
+      const pool = countryItems.length ? countryItems : merged;
+
+      // ✅ Limiter Google News et mieux répartir les autres sources
+      const sourceMeta = new Map<string, { isGoogle: boolean }>();
+      sources.forEach((s) => {
+        let host = "";
+        try {
+          host = new URL(s.url).hostname;
+        } catch {
+          host = "";
+        }
+        const isGoogle = host.includes("news.google.com") || s.name.toLowerCase().includes("google news");
+        sourceMeta.set(s.name, { isGoogle });
+      });
+
+      const maxTotal = 20;
+      const maxGoogle = 4;
+      const maxOther = 6;
+      const rotationSeed = Math.floor(Date.now() / (1000 * 60 * 10)); // change toutes les 10 min
+      const rotateList = (list: RssItem[], seed: number) => {
+        if (list.length <= 1) return list;
+        const offset = seed % list.length;
+        return [...list.slice(offset), ...list.slice(0, offset)];
+      };
+
+      const grouped = new Map<string, RssItem[]>();
+      pool.forEach((it) => {
+        const key = it.sourceName || "Source";
+        const list = grouped.get(key) || [];
+        list.push(it);
+        grouped.set(key, list);
+      });
+
+      const queues = Array.from(grouped.entries()).map(([name, list]) => {
+        const isGoogle = sourceMeta.get(name)?.isGoogle ?? name.toLowerCase().includes("google news");
+        const ordered = [...list].sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0));
+        const rotated = isGoogle ? rotateList(ordered, rotationSeed) : ordered;
+        const cap = isGoogle ? maxGoogle : maxOther;
+        return { name, isGoogle, items: rotated.slice(0, cap) };
+      });
+
+      // non-google d'abord
+      queues.sort((a, b) => Number(a.isGoogle) - Number(b.isGoogle));
+
+      const finalItems: RssItem[] = [];
+      let guard = 0;
+      while (finalItems.length < maxTotal) {
+        let progressed = false;
+        for (const q of queues) {
+          if (!q.items.length) continue;
+          finalItems.push(q.items.shift()!);
+          progressed = true;
+          if (finalItems.length >= maxTotal) break;
+        }
+        if (!progressed || guard++ > 200) break;
+      }
 
       if (!finalItems.length) {
         setRssError(okCount ? "Aucun item RSS trouvé (sources vides ou format non reconnu)." : "Impossible de récupérer les flux RSS (blocage réseau/CORS).");
