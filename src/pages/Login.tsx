@@ -1,6 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +40,7 @@ export default function Login() {
   const [needsConfirm, setNeedsConfirm] = useState(false);
   const [resendPending, setResendPending] = useState(false);
   const [pending, setPending] = useState(false);
+  const envMissing = !SUPABASE_ENV_OK;
 
   const nextPath = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -78,6 +80,16 @@ export default function Login() {
         return;
       }
       if (!userId) {
+        // fallback: verify session presence
+        try {
+          const { data } = await supabase.auth.getSession();
+          if (data.session?.user?.id) {
+            navigate(nextPath, { replace: true });
+            return;
+          }
+        } catch {
+          // ignore
+        }
         setError("Connexion impossible. Reessaie.");
         return;
       }
@@ -152,6 +164,11 @@ export default function Login() {
 
             <CardContent>
               <form className="space-y-4" onSubmit={onSubmit}>
+                {envMissing && (
+                  <div className="rounded-xl border border-amber-700/60 bg-amber-900/40 px-3 py-2 text-xs text-amber-200">
+                    Connexion indisponible: variables Supabase manquantes en production.
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="text-sm text-slate-200">Email</label>
                   <Input
@@ -221,7 +238,7 @@ export default function Login() {
                   </div>
                 )}
 
-                <Button type="submit" className="w-full h-11 font-semibold" disabled={pending || isLoading}>
+                <Button type="submit" className="w-full h-11 font-semibold" disabled={pending || isLoading || envMissing}>
                   {pending || isLoading ? "Connexion..." : "Se connecter"}
                 </Button>
               </form>
