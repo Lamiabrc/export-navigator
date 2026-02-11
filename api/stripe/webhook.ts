@@ -64,9 +64,34 @@ async function findUserIdByCustomer(customerId: string) {
 
 async function findUserIdByEmail(email: string) {
   const admin = supabaseAdmin();
-  const { data, error } = await admin.auth.admin.getUserByEmail(email);
-  if (error) return null;
-  return data?.user?.id || null;
+  const { data: known, error: knownErr } = await admin
+    .from("billing_customers")
+    .select("user_id")
+    .eq("email", email)
+    .maybeSingle();
+  if (!knownErr && known?.user_id) return known.user_id;
+
+  const authAdmin = admin.auth.admin as any;
+  if (typeof authAdmin.getUserByEmail === "function") {
+    const { data, error } = await authAdmin.getUserByEmail(email);
+    if (error) return null;
+    return data?.user?.id || null;
+  }
+
+  if (typeof authAdmin.listUsers === "function") {
+    const target = email.trim().toLowerCase();
+    const perPage = 200;
+    for (let page = 1; page <= 5; page += 1) {
+      const { data, error } = await authAdmin.listUsers({ page, perPage });
+      if (error) return null;
+      const users = (data?.users || []) as any[];
+      const match = users.find((u) => String(u?.email || "").toLowerCase() === target);
+      if (match?.id) return match.id;
+      if (users.length < perPage) break;
+    }
+  }
+
+  return null;
 }
 
 async function upsertBillingCustomer(userId: string, customerId: string, email?: string | null) {
