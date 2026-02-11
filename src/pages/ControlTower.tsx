@@ -4,10 +4,36 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ExternalLink, FileSpreadsheet, RotateCcw, Rss, Upload } from "lucide-react";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { ExternalLink, FileSpreadsheet, RotateCcw, Rss, Upload, Download, Sparkles } from "lucide-react";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { PanoramicControlTowerMap } from "@/components/controlTower/PanoramicControlTowerMap";
+import { usePlan } from "@/auth/PlanContext";
+import { startOnlineCheckout } from "@/lib/billing";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 
 type CsvState = {
   headers: string[];
@@ -54,6 +80,28 @@ type RssItem = {
   link: string;
   sourceName: string;
   publishedAt: number | null;
+};
+
+type DecisionKey = "go-no-go" | "payment" | "pricing" | "documents";
+
+type GoNoGoResult = {
+  assessment_id?: string | null;
+  decision: string;
+  risk_score: number;
+  risk_breakdown: {
+    compliance: number;
+    payment: number;
+    logistics: number;
+    documents: number;
+  };
+  recommendations: string[];
+  checklist: string[];
+  messages: {
+    client: string;
+    internal: string;
+  };
+  can_export: boolean;
+  plan?: string;
 };
 
 const COUNTRY_COORDS: Record<string, { name: string; lat: number; lon: number }> = {
@@ -445,13 +493,73 @@ function formatDate(ts: number | null) {
 
 export default function ControlTower() {
   const { profile } = useCompanyProfile();
+  const { user } = useAuth();
+  const { plan } = usePlan();
+  const isPro = plan !== "FREE";
+  const planLabel = plan === "FREE" ? "Free" : plan.replace(/_/g, " ");
   const companyName = profile?.company_name?.trim() || "Votre entreprise";
 
   const [csvState, setCsvState] = React.useState<CsvState | null>(null);
   const [csvError, setCsvError] = React.useState<string | null>(null);
   const [csvName, setCsvName] = React.useState<string | null>(null);
-  const [objectiveFiles, setObjectiveFiles] = React.useState<File[]>([]);
-  const [knowledgeFiles, setKnowledgeFiles] = React.useState<File[]>([]);
+  const [objectiveCsv, setObjectiveCsv] = React.useState<CsvState | null>(null);
+  const [objectiveName, setObjectiveName] = React.useState<string | null>(null);
+  const [objectiveError, setObjectiveError] = React.useState<string | null>(null);
+  const [objectiveUploading, setObjectiveUploading] = React.useState(false);
+  const [objectivePlan, setObjectivePlan] = React.useState<string[] | null>(null);
+  const [planCtaError, setPlanCtaError] = React.useState<string | null>(null);
+
+  const [assistantQuestion, setAssistantQuestion] = React.useState("");
+  const [assistantAnswer, setAssistantAnswer] = React.useState<string | null>(null);
+  const [assistantActions, setAssistantActions] = React.useState<string[]>([]);
+  const [assistantLoading, setAssistantLoading] = React.useState(false);
+  const [assistantError, setAssistantError] = React.useState<string | null>(null);
+
+  const [decisionOpen, setDecisionOpen] = React.useState<DecisionKey | null>(null);
+  const [decisionLoading, setDecisionLoading] = React.useState(false);
+  const [decisionAnswer, setDecisionAnswer] = React.useState<string | null>(null);
+  const [decisionActions, setDecisionActions] = React.useState<string[]>([]);
+  const [decisionError, setDecisionError] = React.useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  const [deleteDone, setDeleteDone] = React.useState(false);
+
+  const [goNoGoResult, setGoNoGoResult] = React.useState<GoNoGoResult | null>(null);
+  const [goNoGoForm, setGoNoGoForm] = React.useState({
+    country: "FR",
+    product_desc: "",
+    hs_code: "",
+    incoterm: "",
+    payment_method: "",
+    value_amount: "",
+    currency: "EUR",
+    route: "",
+    client: "",
+  });
+
+  const [paymentForm, setPaymentForm] = React.useState({
+    country: "FR",
+    payment_method: "",
+    client: "",
+  });
+  const [pricingForm, setPricingForm] = React.useState({
+    country: "FR",
+    product_desc: "",
+    incoterm: "",
+    value_amount: "",
+    currency: "EUR",
+  });
+  const [documentsForm, setDocumentsForm] = React.useState({
+    country: "FR",
+    product_desc: "",
+    incoterm: "",
+  });
+
+  const assistantExamples = [
+    "Comment trouver des distributeurs en Allemagne ?",
+    "Quels incoterms recommander pour un premier export ?",
+    "Quels risques sanctions pour exporter vers la Turquie ?",
+  ];
 
   const [defaults, setDefaults] = React.useState({
     currency: "EUR",
@@ -487,6 +595,276 @@ export default function ControlTower() {
     setPreferredHs(hs);
     if (hs.length) setFocusPreferred(true);
   }, []);
+
+  const getAuthToken = React.useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  }, []);
+
+  const authFetch = React.useCallback(
+    async (path: string, options: RequestInit) => {
+      const token = await getAuthToken();
+      if (!token) throw new Error("Authentification requise.");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+        Authorization: `Bearer ${token}`,
+      };
+      return fetch(path, { ...options, headers });
+    },
+    [getAuthToken],
+  );
+
+  const openDecision = React.useCallback(
+    (key: DecisionKey) => {
+      setDecisionOpen(key);
+      setDecisionAnswer(null);
+      setDecisionActions([]);
+      setDecisionError(null);
+      setDecisionLoading(false);
+      setGoNoGoResult(null);
+
+      const fallbackCountry = selectedWatchCountry || "FR";
+      setGoNoGoForm((prev) => ({ ...prev, country: fallbackCountry }));
+      setPaymentForm((prev) => ({ ...prev, country: fallbackCountry }));
+      setPricingForm((prev) => ({ ...prev, country: fallbackCountry }));
+      setDocumentsForm((prev) => ({ ...prev, country: fallbackCountry }));
+    },
+    [selectedWatchCountry],
+  );
+
+  const callAsk = React.useCallback(
+    async (question: string, context?: Record<string, any>) => {
+      const resp = await authFetch("/api/ask", {
+        method: "POST",
+        body: JSON.stringify({ question, context }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data?.ok) {
+        throw new Error(data?.error || "Erreur IA");
+      }
+      return data as { answer: string; actions?: string[] };
+    },
+    [authFetch],
+  );
+
+  const handleAssistantAsk = async (override?: string) => {
+    const question = String(override ?? assistantQuestion).trim();
+    if (!question) return;
+    if (override) setAssistantQuestion(question);
+    setAssistantLoading(true);
+    setAssistantError(null);
+    setAssistantAnswer(null);
+    setAssistantActions([]);
+    try {
+      const result = await callAsk(question, {
+        company: companyName,
+        country: selectedWatchCountry,
+      });
+      setAssistantAnswer(result.answer);
+      setAssistantActions(result.actions || []);
+    } catch (err: any) {
+      setAssistantError(err?.message || "Erreur lors de la demande.");
+    } finally {
+      setAssistantLoading(false);
+    }
+  };
+
+  const handleDecisionAsk = async (question: string, context?: Record<string, any>) => {
+    setDecisionLoading(true);
+    setDecisionError(null);
+    setDecisionAnswer(null);
+    setDecisionActions([]);
+    try {
+      const result = await callAsk(question, context);
+      setDecisionAnswer(result.answer);
+      setDecisionActions(result.actions || []);
+    } catch (err: any) {
+      setDecisionError(err?.message || "Erreur lors de la demande.");
+    } finally {
+      setDecisionLoading(false);
+    }
+  };
+
+  const handleGoNoGo = async () => {
+    setDecisionLoading(true);
+    setDecisionError(null);
+    setGoNoGoResult(null);
+    try {
+      const resp = await authFetch("/api/go-no-go", {
+        method: "POST",
+        body: JSON.stringify({
+          ...goNoGoForm,
+          value_amount: goNoGoForm.value_amount ? Number(goNoGoForm.value_amount) : null,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data?.ok) {
+        if (data?.error === "quota_exceeded") {
+          throw new Error("Limite Free atteinte. Passez en Pro pour debloquer.");
+        }
+        throw new Error(data?.error || "Erreur Go/No-Go");
+      }
+      setGoNoGoResult(data as GoNoGoResult);
+    } catch (err: any) {
+      setDecisionError(err?.message || "Erreur Go/No-Go.");
+    } finally {
+      setDecisionLoading(false);
+    }
+  };
+
+  const handleObjectiveUpload = async (file: File) => {
+    setObjectiveError(null);
+    setObjectivePlan(null);
+    setObjectiveUploading(true);
+
+    try {
+      const text = await file.text();
+      const parsed = parseCsvText(text);
+      if (!parsed.headers.length) {
+        setObjectiveError("CSV vide ou illisible.");
+        setObjectiveCsv(null);
+        setObjectiveName(null);
+        setObjectiveUploading(false);
+        return;
+      }
+
+      setObjectiveCsv(parsed);
+      setObjectiveName(file.name);
+
+      if (!user?.id) {
+        setObjectiveUploading(false);
+        return;
+      }
+
+      const unique = crypto.randomUUID();
+      const path = `${user.id}/${unique}/${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("objectives")
+        .upload(path, file, { upsert: false, contentType: file.type || "text/csv" });
+
+      if (uploadError) throw uploadError;
+
+      const previewRows = {
+        headers: parsed.headers,
+        rows: parsed.rows.slice(0, 5),
+      };
+
+      const { error: insertError } = await supabase.from("objectives_uploads").insert({
+        user_id: user.id,
+        file_name: file.name,
+        storage_bucket: "objectives",
+        storage_path: path,
+        mime_type: file.type || "text/csv",
+        size_bytes: file.size,
+        preview_rows: previewRows,
+      });
+
+      if (insertError) throw insertError;
+    } catch (err: any) {
+      setObjectiveError(err?.message || "Impossible de televerser le CSV.");
+    } finally {
+      setObjectiveUploading(false);
+    }
+  };
+
+  const handleGeneratePlan = () => {
+    const examples = objectiveCsv?.rows?.slice(0, 1)?.[0]?.join(" | ");
+    const plan = [
+      "Clarifier les objectifs prioritaires (CA cible, pays, produits, delais).",
+      "Prioriser 3 marches a traiter en premier et definir le mix canaux.",
+      "Construire une sequence prospection (ICP + 3 relances) et le plan de suivi.",
+      "Valider la strategie prix/incoterm + les risques pays avant lancement.",
+      examples ? `Verifier la coherence des donnees (ex: ${examples}).` : "Verifier la coherence des donnees CSV.",
+    ];
+    setObjectivePlan(plan);
+  };
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCsv = () => {
+    if (!goNoGoResult) return;
+    const rows = [
+      ["Decision", goNoGoResult.decision],
+      ["Risk Score", String(goNoGoResult.risk_score)],
+      ["Compliance", String(goNoGoResult.risk_breakdown.compliance)],
+      ["Payment", String(goNoGoResult.risk_breakdown.payment)],
+      ["Logistics", String(goNoGoResult.risk_breakdown.logistics)],
+      ["Documents", String(goNoGoResult.risk_breakdown.documents)],
+      ["Recommendations", goNoGoResult.recommendations.join(" | ")],
+      ["Checklist", goNoGoResult.checklist.join(" | ")],
+      ["Message client", goNoGoResult.messages.client.replace(/\n/g, " ")],
+      ["Message interne", goNoGoResult.messages.internal.replace(/\n/g, " ")],
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/\"/g, '""')}"`).join(";")).join("\n");
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "go-no-go-export.csv");
+  };
+
+  const handleExportPdf = async () => {
+    if (!goNoGoResult) return;
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([595, 842]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+    const lines = [
+      "Go/No-Go Export",
+      `Decision: ${goNoGoResult.decision}`,
+      `Score risque: ${goNoGoResult.risk_score}/100`,
+      `Sanctions/Conformite: ${goNoGoResult.risk_breakdown.compliance}`,
+      `Paiement: ${goNoGoResult.risk_breakdown.payment}`,
+      `Logistique: ${goNoGoResult.risk_breakdown.logistics}`,
+      `Documents: ${goNoGoResult.risk_breakdown.documents}`,
+      "",
+      "Recommandations:",
+      ...goNoGoResult.recommendations.map((r) => `- ${r}`),
+      "",
+      "Checklist:",
+      ...goNoGoResult.checklist.map((c) => `- ${c}`),
+    ];
+
+    let y = 800;
+    for (let i = 0; i < lines.length; i += 1) {
+      const text = lines[i];
+      const size = i === 0 ? 18 : 11;
+      page.drawText(text, {
+        x: 50,
+        y,
+        size,
+        font: i === 0 ? fontBold : font,
+      });
+      y -= size + 6;
+      if (y < 60) break;
+    }
+
+    const bytes = await pdf.save();
+    downloadBlob(new Blob([bytes], { type: "application/pdf" }), "go-no-go-export.pdf");
+  };
+
+  const handleDeleteData = async () => {
+    setDeleteError(null);
+    setDeleteDone(false);
+    setDeleteLoading(true);
+    try {
+      const resp = await authFetch("/api/delete-data", { method: "POST", body: JSON.stringify({}) });
+      const data = await resp.json();
+      if (!resp.ok || !data?.ok) throw new Error(data?.error || "Suppression impossible");
+      setDeleteDone(true);
+    } catch (err: any) {
+      setDeleteError(err?.message || "Erreur suppression.");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const handleCsvUpload = async (file: File) => {
     setCsvError(null);
@@ -1025,47 +1403,520 @@ export default function ControlTower() {
   return (
     <AppLayout contentClassName="md:p-6">
       <div className="space-y-6">
-        <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.35em] text-blue-600">Bienvenue sur votre tour de controle import export</p>
+            <p className="text-xs uppercase tracking-[0.35em] text-blue-600">
+              Bienvenue sur votre tour de contrÃ´le import export
+            </p>
             <h1 className="text-3xl font-bold text-slate-900">L&apos;assistant</h1>
-            <p className="text-sm text-slate-600">Avez-vous une question precise ?</p>
+            <p className="text-sm text-slate-600">Avez-vous une question prÃ©cise ?</p>
             <p className="text-sm text-slate-500">
-              Tableau de bord connecte pour {companyName}. Import, export, prospection et suivi commercial.
+              Tableau de bord connectÃ© pour {companyName}. Import, export, prospection et suivi commercial.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => {
-                setCsvState(null);
-                setCsvName(null);
-                setCsvError(null);
-                setDestinationFilter("ALL");
-                setHsQuery("");
-                setCurrencyFilter("ALL");
-              }}
-            >
-              <RotateCcw className="h-4 w-4" />
-              Vider les donnÃ©es
-            </Button>
+          <div className="flex flex-col items-start gap-2 lg:items-end">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="text-[11px] uppercase tracking-[0.2em]">
+                Plan {planLabel}
+              </Badge>
+              {!isPro ? (
+                <Button
+                  className="gap-2"
+                  onClick={async () => {
+                    setPlanCtaError(null);
+                    try {
+                      await startOnlineCheckout();
+                    } catch (err: any) {
+                      setPlanCtaError(err?.message || "Impossible d'ouvrir le checkout.");
+                    }
+                  }}
+                >
+                  DÃ©bloquer Pro
+                </Button>
+              ) : null}
+            </div>
+            {planCtaError ? <div className="text-xs text-rose-600">{planCtaError}</div> : null}
           </div>
         </header>
 
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <section className="rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <Sparkles className="h-4 w-4 text-blue-600" />
+                DÃ©cision du jour
+              </div>
+              <div className="text-xs text-slate-500">Mini-diagnostics express pour agir tout de suite.</div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" className="rounded-full" onClick={() => openDecision("go-no-go")}>
+                Go/No-Go pays
+              </Button>
+              <Button variant="secondary" className="rounded-full" onClick={() => openDecision("payment")}>
+                SÃ©curiser le paiement
+              </Button>
+              <Button variant="secondary" className="rounded-full" onClick={() => openDecision("pricing")}>
+                Calculer mon prix export
+              </Button>
+              <Button variant="secondary" className="rounded-full" onClick={() => openDecision("documents")}>
+                ContrÃ´ler mes documents
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        <Drawer open={Boolean(decisionOpen)} onOpenChange={(open) => (!open ? setDecisionOpen(null) : null)}>
+          <DrawerContent className="px-4 pb-6">
+            <DrawerHeader>
+              <DrawerTitle>
+                {decisionOpen === "go-no-go" && "Go/No-Go Export en 60 sec"}
+                {decisionOpen === "payment" && "SÃ©curiser le paiement"}
+                {decisionOpen === "pricing" && "Calculer mon prix export"}
+                {decisionOpen === "documents" && "ContrÃ´ler mes documents"}
+              </DrawerTitle>
+              <DrawerDescription>
+                {decisionOpen === "go-no-go" && "Renseignez les infos clÃ©s pour un diagnostic rapide."}
+                {decisionOpen === "payment" && "Mini-formulaire pour limiter le risque de paiement."}
+                {decisionOpen === "pricing" && "DonnÃ©es minimum pour cadrer le prix export."}
+                {decisionOpen === "documents" && "Liste documentaire personnalisÃ©e en 1 minute."}
+              </DrawerDescription>
+            </DrawerHeader>
+
+            <div className="mx-auto w-full max-w-3xl space-y-4">
+              {decisionOpen === "go-no-go" ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Pays</div>
+                      <Input
+                        value={goNoGoForm.country}
+                        onChange={(e) => setGoNoGoForm((prev) => ({ ...prev, country: e.target.value }))}
+                        placeholder="Ex: FR"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Produit (description)</div>
+                      <Input
+                        value={goNoGoForm.product_desc}
+                        onChange={(e) => setGoNoGoForm((prev) => ({ ...prev, product_desc: e.target.value }))}
+                        placeholder="Ex: appareils mÃ©dicaux"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">HS code (optionnel)</div>
+                      <Input
+                        value={goNoGoForm.hs_code}
+                        onChange={(e) => setGoNoGoForm((prev) => ({ ...prev, hs_code: e.target.value }))}
+                        placeholder="Ex: 9018"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Incoterm</div>
+                      <Input
+                        value={goNoGoForm.incoterm}
+                        onChange={(e) => setGoNoGoForm((prev) => ({ ...prev, incoterm: e.target.value }))}
+                        placeholder="Ex: DAP"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Mode paiement</div>
+                      <Input
+                        value={goNoGoForm.payment_method}
+                        onChange={(e) => setGoNoGoForm((prev) => ({ ...prev, payment_method: e.target.value }))}
+                        placeholder="Ex: acompte + LC"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Valeur</div>
+                      <Input
+                        value={goNoGoForm.value_amount}
+                        onChange={(e) => setGoNoGoForm((prev) => ({ ...prev, value_amount: e.target.value }))}
+                        placeholder="Ex: 50000"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Devise</div>
+                      <Input
+                        value={goNoGoForm.currency}
+                        onChange={(e) => setGoNoGoForm((prev) => ({ ...prev, currency: e.target.value }))}
+                        placeholder="EUR"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Route (optionnel)</div>
+                      <Input
+                        value={goNoGoForm.route}
+                        onChange={(e) => setGoNoGoForm((prev) => ({ ...prev, route: e.target.value }))}
+                        placeholder="Ex: maritime via Rotterdam"
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <div className="text-xs text-muted-foreground">Client (optionnel)</div>
+                      <Input
+                        value={goNoGoForm.client}
+                        onChange={(e) => setGoNoGoForm((prev) => ({ ...prev, client: e.target.value }))}
+                        placeholder="Nom du client"
+                      />
+                    </div>
+                  </div>
+
+                  {decisionError ? <div className="text-sm text-rose-600">{decisionError}</div> : null}
+
+                  <Button onClick={handleGoNoGo} disabled={decisionLoading}>
+                    {decisionLoading ? "Calcul..." : "Lancer le Go/No-Go"}
+                  </Button>
+
+                  {goNoGoResult ? (
+                    <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                        <div className="col-span-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                          <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Score global</div>
+                          <div className="text-2xl font-semibold text-slate-900">{goNoGoResult.risk_score}</div>
+                          <div className="text-xs text-slate-500">{goNoGoResult.decision}</div>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                          <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Sanctions</div>
+                          <div className="text-lg font-semibold text-slate-900">
+                            {goNoGoResult.risk_breakdown.compliance}
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                          <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Paiement</div>
+                          <div className="text-lg font-semibold text-slate-900">
+                            {goNoGoResult.risk_breakdown.payment}
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                          <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Logistique</div>
+                          <div className="text-lg font-semibold text-slate-900">
+                            {goNoGoResult.risk_breakdown.logistics}
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                          <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Documents</div>
+                          <div className="text-lg font-semibold text-slate-900">
+                            {goNoGoResult.risk_breakdown.documents}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          Recommandations immÃ©diates
+                        </div>
+                        <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-slate-700">
+                          {goNoGoResult.recommendations.map((rec) => (
+                            <li key={rec}>{rec}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          Checklist export
+                        </div>
+                        <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-slate-700">
+                          {goNoGoResult.checklist.map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                            Message client
+                          </div>
+                          <Textarea value={goNoGoResult.messages.client} readOnly className="mt-2" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                            Message interne
+                          </div>
+                          <Textarea value={goNoGoResult.messages.internal} readOnly className="mt-2" />
+                        </div>
+                      </div>
+
+                      {goNoGoResult.can_export ? (
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" onClick={handleExportPdf}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Export PDF
+                          </Button>
+                          <Button variant="outline" onClick={handleExportCsv}>
+                            Export CSV
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                          Export rÃ©servÃ© aux comptes Pro.
+                          <Button
+                            size="sm"
+                            className="ml-2"
+                            onClick={async () => {
+                              setPlanCtaError(null);
+                              try {
+                                await startOnlineCheckout();
+                              } catch (err: any) {
+                                setPlanCtaError(err?.message || \"Impossible d'ouvrir le checkout.\");
+                              }
+                            }}
+                          >
+                            DÃ©bloquer Pro
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {decisionOpen === "payment" ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Pays</div>
+                      <Input
+                        value={paymentForm.country}
+                        onChange={(e) => setPaymentForm((prev) => ({ ...prev, country: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Mode paiement</div>
+                      <Input
+                        value={paymentForm.payment_method}
+                        onChange={(e) => setPaymentForm((prev) => ({ ...prev, payment_method: e.target.value }))}
+                        placeholder="Ex: acompte + LC"
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <div className="text-xs text-muted-foreground">Client (optionnel)</div>
+                      <Input
+                        value={paymentForm.client}
+                        onChange={(e) => setPaymentForm((prev) => ({ ...prev, client: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() =>
+                      handleDecisionAsk(
+                        `Securiser le paiement pour un export vers ${paymentForm.country}. Mode: ${paymentForm.payment_method || \"a definir\"}. Client: ${paymentForm.client || \"non renseigne\"}. Donne un plan d'action.`,
+                        paymentForm
+                      )
+                    }
+                    disabled={decisionLoading}
+                  >
+                    {decisionLoading ? "Analyse..." : "Obtenir les recommandations"}
+                  </Button>
+                </div>
+              ) : null}
+
+              {decisionOpen === "pricing" ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Pays</div>
+                      <Input
+                        value={pricingForm.country}
+                        onChange={(e) => setPricingForm((prev) => ({ ...prev, country: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Produit</div>
+                      <Input
+                        value={pricingForm.product_desc}
+                        onChange={(e) => setPricingForm((prev) => ({ ...prev, product_desc: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Incoterm</div>
+                      <Input
+                        value={pricingForm.incoterm}
+                        onChange={(e) => setPricingForm((prev) => ({ ...prev, incoterm: e.target.value }))}
+                        placeholder="Ex: DAP"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Valeur</div>
+                      <Input
+                        value={pricingForm.value_amount}
+                        onChange={(e) => setPricingForm((prev) => ({ ...prev, value_amount: e.target.value }))}
+                        placeholder="Ex: 25000"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Devise</div>
+                      <Input
+                        value={pricingForm.currency}
+                        onChange={(e) => setPricingForm((prev) => ({ ...prev, currency: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() =>
+                      handleDecisionAsk(
+                        `Calculer un prix export vers ${pricingForm.country} pour ${pricingForm.product_desc || \"un produit\"}, incoterm ${pricingForm.incoterm || \"a definir\"}, valeur ${pricingForm.value_amount || \"n/a\"} ${pricingForm.currency || \"\"}.`,
+                        pricingForm
+                      )
+                    }
+                    disabled={decisionLoading}
+                  >
+                    {decisionLoading ? "Analyse..." : "Generer les etapes prix"}
+                  </Button>
+                </div>
+              ) : null}
+
+              {decisionOpen === "documents" ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Pays</div>
+                      <Input
+                        value={documentsForm.country}
+                        onChange={(e) => setDocumentsForm((prev) => ({ ...prev, country: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Produit</div>
+                      <Input
+                        value={documentsForm.product_desc}
+                        onChange={(e) => setDocumentsForm((prev) => ({ ...prev, product_desc: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground">Incoterm</div>
+                      <Input
+                        value={documentsForm.incoterm}
+                        onChange={(e) => setDocumentsForm((prev) => ({ ...prev, incoterm: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() =>
+                      handleDecisionAsk(
+                        `Quels documents exporter pour ${documentsForm.product_desc || \"un produit\"} vers ${documentsForm.country} avec incoterm ${documentsForm.incoterm || \"a definir\"} ?`,
+                        documentsForm
+                      )
+                    }
+                    disabled={decisionLoading}
+                  >
+                    {decisionLoading ? "Analyse..." : "Obtenir la checklist"}
+                  </Button>
+                </div>
+              ) : null}
+
+              {decisionAnswer ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 whitespace-pre-line">
+                  {decisionAnswer}
+                </div>
+              ) : null}
+
+              {decisionActions.length ? (
+                <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                  <div className="font-semibold uppercase tracking-[0.2em] text-[10px] text-blue-700">Actions</div>
+                  <ul className="mt-2 list-disc space-y-1 pl-4">
+                    {decisionActions.map((action) => (
+                      <li key={action}>{action}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {decisionError ? <div className="text-sm text-rose-600">{decisionError}</div> : null}
+            </div>
+            <DrawerFooter className="mt-2">
+              <Button variant="outline" onClick={() => setDecisionOpen(null)}>
+                Fermer
+              </Button>
+            </DrawerFooter>
+          </DrawerContent>
+        </Drawer>
+
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Assistant export</CardTitle>
-              <CardDescription>Posez une question precise, l&apos;assistant repond.</CardDescription>
+              <CardDescription>Posez une question prÃ©cise, lâ€™assistant rÃ©pond.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <Input placeholder="Ex: Comment trouver des distributeurs en Allemagne ?" />
-              <Button type="button" className="w-full">
-                Poser la question
-              </Button>
-              <div className="text-xs text-slate-500">
-                L&apos;assistant couvre prospection, techniques de vente, incoterms, douane, paiement, risques pays.
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Input
+                  value={assistantQuestion}
+                  onChange={(e) => setAssistantQuestion(e.target.value)}
+                  placeholder="Ex: Comment trouver des distributeurs en Allemagne ?"
+                />
+                <Button type="button" className="w-full" onClick={handleAssistantAsk} disabled={assistantLoading}>
+                  {assistantLoading ? "Analyse..." : "Poser la question"}
+                </Button>
+                {assistantError ? <div className="text-xs text-rose-600">{assistantError}</div> : null}
+              </div>
+
+              <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                {assistantExamples.map((example) => (
+                  <button
+                    key={example}
+                    type="button"
+                    onClick={() => void handleAssistantAsk(example)}
+                    className="rounded-full border border-slate-200 px-3 py-1 hover:bg-slate-50"
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+
+              {assistantAnswer ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 whitespace-pre-line">
+                  {assistantAnswer}
+                </div>
+              ) : null}
+
+              {assistantActions.length ? (
+                <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                  <div className="font-semibold uppercase tracking-[0.2em] text-[10px] text-blue-700">Actions</div>
+                  <ul className="mt-2 list-disc space-y-1 pl-4">
+                    {assistantActions.map((action) => (
+                      <li key={action}>{action}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Playbook prospection
+                </div>
+                <Tabs defaultValue="clients" className="mt-3">
+                  <TabsList className="flex flex-wrap justify-start gap-1 bg-slate-100">
+                    <TabsTrigger value="clients">Clients</TabsTrigger>
+                    <TabsTrigger value="prospection">Prospection</TabsTrigger>
+                    <TabsTrigger value="vente">Vente</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="clients">
+                    <ul className="list-disc space-y-1 pl-4 text-sm text-slate-700">
+                      <li>LinkedIn + Sales Navigator: ciblage par secteur, taille, pays.</li>
+                      <li>Annuaires export: Kompass, Europages, CCI, Business France.</li>
+                      <li>Salons internationaux et fÃ©dÃ©rations professionnelles.</li>
+                      <li>Recherche par codes HS pour identifier importateurs et distributeurs.</li>
+                      <li>Alertes appels dâ€™offres et plateformes B2B.</li>
+                    </ul>
+                  </TabsContent>
+                  <TabsContent value="prospection">
+                    <ul className="list-disc space-y-1 pl-4 text-sm text-slate-700">
+                      <li>DÃ©finir lâ€™ICP: secteur, taille, zones, pain points.</li>
+                      <li>SÃ©quence 3 relances: J+2, J+7, J+14 avec valeur ajoutÃ©e.</li>
+                      <li>Offrir un diagnostic rapide (incoterm, paiement, risques).</li>
+                      <li>Structurer la valeur: problÃ¨me + solution + preuve + prochain pas.</li>
+                    </ul>
+                  </TabsContent>
+                  <TabsContent value="vente">
+                    <ul className="list-disc space-y-1 pl-4 text-sm text-slate-700">
+                      <li>SPIN: Situation, ProblÃ¨me, Implication, Besoin-payoff.</li>
+                      <li>SONCAS: sÃ©curitÃ©, orgueil, nouveautÃ©, confort, argent, simplicitÃ©.</li>
+                      <li>Traiter les objections: prix, dÃ©lai, risque, conformitÃ©.</li>
+                      <li>ClÃ´turer avec un plan dâ€™action et une date prÃ©cise.</li>
+                    </ul>
+                  </TabsContent>
+                </Tabs>
               </div>
             </CardContent>
           </Card>
@@ -1073,64 +1924,83 @@ export default function ControlTower() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Objectifs & plan</CardTitle>
-              <CardDescription>Chargez un fichier d&apos;objectifs. On etablira un plan et un suivi.</CardDescription>
+              <CardDescription>
+                Chargez un fichier avec vos objectifs. On Ã©tablira un plan et un suivi pour les atteindre. Tous les
+                autres outils contribueront Ã  ces objectifs.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <input
                 type="file"
-                accept=".pdf,.doc,.docx,.csv,.xlsx"
-                onChange={(e) => setObjectiveFiles(Array.from(e.target.files || []))}
+                accept=".csv,text/csv"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleObjectiveUpload(file);
+                }}
                 className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-800"
               />
-              {objectiveFiles.length ? (
-                <div className="space-y-1 text-xs text-slate-600">
-                  {objectiveFiles.map((file) => (
-                    <div key={file.name} className="truncate">
-                      {file.name}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                  Aucun objectif charge pour le moment.
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Base de connaissance</CardTitle>
-              <CardDescription>Ajoutez des documents pour enrichir l&apos;IA prospection & commerce international.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <input
-                type="file"
-                multiple
-                accept=".pdf,.doc,.docx,.ppt,.pptx,.csv,.txt"
-                onChange={(e) => setKnowledgeFiles(Array.from(e.target.files || []))}
-                className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-800"
-              />
-              {knowledgeFiles.length ? (
-                <div className="space-y-1 text-xs text-slate-600">
-                  {knowledgeFiles.map((file) => (
-                    <div key={`${file.name}-${file.size}`} className="truncate">
-                      {file.name}
-                    </div>
-                  ))}
+              {objectiveUploading ? <div className="text-xs text-slate-500">Upload en cours...</div> : null}
+              {objectiveError ? <div className="text-xs text-rose-600">{objectiveError}</div> : null}
+
+              {objectiveName ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                  <div className="font-medium">{objectiveName}</div>
                 </div>
               ) : (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                  Vous n&apos;avez pas encore ajoute de documents.
+                  Aucun objectif chargÃ© pour le moment.
                 </div>
               )}
+
+              {objectiveCsv ? (
+                <div className="overflow-auto rounded-lg border border-slate-200">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-slate-50 text-slate-500">
+                      <tr>
+                        {objectiveCsv.headers.map((h) => (
+                          <th key={h} className="px-2 py-2 text-left font-medium">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {objectiveCsv.rows.slice(0, 5).map((row, idx) => (
+                        <tr key={`${idx}-row`} className="border-t">
+                          {row.map((cell, cIdx) => (
+                            <td key={`${idx}-${cIdx}`} className="px-2 py-2 text-slate-700">
+                              {cell}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              <Button type="button" onClick={handleGeneratePlan} disabled={!objectiveCsv}>
+                GÃ©nÃ©rer mon plan
+              </Button>
+
+              {objectivePlan ? (
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-emerald-700">Plan v1</div>
+                  <ul className="mt-2 list-disc space-y-1 pl-4">
+                    {objectivePlan.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         </section>
 
         {/* Carte + panneaux lateraux */}
         <section className="space-y-4">
-          <div className="relative">
+          <div className="relative w-full">
             <PanoramicControlTowerMap
               selectedCountry={selectedWatchCountry}
               selectedLabel={selectedCountryLabel}
@@ -1139,7 +2009,7 @@ export default function ControlTower() {
               onReset={handleCountryReset}
             />
 
-            <Card className="mt-4 md:mt-0 md:absolute md:top-4 md:left-4 md:z-10 md:w-[260px] md:bg-white/95 md:backdrop-blur">
+            <Card className="absolute left-4 top-4 z-10 w-[min(280px,90vw)] bg-white/95 backdrop-blur pointer-events-auto">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Aspect general</CardTitle>
                 <CardDescription>Contexte pays et veille</CardDescription>
@@ -1187,7 +2057,7 @@ export default function ControlTower() {
               </CardContent>
             </Card>
 
-            <Card className="mt-4 md:mt-0 md:absolute md:top-4 md:right-4 md:z-10 md:w-[260px] md:bg-white/95 md:backdrop-blur">
+            <Card className="absolute right-4 bottom-4 z-10 w-[min(280px,90vw)] bg-white/95 backdrop-blur pointer-events-auto">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Aspect client</CardTitle>
                 <CardDescription>Vos ventes sur ce pays</CardDescription>
