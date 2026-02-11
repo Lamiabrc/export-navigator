@@ -235,7 +235,6 @@ export function ExportMap({
               opacity: 0.45,
               pointerEvents: "none",
             }}
-            // eslint-disable-next-line react/no-danger
             dangerouslySetInnerHTML={{ __html: map.inner }}
           />
 

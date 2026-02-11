@@ -122,7 +122,7 @@ export default function SupportChatWidget({
         .filter((m: any) => m && typeof m === "object")
         .map((m: any) => ({
           id: typeof m.id === "string" ? m.id : uid(),
-          role: m.role === "assistant" ? "assistant" : "user",
+          role: (m.role === "assistant" ? "assistant" : "user") as ChatMessage["role"],
           content: typeof m.content === "string" ? m.content : "",
           createdAt: typeof m.createdAt === "number" ? m.createdAt : Date.now(),
           meta: m.meta && typeof m.meta === "object" ? m.meta : undefined,
