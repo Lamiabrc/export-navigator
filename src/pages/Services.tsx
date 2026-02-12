@@ -1,225 +1,113 @@
 import { Link } from "react-router-dom";
+import { CheckCircle2 } from "lucide-react";
 
 import { MarketingLayout } from "@/components/marketing/MarketingLayout";
-import { useI18n } from "@/contexts/LanguageContext";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { useResolvedPricing, TierSlug } from "@/hooks/useResolvedPricing";
+
+const offers = [
+  {
+    title: "Diagnostic",
+    description: "Premier échange structuré pour qualifier vos flux et vos priorités.",
+    details: ["Prise de contact", "Cadrage des enjeux", "Feuille de route initiale"],
+  },
+  {
+    title: "Audit & plan d’amélioration",
+    description: "Service principal: audit des procédures import/export et plan d’actions concret.",
+    details: ["Risques TVA/douane", "Procédures et documents", "Plan d’amélioration priorisé"],
+    highlighted: true,
+  },
+  {
+    title: "Pilotage",
+    description: "Abonnement au tour de contrôle pour suivre l’exécution et les décisions.",
+    details: ["Suivi continu", "Historique décisions", "Checklists opérationnelles"],
+  },
+];
 
 export default function ServicesPage() {
-  const { t } = useI18n();
-  usePageMeta("meta.services.title", "meta.services.description");
-
-  const { resolved, tierKeys } = useResolvedPricing(t);
-
-  // Fallback FR/EN robuste même si certaines clés i18n n'existent pas encore
-  const lang =
-    typeof document !== "undefined" && document.documentElement?.lang
-      ? document.documentElement.lang.toLowerCase()
-      : "fr";
-  const isEn = lang.startsWith("en");
-
-  const tt = (key: string, frFallback: string, enFallback: string) => {
-    const fallback = isEn ? enFallback : frFallback;
-    try {
-      const v = t(key as any);
-      return !v || v === key ? fallback : v;
-    } catch {
-      return fallback;
-    }
-  };
-
-  const keys =
-    tierKeys?.length
-      ? tierKeys
-      : (Object.keys(resolved?.tiers ?? {}) as TierSlug[]);
-
-  // ✅ Plan recommandé : PRO_ONLINE (65€) si présent, sinon 1er plan non-FREE
-  const primaryKey = (keys.find((k) => k === "PRO_ONLINE") ??
-    keys.find((k) => k !== "FREE") ??
-    keys[0]) as TierSlug;
+  usePageMeta("meta.services.title", "meta.services.description", { brandSuffix: "Export Navigator" });
 
   return (
     <MarketingLayout>
-      {/* HERO */}
-      <section className="bg-white py-16">
-        <div className="mx-auto max-w-5xl px-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
-            {t("servicesPage.subhead")}
-          </p>
-
-          <h1 className="mt-4 text-4xl font-semibold text-slate-950 sm:text-5xl">
-            {t("servicesPage.headline")}
+      <section className="mkt-section mkt-section-hero">
+        <div className="mkt-container space-y-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Offre</p>
+          <h1 className="text-4xl font-semibold text-slate-900 sm:text-5xl">
+            Audit d’abord. Outil ensuite.
           </h1>
-
-          <p className="mt-5 max-w-3xl text-base leading-relaxed text-slate-700 sm:text-lg">
-            {t("servicesPage.description")}
+          <p className="max-w-3xl text-base leading-relaxed text-slate-600 sm:text-lg">
+            Nous vendons d’abord un audit de vos procédures import/export et de vos risques fiscaux/douaniers. Puis,
+            nous déployons le tour de contrôle pour exécuter le plan et garder un pilotage constant.
           </p>
-
-          {/* Proof bullets : “département export digital” */}
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {[
-              {
-                title: tt("servicesPage.proof.adv.title", "ADV export", "Export ops"),
-                desc: tt(
-                  "servicesPage.proof.adv.desc",
-                  "Checklists documentaires, rapports PDF, préparation standardisée.",
-                  "Document checklists, PDF reports, standardized preparation."
-                ),
-              },
-              {
-                title: tt(
-                  "servicesPage.proof.manager.title",
-                  "Responsable export / ADV",
-                  "Export manager"
-                ),
-                desc: tt(
-                  "servicesPage.proof.manager.desc",
-                  "Pilotage, historique, règles communes, partage simple avec l’équipe.",
-                  "Tracking, history, shared rules, easy team handoff."
-                ),
-              },
-              {
-                title: tt(
-                  "servicesPage.proof.consultant.title",
-                  "Consultant export (tâches récurrentes)",
-                  "Export consultant (recurring tasks)"
-                ),
-                desc: tt(
-                  "servicesPage.proof.consultant.desc",
-                  "Cadrage basique, synthèse, documents prêts à valider et diffuser.",
-                  "Basic framing, summaries, and ready-to-share documents."
-                ),
-              },
-              {
-                title: tt(
-                  "servicesPage.proof.watch.title",
-                  "Veille & conformité",
-                  "Compliance watch"
-                ),
-                desc: tt(
-                  "servicesPage.proof.watch.desc",
-                  "Flux RSS, filtres, tags, et digest automatique selon votre plan.",
-                  "RSS feeds, filters, tags, and automated digest (plan-based)."
-                ),
-              },
-            ].map((item, idx) => (
-              <div
-                key={`proof-${idx}`}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-              >
-                <p className="text-sm font-semibold text-slate-950">{item.title}</p>
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">{item.desc}</p>
-              </div>
-            ))}
+          <div className="flex flex-wrap gap-3">
+            <Button asChild size="lg">
+              <Link to="/contact">Nous contacter</Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link to="/register">S’inscrire gratuitement</Link>
+            </Button>
           </div>
-
-          <div className="mt-8 flex flex-wrap items-center gap-3">
-            <Link
-              to="/pricing"
-              className="inline-flex items-center justify-center rounded-full bg-slate-950 px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-sm transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
-            >
-              {/* ✅ on privilégie ctaPricing si tu l'as ajouté dans i18n */}
-              {tt("servicesPage.ctaPricing", "Voir les tarifs", "See pricing")}
-            </Link>
-
-            <Link
-              to="/contact"
-              className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white px-6 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-slate-900 shadow-sm transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
-            >
-              {t("servicesPage.cta")}
-            </Link>
-          </div>
-
-          <p className="mt-6 text-xs leading-relaxed text-slate-500">
-            {tt(
-              "servicesPage.disclaimer",
-              "Indications non contractuelles — ne remplace pas un agent en douane/commissionnaire. Vous restez responsable de la conformité finale.",
-              "Non-binding information — does not replace a customs broker. You remain responsible for final compliance."
-            )}
-          </p>
         </div>
       </section>
 
-      {/* TIERS SUMMARY (source unique = pricing) */}
       <section className="py-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {keys.map((key: TierSlug) => {
-              const tier = resolved?.tiers?.[key];
-              if (!tier) return null;
+        <div className="mx-auto grid max-w-6xl gap-6 px-6 md:grid-cols-3">
+          {offers.map((offer) => (
+            <Card
+              key={offer.title}
+              className={offer.highlighted ? "border-primary/40 ring-1 ring-primary/20" : "border-slate-200"}
+            >
+              <CardHeader>
+                <CardTitle>{offer.title}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-slate-600">{offer.description}</p>
+                <ul className="space-y-2 text-sm text-slate-700">
+                  {offer.details.map((item) => (
+                    <li key={item} className="flex items-start gap-2">
+                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-col gap-2 pt-2">
+                  <Button asChild>
+                    <Link to="/contact">Nous contacter</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link to="/register">S’inscrire gratuitement</Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
 
-              const isPrimary = key === primaryKey;
-              const features = Array.isArray(tier.features) ? tier.features : [];
-              const topFeatures = features.slice(0, 4);
+      <section className="pb-16">
+        <div className="mx-auto grid max-w-6xl gap-6 px-6 lg:grid-cols-2">
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle>Ce que couvre l’audit</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-slate-700">
+              <p>TVA (règles, preuves, facturation, points d’alerte)</p>
+              <p>Douane (classement, origine, valeur, contrôles)</p>
+              <p>Incoterms, paiement, documents, sanctions et zones sensibles</p>
+            </CardContent>
+          </Card>
 
-              return (
-                <article
-                  key={key}
-                  className={[
-                    "flex flex-col justify-between rounded-3xl border p-7 shadow-sm transition hover:shadow-lg",
-                    isPrimary
-                      ? "border-slate-900/20 bg-white ring-1 ring-slate-900/10"
-                      : "border-slate-200 bg-white",
-                  ].join(" ")}
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.4em] text-slate-500">
-                        {tier.name}
-                      </p>
-
-                      {isPrimary && (
-                        <span className="rounded-full bg-slate-950 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-white">
-                          {tt(
-                            "servicesPage.badgeRecommended",
-                            "Recommandé",
-                            "Recommended"
-                          )}
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="mt-3 text-3xl font-semibold text-slate-950">{tier.price}</p>
-                    <p className="mt-3 text-sm leading-relaxed text-slate-600">
-                      {tier.description}
-                    </p>
-
-                    <div className="mt-5 h-px w-full bg-slate-100" />
-
-                    <ul className="mt-5 space-y-2 text-sm text-slate-700">
-                      {topFeatures.map((f) => (
-                        <li key={f} className="flex items-start gap-2">
-                          <span className="mt-2 h-2 w-2 rounded-full bg-slate-900" aria-hidden />
-                          <span>{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="mt-8 flex flex-wrap gap-3">
-                    <Link
-                      to={`/pricing#${key}`}
-                      className={[
-                        "inline-flex w-fit items-center justify-center rounded-full px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.28em] transition",
-                        isPrimary
-                          ? "bg-slate-950 text-white hover:bg-slate-900"
-                          : "border border-slate-300 bg-white text-slate-900 hover:bg-slate-50",
-                      ].join(" ")}
-                    >
-                      {tt("servicesPage.ctaDetails", "Voir le détail", "View details")} →
-                    </Link>
-
-                    <Link
-                      to="/contact"
-                      className="inline-flex w-fit items-center justify-center rounded-full px-5 py-2.5 text-xs font-semibold uppercase tracking-[0.28em] text-slate-600 transition hover:text-slate-900"
-                    >
-                      {resolved?.cta ?? t("servicesPage.cta")}
-                    </Link>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle>Pourquoi ensuite l’outil</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-slate-700">
+              <p>Suivi continu du plan d’amélioration</p>
+              <p>Historique des décisions et des actions</p>
+              <p>Checklists et livrables opérationnels dans un espace unique</p>
+            </CardContent>
+          </Card>
         </div>
       </section>
     </MarketingLayout>
