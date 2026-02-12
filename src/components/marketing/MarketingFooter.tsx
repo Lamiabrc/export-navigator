@@ -39,8 +39,8 @@ export function MarketingFooter({ className = "" }: FooterProps) {
 
   const legalLinks: FooterLink[] = isFr
     ? [
-        { label: "Mentions lÃ©gales", to: "/mentions-legales" },
-        { label: "ConfidentialitÃ©", to: "/confidentialite" },
+        { label: "Mentions légales", to: "/mentions-legales" },
+        { label: "Confidentialité", to: "/confidentialite" },
         { label: "Cookies", to: "/cookies" },
       ]
     : [
@@ -79,7 +79,7 @@ export function MarketingFooter({ className = "" }: FooterProps) {
             </Link>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-[hsl(var(--mkt-ink-muted))]">
               {isFr
-                ? "Cockpit export pour PME. CoÃ»ts rendus, documents, risques et veille rÃ©glementaire dans un outil unifiÃ©."
+                ? "Cockpit export pour PME. Coûts rendus, documents, risques et veille réglementaire dans un outil unifié."
                 : "Export cockpit for SMEs. Landed cost, documents, risks, and regulatory watch in a unified tool."}
             </p>
 
@@ -121,7 +121,7 @@ export function MarketingFooter({ className = "" }: FooterProps) {
 
           {/* Legal */}
           <div>
-            <h4 className="mkt-label mb-4">{isFr ? "LÃ©gal" : "Legal"}</h4>
+            <h4 className="mkt-label mb-4">{isFr ? "Légal" : "Legal"}</h4>
             <ul className="space-y-2">
               {legalLinks.map((link) => (
                 <li key={link.to}>
@@ -136,7 +136,7 @@ export function MarketingFooter({ className = "" }: FooterProps) {
             </ul>
 
             <div className="mt-8">
-              <h4 className="mkt-label mb-4">{isFr ? "RÃ©seaux" : "Social"}</h4>
+              <h4 className="mkt-label mb-4">{isFr ? "Réseaux" : "Social"}</h4>
               <ul className="space-y-2">
                 {socialLinks.map((link) => (
                   <li key={link.href}>
@@ -161,12 +161,12 @@ export function MarketingFooter({ className = "" }: FooterProps) {
       <div className="border-t border-[hsl(var(--mkt-blue-100))]">
         <div className="mkt-container flex flex-col items-center justify-between gap-4 py-6 sm:flex-row">
           <p className="text-xs text-[hsl(var(--mkt-ink-muted))]">
-            Â© {new Date().getFullYear()} MPL Export Conseil.{" "}
-            {isFr ? "Tous droits rÃ©servÃ©s." : "All rights reserved."}
+            © {new Date().getFullYear()} MPL Export Conseil.{" "}
+            {isFr ? "Tous droits réservés." : "All rights reserved."}
           </p>
           <p className="text-xs text-[hsl(var(--mkt-ink-muted))]">
             {isFr
-              ? "Cet outil aide Ã  structurer vos dÃ©cisions export. Il ne remplace pas un conseil rÃ©glementaire."
+              ? "Cet outil aide à structurer vos décisions export. Il ne remplace pas un conseil réglementaire."
               : "This tool helps structure your export decisions. It does not replace regulatory advice."}
           </p>
         </div>
