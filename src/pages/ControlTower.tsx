@@ -1409,8 +1409,8 @@ export default function ControlTower() {
             <p className="text-xs uppercase tracking-[0.35em] text-blue-600">
               Bienvenue sur votre tour de contrôle import export
             </p>
-            <h1 className="text-3xl font-bold text-slate-900">L&apos;assistant</h1>
-            <p className="text-sm text-slate-600">Avez-vous une question précise ?</p>
+            <h1 className="text-3xl font-bold text-slate-900">Tour de contrôle export</h1>
+            <p className="text-sm text-slate-600">Pilotage unifié: conformité, coûts, veille et décision rapide.</p>
             <p className="text-sm text-slate-500">
               Tableau de bord connecté pour {companyName}. Import, export, prospection et suivi commercial.
             </p>
@@ -1453,13 +1453,13 @@ export default function ControlTower() {
               <Button variant="secondary" className="rounded-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" onClick={() => openDecision("go-no-go")}>
                 Go/No-Go pays
               </Button>
-              <Button variant="secondary" className="rounded-full" onClick={() => openDecision("payment")}>
+              <Button variant="secondary" className="rounded-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" onClick={() => openDecision("payment")}>
                 Sécuriser le paiement
               </Button>
               <Button variant="secondary" className="rounded-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" onClick={() => openDecision("pricing")}>
                 Calculer mon prix export
               </Button>
-              <Button variant="secondary" className="rounded-full" onClick={() => openDecision("documents")}>
+              <Button variant="secondary" className="rounded-full border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" onClick={() => openDecision("documents")}>
                 Contrôler mes documents
               </Button>
             </div>
@@ -2608,4 +2608,3 @@ export default function ControlTower() {
     </AppLayout>
   );
 }
-
