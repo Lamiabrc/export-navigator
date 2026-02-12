@@ -97,7 +97,7 @@ function FooterSocial() {
       <div className="mt-5">
         <Button asChild className="bg-[#DC2626] text-white hover:bg-[#B0231D]">
           <Link to="/contact?offer=diagnostic">
-            {isFr ? "Demander un diagnostic" : "Request a diagnostic"}
+            {isFr ? "Nous contacter" : "Contact us"}
           </Link>
         </Button>
       </div>
@@ -125,11 +125,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
     return candidate;
   };
 
-  const ctaLabel = (() => {
-    const candidate = (t("header.cta") as string) ?? "";
-    if (!candidate || candidate === "header.cta") return "CrÃ©er un compte gratuit";
-    return candidate;
-  })();
+  const ctaLabel = isFr ? "Nous contacter" : "Contact us";
 
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";

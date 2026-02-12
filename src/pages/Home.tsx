@@ -121,6 +121,9 @@ export default function Home() {
                   <p className="font-semibold">Checklist + email client</p>
                 </div>
               </div>
+              <p className="text-sm text-slate-200">
+                Rapport orienté décision: risques TVA/douane, actions prioritaires, livrables et suivi d’exécution.
+              </p>
             </CardContent>
           </Card>
         </section>

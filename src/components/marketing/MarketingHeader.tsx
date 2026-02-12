@@ -27,7 +27,7 @@ export function MarketingHeader() {
     return candidate;
   };
 
-  const ctaLabel = isEN ? "Request a diagnostic" : "Demander un diagnostic";
+  const ctaLabel = isEN ? "Contact us" : "Nous contacter";
   const appLabel = isEN ? "My workspace" : "Mon espace";
   const loginLabel = isEN ? "Sign in" : "Connexion";
 
