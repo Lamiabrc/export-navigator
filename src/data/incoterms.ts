@@ -161,7 +161,7 @@ export const INCOTERMS: IncotermEntry[] = [
     example:
       "Le vendeur expedie des machines vers Montreal et fournit une assurance ICC A couvrant le trajet.",
     mistakes: [
-      "Assurance minimale ou inadapt�e a la valeur.",
+      "Assurance minimale ou inadaptée à la valeur.",
       "Confondre transfert du risque et lieu de livraison.",
       "Oublier de preciser le lieu exact.",
     ],

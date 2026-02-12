@@ -148,7 +148,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
   return (
     <div className="relative min-h-screen bg-white text-foreground">
-      {/* Backdrop â€œlight-friendly” */}
+      {/* Backdrop “light-friendly” */}
       <CinematicBackdrop variant="public" className="z-0 opacity-20" />
       <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-white/85 via-white/90 to-white" />
 
