@@ -231,7 +231,7 @@ export default function InvoiceCheck() {
         if (!destination && normalized.billingCountry) setDestination(normalized.billingCountry);
       }
 
-      toast({ title: "Facture importee", description: "Le fichier est stocke et la synthese est disponible." });
+      toast({ title: "Facture importée", description: "Le fichier est stocké et la synthèse est disponible." });
       setTimeout(scrollToResults, 120);
     } catch (err: any) {
       setImportError(err?.message || "Import impossible.");
@@ -374,6 +374,7 @@ export default function InvoiceCheck() {
           </CardHeader>
 
           <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-4">
 
               <div className="space-y-2">
                 <Label>Incoterm</Label>
@@ -437,7 +438,7 @@ export default function InvoiceCheck() {
 
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" onClick={scrollToResults}>
-                Voir la synthese
+                Voir la synthèse
               </Button>
             </div>
 
@@ -518,7 +519,7 @@ export default function InvoiceCheck() {
 
             {importSummary ? (
               <div className="rounded-xl border border-border bg-white p-4 space-y-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Synthese importee</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Synthèse importée</div>
                 <div className="grid gap-3 md:grid-cols-3">
                   <div>
                     <div className="text-xs text-muted-foreground">Total HT</div>
@@ -550,8 +551,8 @@ export default function InvoiceCheck() {
             ) : null}
 
             <p className="text-xs text-muted-foreground">
-              Formats acceptes : PDF, Excel (XLSX/XLS) ou CSV. Le fichier est stocke dans Supabase et la synthese
-              est appliquee aux lignes ci-dessus.
+              Formats acceptés : PDF, Excel (XLSX/XLS) ou CSV. Le fichier est stocké dans Supabase et la synthèse
+              est appliquée aux lignes ci-dessus.
             </p>
           </CardContent>
         </Card>
