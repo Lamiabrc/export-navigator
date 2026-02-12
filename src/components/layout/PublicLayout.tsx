@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
 import { TricolorBanner } from "@/components/layout/TricolorBanner";
 import { useI18n } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import type { LanguageCode } from "@/i18n/translations";
 import { navLinks } from "@/config/navLinks";
 import { getBannerContent } from "@/config/bannerContent";
@@ -107,6 +108,7 @@ function FooterSocial() {
 export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const location = useLocation();
   const { t, lang, setLang } = useI18n();
+  const { isAuthenticated } = useAuth();
   const isFr = lang === "fr";
   const banner = getBannerContent(location.pathname);
   const siteDisclaimers = (t("disclaimers") as string[]) ?? [];
@@ -220,20 +222,31 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
               ))}
             </div>
 
-            {/* CTA */}
-            <Link
-              to={`/register?next=${authNextParam}`}
-              className="inline-flex rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#B0231D]"
-            >
-              {ctaLabel}
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                to="/app/control-tower"
+                className="inline-flex rounded-full bg-blue-900 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-blue-800"
+              >
+                Tour de contrôle
+              </Link>
+            ) : (
+              <>
+                {/* CTA */}
+                <Link
+                  to={`/register?next=${authNextParam}`}
+                  className="inline-flex rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#B0231D]"
+                >
+                  {ctaLabel}
+                </Link>
 
-            <Link
-              to={`/login?next=${authNextParam}`}
-              className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-blue-900/70 transition hover:text-blue-900 md:inline-flex"
-            >
-              Connexion
-            </Link>
+                <Link
+                  to={`/login?next=${authNextParam}`}
+                  className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-blue-900/70 transition hover:text-blue-900 md:inline-flex"
+                >
+                  Connexion
+                </Link>
+              </>
+            )}
           </div>
         </div>
 
@@ -273,6 +286,15 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         </div>
         {children ?? <Outlet />}
       </main>
+
+      {isAuthenticated ? (
+        <Link
+          to="/app/control-tower"
+          className="fixed bottom-6 left-6 z-[80] inline-flex items-center rounded-full border border-blue-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-900 shadow-lg hover:bg-blue-50"
+        >
+          Retour tour de contrôle
+        </Link>
+      ) : null}
 
       <footer className="relative z-10 border-t border-blue-100 bg-white/85">
         <div className="mx-auto grid max-w-7xl gap-6 px-6 py-10 md:px-10 lg:grid-cols-[1fr_0.95fr]">
@@ -344,4 +366,3 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
     </div>
   );
 }
-

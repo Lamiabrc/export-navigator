@@ -3,6 +3,7 @@ import * as React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { isAdminUser } from "@/lib/authz";
 import {
   Activity,
   BadgeDollarSign,
@@ -10,16 +11,11 @@ import {
   Bot,
   Calculator,
   FileCheck2,
-  Home,
   LogOut,
-  Mail,
-  Newspaper,
   Package,
   Scale,
   Settings,
   ShieldCheck,
-  Target,
-  Users,
 } from "lucide-react";
 
 type NavItem = {
@@ -127,60 +123,6 @@ const navigation: NavSection[] = [
     title: "Admin",
     items: [{ name: "Admin", href: "/app/admin", icon: Settings, adminOnly: true }],
   },
-  {
-    title: "Site public",
-    items: [
-      {
-        name: "Accueil public",
-        href: "/",
-        icon: Home,
-        aliases: ["/home", "/public"],
-      },
-      {
-        name: "Offre & services",
-        href: "/services",
-        icon: ShieldCheck,
-        aliases: ["/offre"],
-      },
-      {
-        name: "Tarifs",
-        href: "/pricing",
-        icon: BadgeDollarSign,
-        aliases: ["/tarifs"],
-      },
-      {
-        name: "Prospection",
-        href: "/prospection",
-        icon: Target,
-      },
-      {
-        name: "Veille (site)",
-        href: "/veille",
-        icon: Newspaper,
-        aliases: ["/watch"],
-      },
-      {
-        name: "Guides",
-        href: "/guides",
-        icon: BookOpen,
-      },
-      {
-        name: "Méthodologie",
-        href: "/methodologie",
-        icon: BookOpen,
-      },
-      {
-        name: "À propos",
-        href: "/about",
-        icon: Users,
-      },
-      {
-        name: "Contact",
-        href: "/contact",
-        icon: Mail,
-      },
-    ],
-  },
 ];
 
 export type SidebarProps = {
@@ -224,9 +166,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
     }
   };
 
-  const isAdmin =
-    user?.email?.toLowerCase() === "lamia.brechet@outlook.fr" ||
-    user?.role === "admin";
+  const isAdmin = isAdminUser(user);
 
   const renderLink = (item: NavItem) => {
     if (item.adminOnly && !isAdmin) return null;

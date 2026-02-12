@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
+import { isAdminUser } from "@/lib/authz";
 
 import { Database, FileText, Package, Truck, Wrench, BookOpen, UploadCloud } from "lucide-react";
 
@@ -40,8 +41,7 @@ async function fetchTableCount(table: string): Promise<number | null> {
 export default function Admin() {
   const { user } = useAuth();
 
-  // ✅ Admin = email allowlist (frontend). La vraie sécurité est côté RLS (is_admin()).
-  const isAdmin = user?.email?.toLowerCase() === "lamia.brechet@outlook.fr";
+  const isAdmin = isAdminUser(user);
 
   const sections: Section[] = useMemo(
     () => [

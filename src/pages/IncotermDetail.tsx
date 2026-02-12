@@ -12,6 +12,11 @@ export default function IncotermDetail() {
   const params = useParams();
   const rawCode = params.code || "";
   const incoterm = getIncotermByCode(rawCode) || getIncotermBySlug(`incoterms-${rawCode}`);
+  const pageTitle = incoterm
+    ? `Incoterm ${incoterm.code} : definition, obligations, risques, exemple`
+    : "Incoterm introuvable";
+  const pageDescription = incoterm?.intro || "Cet Incoterm est introuvable ou indisponible.";
+  usePageMeta(pageTitle, pageDescription);
 
   if (!incoterm) {
     return (
@@ -33,9 +38,6 @@ export default function IncotermDetail() {
     );
   }
 
-  const pageTitle = `Incoterm ${incoterm.code} : definition, obligations, risques, exemple`;
-  const pageDescription = incoterm.intro;
-  usePageMeta(pageTitle, pageDescription);
 
   const nearby = incoterm.nearby
     .map((code) => getIncotermByCode(code))

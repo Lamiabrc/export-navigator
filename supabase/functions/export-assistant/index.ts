@@ -43,9 +43,16 @@ type AssistantResponse = {
   actionsSuggested?: string[];
   sections?: AssistantSections;
   citations?: Citation[];
+  privacy_notice?: string;
+  retention_days?: number;
 
   debug?: any;
   error?: string;
+};
+
+type AuthUser = {
+  id: string;
+  email?: string | null;
 };
 
 type KBHit = {
@@ -63,11 +70,13 @@ type KBHit = {
 
 type DocMatch = {
   document_id: string;
+  chunk_id?: string;
   title: string;
   doc_type: string | null;
   published_at: string | null;
   chunk_index: number;
   content: string;
+  similarity?: number;
 };
 
 type RssItem = {
@@ -302,23 +311,121 @@ function pickKeywords(question: string, max = 6) {
 }
 
 async function searchDocsMaybe(supabase: any, question: string, matchCount: number) {
-  // Optionnel: seulement si table document_chunks existe
-  const exists = await hasTable(supabase, "document_chunks");
-  if (!exists) return { matches: [] as DocMatch[], error: "document_chunks not found" };
+  const openaiKey = Deno.env.get("OPENAI_API_KEY");
+  const embedModel = Deno.env.get("OPENAI_EMBED_MODEL") || "text-embedding-3-small";
+  if (!openaiKey) return { matches: [] as DocMatch[], error: "OPENAI_API_KEY missing" };
 
-  const keywords = pickKeywords(question, 6);
-  if (!keywords.length) return { matches: [] as DocMatch[], error: null as string | null };
+  const embResp = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${openaiKey}`,
+    },
+    body: JSON.stringify({ model: embedModel, input: question }),
+  });
 
-  const or = keywords.map((k) => `content.ilike.%${k}%`).join(",");
+  if (!embResp.ok) {
+    const t = await embResp.text().catch(() => "");
+    return { matches: [] as DocMatch[], error: `embedding_failed: ${embResp.status} ${t}` };
+  }
 
-  const { data, error } = await supabase
-    .from("document_chunks")
-    .select("document_id,title,doc_type,published_at,chunk_index,content")
-    .or(or)
-    .limit(clamp(matchCount, 1, 20));
+  const embJson = await embResp.json();
+  const embedding = embJson?.data?.[0]?.embedding;
+  if (!Array.isArray(embedding)) return { matches: [] as DocMatch[], error: "embedding_missing" };
 
-  if (error) return { matches: [] as DocMatch[], error: error.message };
-  return { matches: (data ?? []) as DocMatch[], error: null as string | null };
+  const { data: matched, error: matchError } = await supabase.rpc("match_kb_chunks", {
+    query_embedding: embedding,
+    match_count: clamp(matchCount, 1, 20),
+    min_similarity: 0.15,
+  });
+  if (matchError) return { matches: [] as DocMatch[], error: matchError.message };
+
+  const raw = Array.isArray(matched) ? matched : [];
+  if (!raw.length) return { matches: [] as DocMatch[], error: null as string | null };
+
+  const docIds = Array.from(new Set(raw.map((m: any) => String(m.document_id || "")).filter(Boolean)));
+  const { data: docsRows, error: docsError } = await supabase
+    .from("kb_documents")
+    .select("id,title,created_at,enabled,status")
+    .in("id", docIds)
+    .eq("enabled", true)
+    .eq("status", "ready");
+
+  if (docsError) return { matches: [] as DocMatch[], error: docsError.message };
+  const docsMap = new Map((docsRows || []).map((d: any) => [String(d.id), d]));
+
+  const matches: DocMatch[] = raw
+    .map((m: any) => {
+      const doc = docsMap.get(String(m.document_id || ""));
+      if (!doc) return null;
+      return {
+        document_id: String(m.document_id),
+        chunk_id: String(m.id || ""),
+        title: String(doc.title || "Document"),
+        doc_type: "kb",
+        published_at: doc.created_at || null,
+        chunk_index: Number(m.chunk_index || 0),
+        content: String(m.content || ""),
+        similarity: Number(m.similarity || 0),
+      };
+    })
+    .filter(Boolean);
+
+  return { matches, error: null as string | null };
+}
+
+function enforceHumanStyle(answer: string, language: "fr" | "en") {
+  const base = String(answer || "").trim();
+  const withGreeting = /^bonjour\b/i.test(base) || /^hello\b/i.test(base)
+    ? base
+    : `${language === "fr" ? "Bonjour," : "Hello,"} ${base}`;
+  const hasThanks = /merci\.?$/i.test(withGreeting) || /thank you\.?$/i.test(withGreeting);
+  return hasThanks ? withGreeting : `${withGreeting}\n\n${language === "fr" ? "Merci." : "Thank you."}`;
+}
+
+function hasQuestionOverlap(question: string, text: string) {
+  const q = pickKeywords(question, 8);
+  if (!q.length) return false;
+  const hay = stripAccents(String(text || "").toLowerCase());
+  return q.some((token) => hay.includes(token));
+}
+
+function isGenericKbHit(hit: KBHit | null) {
+  if (!hit) return true;
+  const t = stripAccents(`${hit.title || ""} ${hit.summary || ""} ${hit.body_md || ""}`.toLowerCase());
+  return (
+    t.includes("encycloped") ||
+    t.includes("pour une reponse precise") ||
+    t.includes("for a precise answer") ||
+    t.includes("donne : **pays")
+  );
+}
+
+async function requireUser(req: Request, supabase: any) {
+  const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  const token = match?.[1]?.trim();
+  if (!token) return { user: null as AuthUser | null, error: "missing_auth_bearer" };
+
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data?.user?.id) return { user: null as AuthUser | null, error: "invalid_auth" };
+  return {
+    user: { id: String(data.user.id), email: data.user.email ?? null } as AuthUser,
+    error: null as string | null,
+  };
+}
+
+async function storeToolRun(supabase: any, userId: string, input: unknown, output: unknown) {
+  try {
+    await supabase.from("tool_runs").insert({
+      user_id: userId,
+      tool_name: "export_assistant",
+      input_json: input,
+      output_json: output,
+    });
+  } catch (e) {
+    console.error("[export-assistant] tool_runs insert failed", e);
+  }
 }
 
 /** Fallback encyclopÃ©die minimal si aucun article KB ne matche */
@@ -350,6 +457,17 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
+  const auth = await requireUser(req, supabase);
+  if (auth.error || !auth.user) {
+    return json(401, {
+      ok: false,
+      error: auth.error || "invalid_auth",
+      privacy_notice:
+        "Vos données sont confidentielles, stockées de manière sécurisée et supprimées automatiquement après rétention.",
+      retention_days: 90,
+    });
+  }
+
   let body: AssistantRequest;
   try {
     body = await req.json();
@@ -363,6 +481,10 @@ Deno.serve(async (req) => {
   const language: "fr" | "en" = body.lang ?? detectLanguage(question);
   const matchCount = clamp(Number(body.match_count ?? 6), 1, 20);
   const strictDocsOnly = Boolean(body.strict_docs_only);
+  const privacyNotice =
+    language === "fr"
+      ? "Vos données sont confidentielles, stockées de manière sécurisée (RLS + Supabase) et supprimées automatiquement après la période de rétention."
+      : "Your data is confidential, securely stored (RLS + Supabase), and automatically deleted after the retention period.";
 
   const destination = normStr(body.destination ?? "") || null;
   const origin = normStr(body.origin ?? "") || null;
@@ -425,23 +547,31 @@ Deno.serve(async (req) => {
       origin,
       incoterm,
       transport_mode,
-      answer: msg,
+      answer: enforceHumanStyle(msg, language),
       questions:
         language === "fr"
           ? ["Quel pays de destination ?", "Quel produit (matiÃ¨re + usage) ?", "Valeur et Incoterm ?"]
           : ["Destination country?", "Product (material + use)?", "Value and Incoterm?"],
       actionsSuggested:
         language === "fr"
-          ? ["Ajouter des guides (fiches pays/produits) dans kb_articles.", "Indexer des documents dans document_chunks."]
-          : ["Add guides (country/product sheets) to kb_articles.", "Index documents into document_chunks."],
+          ? ["Ajouter des guides (fiches pays/produits) dans kb_articles.", "Indexer des documents dans kb_documents/kb_chunks."]
+          : ["Add guides (country/product sheets) to kb_articles.", "Index documents into kb_documents/kb_chunks."],
       citations: [],
       debug: { kb_error: kb.error ?? null, docs_error: docs.error ?? null },
+      privacy_notice: privacyNotice,
+      retention_days: 90,
     };
+    await storeToolRun(supabase, auth.user.id, body, resp);
     return json(200, resp);
   }
 
-  // 3) RÃ©ponse KB prioritaire
-  if (best) {
+  // 3) Réponse KB prioritaire uniquement si réellement pertinente à la question
+  const bestLooksRelevant =
+    Boolean(best) &&
+    !isGenericKbHit(best) &&
+    hasQuestionOverlap(question, `${best?.title || ""} ${best?.summary || ""} ${best?.body_md || ""}`);
+
+  if (bestLooksRelevant) {
     const sections: AssistantSections = {};
     sections[best.title] = toLines(best.body_md);
 
@@ -468,14 +598,17 @@ Deno.serve(async (req) => {
       origin,
       incoterm,
       transport_mode,
-      answer: best.body_md + (rssPreview ? `\n\n${rssPreview}` : ""),
+      answer: enforceHumanStyle(best.body_md + (rssPreview ? `\n\n${rssPreview}` : ""), language),
       summary: best.title,
       sections,
       questions: (best.followups ?? []).slice(0, 6),
       actionsSuggested: (best.actions ?? []).slice(0, 8),
       citations: citations.length ? citations : [],
       debug: { kb_rank: best.rank ?? null, kb_error: kb.error ?? null, docs_error: docs.error ?? null, kb_slug: best.slug },
+      privacy_notice: privacyNotice,
+      retention_days: 90,
     };
+    await storeToolRun(supabase, auth.user.id, body, resp);
     return json(200, resp);
   }
 
@@ -507,9 +640,14 @@ Deno.serve(async (req) => {
       origin,
       incoterm,
       transport_mode,
-      answer:
-        sections[language === "fr" ? "RÃ©ponse rapide" : "Quick answer"].join("\n") +
-        (rssPreview ? `\n\n${rssPreview}` : ""),
+      answer: enforceHumanStyle(
+        (language === "fr"
+          ? `Question traitée: ${question}\n\n`
+          : `Question handled: ${question}\n\n`) +
+          sections[language === "fr" ? "RÃ©ponse rapide" : "Quick answer"].join("\n") +
+          (rssPreview ? `\n\n${rssPreview}` : ""),
+        language
+      ),
       sections,
       questions:
         language === "fr"
@@ -521,7 +659,10 @@ Deno.serve(async (req) => {
           : ["Add FR/EN articles to kb_articles (Incoterms, documents, taxes, compliance)."],
       citations,
       debug: { kb_error: kb.error ?? null, docs_error: docs.error ?? null },
+      privacy_notice: privacyNotice,
+      retention_days: 90,
     };
+    await storeToolRun(supabase, auth.user.id, body, resp);
     return json(200, resp);
   }
 
@@ -539,13 +680,15 @@ Deno.serve(async (req) => {
     origin,
     incoterm,
     transport_mode,
-    answer: fb.answer + (rssPreview ? `\n\n${rssPreview}` : ""),
+    answer: enforceHumanStyle(fb.answer + (rssPreview ? `\n\n${rssPreview}` : ""), language),
     questions: fb.questions,
     actionsSuggested: fb.actionsSuggested,
     sections: Object.keys(fallbackSections).length ? fallbackSections : undefined,
     citations: [],
     debug: { kb_error: kb.error ?? null, docs_error: docs.error ?? null },
+    privacy_notice: privacyNotice,
+    retention_days: 90,
   };
+  await storeToolRun(supabase, auth.user.id, body, resp);
   return json(200, resp);
 });
-

@@ -1,11 +1,28 @@
+import { Link } from "react-router-dom";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+
 export default function Sales() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-950 to-slate-900 px-6 py-16 text-center">
-      <p className="rounded-full border border-white/30 px-5 py-1 text-xs uppercase tracking-[0.45em] text-white/60">Protected</p>
-      <h1 className="mt-6 text-3xl font-semibold text-white">Sales & Operations</h1>
-      <p className="mt-4 max-w-2xl text-sm text-white/80">
-        This section is part of the authenticated suite. Please use the command center for dashboards and custom data.
-      </p>
-    </div>
+    <AppLayout contentClassName="md:p-6">
+      <Card className="border-blue-100 bg-white/95 shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-xl">Espace Sales & Operations</CardTitle>
+          <CardDescription>
+            Cet espace sera bientôt enrichi avec votre pipeline commercial, les opportunités par marché et le suivi des
+            actions terrain.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button asChild>
+            <Link to="/app/control-tower">Retour à la tour de contrôle</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/app/simulator">Ouvrir le simulateur</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    </AppLayout>
   );
 }

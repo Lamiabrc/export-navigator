@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePlan } from "@/auth/PlanContext";
+import { isAdminUser } from "@/lib/authz";
 import { Badge } from "@/components/ui/badge";
 import { BrandLogo } from "../BrandLogo";
 import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
@@ -45,6 +46,7 @@ export function MainLayout({
     user?.email?.split("@")[0] ||
     "Compte";
   const planLabel = plan === "FREE" ? "Free" : plan.replace(/_/g, " ");
+  const isAdmin = isAdminUser(user);
 
   React.useEffect(() => {
     const handler = () => {
@@ -119,7 +121,7 @@ export function MainLayout({
                       if (e.key === "Enter") {
                         // simple: on redirige vers l’analyse avec la query
                         // adapte si tu as déjà une page /search
-                        navigate(`/app/analyse?q=${encodeURIComponent(q.trim())}`);
+                        navigate(`/app/simulator?q=${encodeURIComponent(q.trim())}`);
                       }
                     }}
                     placeholder="Rechercher client, facture, HS code, pays…"
@@ -141,7 +143,7 @@ export function MainLayout({
             {/* Row 2: CTA actions */}
             <div className="flex flex-wrap items-center gap-2 justify-end">
               <Link
-                to="/watch"
+                to="/app/centre-veille/reglementation"
                 className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-muted transition shrink-0"
                 title="Veille réglementaire et marchés (RSS & sources)"
               >
@@ -150,7 +152,7 @@ export function MainLayout({
               </Link>
 
               <Link
-                to="/app/analyse"
+                to="/app/simulator"
                 className="inline-flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground border border-border hover:shadow-md hover:-translate-y-0.5 transition shrink-0"
                 title="Calcul du prix de revient & aide à la décision"
               >
@@ -176,13 +178,15 @@ export function MainLayout({
                 Contrôler une facture
               </Link>
 
-              <Link
-                to="/resources"
-                className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-muted transition shrink-0"
-                title="Initialisation / ressources (admin)"
-              >
-                Init DB
-              </Link>
+              {isAdmin ? (
+                <Link
+                  to="/app/admin"
+                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-muted transition shrink-0"
+                  title="Administration"
+                >
+                  Admin
+                </Link>
+              ) : null}
 
               <button
                 onClick={async () => {

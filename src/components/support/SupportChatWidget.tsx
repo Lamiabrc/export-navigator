@@ -19,6 +19,8 @@ type AssistantResponse = {
   detail?: string;
   error?: string;
   citations?: Array<{ title: string; chunk_index: number; similarity?: number }>;
+  privacy_notice?: string;
+  retention_days?: number;
 };
 
 type ChatMessage = {
@@ -122,7 +124,7 @@ export default function SupportChatWidget({
         .filter((m: any) => m && typeof m === "object")
         .map((m: any) => ({
           id: typeof m.id === "string" ? m.id : uid(),
-          role: m.role === "assistant" ? "assistant" : "user",
+          role: (m.role === "assistant" ? "assistant" : "user") as ChatMessage["role"],
           content: typeof m.content === "string" ? m.content : "",
           createdAt: typeof m.createdAt === "number" ? m.createdAt : Date.now(),
           meta: m.meta && typeof m.meta === "object" ? m.meta : undefined,
@@ -422,6 +424,11 @@ export default function SupportChatWidget({
               ) : null}
 
               <Separator />
+
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800">
+                Données confidentielles : vos questions sont stockées de façon sécurisée dans la base de données et
+                supprimées automatiquement après la période de rétention.
+              </div>
 
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={() => navigate("/assistant")}>
