@@ -1467,7 +1467,7 @@ export default function ControlTower() {
         </section>
 
         <Drawer open={Boolean(decisionOpen)} onOpenChange={(open) => (!open ? setDecisionOpen(null) : null)}>
-          <DrawerContent className="px-4 pb-6">
+          <DrawerContent className="px-4 pb-6 md:left-64 md:right-4 md:inset-x-auto md:rounded-t-2xl">
             <DrawerHeader>
               <DrawerTitle>
                 {decisionOpen === "go-no-go" && "Go/No-Go Export en 60 sec"}

@@ -547,8 +547,13 @@ Deno.serve(async (req) => {
     return json(200, resp);
   }
 
-  // 3) RÃ©ponse KB prioritaire
-  if (best) {
+  // 3) Réponse KB prioritaire uniquement si réellement pertinente à la question
+  const bestLooksRelevant =
+    Boolean(best) &&
+    !isGenericKbHit(best) &&
+    hasQuestionOverlap(question, `${best?.title || ""} ${best?.summary || ""} ${best?.body_md || ""}`);
+
+  if (bestLooksRelevant) {
     const sections: AssistantSections = {};
     sections[best.title] = toLines(best.body_md);
 

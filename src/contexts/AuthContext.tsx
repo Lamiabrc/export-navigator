@@ -32,6 +32,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let alive = true;
 
+    const syncFromSession = async () => {
+      if (!SUPABASE_ENV_OK) return;
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (!alive) return;
+        if (error) {
+          setSession(null);
+          setUser(null);
+          return;
+        }
+        setSession(data.session ?? null);
+        setUser(data.session?.user ?? null);
+      } catch {
+        if (!alive) return;
+      }
+    };
+
     const init = async () => {
       try {
         if (!SUPABASE_ENV_OK) {
@@ -77,9 +94,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     });
 
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void syncFromSession();
+      }
+    };
+
+    const onFocus = () => {
+      void syncFromSession();
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", onFocus);
+      document.addEventListener("visibilitychange", onVisibility);
+    }
+
     return () => {
       alive = false;
       sub.subscription.unsubscribe();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("focus", onFocus);
+        document.removeEventListener("visibilitychange", onVisibility);
+      }
     };
   }, []);
 
