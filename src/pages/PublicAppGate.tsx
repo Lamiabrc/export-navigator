@@ -109,18 +109,20 @@ export default function PublicAppGate({ mode }: { mode: GateMode }) {
 
             <div className="flex flex-wrap gap-2 pt-2">
               <Button asChild className="gap-2">
-                <Link to={`/register?next=${encodeURIComponent(config.appPath)}`}>
-                  <Sparkles className="h-4 w-4" />
-                  Créer un compte gratuit
+                <Link to="/pricing#tool">
+                  Payer en ligne pour utiliser l'outil
                 </Link>
               </Button>
               <Button asChild variant="outline">
                 <Link to={`/login?next=${encodeURIComponent(config.appPath)}`}>Se connecter</Link>
               </Button>
+              <Button asChild variant="ghost">
+                <Link to="/contact?offer=devis">Nous contacter pour devis</Link>
+              </Button>
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Le site public est informatif. Les calculs et simulations se font dans l'application.
+              L'outil est accessible aux comptes connectés. Paiement en ligne pour l'usage outil; pour le reste, demandez un devis.
             </p>
           </div>
 
@@ -222,7 +224,7 @@ export default function PublicAppGate({ mode }: { mode: GateMode }) {
 
                   <div className="p-4 md:p-6">
                     {mode === "watch" ? (
-                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
                         <PanoramicControlTowerMap
                           selectedCountry={selected}
                           selectedLabel={selected ?? undefined}

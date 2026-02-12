@@ -85,17 +85,17 @@ export default function Home() {
               ))}
             </ul>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="sm:min-w-52">
-                <Link to="/register">
-                  Essayer gratuitement <ArrowRight className="ml-2 size-4" />
+              <Button asChild size="lg" className="sm:min-w-60">
+                <Link to="/pricing#tool">
+                  Payer en ligne pour utiliser l'outil <ArrowRight className="ml-2 size-4" />
                 </Link>
               </Button>
               <Button asChild variant="outline" size="lg" className="sm:min-w-52">
-                <Link to="/pricing#plans">Payer en ligne et démarrer</Link>
+                <Link to="/contact">Nous contacter pour devis</Link>
               </Button>
             </div>
             <p className="text-sm text-slate-500">
-              Données confidentielles. Suppression à tout moment. Purge automatique selon politique de rétention.
+              Tour de contrôle accessible uniquement après connexion. Données confidentielles.
             </p>
           </div>
 

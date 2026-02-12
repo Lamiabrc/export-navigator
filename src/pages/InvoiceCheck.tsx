@@ -3,7 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -87,6 +87,9 @@ export default function InvoiceCheck() {
   const [destination, setDestination] = React.useState("");
   const [incoterm, setIncoterm] = React.useState("DAP");
   const [currency, setCurrency] = React.useState("EUR");
+
+  const [entryMode, setEntryMode] = React.useState<"import" | "manual">("import");
+  const [activityLabel, setActivityLabel] = React.useState("");
 
   const [lines, setLines] = React.useState<Line[]>([{ description: "", qty: 1, price: 0, hs: "" }]);
 
@@ -201,6 +204,7 @@ export default function InvoiceCheck() {
         destination,
         incoterm,
         currency,
+        activityLabel,
         parsed: parsed
           ? {
               invoiceNumber: parsed.invoiceNumber,
@@ -246,6 +250,7 @@ export default function InvoiceCheck() {
         destination,
         incoterm,
         currency,
+        activityLabel,
         score,
         value: totalValue,
         lines,
@@ -284,6 +289,7 @@ export default function InvoiceCheck() {
           email,
           destination,
           incoterm,
+          activity: activityLabel?.trim() || "",
           value: totalValue,
           currency,
           lines_count: lines.length,
@@ -323,19 +329,51 @@ export default function InvoiceCheck() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Saisie rapide</CardTitle>
+            <CardTitle>Mode d'analyse</CardTitle>
+            <CardDescription>Importer un PDF/Excel ou saisir manuellement les lignes.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button variant={entryMode === "import" ? "default" : "outline"} onClick={() => setEntryMode("import")}>
+              Importer une facture (PDF/Excel/CSV)
+            </Button>
+            <Button variant={entryMode === "manual" ? "default" : "outline"} onClick={() => setEntryMode("manual")}>
+              Saisie manuelle
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Contexte facture</CardTitle>
+            <CardDescription>Indiquez l'intitulé exact de l'activité et les paramètres de base.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-4">
+            <div className="space-y-2 md:col-span-2">
+              <Label>Activité exacte</Label>
+              <Input
+                value={activityLabel}
+                onChange={(e) => setActivityLabel(e.target.value)}
+                placeholder="Ex : Fabrication de dispositifs médicaux"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Marché / destination</Label>
+              <Input
+                value={destination}
+                onChange={(e) => setDestination(e.target.value)}
+                placeholder="Ex : États-Unis / Allemagne / Suisse"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Saisie manuelle / lignes facture</CardTitle>
+            <CardDescription>Renseignez les lignes ou ajustez les données importées.</CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Marché / destination</Label>
-                <Input
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  placeholder="Ex : États-Unis / Allemagne / Suisse…"
-                />
-              </div>
 
               <div className="space-y-2">
                 <Label>Incoterm</Label>
@@ -442,9 +480,11 @@ export default function InvoiceCheck() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        {entryMode === "import" ? (
+<Card>
           <CardHeader>
-            <CardTitle>Importer une facture</CardTitle>
+            <CardTitle>Importer une facture (PDF analysé automatiquement)</CardTitle>
+            <CardDescription>Extraction auto des lignes, HS, totaux et pays si détectés.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Input
@@ -515,6 +555,7 @@ export default function InvoiceCheck() {
             </p>
           </CardContent>
         </Card>
+        ) : null}
       </div>
 
       <Dialog open={contactOpen} onOpenChange={setContactOpen}>

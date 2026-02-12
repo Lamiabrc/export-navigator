@@ -15,6 +15,7 @@ export type PdfPayload = {
   email?: string;
   destination?: string;
   incoterm?: string;
+  activityLabel?: string;
   value?: number | string;
   currency?: string;
   score?: number;

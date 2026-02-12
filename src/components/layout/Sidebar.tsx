@@ -6,13 +6,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { isAdminUser } from "@/lib/authz";
 import {
   Activity,
-  BadgeDollarSign,
   BookOpen,
   Bot,
   Calculator,
   FileCheck2,
   LogOut,
-  Package,
   Scale,
   Settings,
   ShieldCheck,
@@ -38,7 +36,7 @@ const navigation: NavSection[] = [
     title: "Accueil",
     items: [
       {
-        name: "Tour de controle",
+        name: "Tour de contrôle",
         href: "/app/control-tower",
         icon: Activity,
         badge: "Live",
@@ -73,16 +71,16 @@ const navigation: NavSection[] = [
   },
 
   {
-    title: "Conformité",
+    title: "Conformité & Audit",
     items: [
       {
-        name: "Centre conformité",
-        href: "/app/compliance",
+        name: "Audit interne",
+        href: "/app/audit-interne",
         icon: ShieldCheck,
-        aliases: ["/app/centre-conformite", "/app/controls", "/app/sanctions"],
+        aliases: ["/app/audit-interne", "/app/compliance", "/app/centre-conformite", "/app/controls", "/app/sanctions"],
       },
       {
-        name: "Guides (Incoterms, TVA…)",
+        name: "Guides export (Incoterms, géopolitique…)",
         href: "/guides/incoterms-ddp",
         icon: BookOpen,
         aliases: ["/guides", "/guides/incoterms", "/guides/tva", "/methodologie"],
@@ -103,20 +101,8 @@ const navigation: NavSection[] = [
   },
 
   {
-    title: "Référentiels",
-    items: [
-      {
-        name: "Produits (HS code)",
-        href: "/app/produits",
-        icon: Package,
-        aliases: ["/app/products", "/app/hs", "/app/hs-codes"],
-      },
-    ],
-  },
-
-  {
     title: "IA & Assistance",
-    items: [{ name: "IA Export", href: "/app/assistant", icon: Bot, aliases: ["/assistant"] }],
+    items: [{ name: "MPL Export Expert", href: "/app/assistant", icon: Bot, aliases: ["/assistant"] }],
   },
 
   {
@@ -251,7 +237,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
 
         <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
           <Bot className="h-4 w-4" />
-          IA Export — traitements côté serveur uniquement
+          MPL Export Expert — traitements côté serveur uniquement
         </div>
       </div>
     </aside>

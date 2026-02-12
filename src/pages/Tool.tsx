@@ -254,7 +254,7 @@ function pickDutyRate(countryCode: string, hsCode: string): { rate: number | nul
 function dutySourceHint(source: DutyRateSource, hasHs: boolean) {
   if (source === "eu") return "UE : pas de droits";
   if (source === "mock") return "Taux pays/HS (indicatif)";
-  if (source === "fallback") return hasHs ? "Taux indicatif (HS non trouve)" : "Taux indicatif (HS manquant)";
+    if (source === "fallback") return hasHs ? "Taux indicatif (HS non trouvé)" : "Taux indicatif (HS manquant)";
   return "Pays manquant";
 }
 
@@ -309,10 +309,10 @@ function buildTeaserChecklist(pre: Precheck) {
     risks.push(`Assurance obligatoire pour ${pre.incoterm} : renseigner un % (ref ${defaultInsurancePct(pre.destination_country)}%).`);
   }
   if (importRate.source === "fallback") {
-    risks.push("Droits import estimes generiques : taux pays/HS non trouve.");
+      risks.push("Droits import estimés génériques : taux pays/HS non trouvé.");
   }
   if (exportRate.source === "fallback") {
-    risks.push("Droits export estimes generiques : taux pays/HS non trouve.");
+      risks.push("Droits export estimés génériques : taux pays/HS non trouvé.");
   }
 
   return {
@@ -677,9 +677,9 @@ export default function Tool() {
                   Se connecter
                 </Button>
               
-                <Button variant="secondary" onClick={scrollToResults}>
-                  Voir l'aper?u des r?sultats
-                </Button></div>
+                  <Button variant="secondary" onClick={scrollToResults}>
+                    Voir l'aperçu des résultats
+                  </Button></div>
 
               {submitted ? (
                 <p className="text-xs text-muted-foreground">

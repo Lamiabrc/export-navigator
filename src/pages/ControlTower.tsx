@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ExternalLink, FileSpreadsheet, RotateCcw, Rss, Upload, Download, Sparkles } from "lucide-react";
+import { ExternalLink, FileSpreadsheet, RotateCcw, Rss, Upload, Download, Sparkles, Users, TrendingUp } from "lucide-react";
 import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 import { PanoramicControlTowerMap } from "@/components/controlTower/PanoramicControlTowerMap";
 import { usePlan } from "@/auth/PlanContext";
@@ -34,6 +34,7 @@ import { startOnlineCheckout } from "@/lib/billing";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { PDFDocument, StandardFonts } from "pdf-lib";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type CsvState = {
   headers: string[];
@@ -71,6 +72,15 @@ type Agg = {
   margin: number;
   quantity: number;
   lines: number;
+};
+
+type ClientRegionRow = {
+  id: string;
+  region: string;
+  sector: string;
+  product: string;
+  clients: number;
+  sales: number;
 };
 
 type RssSource = { name: string; url: string };
@@ -491,6 +501,8 @@ function formatDate(ts: number | null) {
   }
 }
 
+const uid = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
 export default function ControlTower() {
   const { profile } = useCompanyProfile();
   const { user } = useAuth();
@@ -509,6 +521,13 @@ export default function ControlTower() {
   const [objectivePlan, setObjectivePlan] = React.useState<string[] | null>(null);
   const [planCtaError, setPlanCtaError] = React.useState<string | null>(null);
 
+  const [clientRows, setClientRows] = React.useState<ClientRegionRow[]>([
+    { id: uid(), region: "", sector: "", product: "", clients: 0, sales: 0 },
+  ]);
+  const [clientCsvName, setClientCsvName] = React.useState<string | null>(null);
+  const [clientCsvError, setClientCsvError] = React.useState<string | null>(null);
+  const [marginCoefficient, setMarginCoefficient] = React.useState(1.3);
+
   const [assistantQuestion, setAssistantQuestion] = React.useState("");
   const [assistantAnswer, setAssistantAnswer] = React.useState<string | null>(null);
   const [assistantActions, setAssistantActions] = React.useState<string[]>([]);
@@ -516,6 +535,7 @@ export default function ControlTower() {
   const [assistantError, setAssistantError] = React.useState<string | null>(null);
 
   const [decisionOpen, setDecisionOpen] = React.useState<DecisionKey | null>(null);
+  const [decisionCollapsed, setDecisionCollapsed] = React.useState(false);
   const [decisionLoading, setDecisionLoading] = React.useState(false);
   const [decisionAnswer, setDecisionAnswer] = React.useState<string | null>(null);
   const [decisionActions, setDecisionActions] = React.useState<string[]>([]);
@@ -523,6 +543,10 @@ export default function ControlTower() {
   const [deleteLoading, setDeleteLoading] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const [deleteDone, setDeleteDone] = React.useState(false);
+
+  React.useEffect(() => {
+    if (decisionOpen) setDecisionCollapsed(false);
+  }, [decisionOpen]);
 
   const [goNoGoResult, setGoNoGoResult] = React.useState<GoNoGoResult | null>(null);
   const [goNoGoForm, setGoNoGoForm] = React.useState({
@@ -778,6 +802,80 @@ export default function ControlTower() {
       examples ? `Verifier la coherence des donnees (ex: ${examples}).` : "Verifier la coherence des donnees CSV.",
     ];
     setObjectivePlan(plan);
+  };
+
+  const updateClientRow = (id: string, patch: Partial<ClientRegionRow>) => {
+    setClientRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  };
+
+  const addClientRow = () => {
+    setClientRows((prev) => [...prev, { id: uid(), region: "", sector: "", product: "", clients: 0, sales: 0 }]);
+  };
+
+  const removeClientRow = (id: string) => {
+    setClientRows((prev) => (prev.length > 1 ? prev.filter((row) => row.id !== id) : prev));
+  };
+
+  const handleClientUpload = async (file: File) => {
+    setClientCsvError(null);
+    setClientCsvName(file.name);
+
+    try {
+      const text = await file.text();
+      const parsed = parseCsvText(text);
+      if (!parsed.headers.length) {
+        setClientCsvError("CSV vide ou illisible.");
+        return;
+      }
+
+      const headerMap = new Map<string, number>();
+      parsed.headers.forEach((h, idx) => {
+        headerMap.set(normalizeHeader(h), idx);
+      });
+
+      const pickIndex = (aliases: string[]) => {
+        for (const alias of aliases) {
+          const key = normalizeHeader(alias);
+          const idx = headerMap.get(key);
+          if (idx !== undefined) return idx;
+        }
+        return null;
+      };
+
+      const idx = {
+        region: pickIndex(["region", "zone", "market_zone", "pays", "country", "region_code"]),
+        sector: pickIndex(["sector", "secteur", "industry"]),
+        product: pickIndex(["product", "produit", "product_label", "hs_code"]),
+        clients: pickIndex(["clients", "nb_clients", "count_clients", "client_count"]),
+        sales: pickIndex(["sales", "revenue", "ca", "total_sales"]),
+      };
+
+      if (idx.region === null || idx.clients === null) {
+        setClientCsvError("Colonnes obligatoires manquantes : region + clients.");
+        return;
+      }
+
+      const rows: ClientRegionRow[] = [];
+      const getValue = (cells: string[], index: number | null) => {
+        if (index === null) return "";
+        return cells[index] ?? "";
+      };
+
+      parsed.rows.forEach((cells) => {
+        if (!cells.some((c) => String(c || "").trim() !== "")) return;
+        const region = String(getValue(cells, idx.region)).trim();
+        if (!region) return;
+        const sector = String(getValue(cells, idx.sector)).trim();
+        const product = String(getValue(cells, idx.product)).trim();
+        const clients = parseNumber(getValue(cells, idx.clients)) ?? 0;
+        const sales = parseNumber(getValue(cells, idx.sales)) ?? 0;
+        rows.push({ id: uid(), region, sector, product, clients, sales });
+      });
+
+      setClientRows(rows.length ? rows : [{ id: uid(), region: "", sector: "", product: "", clients: 0, sales: 0 }]);
+    } catch (err: any) {
+      setClientCsvError(err?.message || "Impossible de lire le CSV.");
+    }
   };
 
   const downloadBlob = (blob: Blob, filename: string) => {
@@ -1085,6 +1183,63 @@ export default function ControlTower() {
       { revenue: 0, costs: 0, margin: 0, quantity: 0, lines: 0 }
     );
   }, [filteredRows]);
+
+  const marginCoeffSafe = React.useMemo(() => {
+    const n = Number(marginCoefficient);
+    if (!Number.isFinite(n) || n <= 0) return 1;
+    return n;
+  }, [marginCoefficient]);
+
+  const maxCostAllowed = React.useMemo(() => {
+    if (!totals.revenue) return 0;
+    return totals.revenue / marginCoeffSafe;
+  }, [totals.revenue, marginCoeffSafe]);
+
+  const clientsByRegion = React.useMemo(() => {
+    const map = new Map<string, number>();
+    clientRows.forEach((row) => {
+      const key = row.region || "Non renseigné";
+      map.set(key, (map.get(key) || 0) + (Number(row.clients) || 0));
+    });
+    return Array.from(map.entries())
+      .map(([region, clients]) => ({ region, clients }))
+      .sort((a, b) => b.clients - a.clients);
+  }, [clientRows]);
+
+  const totalClients = React.useMemo(() => {
+    return clientsByRegion.reduce((sum, row) => sum + row.clients, 0);
+  }, [clientsByRegion]);
+
+  const salesBySector = React.useMemo(() => {
+    const map = new Map<string, number>();
+    clientRows.forEach((row) => {
+      if (!row.sector) return;
+      map.set(row.sector, (map.get(row.sector) || 0) + (Number(row.sales) || 0));
+    });
+    return Array.from(map.entries())
+      .map(([sector, sales]) => ({ sector, sales }))
+      .sort((a, b) => b.sales - a.sales);
+  }, [clientRows]);
+
+  const improvementSuggestions = React.useMemo(() => {
+    const suggestions: string[] = [];
+    if (!rowsAll.length) {
+      suggestions.push("Importer un CSV de ventes pour analyser marges et produits.");
+    }
+    if (totals.revenue && totals.margin / totals.revenue < 0.15) {
+      suggestions.push("Marge moyenne faible : revaloriser les prix ou réduire les coûts logistiques.");
+    }
+    if (clientsByRegion.length > 0 && clientsByRegion[0].clients < 5) {
+      suggestions.push("Portefeuille clients limité : renforcer la prospection par région prioritaire.");
+    }
+    if (productAgg.length === 0) {
+      suggestions.push("Renseigner les HS codes pour analyser les marges par produit.");
+    }
+    if (!suggestions.length) {
+      suggestions.push("Poursuivre la diversification pays/produits et documenter les process clés.");
+    }
+    return suggestions;
+  }, [rowsAll.length, totals.revenue, totals.margin, clientsByRegion, productAgg.length]);
 
   const destinationAgg = React.useMemo(() => {
     const map = new Map<string, Agg>();
@@ -1469,21 +1624,29 @@ export default function ControlTower() {
         <Drawer open={Boolean(decisionOpen)} onOpenChange={(open) => (!open ? setDecisionOpen(null) : null)}>
           <DrawerContent className="px-4 pb-6 md:left-64 md:right-4 md:inset-x-auto md:rounded-t-2xl">
             <DrawerHeader>
-              <DrawerTitle>
-                {decisionOpen === "go-no-go" && "Go/No-Go Export en 60 sec"}
-                {decisionOpen === "payment" && "Sécuriser le paiement"}
-                {decisionOpen === "pricing" && "Calculer mon prix export"}
-                {decisionOpen === "documents" && "Contrôler mes documents"}
-              </DrawerTitle>
-              <DrawerDescription>
-                {decisionOpen === "go-no-go" && "Renseignez les infos clés pour un diagnostic rapide."}
-                {decisionOpen === "payment" && "Mini-formulaire pour limiter le risque de paiement."}
-                {decisionOpen === "pricing" && "Données minimum pour cadrer le prix export."}
-                {decisionOpen === "documents" && "Liste documentaire personnalisée en 1 minute."}
-              </DrawerDescription>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <DrawerTitle>
+                    {decisionOpen === "go-no-go" && "Go/No-Go Export en 60 sec"}
+                    {decisionOpen === "payment" && "Sécuriser le paiement"}
+                    {decisionOpen === "pricing" && "Calculer mon prix export"}
+                    {decisionOpen === "documents" && "Contrôler mes documents"}
+                  </DrawerTitle>
+                  <DrawerDescription>
+                    {decisionOpen === "go-no-go" && "Renseignez les infos clés pour un diagnostic rapide."}
+                    {decisionOpen === "payment" && "Mini-formulaire pour limiter le risque de paiement."}
+                    {decisionOpen === "pricing" && "Données minimum pour cadrer le prix export."}
+                    {decisionOpen === "documents" && "Liste documentaire personnalisée en 1 minute."}
+                  </DrawerDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setDecisionCollapsed((v) => !v)}>
+                  {decisionCollapsed ? "Développer" : "Réduire"}
+                </Button>
+              </div>
             </DrawerHeader>
 
-            <div className="mx-auto w-full max-w-3xl space-y-4">
+            {!decisionCollapsed && (
+              <div className="mx-auto w-full max-w-3xl space-y-4">
               {decisionOpen === "go-no-go" ? (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1824,7 +1987,8 @@ export default function ControlTower() {
               ) : null}
 
               {decisionError ? <div className="text-sm text-rose-600">{decisionError}</div> : null}
-            </div>
+              </div>
+            )}
             <DrawerFooter className="mt-2">
               <Button variant="outline" onClick={() => setDecisionOpen(null)}>
                 Fermer
@@ -2004,6 +2168,119 @@ export default function ControlTower() {
                   </ul>
                 </div>
               ) : null}
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-blue-600" />
+                Clients par région
+              </CardTitle>
+              <CardDescription>
+                Saisissez le nombre de clients par région ou importez un CSV pour analyser les ventes par secteur/produit.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="space-y-3">
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleClientUpload(file);
+                  }}
+                  className="block w-full text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-slate-800"
+                />
+
+                {clientCsvName ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                    Fichier : {clientCsvName}
+                  </div>
+                ) : null}
+
+                {clientCsvError ? (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                    {clientCsvError}
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  {clientRows.map((row) => (
+                    <div key={row.id} className="grid gap-2 md:grid-cols-[1.2fr_1fr_1fr_0.6fr_0.8fr_auto] items-end">
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Région</div>
+                        <Input value={row.region} onChange={(e) => updateClientRow(row.id, { region: e.target.value })} placeholder="Ex : UE" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Secteur</div>
+                        <Input value={row.sector} onChange={(e) => updateClientRow(row.id, { sector: e.target.value })} placeholder="Ex : Agro" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Produit</div>
+                        <Input value={row.product} onChange={(e) => updateClientRow(row.id, { product: e.target.value })} placeholder="HS / produit" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Clients</div>
+                        <Input type="number" min={0} value={row.clients} onChange={(e) => updateClientRow(row.id, { clients: Number(e.target.value) || 0 })} />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Ventes</div>
+                        <Input type="number" min={0} value={row.sales} onChange={(e) => updateClientRow(row.id, { sales: Number(e.target.value) || 0 })} />
+                      </div>
+                      <Button variant="ghost" onClick={() => removeClientRow(row.id)}>
+                        Retirer
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+
+                <Button variant="outline" onClick={addClientRow}>
+                  Ajouter une ligne
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                  <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Synthèse</div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span>Total clients</span>
+                    <span className="font-semibold text-slate-900">{totalClients}</span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span>Régions suivies</span>
+                    <span className="font-semibold text-slate-900">{clientsByRegion.length}</span>
+                  </div>
+                </div>
+
+                <div className="h-56 rounded-xl border border-slate-200 bg-white p-3">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={clientsByRegion.slice(0, 6)}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="region" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="clients" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {salesBySector.length ? (
+                  <div className="h-56 rounded-xl border border-slate-200 bg-white p-3">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={salesBySector.slice(0, 6)}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="sector" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} />
+                        <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} />
+                        <Tooltip />
+                        <Bar dataKey="sales" fill="hsl(var(--secondary))" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : null}
+              </div>
             </CardContent>
           </Card>
         </section>
@@ -2222,7 +2499,7 @@ export default function ControlTower() {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Synthèse</CardTitle>
@@ -2246,6 +2523,21 @@ export default function ControlTower() {
                   <span className="text-lg font-semibold text-slate-900">
                     {formatPercent(totals.revenue ? totals.margin / totals.revenue : null)}
                   </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-muted-foreground">Coefficient de marge</span>
+                  <Input
+                    className="h-8 w-24 text-right"
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={marginCoefficient}
+                    onChange={(e) => setMarginCoefficient(Number(e.target.value) || 0)}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Coût max de revient</span>
+                  <span className="text-lg font-semibold text-slate-900">{formatMoney(maxCostAllowed, displayCurrency)}</span>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-2">
                   <Badge variant="outline">Lignes: {totals.lines}</Badge>
@@ -2313,6 +2605,23 @@ export default function ControlTower() {
                 ) : (
                   <div className="text-xs text-muted-foreground">Aucun HS préféré détecté (profil non configuré).</div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <TrendingUp className="h-4 w-4 text-blue-600" />
+                  Améliorations
+                </CardTitle>
+                <CardDescription>Priorités issues de vos données.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-slate-700">
+                <ul className="list-disc space-y-1 pl-4">
+                  {improvementSuggestions.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
               </CardContent>
             </Card>
           </div>
@@ -2471,6 +2780,19 @@ export default function ControlTower() {
               <CardDescription>CA, coûts et marges par pays (devise filtrée si nécessaire).</CardDescription>
             </CardHeader>
             <CardContent>
+              {destinationAgg.length ? (
+                <div className="mb-4 h-48 rounded-xl border border-slate-200 bg-white p-3">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={destinationAgg.slice(0, 6)}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : null}
               <div className="overflow-auto rounded-xl border border-slate-200">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-xs text-slate-500">
@@ -2514,6 +2836,19 @@ export default function ControlTower() {
               <CardDescription>Suivi marge par HS code.</CardDescription>
             </CardHeader>
             <CardContent>
+              {productAgg.length ? (
+                <div className="mb-4 h-48 rounded-xl border border-slate-200 bg-white p-3">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={productAgg.slice(0, 6)}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="code" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="revenue" fill="hsl(var(--secondary))" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : null}
               <div className="overflow-auto rounded-xl border border-slate-200">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-xs text-slate-500">
