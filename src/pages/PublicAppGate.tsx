@@ -21,52 +21,53 @@ type GateConfig = {
 const CONFIG: Record<GateMode, GateConfig> = {
   "invoice-check": {
     eyebrow: "Outil facture",
-    title: "La verification facture est disponible dans l'application.",
+    title: "La vérification facture est disponible dans l'application.",
     subtitle:
-      "Le site public reste informatif. Connectez-vous pour tester les controles, la simulation et la Control Tower.",
+      "Le site public reste informatif. Connectez-vous pour tester les contrôles, la simulation et la Control Tower.",
     appPath: "/app/invoice-check",
     bullets: [
-      "Controle coherence (Incoterm, assurance, documents).",
-      "Simulations couts/marge et droits estimes.",
+      "Contrôle cohérence (Incoterm, assurance, documents).",
+      "Simulations coûts/marge et droits estimés.",
       "Historique + suivi par destination.",
     ],
     preview: true,
   },
   analyse: {
-    eyebrow: "Analyse couts",
-    title: "L'analyse complete se fait dans l'application.",
+    eyebrow: "Analyse coûts",
+    title: "L'analyse complète se fait dans l'application.",
     subtitle:
-      "Les calculateurs et simulateurs sont centralises dans l'app pour garantir vos sauvegardes, l'historique et la securite.",
+      "Les calculateurs et simulateurs sont centralisés dans l'app pour garantir vos sauvegardes, l'historique et la sécurité.",
     appPath: "/app/simulator",
     bullets: [
       "Calcul du prix de revient rendu.",
-      "Scenarios par Incoterm et mode de transport.",
-      "Comparaison marge / sensibilite.",
+      "Scénarios par Incoterm et mode de transport.",
+      "Comparaison marge / sensibilité.",
     ],
   },
   costing: {
     eyebrow: "Simulation export",
     title: "La simulation est disponible dans l'application.",
     subtitle:
-      "Connectez-vous pour lancer vos calculs, conserver vos scenarios et acceder aux recommandations.",
+      "Connectez-vous pour lancer vos calculs, conserver vos scénarios et accéder aux recommandations.",
     appPath: "/app/simulator",
     bullets: [
-      "Simulation couts complets (douane, assurance, logistique).",
+      "Simulation coûts complets (douane, assurance, logistique).",
       "Rapport exportable.",
       "Historique par dossier.",
     ],
   },
   watch: {
     eyebrow: "Veille",
-    title: "La veille personnalisee est accessible dans l'application.",
+    title: "La veille personnalisée est accessible dans l'application.",
     subtitle:
-      "Le site public presente l'offre. L'app centralise vos pays/HS et les alertes utiles.",
+      "Le site public présente l'offre. L'application centralise vos pays/HS et les alertes utiles.",
     appPath: "/app/centre-veille/reglementation",
     bullets: [
       "Flux pays + secteurs + sanctions.",
-      "Alertes ciblees par destination et HS.",
-      "Suivi des priorites en equipe.",
+      "Alertes ciblées par destination et HS.",
+      "Suivi des priorités en équipe.",
     ],
+    preview: true,
   },
 };
 
@@ -77,6 +78,12 @@ const PREVIEW_STATS = {
   CN: { label: "Chine", total: 5 },
   GB: { label: "Royaume-Uni", total: 4 },
 };
+
+const WATCH_FEED_PREVIEW = [
+  { id: "1", title: "Maroc — contrôle documentaire renforcé", detail: "Impact potentiel sur les délais de dédouanement." },
+  { id: "2", title: "USA — ajustement tarifaire HS 84", detail: "Vérifier vos prix DDP et la marge minimale." },
+  { id: "3", title: "UE — mise à jour conformité emballages", detail: "Anticiper les justificatifs pour les produits sensibles." },
+];
 
 export default function PublicAppGate({ mode }: { mode: GateMode }) {
   const config = CONFIG[mode];
@@ -102,18 +109,20 @@ export default function PublicAppGate({ mode }: { mode: GateMode }) {
 
             <div className="flex flex-wrap gap-2 pt-2">
               <Button asChild className="gap-2">
-                <Link to={`/register?next=${encodeURIComponent(config.appPath)}`}>
-                  <Sparkles className="h-4 w-4" />
-                  Creer un compte gratuit
+                <Link to="/pricing#tool">
+                  Payer en ligne pour utiliser l'outil
                 </Link>
               </Button>
               <Button asChild variant="outline">
                 <Link to={`/login?next=${encodeURIComponent(config.appPath)}`}>Se connecter</Link>
               </Button>
+              <Button asChild variant="ghost">
+                <Link to="/contact?offer=devis">Nous contacter pour devis</Link>
+              </Button>
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Le site public est informatif. Les calculs et simulations se font dans l'app.
+              L'outil est accessible aux comptes connectés. Paiement en ligne pour l'usage outil; pour le reste, demandez un devis.
             </p>
           </div>
 
@@ -121,10 +130,10 @@ export default function PublicAppGate({ mode }: { mode: GateMode }) {
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Lock className="h-4 w-4 text-blue-600" />
-                Acces application
+                Accès application
               </CardTitle>
               <CardDescription>
-                Connectez-vous pour acceder a la Control Tower, aux simulateurs et a la veille.
+                Connectez-vous pour accéder a la Control Tower, aux simulateurs et a la veille.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-slate-600">
@@ -135,15 +144,15 @@ export default function PublicAppGate({ mode }: { mode: GateMode }) {
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
                   <div className="font-medium text-slate-900">Simulations</div>
-                  <div className="text-xs">Couts complets et scenarios Incoterm.</div>
+                  <div className="text-xs">Couts complets et scénarios Incoterm.</div>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
                   <div className="font-medium text-slate-900">Veille</div>
-                  <div className="text-xs">Flux pays, sanctions, reglementations.</div>
+                  <div className="text-xs">Flux pays, sanctions, réglementations.</div>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
                   <div className="font-medium text-slate-900">Historique</div>
-                  <div className="text-xs">Sauvegarde et suivi des decisions.</div>
+                  <div className="text-xs">Sauvegarde et suivi des décisions.</div>
                 </div>
               </div>
             </CardContent>
@@ -154,8 +163,8 @@ export default function PublicAppGate({ mode }: { mode: GateMode }) {
           <section className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-blue-600">Apercu</p>
-              <h2 className="text-2xl font-semibold text-slate-900">Previsualisation Control Tower</h2>
+              <p className="text-xs uppercase tracking-[0.35em] text-blue-600">Aperçu</p>
+              <h2 className="text-2xl font-semibold text-slate-900">Prévisualisation Control Tower</h2>
             </div>
             <Badge variant="outline">Exemple visuel (demo)</Badge>
           </div>
@@ -168,15 +177,15 @@ export default function PublicAppGate({ mode }: { mode: GateMode }) {
                       Accueil
                     </div>
                     <div className="mt-3 flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-900 shadow-sm">
-                      <span>Tour de controle</span>
+                      <span>Tour de contrôle</span>
                       <Badge className="bg-blue-600 text-white hover:bg-blue-600">Live</Badge>
                     </div>
 
                     <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">
-                      Decider vite
+                      Décider vite
                     </div>
                     <div className="mt-2 space-y-2 text-sm">
-                      {["Analyse couts", "Controle facture", "Taxes & OM"].map((item) => (
+                      {["Analyse coûts", "Contrôle facture", "Taxes & OM"].map((item) => (
                         <div key={item} className="flex items-center gap-2 text-slate-600">
                           <span className="h-2 w-2 rounded-full bg-slate-300" />
                           {item}
@@ -185,10 +194,10 @@ export default function PublicAppGate({ mode }: { mode: GateMode }) {
                     </div>
 
                     <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">
-                      Conformite
+                      Conformité
                     </div>
                     <div className="mt-2 space-y-2 text-sm">
-                      {["Centre conformite", "Guides (Incoterms, TVA)", "Veille reglementaire"].map((item) => (
+                      {["Centre conformité", "Guides (Incoterms, TVA)", "Veille réglementaire"].map((item) => (
                         <div key={item} className="flex items-center gap-2 text-slate-600">
                           <span className="h-2 w-2 rounded-full bg-slate-300" />
                           {item}
@@ -197,7 +206,7 @@ export default function PublicAppGate({ mode }: { mode: GateMode }) {
                     </div>
 
                     <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">
-                      Referentiels
+                      Référentiels
                     </div>
                     <div className="mt-2 space-y-2 text-sm">
                       {["Produits (HS code)", "Clients & fournisseurs"].map((item) => (
@@ -209,18 +218,41 @@ export default function PublicAppGate({ mode }: { mode: GateMode }) {
                     </div>
 
                     <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-                      Apercu interface — connectez-vous pour tout debloquer.
+                      Aperçu interface — connectez-vous pour tout débloquer.
                     </div>
                   </aside>
 
                   <div className="p-4 md:p-6">
-                    <PanoramicControlTowerMap
-                      selectedCountry={selected}
-                      selectedLabel={selected ?? undefined}
-                      countryStats={PREVIEW_STATS}
-                      onCountrySelect={(iso) => setSelected(iso)}
-                      onReset={() => setSelected(null)}
-                    />
+                    {mode === "watch" ? (
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+                        <PanoramicControlTowerMap
+                          selectedCountry={selected}
+                          selectedLabel={selected ?? undefined}
+                          countryStats={PREVIEW_STATS}
+                          onCountrySelect={(iso) => setSelected(iso)}
+                          onReset={() => setSelected(null)}
+                        />
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Flux de veille</p>
+                          <div className="mt-3 space-y-3">
+                            {WATCH_FEED_PREVIEW.map((item) => (
+                              <div key={item.id} className="rounded-xl border border-slate-200 p-3">
+                                <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                                <p className="mt-1 text-xs text-slate-600">{item.detail}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <PanoramicControlTowerMap
+                        selectedCountry={selected}
+                        selectedLabel={selected ?? undefined}
+                        countryStats={PREVIEW_STATS}
+                        onCountrySelect={(iso) => setSelected(iso)}
+                        onReset={() => setSelected(null)}
+                      />
+                    )}
                   </div>
                 </div>
               </CardContent>

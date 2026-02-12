@@ -72,11 +72,11 @@ function FooterSocial() {
   return (
     <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
       <div className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
-        {isFr ? "Reseaux sociaux" : "Social networks"}
+        {isFr ? "Réseaux sociaux" : "Social networks"}
       </div>
       <div className="mt-2 text-sm text-muted-foreground">
         {isFr
-          ? "Suivez MPL Export Conseil pour les actualites et contenus export."
+          ? "Suivez MPL Export Conseil pour les actualités et contenus export."
           : "Follow MPL Export Conseil for export updates and insights."}
       </div>
       <ul className="mt-4 space-y-3">
@@ -125,7 +125,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
     return candidate;
   };
 
-  const ctaLabel = isFr ? "Nous contacter" : "Contact us";
+  const ctaLabel = isFr ? "Demander un devis" : "Request a quote";
 
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
@@ -148,7 +148,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
   return (
     <div className="relative min-h-screen bg-white text-foreground">
-      {/* Backdrop â€œlight-friendlyâ€ */}
+      {/* Backdrop “light-friendly” */}
       <CinematicBackdrop variant="public" className="z-0 opacity-20" />
       <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-white/85 via-white/90 to-white" />
 
@@ -236,10 +236,16 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                 </Link>
 
                 <Link
+                  to="/pricing#plans"
+                  className="hidden rounded-full border border-blue-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-900 transition hover:border-blue-300 md:inline-flex"
+                >
+                  {isFr ? "Payer en ligne" : "Pay online"}
+                </Link>
+                <Link
                   to={`/login?next=${authNextParam}`}
                   className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-blue-900/70 transition hover:text-blue-900 md:inline-flex"
                 >
-                  Connexion
+                  {isFr ? "Connexion" : "Sign in"}
                 </Link>
               </>
             )}
@@ -297,15 +303,15 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
           <div className="space-y-3">
             <div className="text-sm font-semibold text-foreground">MPL Export Navigator</div>
             <div className="text-sm text-muted-foreground">
-              Outil dâ€™aide Ã  la dÃ©cision export â€” par MPL Export Conseil (audit, conformitÃ©, veille personnalisÃ©e).
+              Outil d’aide à la décision export — par MPL Export Conseil (audit, conformité, veille personnalisée).
             </div>
 
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
               <Link to="/methodologie" className="hover:text-foreground hover:underline">
-                MÃ©thodologie
+                Méthodologie
               </Link>
               <Link to="/about" className="hover:text-foreground hover:underline">
-                Ã€ propos
+                À propos
               </Link>
               <Link to="/guides" className="hover:text-foreground hover:underline">
                 Guides
@@ -328,7 +334,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             </div>
 
             <div className="text-xs text-muted-foreground">
-              Â© {new Date().getFullYear()} MPL Export Conseil â€” outil dâ€™aide Ã  la dÃ©cision.
+              © {new Date().getFullYear()} MPL Export Conseil — outil d’aide à la décision.
             </div>
             <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground md:mt-2">
               {siteDisclaimers.map((text, index) => (
@@ -354,9 +360,9 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             setSupportOpen(true);
           }}
           className="fixed bottom-6 right-6 z-[90] inline-flex items-center gap-2 rounded-full bg-[#0B1220] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-[#16233a]"
-          aria-label={isFr ? "Ouvrir ton conseiller export" : "Open your export advisor"}
+          aria-label={isFr ? "Ouvrir MPL Export Expert" : "Open MPL Export Expert"}
         >
-          {isFr ? "Ton conseiller export" : "Your export advisor"}
+          {isFr ? "MPL Export Expert" : "MPL Export Expert"}
         </button>
       )}
     </div>

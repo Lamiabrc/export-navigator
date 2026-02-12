@@ -85,17 +85,17 @@ export default function Home() {
               ))}
             </ul>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="sm:min-w-52">
-                <Link to="/register">
-                  Essayer gratuitement <ArrowRight className="ml-2 size-4" />
+              <Button asChild size="lg" className="sm:min-w-60">
+                <Link to="/pricing#tool">
+                  Payer en ligne pour utiliser l'outil <ArrowRight className="ml-2 size-4" />
                 </Link>
               </Button>
               <Button asChild variant="outline" size="lg" className="sm:min-w-52">
-                <Link to="/pricing">Découvrir la version Pro</Link>
+                <Link to="/contact">Nous contacter pour devis</Link>
               </Button>
             </div>
             <p className="text-sm text-slate-500">
-              Données confidentielles. Suppression à tout moment. Purge automatique selon politique de rétention.
+              Tour de contrôle accessible uniquement après connexion. Données confidentielles.
             </p>
           </div>
 
@@ -211,6 +211,18 @@ export default function Home() {
           </ul>
         </section>
 
+        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6">
+          <h2 className="text-2xl font-semibold text-slate-900">Voir l’outil en vidéo</h2>
+          <p className="max-w-3xl text-slate-600">
+            Démonstration rapide de la tour de contrôle, de l’analyse facture et du calcul de coûts export.
+          </p>
+          <video className="w-full rounded-xl border border-slate-200" controls preload="metadata" poster="/videos/hero-export.jpg">
+            <source src="/videos/hero-export.mp4" type="video/mp4" />
+            <source src="/videos/hero-export.webm" type="video/webm" />
+            Votre navigateur ne supporte pas la lecture vidéo.
+          </video>
+        </section>
+
         <section className="space-y-4 rounded-2xl border border-slate-200 p-6">
           <h2 className="text-2xl font-semibold text-slate-900">Vos données sont confidentielles.</h2>
           <p className="max-w-3xl text-slate-600">
@@ -242,13 +254,6 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-          <p className="font-medium text-slate-700">EN option</p>
-          <p>H1: “Decide faster. Export with confidence.”</p>
-          <p>
-            Sub: “Your import-export control tower: Go/No-Go, payments, Incoterms, documents, and landed cost.”
-          </p>
-        </section>
       </main>
     </PublicLayout>
   );

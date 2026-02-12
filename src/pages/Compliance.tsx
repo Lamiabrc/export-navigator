@@ -1,41 +1,41 @@
 import { Link } from "react-router-dom";
+import * as React from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ShieldCheck, FileCheck2, BookOpen, BellRing, Target } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ClipboardList, ShieldCheck, FileCheck2, Target, BarChart3 } from "lucide-react";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 
-type ActionItem = {
-  title: string;
-  description: string;
-  to: string;
-  icon: React.ComponentType<{ className?: string }>;
-  cta: string;
-};
-
-const ACTIONS: ActionItem[] = [
+const PILLARS = [
   {
-    title: "Vérifier une facture",
-    description: "Contrôle rapide : cohérence facture, Incoterm, HS code, taxes.",
-    to: "/app/invoice-check",
+    title: "Process & responsabilités",
+    description: "Cartographier qui fait quoi (vente, ADV, logistique, douane) et définir les points de contrôle.",
+    icon: ClipboardList,
+  },
+  {
+    title: "Factures & documents",
+    description: "Valider facture, packing list, transport, origine et cohérence incoterm.",
     icon: FileCheck2,
-    cta: "Ouvrir le contrôle",
   },
   {
-    title: "Veille réglementaire",
-    description: "Sanctions, douanes, contraintes pays et signaux utiles.",
-    to: "/app/centre-veille/reglementation",
-    icon: BellRing,
-    cta: "Voir la veille",
+    title: "Taxes, droits & DDP",
+    description: "Sécuriser la base douane, les taxes locales, et les frais annexes selon l'incoterm.",
+    icon: ShieldCheck,
   },
   {
-    title: "Guides pratiques",
-    description: "Incoterms, documents, TVA/taxes import, risques & bonnes pratiques.",
-    to: "/guides/incoterms-ddp",
-    icon: BookOpen,
-    cta: "Parcourir les guides",
+    title: "Pilotage & marges",
+    description: "Suivre les marges par pays/produit et détecter les pertes de rentabilité.",
+    icon: BarChart3,
   },
+];
+
+const QUICK_CHECKS = [
+  "Intitulé exact de l'activité, produits, HS code et destinations prioritaires.",
+  "Incoterm utilisé, transport et règles de facturation (HT, TVA, DDP).",
+  "Documents obligatoires et responsables de validation.",
+  "Marge cible, risques pays et exigences documentaires."
 ];
 
 export default function Compliance() {
@@ -44,6 +44,8 @@ export default function Compliance() {
     (labels?.territory_label?.trim() || "") ||
     (String(variables?.territory_code || "").trim() || "");
 
+  const [activityLabel, setActivityLabel] = React.useState("");
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -51,17 +53,17 @@ export default function Compliance() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl space-y-2">
               <p className="text-xs font-semibold tracking-[0.2em] text-muted-foreground">
-                Centre conformité
+                Audit interne
               </p>
               <h1 className="text-3xl font-semibold font-display text-foreground">
-                Conformité export, claire et actionnable.
+                Audit interne export, clair et actionnable.
               </h1>
               <p className="text-sm text-muted-foreground">
-                Vérifiez documents, risques pays, sanctions et obligations avant expédition.
+                Identifiez les failles de process, les risques douaniers et les pertes de marge avant le prochain envoi.
               </p>
 
               <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">Priorité : avant expédition</Badge>
+                <Badge variant="secondary">Priorité : avant devis / expédition</Badge>
                 <Badge variant="outline">
                   Destination : {destinationLabel ? destinationLabel : "à définir"}
                 </Badge>
@@ -70,23 +72,37 @@ export default function Compliance() {
 
             <div className="flex flex-wrap gap-2">
               <Button asChild className="gap-2">
-                <Link to="/app/control-tower">
+                <Link to="/contact?offer=audit-interne">
                   <Target className="h-4 w-4" />
-                  Paramétrer mon profil
+                  Demander un audit
                 </Link>
               </Button>
               <Button asChild variant="outline" className="gap-2">
-                <Link to="/app/simulator">
+                <Link to="/app/control-tower">
                   <ShieldCheck className="h-4 w-4" />
-                  Simuler un coût
+                  Ouvrir la tour de contrôle
                 </Link>
               </Button>
             </div>
           </div>
         </section>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          {ACTIONS.map((item) => {
+        <Card>
+          <CardHeader>
+            <CardTitle>Contexte de votre activité</CardTitle>
+            <CardDescription>Indiquez l'intitulé exact de l'activité pour adapter l'audit.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Input
+              value={activityLabel}
+              onChange={(e) => setActivityLabel(e.target.value)}
+              placeholder="Ex : Fabrication de dispositifs médicaux, cosémétiques, agro..."
+            />
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {PILLARS.map((item) => {
             const Icon = item.icon;
             return (
               <Card key={item.title} className="card-hover">
@@ -97,11 +113,6 @@ export default function Compliance() {
                   </CardTitle>
                   <CardDescription>{item.description}</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <Button asChild variant="secondary">
-                    <Link to={item.to}>{item.cta}</Link>
-                  </Button>
-                </CardContent>
               </Card>
             );
           })}
@@ -109,18 +120,53 @@ export default function Compliance() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Checklist avant envoi</CardTitle>
-            <CardDescription>Les points qui évitent 80% des blocages.</CardDescription>
+            <CardTitle className="text-base">Checklist audit (à valider)</CardTitle>
+            <CardDescription>Les points qui évitent 80% des blocages et surcoûts.</CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             <ul className="list-disc space-y-2 pl-5">
-              <li>HS code cohérent (4 à 6 chiffres minimum, idéalement 8/10 selon le flux)</li>
-              <li>Incoterm clarifié + cohérence facture / transport / assurances</li>
-              <li>Destination confirmée + restrictions (sanctions, licences, contrôles)</li>
-              <li>Documents : facture, packing list, origine (si applicable), document transport</li>
+              {QUICK_CHECKS.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
             </ul>
           </CardContent>
         </Card>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card className="card-hover">
+            <CardHeader>
+              <CardTitle className="text-base">Contrôle facture</CardTitle>
+              <CardDescription>Importer une facture ou saisir manuellement les lignes.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild variant="secondary">
+                <Link to="/app/invoice-check">Ouvrir l'analyse facture</Link>
+              </Button>
+            </CardContent>
+          </Card>
+          <Card className="card-hover">
+            <CardHeader>
+              <CardTitle className="text-base">Taxes & OM</CardTitle>
+              <CardDescription>Droits, TVA import, DDP et frais annexes.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild variant="secondary">
+                <Link to="/app/taxes-om">Calculer les taxes</Link>
+              </Button>
+            </CardContent>
+          </Card>
+          <Card className="card-hover">
+            <CardHeader>
+              <CardTitle className="text-base">Guides export</CardTitle>
+              <CardDescription>Incoterms, géopolitique et erreurs de process.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild variant="secondary">
+                <Link to="/guides">Voir les guides</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </AppLayout>
   );

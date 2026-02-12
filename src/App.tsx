@@ -38,7 +38,6 @@ import SetPassword from "@/pages/SetPassword";
 import ControlTower from "@/pages/ControlTower";
 import ExportSimulator from "@/pages/ExportSimulator";
 import Simulator from "@/pages/Simulator";
-import Products from "@/pages/Products";
 import Sales from "@/pages/Sales";
 import InvoiceDetail from "@/pages/InvoiceDetail";
 import Admin from "@/pages/Admin";
@@ -48,7 +47,7 @@ import NotFound from "@/pages/NotFound";
 import Solutions from "@/pages/Solutions";
 import Resources from "@/pages/Resources";
 import Contact from "@/pages/Contact";
-import Compliance from "@/pages/Compliance";
+import AuditInterne from "@/pages/Compliance";
 import InternalResources from "@/pages/InternalResources";
 import ExportToFrance from "@/pages/ExportToFrance";
 import BillingSuccess from "@/pages/BillingSuccess";
@@ -288,7 +287,7 @@ export default function App() {
                           path="/app/produits"
                           element={
                             <ProtectedRoute>
-                              <Products />
+                              <Navigate to="/app/taxes-om" replace />
                             </ProtectedRoute>
                           }
                         />
@@ -312,10 +311,19 @@ export default function App() {
                         />
 
                         <Route
+                          path="/app/audit-interne"
+                          element={
+                            <ProtectedRoute>
+                              <AuditInterne />
+                            </ProtectedRoute>
+                          }
+                        />
+
+                        <Route
                           path="/app/compliance"
                           element={
                             <ProtectedRoute>
-                              <Compliance />
+                              <Navigate to="/app/audit-interne" replace />
                             </ProtectedRoute>
                           }
                         />
@@ -382,9 +390,9 @@ export default function App() {
                         <Route path="/invoice-check" element={<Navigate to="/app/invoice-check" replace />} />
                         <Route path="/assistant" element={<Navigate to="/app/assistant" replace />} />
                         <Route path="/admin" element={<Navigate to="/app/admin" replace />} />
-                        <Route path="/app/centre-conformite" element={<Navigate to="/app/compliance" replace />} />
-                        <Route path="/app/controls" element={<Navigate to="/app/compliance" replace />} />
-                        <Route path="/app/sanctions" element={<Navigate to="/app/compliance" replace />} />
+                        <Route path="/app/centre-conformite" element={<Navigate to="/app/audit-interne" replace />} />
+                        <Route path="/app/controls" element={<Navigate to="/app/audit-interne" replace />} />
+                        <Route path="/app/sanctions" element={<Navigate to="/app/audit-interne" replace />} />
                         <Route path="/settings" element={<Navigate to="/app/settings" replace />} />
 
                         <Route path="*" element={<NotFound />} />

@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 const GUIDES = [
   {
     title: "Incoterm DDP",
-    description: "Couts, risques et points de vigilance avant exp?dition.",
+    description: "Coûts, risques et points de vigilance avant expédition.",
     tag: "Incoterms",
     action: "Lire",
     href: "/guides/incoterms-ddp",
@@ -132,11 +132,11 @@ export default function Resources() {
       link.click();
       URL.revokeObjectURL(url);
 
-      toast({ title: "Kit envoye", description: "Le kit export est telecharge." });
-    } catch (err: any) {
-      toast({ title: "Erreur", description: err?.message || "Impossible de generer le kit." });
-    } finally {
-      setLoading(false);
+        toast({ title: "Kit envoyé", description: "Le kit export est téléchargé." });
+      } catch (err: any) {
+        toast({ title: "Erreur", description: err?.message || "Impossible de générer le kit." });
+      } finally {
+        setLoading(false);
     }
   };
 
@@ -182,7 +182,7 @@ export default function Resources() {
                 <span>J'accepte de recevoir les emails MPL (RGPD).</span>
               </label>
               <Button onClick={requestKit} disabled={loading} className="w-full">
-                {loading ? "Generation..." : "Recevoir le kit"}
+                {loading ? "Génération..." : "Recevoir le kit"}
               </Button>
               <div className="text-xs text-muted-foreground">
                 Gratuit. Ideal pour demarrer rapidement.

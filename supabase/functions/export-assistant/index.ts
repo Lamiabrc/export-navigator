@@ -111,7 +111,7 @@ function stripAccents(s: string) {
 function detectLanguage(question: string): "fr" | "en" {
   const q = question.trim();
   if (!q) return "fr";
-  if (/[Ã Ã¢Ã§Ã©Ã¨ÃªÃ«Ã®Ã¯Ã´Ã¹Ã»Ã¼Ã¿Å“Ã¦]/i.test(q)) return "fr";
+  if (/[àâçéèêëîïôùûüÿœæ]/i.test(q)) return "fr";
 
   const text = stripAccents(q).toLowerCase();
   const padded = ` ${text.replace(/\s+/g, " ")} `;
@@ -129,7 +129,7 @@ function normalizeIncoterm(raw?: string | null) {
   const v = normStr(raw).toUpperCase().replace(/[^A-Z]/g, "");
   const ALL = new Set(["EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF"]);
   if (ALL.has(v)) return v;
-  // si lâ€™utilisateur lâ€™a mis dans la question
+  // si l’utilisateur l’a mis dans la question
   const q = normalizeIncotermFromText(raw ?? "");
   return q;
 }
@@ -431,20 +431,20 @@ async function storeToolRun(supabase: any, userId: string, input: unknown, outpu
   }
 }
 
-/** Fallback encyclopÃ©die minimal si aucun article KB ne matche */
+/** Fallback encyclopédie minimal si aucun article KB ne matche */
 function fallbackAnswer(lang: "fr" | "en") {
   return lang === "fr"
     ? {
         answer:
-          "Je peux tâ€™aider (encyclopÃ©die import/export). Pour une rÃ©ponse prÃ©cise, donne : **pays dâ€™import**, **produit (description + HS si possible)**, **valeur**, **Incoterm**, **mode de transport**.\n\n" +
-          "Exemple : â€œJe vends [produit] de [origine] vers [destination] en [mode] Incoterm [xxx], valeur [â‚¬]. Quels documents + obligations + taxes ?â€",
-        questions: ["Quel pays de destination ?", "Quel produit (matiÃ¨re + usage) ?", "Valeur + Incoterm + mode transport ?"],
-        actionsSuggested: ["Donner 4 infos : pays + produit + valeur + incoterm.", "Ajouter des articles FR/EN dans kb_articles pour enrichir lâ€™encyclopÃ©die."],
+          "Je peux t’aider (encyclopédie import/export). Pour une réponse précise, donne : **pays d’import**, **produit (description + HS si possible)**, **valeur**, **Incoterm**, **mode de transport**.\n\n" +
+          "Exemple : “Je vends [produit] de [origine] vers [destination] en [mode] Incoterm [xxx], valeur [€]. Quels documents + obligations + taxes ?”",
+        questions: ["Quel pays de destination ?", "Quel produit (matière + usage) ?", "Valeur + Incoterm + mode transport ?"],
+        actionsSuggested: ["Donner 4 infos : pays + produit + valeur + incoterm.", "Ajouter des articles FR/EN dans kb_articles pour enrichir l’encyclopédie."],
       }
     : {
         answer:
           "I can help (import/export encyclopedia). For a precise answer, share: **import country**, **product (description + HS if possible)**, **value**, **Incoterm**, **transport mode**.\n\n" +
-          "Example: â€œI sell [product] from [origin] to [destination] by [mode] under Incoterm [xxx], value [â‚¬]. What documents + obligations + taxes apply?â€",
+          "Example: “I sell [product] from [origin] to [destination] by [mode] under Incoterm [xxx], value [€]. What documents + obligations + taxes apply?”",
         questions: ["Destination country?", "Product (material + use)?", "Value + Incoterm + transport mode?"],
         actionsSuggested: ["Provide 4 inputs: country + product + value + incoterm.", "Add FR/EN articles to kb_articles to enrich the encyclopedia."],
       };
@@ -516,7 +516,7 @@ Deno.serve(async (req) => {
           .join("\n")
       : "";
 
-  // 1) KB search (encyclopÃ©die)
+  // 1) KB search (encyclopédie)
   const kb = await searchKB(supabase, question, language, matchCount);
   const best = kb.rows?.[0] ?? null;
 
@@ -540,7 +540,7 @@ Deno.serve(async (req) => {
   if (strictDocsOnly && !docContext) {
     const msg =
       language === "fr"
-        ? "Je ne trouve pas de correspondance dans les documents indexÃ©s. Reformule avec pays + produit (HS) + Incoterm, ou ajoute des documents."
+        ? "Je ne trouve pas de correspondance dans les documents indexés. Reformule avec pays + produit (HS) + Incoterm, ou ajoute des documents."
         : "I couldn't find a match in the indexed documents. Rephrase with country + product (HS) + Incoterm, or add more documents.";
     const resp: AssistantResponse = {
       ok: true,
@@ -553,7 +553,7 @@ Deno.serve(async (req) => {
       answer: enforceHumanStyle(msg, language),
       questions:
         language === "fr"
-          ? ["Quel pays de destination ?", "Quel produit (matiÃ¨re + usage) ?", "Valeur et Incoterm ?"]
+          ? ["Quel pays de destination ?", "Quel produit (matière + usage) ?", "Valeur et Incoterm ?"]
           : ["Destination country?", "Product (material + use)?", "Value and Incoterm?"],
       actionsSuggested:
         language === "fr"
@@ -591,7 +591,7 @@ Deno.serve(async (req) => {
     if (origin) detected.push(`${language === "fr" ? "Origine" : "Origin"}: ${origin}`);
     if (transport_mode) detected.push(`${language === "fr" ? "Transport" : "Transport"}: ${transport_mode}`);
     if (hsCandidates.length) detected.push(`HS: ${hsCandidates.slice(0, 3).join(", ")}`);
-    if (detected.length) sections[language === "fr" ? "DonnÃ©es dÃ©tectÃ©es" : "Detected inputs"] = detected;
+    if (detected.length) sections[language === "fr" ? "Données détectées" : "Detected inputs"] = detected;
 
     const resp: AssistantResponse = {
       ok: true,
@@ -619,16 +619,16 @@ Deno.serve(async (req) => {
   if (docContext) {
     const intro =
       language === "fr"
-        ? "Je nâ€™ai pas (encore) de fiche encyclopÃ©die parfaite, mais voici les extraits les plus pertinents + une checklist."
-        : "I donâ€™t (yet) have a perfect encyclopedia article, but here are the most relevant excerpts + a checklist.";
+        ? "Je n’ai pas (encore) de fiche encyclopédie parfaite, mais voici les extraits les plus pertinents + une checklist."
+        : "I don’t (yet) have a perfect encyclopedia article, but here are the most relevant excerpts + a checklist.";
 
     const sections: AssistantSections = {};
-    sections[language === "fr" ? "RÃ©ponse rapide" : "Quick answer"] = [
+    sections[language === "fr" ? "Réponse rapide" : "Quick answer"] = [
       intro,
       "",
       language === "fr"
-        ? "âœ… Checklist : pays export/import, produit (HS + description), valeur, incoterm, mode transport, qui dÃ©douane."
-        : "âœ… Checklist: export/import countries, product (HS + description), value, incoterm, transport mode, who clears customs.",
+        ? "✅ Checklist : pays export/import, produit (HS + description), valeur, incoterm, mode transport, qui dédouane."
+        : "✅ Checklist: export/import countries, product (HS + description), value, incoterm, transport mode, who clears customs.",
     ];
     sections[language === "fr" ? "Extraits documentaires" : "Document excerpts"] = toLines(docContext);
     if (rssLines.length) {
@@ -647,18 +647,18 @@ Deno.serve(async (req) => {
         (language === "fr"
           ? `Question traitée: ${question}\n\n`
           : `Question handled: ${question}\n\n`) +
-          sections[language === "fr" ? "RÃ©ponse rapide" : "Quick answer"].join("\n") +
+          sections[language === "fr" ? "Réponse rapide" : "Quick answer"].join("\n") +
           (rssPreview ? `\n\n${rssPreview}` : ""),
         language
       ),
       sections,
       questions:
         language === "fr"
-          ? ["Quel pays dâ€™import ?", "Quel produit (matiÃ¨re + usage) ?", "As-tu un HS code ?"]
+          ? ["Quel pays d’import ?", "Quel produit (matière + usage) ?", "As-tu un HS code ?"]
           : ["Which import country?", "What product (material + use)?", "Do you have an HS code?"],
       actionsSuggested:
         language === "fr"
-          ? ["Ajouter des articles FR/EN dans kb_articles (Incoterms, documents, taxes, conformitÃ©)."]
+          ? ["Ajouter des articles FR/EN dans kb_articles (Incoterms, documents, taxes, conformité)."]
           : ["Add FR/EN articles to kb_articles (Incoterms, documents, taxes, compliance)."],
       citations,
       debug: { kb_error: kb.error ?? null, docs_error: docs.error ?? null },

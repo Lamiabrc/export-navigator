@@ -10,33 +10,47 @@ export type GuideEntry = {
 export const GUIDES: GuideEntry[] = [
   {
     slug: "incoterms-ddp",
-    title: "Incoterm DDP: coûts, risques, points de vigilance",
+    title: "Incoterm DDP : coûts, risques, points de vigilance",
     intro:
-      "Le DDP engage le vendeur sur la totalité des coûts et risques à l'import. C'est le scénario le plus exigeant.",
+      "Le DDP engage le vendeur sur la totalité des coûts et risques à l'import. C'est le scénario le plus exigeant en process et trésorerie.",
     mistakes: [
-      "Sous-estimer les formalités locales d'import.",
-      "Oublier la TVA et les droits dans le prix de vente.",
-      "Ne pas vérifier la capacité à dédouaner localement.",
+      "Sous-estimer les formalités locales d'import et les taxes locales.",
+      "Oublier la TVA et les droits dans le prix de vente (base douane incorrecte).",
+      "Ne pas vérifier la capacité à dédouaner localement (EORI / représentant fiscal).",
     ],
     ctaLabel: "Simuler un DDP",
     incoterm: "DDP",
   },
   {
     slug: "incoterms-dap",
-    title: "Incoterm DAP: qui paie quoi ?",
-    intro: "Le DAP impose au vendeur d'amener la marchandise au point de livraison, mais l'import reste à la charge de l'acheteur.",
+    title: "Incoterm DAP : qui paie quoi ?",
+    intro:
+      "Le DAP impose au vendeur d'amener la marchandise au point de livraison, mais l'import reste à la charge de l'acheteur.",
     mistakes: [
       "Confondre DAP et DDP sur les obligations d'import.",
-      "Ne pas clarifier le lieu de livraison exact.",
-      "Oublier de chiffrer le pré-acheminement.",
+      "Ne pas clarifier le lieu exact de livraison (adresse / zone).",
+      "Oublier de chiffrer le transport principal et la manutention.",
     ],
     ctaLabel: "Analyser un DAP",
     incoterm: "DAP",
   },
   {
+    slug: "incoterms-choisir",
+    title: "Choisir le bon Incoterm : méthode simple",
+    intro:
+      "Le bon Incoterm dépend du niveau de contrôle souhaité, du transport et de la capacité à gérer les formalités douanières.",
+    mistakes: [
+      "Choisir un Incoterm pour 'faire plaisir' sans maîtriser les coûts.",
+      "Utiliser le même Incoterm pour tous les clients / destinations.",
+      "Ne pas documenter qui paie le transport, l'assurance et les taxes.",
+    ],
+    ctaLabel: "Comparer les scénarios",
+  },
+  {
     slug: "tva-import",
-    title: "TVA à l'import: anticiper l'impact cash",
-    intro: "La TVA import peut impacter fortement la trésorerie. Elle reste manuelle dans l'outil pour éviter toute erreur.",
+    title: "TVA à l'import : anticiper l'impact cash",
+    intro:
+      "La TVA import peut impacter fortement la trésorerie. Elle reste manuelle dans l'outil pour éviter toute erreur.",
     mistakes: [
       "Utiliser un taux standard sans vérifier le régime applicable.",
       "Oublier que la TVA s'applique sur valeur + droits + transport.",
@@ -46,8 +60,9 @@ export const GUIDES: GuideEntry[] = [
   },
   {
     slug: "droits-douane",
-    title: "Droits de douane: comment sécuriser vos estimations",
-    intro: "Les droits varient selon le code HS et les accords commerciaux. L'outil vous aide à structurer les hypothèses.",
+    title: "Droits de douane : comment sécuriser vos estimations",
+    intro:
+      "Les droits varient selon le code HS et les accords commerciaux. L'outil vous aide à structurer les hypothèses.",
     mistakes: [
       "Utiliser un code HS incomplet ou approximatif.",
       "Ignorer les accords préférentiels disponibles.",
@@ -57,8 +72,9 @@ export const GUIDES: GuideEntry[] = [
   },
   {
     slug: "documents-export",
-    title: "Documents export: checklist essentielle",
-    intro: "Facture, packing list, certificat d'origine, transport... La documentation conditionne la fluidité douanière.",
+    title: "Documents export : checklist essentielle",
+    intro:
+      "Facture, packing list, certificat d'origine, transport… La documentation conditionne la fluidité douanière.",
     mistakes: [
       "Envoyer des documents incohérents entre eux.",
       "Oublier les exigences spécifiques pays (certificats, licences).",
@@ -68,8 +84,9 @@ export const GUIDES: GuideEntry[] = [
   },
   {
     slug: "assurance-transport",
-    title: "Assurance transport: protéger la marge",
-    intro: "L'assurance représente souvent un faible coût, mais peut éviter une perte majeure en cas d'incident.",
+    title: "Assurance transport : protéger la marge",
+    intro:
+      "L'assurance représente souvent un faible coût, mais évite une perte majeure en cas d'incident.",
     mistakes: [
       "N'assurer que le fret principal en oubliant la valeur marchandise.",
       "Oublier de préciser les garanties (ICC A/B/C).",
@@ -79,8 +96,9 @@ export const GUIDES: GuideEntry[] = [
   },
   {
     slug: "strategie-prix-export",
-    title: "Stratégie de prix export: sécuriser la marge",
-    intro: "Un prix export solide intègre tous les coûts logistiques et douaniers. La simulation facilite la décision.",
+    title: "Stratégie de prix export : sécuriser la marge",
+    intro:
+      "Un prix export solide intègre tous les coûts logistiques et douaniers. La simulation facilite la décision.",
     mistakes: [
       "Omettre les coûts indirects dans le prix.",
       "Fixer une marge sans tenir compte du risque pays.",
@@ -89,61 +107,40 @@ export const GUIDES: GuideEntry[] = [
     ctaLabel: "Comparer les scénarios",
   },
   {
-    slug: "transport-maritime",
-    title: "Transport maritime: anticiper les surcoûts",
-    intro: "Le maritime reste économique, mais expose aux congestions et surcharges. Anticipez ces variations.",
+    slug: "geopolitique-export",
+    title: "Géopolitique : impacts sur l'export",
+    intro:
+      "Les tensions géopolitiques modifient les coûts, les délais et les risques (sanctions, contrôles, restrictions).",
     mistakes: [
-      "Oublier les surcharges saisonnières.",
-      "Sous-estimer les délais de transit.",
-      "Ne pas prévoir de marge sur le fret principal.",
+      "Négliger la veille sur les sanctions et les pays sensibles.",
+      "Sous-estimer l'impact sur les coûts logistiques et l'assurance.",
+      "Continuer à vendre sans plan B (transport, paiement, sourcing).",
     ],
-    ctaLabel: "Simuler un transport mer",
+    ctaLabel: "Activer la veille",
   },
   {
-    slug: "transport-aerien",
-    title: "Transport aérien: quand le temps prime",
-    intro: "L'aérien coûte plus cher mais réduit le cycle cash. Utile pour les urgences ou produits à forte valeur.",
+    slug: "erreurs-process-export",
+    title: "Erreurs de process export : ce qu'elles coûtent",
+    intro:
+      "Une erreur de process peut générer blocages douane, surcoûts et pertes de marge. L'audit interne permet de réduire ces risques.",
     mistakes: [
-      "Ne pas comparer l'impact marge vs délai.",
-      "Oublier les limitations de poids/volume.",
-      "Ignorer les contraintes douanières sur l'aérien.",
+      "Données produit incomplètes (HS, origine, poids/volume).",
+      "Incoterm non aligné avec la facture et le transport.",
+      "Absence de contrôle de cohérence avant expédition.",
     ],
-    ctaLabel: "Simuler un transport air",
+    ctaLabel: "Lancer un audit interne",
   },
   {
     slug: "export-control",
-    title: "Export control: anticiper les restrictions",
-    intro: "Sanctions, embargo, dual-use: certaines marchandises sont réglementées. La veille vous alerte.",
+    title: "Export control : anticiper les restrictions",
+    intro:
+      "Sanctions, embargo, dual-use : certaines marchandises sont réglementées. La veille vous alerte.",
     mistakes: [
       "Ne pas identifier les pays sensibles.",
       "Oublier de documenter la classification.",
       "Ignorer les restrictions de réexportation.",
     ],
     ctaLabel: "Vérifier vos risques",
-  },
-  {
-    slug: "incoterms-cif",
-    title: "Incoterm CIF: obligations et assurance",
-    intro: "Le CIF impose au vendeur de payer fret et assurance jusqu'au port d'arrivée, mais le risque transfert plus tôt.",
-    mistakes: [
-      "Confondre point de transfert de risque et lieu de livraison.",
-      "Ne pas vérifier les garanties d'assurance.",
-      "Oublier les coûts portuaires à destination.",
-    ],
-    ctaLabel: "Simuler un CIF",
-    incoterm: "CIF",
-  },
-  {
-    slug: "incoterms-fca",
-    title: "Incoterm FCA: clarifier le point de remise",
-    intro: "Le FCA est flexible, mais la responsabilité se joue au point de remise. Tout doit être défini.",
-    mistakes: [
-      "Ne pas préciser le lieu exact de remise.",
-      "Oublier les coûts de chargement selon le lieu.",
-      "Ignorer la coordination avec le transport principal.",
-    ],
-    ctaLabel: "Simuler un FCA",
-    incoterm: "FCA",
   },
 ];
 

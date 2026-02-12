@@ -1,4 +1,5 @@
-﻿import * as React from "react";
+import * as React from "react";
+import * as React from "react";
 import { Link } from "react-router-dom";
 
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -9,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 import {
   BadgePercent,
@@ -19,6 +22,8 @@ import {
   Info,
   ShieldCheck,
   Truck,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 import { computeLandedCost, type Incoterm, type TransportMode } from "@/lib/landedCost";
@@ -30,11 +35,13 @@ const INCOTERMS: Incoterm[] = ["EXW", "FCA", "FOB", "CFR", "CIF", "CPT", "CIP", 
 const MODES: TransportMode[] = ["road", "sea", "air", "rail"];
 const CURRENCIES = ["EUR", "USD", "GBP", "CHF", "CAD"];
 
+const INCLUDE_TRANSPORT_INCOTERMS: Incoterm[] = ["CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"];
+
 function normalizeText(value: string) {
   return value
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -56,6 +63,17 @@ function formatPct(value: number) {
   return `${Math.round(value * 10) / 10}%`;
 }
 
+type ProductLine = {
+  id: string;
+  description: string;
+  hs: string;
+  qty: number;
+  unitPrice: number;
+  packaging: number;
+};
+
+const uid = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
 export default function TaxesOm() {
   const { referenceData } = useReferenceData();
   const {
@@ -75,21 +93,27 @@ export default function TaxesOm() {
   const [destination, setDestination] = React.useState(destinationOptions[0] ?? "Suisse");
   const [customDestination, setCustomDestination] = React.useState("");
 
-  const [hsCode, setHsCode] = React.useState("");
   const [incoterm, setIncoterm] = React.useState<Incoterm>("DAP");
   const [mode, setMode] = React.useState<TransportMode>("road");
   const [currency, setCurrency] = React.useState("EUR");
-  const [goodsValue, setGoodsValue] = React.useState(10000);
-  const [quantity, setQuantity] = React.useState(1);
+
+  const [lines, setLines] = React.useState<ProductLine[]>([
+    { id: uid(), description: "", hs: "", qty: 1, unitPrice: 0, packaging: 0 },
+  ]);
 
   const [dutyImportRate, setDutyImportRate] = React.useState(0);
   const [dutyExportRate, setDutyExportRate] = React.useState(0);
   const [vatRate, setVatRate] = React.useState(0);
 
-  const [mainFreight, setMainFreight] = React.useState(0);
+  const [transportCost, setTransportCost] = React.useState(0);
+  const [handlingCost, setHandlingCost] = React.useState(0);
   const [insurancePercent, setInsurancePercent] = React.useState(0.3);
   const [brokerage, setBrokerage] = React.useState(0);
   const [misc, setMisc] = React.useState(0);
+
+  const [ddpMode, setDdpMode] = React.useState(false);
+  const [showDetails, setShowDetails] = React.useState(true);
+
   const resultsRef = React.useRef<HTMLDivElement | null>(null);
   const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -106,56 +130,78 @@ export default function TaxesOm() {
   const destinationInfo = React.useMemo(() => {
     const target = normalizeText(effectiveDestination || "");
     if (!target) return null;
-    return (
-      referenceData.destinations.find((d) => normalizeText(String(d.destination)) === target) || null
-    );
+    return referenceData.destinations.find((d) => normalizeText(String(d.destination)) === target) || null;
   }, [effectiveDestination, referenceData.destinations]);
 
   const incotermRule = React.useMemo(() => getIncotermRule(incoterm), [incoterm]);
   const insuranceRequired = incoterm === "CIF" || incoterm === "CIP";
+  const includeTransport = INCLUDE_TRANSPORT_INCOTERMS.includes(incoterm);
 
-  const baseDuty = React.useMemo(() => {
-    const insurance = (goodsValue * insurancePercent) / 100;
-    return goodsValue + mainFreight + insurance + brokerage + misc;
-  }, [goodsValue, insurancePercent, mainFreight, brokerage, misc]);
+  const updateLine = (id: string, patch: Partial<ProductLine>) => {
+    setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  };
 
-  const dutiesImport = React.useMemo(() => (baseDuty * dutyImportRate) / 100, [baseDuty, dutyImportRate]);
-  const dutiesExport = React.useMemo(() => (baseDuty * dutyExportRate) / 100, [baseDuty, dutyExportRate]);
+  const addLine = () => setLines((prev) => [...prev, { id: uid(), description: "", hs: "", qty: 1, unitPrice: 0, packaging: 0 }]);
+  const removeLine = (id: string) => setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.id !== id) : prev));
+
+  const merchandiseValue = React.useMemo(
+    () => lines.reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0),
+    [lines]
+  );
+  const packagingValue = React.useMemo(
+    () => lines.reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.packaging) || 0), 0),
+    [lines]
+  );
+
+  const goodsValue = merchandiseValue + packagingValue;
+  const insurance = (goodsValue * insurancePercent) / 100;
+  const transportBase = includeTransport ? transportCost + handlingCost : 0;
+
+  const baseDuty = goodsValue + transportBase + insurance + brokerage + misc;
+  const dutiesImport = (baseDuty * dutyImportRate) / 100;
+  const dutiesExport = (baseDuty * dutyExportRate) / 100;
   const dutyRateTotal = dutyImportRate + dutyExportRate;
 
   const landed = React.useMemo(() => {
     return computeLandedCost({
       goodsValue,
       currency,
-      quantity: quantity > 0 ? quantity : undefined,
+      quantity: undefined,
       destination: effectiveDestination || "",
       incoterm,
       mode,
       preCarriage: 0,
-      mainFreight,
+      mainFreight: includeTransport ? transportCost : 0,
       insuranceType: "percent",
       insuranceValue: insurancePercent,
-      packaging: 0,
+      packaging: packagingValue,
       brokerage,
-      misc,
+      misc: misc + handlingCost,
       dutyRate: dutyRateTotal,
       vatRate,
     });
-  }, [goodsValue, currency, quantity, effectiveDestination, incoterm, mode, mainFreight, insurancePercent, brokerage, misc, dutyRateTotal, vatRate]);
+  }, [goodsValue, currency, effectiveDestination, incoterm, mode, includeTransport, transportCost, insurancePercent, packagingValue, brokerage, misc, handlingCost, dutyRateTotal, vatRate]);
+
+  const hsList = React.useMemo(() => {
+    return lines.map((l) => String(l.hs || "").replace(/[^0-9]/g, "")).filter(Boolean);
+  }, [lines]);
 
   const omMatches = React.useMemo(() => {
     const destKey = normalizeText(effectiveDestination || "");
     if (!destKey) return [];
-    const hs = hsCode.replace(/[^0-9]/g, "");
     return (octroiMerRates || []).filter((r) => {
       const rDest = normalizeText(String(r.destination || ""));
       if (!rDest || rDest !== destKey) return false;
-      if (!hs) return true;
+      if (!hsList.length) return true;
       const rHs = String((r as any).hs_code || "").replace(/[^0-9]/g, "");
       if (!rHs) return true;
-      return hs.startsWith(rHs) || rHs.startsWith(hs);
+      return hsList.some((hs) => hs.startsWith(rHs) || rHs.startsWith(hs));
     });
-  }, [octroiMerRates, effectiveDestination, hsCode]);
+  }, [octroiMerRates, effectiveDestination, hsList]);
+
+  const effectiveDdp = incoterm === "DDP" || ddpMode;
+  const totalBeforeTaxes = goodsValue + transportBase + insurance + brokerage + misc;
+  const totalDdp = landed.total;
 
   return (
     <AppLayout>
@@ -165,7 +211,7 @@ export default function TaxesOm() {
             <p className="text-sm text-muted-foreground">Taxes & douanes</p>
             <h1 className="text-2xl font-bold">Taxes, TVA import et Octroi de mer</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Page simple pour calculer les droits, clarifier qui paie quoi et preparer un cout rendu fiable.
+              Renseignez destination, produits et HS pour estimer les taxes locales (DDP) et les droits de douane.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -180,7 +226,7 @@ export default function TaxesOm() {
 
         {ratesError ? (
           <Alert>
-            <AlertTitle>Donnees de reference indisponibles</AlertTitle>
+            <AlertTitle>Données de référence indisponibles</AlertTitle>
             <AlertDescription>{ratesError}</AlertDescription>
           </Alert>
         ) : null}
@@ -190,13 +236,11 @@ export default function TaxesOm() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calculator className="h-5 w-5 text-blue-600" />
-                Calcul rapide
+                Saisie & paramètres
               </CardTitle>
-              <CardDescription>
-                Renseigne destination, valeur et taux. Les montants se calculent automatiquement.
-              </CardDescription>
+              <CardDescription>Valeur marchandise = produits + conditionnement (HT).</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-5">
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Destination</div>
@@ -214,22 +258,6 @@ export default function TaxesOm() {
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">HS code</div>
-                  <Input value={hsCode} onChange={(e) => setHsCode(e.target.value)} placeholder="ex: 902110" />
-                </div>
-
-                {destination === "__other__" ? (
-                  <div className="space-y-1 md:col-span-2">
-                    <div className="text-xs text-muted-foreground">Destination (libre)</div>
-                    <Input
-                      value={customDestination}
-                      onChange={(e) => setCustomDestination(e.target.value)}
-                      placeholder="Pays ou zone"
-                    />
-                  </div>
-                ) : null}
 
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Incoterm</div>
@@ -264,26 +292,6 @@ export default function TaxesOm() {
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Valeur marchandise</div>
-                  <Input
-                    type="number"
-                    value={goodsValue}
-                    onChange={(e) => setGoodsValue(Number(e.target.value))}
-                    min={0}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Quantite</div>
-                  <Input
-                    type="number"
-                    value={quantity}
-                    onChange={(e) => setQuantity(Number(e.target.value))}
-                    min={0}
-                  />
-                </div>
-
-                <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Devise</div>
                   <Select value={currency} onValueChange={setCurrency}>
                     <SelectTrigger>
@@ -298,45 +306,116 @@ export default function TaxesOm() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {destination === "__other__" ? (
+                  <div className="space-y-1 md:col-span-2">
+                    <div className="text-xs text-muted-foreground">Destination (libre)</div>
+                    <Input
+                      value={customDestination}
+                      onChange={(e) => setCustomDestination(e.target.value)}
+                      placeholder="Pays ou zone"
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">Produits & HS</div>
+                  <Button variant="outline" onClick={addLine}>
+                    Ajouter un produit
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  {lines.map((line) => (
+                    <div
+                      key={line.id}
+                      className="grid gap-3 md:grid-cols-[2fr_0.8fr_0.6fr_0.8fr_0.8fr_auto] items-end"
+                    >
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Produit</div>
+                        <Input
+                          value={line.description}
+                          onChange={(e) => updateLine(line.id, { description: e.target.value })}
+                          placeholder="Produit / référence"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">HS code</div>
+                        <Input
+                          value={line.hs}
+                          onChange={(e) => updateLine(line.id, { hs: e.target.value })}
+                          placeholder="Ex : 6109"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Qté</div>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={line.qty}
+                          onChange={(e) => updateLine(line.id, { qty: Number(e.target.value) || 0 })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Prix unitaire</div>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={line.unitPrice}
+                          onChange={(e) => updateLine(line.id, { unitPrice: Number(e.target.value) || 0 })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Conditionnement</div>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={line.packaging}
+                          onChange={(e) => updateLine(line.id, { packaging: Number(e.target.value) || 0 })}
+                          placeholder="/ unité"
+                        />
+                      </div>
+                      <Button variant="ghost" onClick={() => removeLine(line.id)}>
+                        Retirer
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <div className="text-xs text-muted-foreground">Marchandise HT</div>
+                    <div className="text-lg font-semibold">{formatMoney(merchandiseValue, currency)}</div>
+                  </div>
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <div className="text-xs text-muted-foreground">Conditionnement</div>
+                    <div className="text-lg font-semibold">{formatMoney(packagingValue, currency)}</div>
+                  </div>
+                  <div className="rounded-lg border bg-muted/30 p-3">
+                    <div className="text-xs text-muted-foreground">Valeur marchandise</div>
+                    <div className="text-lg font-semibold">{formatMoney(goodsValue, currency)}</div>
+                  </div>
+                </div>
               </div>
 
               <Separator />
 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Droits import (%)</div>
-                  <Input
-                    type="number"
-                    value={dutyImportRate}
-                    onChange={(e) => setDutyImportRate(Number(e.target.value))}
-                    min={0}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Droits export (%)</div>
-                  <Input
-                    type="number"
-                    value={dutyExportRate}
-                    onChange={(e) => setDutyExportRate(Number(e.target.value))}
-                    min={0}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">TVA import (%)</div>
-                  <Input type="number" value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))} min={0} />
-                </div>
-                <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Transport principal</div>
-                  <Input type="number" value={mainFreight} onChange={(e) => setMainFreight(Number(e.target.value))} min={0} />
+                  <Input type="number" value={transportCost} onChange={(e) => setTransportCost(Number(e.target.value))} min={0} />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Manutention</div>
+                  <Input type="number" value={handlingCost} onChange={(e) => setHandlingCost(Number(e.target.value))} min={0} />
                 </div>
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Assurance (%)</div>
-                  <Input
-                    type="number"
-                    value={insurancePercent}
-                    onChange={(e) => setInsurancePercent(Number(e.target.value))}
-                    min={0}
-                  />
+                  <Input type="number" value={insurancePercent} onChange={(e) => setInsurancePercent(Number(e.target.value))} min={0} />
                 </div>
                 <div className="space-y-1">
                   <div className="text-xs text-muted-foreground">Frais dossier / transit</div>
@@ -348,15 +427,39 @@ export default function TaxesOm() {
                 </div>
               </div>
 
+              <Separator />
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Droits import (%)</div>
+                  <Input type="number" value={dutyImportRate} onChange={(e) => setDutyImportRate(Number(e.target.value))} min={0} />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">Droits export (%)</div>
+                  <Input type="number" value={dutyExportRate} onChange={(e) => setDutyExportRate(Number(e.target.value))} min={0} />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">TVA import (%)</div>
+                  <Input type="number" value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))} min={0} />
+                </div>
+                <div className="flex items-center gap-3">
+                  <Switch checked={ddpMode} onCheckedChange={setDdpMode} />
+                  <div>
+                    <div className="text-sm font-medium">Mode DDP</div>
+                    <div className="text-xs text-muted-foreground">Inclure taxes locales dans le prix rendu.</div>
+                  </div>
+                </div>
+              </div>
+
               {insuranceRequired ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  Assurance obligatoire pour {incoterm}. Renseigne un pourcentage minimum adapte au contrat.
+                  Assurance obligatoire pour {incoterm}. Renseignez un pourcentage minimum adapté au contrat.
                 </div>
               ) : null}
 
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={scrollToResults}>
-                  Voir le resultat
+                  Voir le résultat
                 </Button>
               </div>
             </CardContent>
@@ -366,9 +469,9 @@ export default function TaxesOm() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BadgePercent className="h-5 w-5 text-blue-600" />
-                Resultat
+                Résultat
               </CardTitle>
-              <CardDescription>Montants calcules a partir des taux et de la valeur marchandise.</CardDescription>
+              <CardDescription>Taxes locales, base douane et total rendu.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-2">
@@ -377,35 +480,45 @@ export default function TaxesOm() {
                   <div className="text-lg font-semibold">{formatMoney(baseDuty, currency)}</div>
                 </div>
                 <div className="rounded-xl border bg-white p-3">
-                  <div className="text-xs text-muted-foreground">Droits import</div>
-                  <div className="text-lg font-semibold">{formatMoney(dutiesImport, currency)}</div>
-                </div>
-                <div className="rounded-xl border bg-white p-3">
-                  <div className="text-xs text-muted-foreground">Droits export</div>
-                  <div className="text-lg font-semibold">{formatMoney(dutiesExport, currency)}</div>
+                  <div className="text-xs text-muted-foreground">Droits total</div>
+                  <div className="text-lg font-semibold">{formatMoney(dutiesImport + dutiesExport, currency)}</div>
                 </div>
                 <div className="rounded-xl border bg-white p-3">
                   <div className="text-xs text-muted-foreground">TVA import</div>
                   <div className="text-lg font-semibold">{formatMoney(landed.breakdown.vat, currency)}</div>
                 </div>
+                <div className="rounded-xl border bg-white p-3">
+                  <div className="text-xs text-muted-foreground">Total hors taxes</div>
+                  <div className="text-lg font-semibold">{formatMoney(totalBeforeTaxes, currency)}</div>
+                </div>
               </div>
 
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-blue-700">Total</div>
-                <div className="mt-1 text-2xl font-bold text-blue-900">{formatMoney(landed.total, currency)}</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-blue-700">
+                  {effectiveDdp ? "Total rendu DDP" : "Total si DDP"}
+                </div>
+                <div className="mt-1 text-2xl font-bold text-blue-900">{formatMoney(totalDdp, currency)}</div>
                 {landed.unitCost ? (
-                  <div className="mt-1 text-xs text-blue-700">Cout unitaire: {formatMoney(landed.unitCost, currency)}</div>
+                  <div className="mt-1 text-xs text-blue-700">Coût unitaire: {formatMoney(landed.unitCost, currency)}</div>
                 ) : null}
               </div>
 
-              <div className="space-y-2 text-xs text-muted-foreground">
-                {landed.warnings.map((w) => (
-                  <div key={w} className="flex items-start gap-2">
-                    <CircleAlert className="h-3.5 w-3.5 text-amber-500" />
-                    <span>{w}</span>
-                  </div>
-                ))}
-              </div>
+              <Collapsible open={showDetails} onOpenChange={setShowDetails}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between">
+                    Détails et alertes
+                    {showDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-3 space-y-2 text-xs text-muted-foreground">
+                  {landed.warnings.map((w) => (
+                    <div key={w} className="flex items-start gap-2">
+                      <CircleAlert className="h-3.5 w-3.5 text-amber-500" />
+                      <span>{w}</span>
+                    </div>
+                  ))}
+                </CollapsibleContent>
+              </Collapsible>
 
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary">Droits total: {formatPct(dutyRateTotal)}</Badge>
@@ -423,7 +536,7 @@ export default function TaxesOm() {
                 <ShieldCheck className="h-4 w-4 text-blue-600" />
                 Qui paie quoi
               </CardTitle>
-              <CardDescription>Lecture rapide des responsabilites Incoterm.</CardDescription>
+              <CardDescription>Lecture rapide des responsabilités Incoterm.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               {incotermRule ? (
@@ -447,7 +560,7 @@ export default function TaxesOm() {
                 </>
               ) : (
                 <div className="text-sm text-muted-foreground">
-                  Regles non configurees pour {incoterm}. Verifie la fiche Incoterm.
+                  Règles non configurées pour {incoterm}. Vérifiez la fiche Incoterm.
                 </div>
               )}
             </CardContent>
@@ -457,7 +570,7 @@ export default function TaxesOm() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Globe className="h-4 w-4 text-blue-600" />
-                Repere destination
+                Repère destination
               </CardTitle>
               <CardDescription>Informations pratiques (TVA, taxes possibles, docs).</CardDescription>
             </CardHeader>
@@ -469,7 +582,7 @@ export default function TaxesOm() {
                     <Badge variant="outline">{destinationInfo.zone}</Badge>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Regime TVA</span>
+                    <span>Régime TVA</span>
                     <span className="text-xs text-muted-foreground">{destinationInfo.tvaRegime}</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -489,7 +602,7 @@ export default function TaxesOm() {
                 </>
               ) : (
                 <div className="text-sm text-muted-foreground">
-                  Aucun repere pour cette destination. Utilise les liens officiels ci-dessous.
+                  Aucun repère pour cette destination. Utilisez les liens officiels ci-dessous.
                 </div>
               )}
             </CardContent>
@@ -520,7 +633,7 @@ export default function TaxesOm() {
                 </div>
               ) : (
                 <div className="text-sm text-muted-foreground">
-                  Aucun taux OM disponible. Ajoute une table OM ou un HS pour filtrer.
+                  Aucun taux OM disponible. Ajoutez une table OM ou un HS pour filtrer.
                 </div>
               )}
               <div className="text-xs text-muted-foreground">OM charges: {stats.om_total}</div>
@@ -533,16 +646,16 @@ export default function TaxesOm() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Info className="h-4 w-4 text-blue-600" />
-                Ce qu'il faut verifier
+                Ce qu'il faut vérifier
               </CardTitle>
               <CardDescription>Checklist rapide avant devis DAP/DDP.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <div>1. HS code exact (prefixe HS4/HS6 si besoin).</div>
-              <div>2. Base douane = valeur + transport + assurance + frais.</div>
+              <div>1. HS code exact (préfixe HS4/HS6 si besoin).</div>
+              <div>2. Base douane = marchandise + conditionnement + transport + assurance + frais.</div>
               <div>3. Droits import + TVA import selon incoterm.</div>
               <div>4. Documents obligatoires (facture, origine, packing list).</div>
-              <div>5. Si DDP: verifier capacite locale (douane + TVA).</div>
+              <div>5. Si DDP: vérifier capacité locale (douane + TVA).</div>
             </CardContent>
           </Card>
 
@@ -550,9 +663,9 @@ export default function TaxesOm() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <CircleCheck className="h-4 w-4 text-blue-600" />
-                Donnees de reference
+                Données de référence
               </CardTitle>
-              <CardDescription>Etat des tables taxes dans Supabase.</CardDescription>
+              <CardDescription>État des tables taxes dans Supabase.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
@@ -569,7 +682,7 @@ export default function TaxesOm() {
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <CircleAlert className="h-3.5 w-3.5" />
-                Si les tables sont vides, ajoute la migration ou charge un CSV dans Supabase.
+                Si les tables sont vides, ajoutez la migration ou chargez un CSV dans Supabase.
               </div>
             </CardContent>
           </Card>
@@ -578,7 +691,7 @@ export default function TaxesOm() {
         <Card className="border-muted">
           <CardHeader>
             <CardTitle className="text-base">Ressources utiles</CardTitle>
-            <CardDescription>Sources officielles pour verifier les taux.</CardDescription>
+            <CardDescription>Sources officielles pour vérifier les taux.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             <Badge variant="secondary">Access2Markets (UE)</Badge>

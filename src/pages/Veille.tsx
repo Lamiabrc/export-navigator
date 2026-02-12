@@ -12,6 +12,7 @@ import { getAlerts, postPrefs } from "@/lib/leadMagnetApi";
 import { startOnlineCheckout } from "@/lib/billing";
 import { formatDateTimeFr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { PanoramicControlTowerMap } from "@/components/controlTower/PanoramicControlTowerMap";
 import {
   BellRing,
   ShieldAlert,
@@ -240,6 +241,8 @@ export default function Veille() {
   const [categoryFilter, setCategoryFilter] = React.useState("ALL");
   const [sourceFilter, setSourceFilter] = React.useState("ALL");
 
+  const [mapCountry, setMapCountry] = React.useState<string | null>(null);
+
   const allCountries = React.useMemo(() => {
     try {
       const supported = (Intl as any).supportedValuesOf?.("region") as string[] | undefined;
@@ -261,6 +264,10 @@ export default function Veille() {
       return COUNTRIES_FALLBACK;
     }
   }, []);
+
+  const countryLabelMap = React.useMemo(() => {
+    return new Map(allCountries.map((c) => [c.iso2, c.label]));
+  }, [allCountries]);
 
   const topCountries = React.useMemo(() => {
     const m = new Map(allCountries.map((c) => [c.iso2, c]));
@@ -530,6 +537,19 @@ export default function Veille() {
   );
 
   const effectiveAlerts = emailOk ? alerts : demoAlerts;
+
+  const countryStats = React.useMemo(() => {
+    const stats: Record<string, { label?: string; alerts?: number; updates?: number; total?: number }> = {};
+    for (const alert of effectiveAlerts) {
+      const iso = String(alert.country || "").trim().toUpperCase();
+      if (!iso) continue;
+      const current = stats[iso] || { label: countryLabelMap.get(iso) || iso, alerts: 0, updates: 0, total: 0 };
+      current.alerts = (current.alerts || 0) + 1;
+      current.total = (current.total || 0) + 1;
+      stats[iso] = current;
+    }
+    return stats;
+  }, [effectiveAlerts, countryLabelMap]);
 
   return (
     <PublicLayout>
@@ -1078,7 +1098,29 @@ export default function Veille() {
               </CardContent>
             </Card>
 
-            {/* FLUX */}
+            {/* CARTE + FLUX */}
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+              <Card className="card-hover">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Globe2 className="h-5 w-5" />
+                    Carte export & veille
+                  </CardTitle>
+                  <CardDescription>La carte reste alignée au flux de veille (plus lisible, même en filtre).</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <PanoramicControlTowerMap
+                    selectedCountry={mapCountry}
+                    selectedLabel={mapCountry ? countryLabelMap.get(mapCountry) ?? mapCountry : "Tous"}
+                    stats={{ alerts: effectiveAlerts.length, updates: rssItems.length, total: effectiveAlerts.length }}
+                    countryStats={countryStats}
+                    onCountrySelect={(iso) => setMapCountry(iso)}
+                    onReset={() => setMapCountry(null)}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* FLUX */}
             <Card className="card-hover">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1188,6 +1230,7 @@ export default function Veille() {
                 )}
               </CardContent>
             </Card>
+            </div>
           </div>
         </section>
       </div>
