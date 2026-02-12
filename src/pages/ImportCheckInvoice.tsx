@@ -330,7 +330,7 @@ export default function Home() {
 
             <div className="mt-4 flex flex-wrap gap-3 md:mt-0">
               <Link
-                to="/import/check-invoice"
+                to="/app/invoice-check"
                 className="rounded-full bg-[#1E3A8A] px-6 py-3 text-xs font-semibold tracking-[0.2em] text-white transition hover:bg-[#162864]"
               >
                 {isEN ? "Check an invoice" : "Vérifier une facture"}

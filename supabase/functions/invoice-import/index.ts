@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5";
+import { extractInvoiceFromPdfBytes, type ParsedInvoice } from "../_shared/invoicePdf.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,6 +33,32 @@ type ParsedLine = {
   amountHT?: number | null;
   hsCode?: string | null;
   codeArticle?: string | null;
+};
+
+type ComparisonLine = {
+  index: number;
+  description?: string | null;
+  hs: string | null;
+  matchLevel: "exact" | "hs6" | "hs4" | "none";
+  reference?: {
+    hs_code: string;
+    destination: string;
+    category?: string | null;
+    om_rate?: number | null;
+    omr_rate?: number | null;
+    notes?: string | null;
+    source?: string | null;
+  } | null;
+  issues: string[];
+};
+
+type ComparisonSummary = {
+  inputDestination: string | null;
+  destination: string | null;
+  coverage: { total: number; withHs: number; matched: number; missingHs: number; unmatched: number };
+  lines: ComparisonLine[];
+  issues: string[];
+  warning?: string;
 };
 
 function normalizeHeader(value: string) {
@@ -172,6 +199,177 @@ function finalizeParsed(raw: any) {
   };
 }
 
+function normalizeHsCode(hs?: string | null) {
+  return String(hs || "").replace(/[^0-9]/g, "");
+}
+
+function buildHsCandidates(hs: string) {
+  const cleaned = normalizeHsCode(hs);
+  if (!cleaned) return [];
+  const out = new Set<string>();
+  out.add(cleaned);
+  if (cleaned.length >= 6) out.add(cleaned.slice(0, 6));
+  if (cleaned.length >= 4) out.add(cleaned.slice(0, 4));
+  return Array.from(out);
+}
+
+function isMissingTableError(err: any) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  return msg.includes("does not exist") || msg.includes("relation") || msg.includes("unknown table");
+}
+
+async function resolveDestinationCode(admin: any, input?: string | null) {
+  const raw = String(input || "").trim();
+  if (!raw) return { resolved: null as string | null };
+  const codeCandidate = raw.toUpperCase();
+
+  try {
+    const byCode = await admin
+      .from("export_destinations")
+      .select("code,name")
+      .ilike("code", codeCandidate)
+      .maybeSingle();
+    if (!byCode.error && byCode.data?.code) return { resolved: byCode.data.code as string };
+    if (byCode.error && isMissingTableError(byCode.error)) return { resolved: raw };
+
+    const byName = await admin
+      .from("export_destinations")
+      .select("code,name")
+      .ilike("name", raw)
+      .maybeSingle();
+    if (!byName.error && byName.data?.code) return { resolved: byName.data.code as string };
+    if (byName.error && isMissingTableError(byName.error)) return { resolved: raw };
+  } catch {
+    return { resolved: raw };
+  }
+
+  return { resolved: raw };
+}
+
+async function buildComparison(admin: any, parsed: ReturnType<typeof finalizeParsed>, destinationInput?: string | null) {
+  const inputDestination = String(destinationInput || "").trim() || null;
+  const { resolved: destination } = await resolveDestinationCode(admin, inputDestination);
+
+  const issues: string[] = [];
+  if (!destination) issues.push("Destination manquante (pays).");
+
+  const rawLines = Array.isArray(parsed?.lineItems) ? parsed.lineItems : [];
+  const lines: ComparisonLine[] = [];
+  let withHs = 0;
+  let matched = 0;
+  let missingHs = 0;
+  let unmatched = 0;
+
+  const hsCandidates = new Set<string>();
+  rawLines.forEach((line: any, idx: number) => {
+    const hsRaw = normalizeHsCode(line?.hsCode ?? line?.hs_code ?? line?.hs ?? "");
+    if (!hsRaw || hsRaw.length < 4) {
+      missingHs += 1;
+      lines.push({
+        index: idx,
+        description: line?.description ?? null,
+        hs: hsRaw || null,
+        matchLevel: "none",
+        reference: null,
+        issues: ["HS manquant ou incomplet"],
+      });
+      return;
+    }
+    withHs += 1;
+    buildHsCandidates(hsRaw).forEach((c) => hsCandidates.add(c));
+    lines.push({
+      index: idx,
+      description: line?.description ?? null,
+      hs: hsRaw,
+      matchLevel: "none",
+      reference: null,
+      issues: [],
+    });
+  });
+
+  let catalogRows: any[] = [];
+  if (destination && hsCandidates.size) {
+    const { data, error } = await admin
+      .from("export_hs_catalog")
+      .select("hs_code,destination,category,om_rate,omr_rate,notes,source")
+      .eq("destination", destination)
+      .in("hs_code", Array.from(hsCandidates));
+
+    if (error) {
+      if (isMissingTableError(error)) {
+        issues.push("Table export_hs_catalog manquante.");
+      } else {
+        issues.push("Echec lecture referentiel HS.");
+      }
+    } else {
+      catalogRows = data || [];
+    }
+  }
+
+  const byHs = new Map<string, any>();
+  for (const row of catalogRows) {
+    const key = normalizeHsCode(row?.hs_code);
+    if (key) byHs.set(key, row);
+  }
+
+  const coverage = { total: rawLines.length, withHs, matched: 0, missingHs, unmatched: 0 };
+
+  lines.forEach((line) => {
+    if (!line.hs || line.hs.length < 4) return;
+    const candidates = buildHsCandidates(line.hs);
+    let hit: any = null;
+    let level: ComparisonLine["matchLevel"] = "none";
+
+    if (candidates.length) {
+      if (byHs.has(candidates[0])) {
+        hit = byHs.get(candidates[0]);
+        level = "exact";
+      } else {
+        const hs6 = candidates.find((c) => c.length === 6 && byHs.has(c));
+        const hs4 = candidates.find((c) => c.length === 4 && byHs.has(c));
+        if (hs6) {
+          hit = byHs.get(hs6);
+          level = "hs6";
+        } else if (hs4) {
+          hit = byHs.get(hs4);
+          level = "hs4";
+        }
+      }
+    }
+
+    if (hit) {
+      matched += 1;
+      line.matchLevel = level;
+      line.reference = {
+        hs_code: String(hit.hs_code || ""),
+        destination: String(hit.destination || destination || ""),
+        category: hit.category ?? null,
+        om_rate: hit.om_rate ?? null,
+        omr_rate: hit.omr_rate ?? null,
+        notes: hit.notes ?? null,
+        source: hit.source ?? null,
+      };
+    } else {
+      unmatched += 1;
+      line.issues.push("Aucun match HS pour la destination");
+    }
+  });
+
+  coverage.matched = matched;
+  coverage.unmatched = unmatched;
+
+  if (!destination && withHs) issues.push("Impossible de comparer sans destination.");
+  if (withHs && !matched && destination) issues.push("Aucune reference HS trouvee pour cette destination.");
+
+  return {
+    inputDestination,
+    destination,
+    coverage,
+    lines,
+    issues,
+  } satisfies ComparisonSummary;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { ok: false, error: "Method not allowed" });
@@ -219,7 +417,7 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-  let parsed = body.parsed ?? null;
+  let parsed: ParsedInvoice | any = body.parsed ?? null;
 
   if (!parsed) {
     const { data: fileData, error: fileError } = await admin.storage.from(bucket).download(path);
@@ -229,40 +427,63 @@ Deno.serve(async (req) => {
 
     const bytes = new Uint8Array(await fileData.arrayBuffer());
     const lowerName = fileName.toLowerCase();
+    const isPdf = fileType.includes("pdf") || lowerName.endsWith(".pdf");
     const isCsv = fileType.includes("csv") || lowerName.endsWith(".csv");
 
-    const workbook = isCsv
-      ? XLSX.read(new TextDecoder().decode(bytes), { type: "string" })
-      : XLSX.read(bytes, { type: "array" });
+    if (isPdf) {
+      try {
+        parsed = await extractInvoiceFromPdfBytes(bytes);
+      } catch (err: any) {
+        return json(400, { ok: false, error: err?.message || "PDF parse failed" });
+      }
+    } else {
+      const workbook = isCsv
+        ? XLSX.read(new TextDecoder().decode(bytes), { type: "string" })
+        : XLSX.read(bytes, { type: "array" });
 
-    const sheetName = workbook.SheetNames[0];
-    if (!sheetName) {
-      return json(400, { ok: false, error: "No sheet found" });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return json(400, { ok: false, error: "No sheet found" });
+      }
+
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+
+      const { items, totalVat } = buildLineItems(rows);
+      const totalHT = sumLineItems(items);
+      const totalTVA = totalVat;
+      const totalTTC = totalTVA !== null ? totalHT + totalTVA : null;
+
+      parsed = {
+        invoiceNumber: null,
+        supplier: null,
+        date: null,
+        totalHT,
+        totalTVA,
+        totalTTC,
+        transitFees: null,
+        billingCountry: null,
+        vatExemptionMention: null,
+        lineItems: items,
+      };
     }
-
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-
-    const { items, totalVat } = buildLineItems(rows);
-    const totalHT = sumLineItems(items);
-    const totalTVA = totalVat;
-    const totalTTC = totalTVA !== null ? totalHT + totalTVA : null;
-
-    parsed = {
-      invoiceNumber: null,
-      supplier: null,
-      date: null,
-      totalHT,
-      totalTVA,
-      totalTTC,
-      transitFees: null,
-      billingCountry: null,
-      vatExemptionMention: null,
-      lineItems: items,
-    };
   }
 
   const finalParsed = finalizeParsed(parsed);
+  let comparison: ComparisonSummary | null = null;
+  try {
+    comparison = await buildComparison(admin, finalParsed, body?.destination || finalParsed?.billingCountry || null);
+  } catch (err: any) {
+    comparison = {
+      inputDestination: body?.destination || null,
+      destination: null,
+      coverage: { total: finalParsed?.lineItems?.length || 0, withHs: 0, matched: 0, missingHs: 0, unmatched: 0 },
+      lines: [],
+      issues: [err?.message || "Comparison failed"],
+    };
+  }
+
+  const storedParsed = { ...finalParsed, comparison };
 
   const { data: inserted, error: insertError } = await admin
     .from("invoice_uploads")
@@ -278,7 +499,7 @@ Deno.serve(async (req) => {
       total_ht: finalParsed.totalHT,
       total_tva: finalParsed.totalTVA,
       total_ttc: finalParsed.totalTTC,
-      parsed: finalParsed,
+      parsed: storedParsed,
     })
     .select("id")
     .single();
@@ -287,5 +508,5 @@ Deno.serve(async (req) => {
     return json(500, { ok: false, error: insertError.message });
   }
 
-  return json(200, { ok: true, id: inserted?.id, parsed: finalParsed });
+  return json(200, { ok: true, id: inserted?.id, parsed: finalParsed, comparison });
 });

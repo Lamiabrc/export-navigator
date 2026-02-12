@@ -538,7 +538,7 @@ export default function Analyse() {
 
           <div className="mt-6 flex flex-wrap gap-3">
             <Button onClick={() => goTo("/contact")}>Demander un audit export</Button>
-            <Button variant="outline" className="border-white/30 text-white hover:bg-white/10" onClick={() => goTo("/import/check-invoice")}>
+            <Button variant="outline" className="border-white/30 text-white hover:bg-white/10" onClick={() => goTo("/verifier-facture")}>
               Vérifier une facture import/export
             </Button>
             <Button variant="outline" className="border-white/30 text-white hover:bg-white/10" onClick={handleGoWatch}>
@@ -588,7 +588,7 @@ export default function Analyse() {
                   <div className="text-muted-foreground">Simulateur complet • Vérification facture • Suivi opérations</div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => goTo("/import/check-invoice")}>
+                  <Button variant="outline" onClick={() => goTo("/verifier-facture")}>
                     Tester la vérification
                   </Button>
                   <Button onClick={() => goPricing("tool")}>Voir TOOL</Button>
@@ -755,7 +755,7 @@ export default function Analyse() {
                   Voir la synthese
                 </Button>
 
-                <Button variant="outline" onClick={() => goTo("/import/check-invoice")}>
+                <Button variant="outline" onClick={() => goTo("/verifier-facture")}>
                   Vérifier une facture
                 </Button>
 
@@ -1036,7 +1036,7 @@ export default function Analyse() {
                 <Button variant="outline" onClick={handleShare}>
                   Partager un lien (TOOL+)
                 </Button>
-                <Button variant="outline" onClick={() => goTo("/import/check-invoice")}>
+                <Button variant="outline" onClick={() => goTo("/verifier-facture")}>
                   Vérifier une facture
                 </Button>
               </div>

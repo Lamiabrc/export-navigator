@@ -12,7 +12,6 @@ import { postPdf } from "@/lib/leadMagnetApi";
 import { useGlobalFilters } from "@/contexts/GlobalFiltersContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { extractInvoiceFromPdf, type ParsedInvoice } from "@/lib/pdf/extractInvoice";
 
 type Line = {
   description: string;
@@ -76,6 +75,12 @@ function formatMoney(value: number, currency: string) {
   }
 }
 
+function formatPct(value: number | null | undefined) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "n/a";
+  return `${n.toFixed(2)}%`;
+}
+
 export default function InvoiceCheck() {
   const { toast } = useToast();
   const { labels, variables } = useGlobalFilters();
@@ -103,6 +108,7 @@ export default function InvoiceCheck() {
   const [importError, setImportError] = React.useState<string | null>(null);
   const [importSummary, setImportSummary] = React.useState<any | null>(null);
   const [importFileName, setImportFileName] = React.useState<string | null>(null);
+  const [comparison, setComparison] = React.useState<any | null>(null);
 
   const prefillRef = React.useRef(false);
 
@@ -120,6 +126,14 @@ export default function InvoiceCheck() {
   const totalValue = lines.reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
   const score = calcScore(lines, incoterm, destination);
   const issues = getIssues(lines, incoterm, destination);
+
+  const renderMatch = (line: any) => {
+    if (!line) return "Aucun match";
+    if (line.matchLevel === "exact") return `HS ${line.reference?.hs_code || line.hs} (exact)`;
+    if (line.matchLevel === "hs6") return `HS ${line.reference?.hs_code || line.hs} (HS6)`;
+    if (line.matchLevel === "hs4") return `HS ${line.reference?.hs_code || line.hs} (HS4)`;
+    return "Aucun match";
+  };
 
   const updateLine = (idx: number, patch: Partial<Line>) => {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
@@ -175,16 +189,10 @@ export default function InvoiceCheck() {
     setImporting(true);
     setImportError(null);
     setImportSummary(null);
+    setComparison(null);
     setImportFileName(file.name);
 
-    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-    let parsed: ParsedInvoice | null = null;
-
     try {
-      if (isPdf) {
-        parsed = await extractInvoiceFromPdf(file);
-      }
-
       const safeName = file.name.replace(/[^\w.-]+/g, "_");
       const path = `${user.id}/${Date.now()}-${safeName}`;
       const bucket = "invoice_files";
@@ -205,31 +213,19 @@ export default function InvoiceCheck() {
         incoterm,
         currency,
         activityLabel,
-        parsed: parsed
-          ? {
-              invoiceNumber: parsed.invoiceNumber,
-              supplier: parsed.supplier,
-              date: parsed.date,
-              totalHT: parsed.totalHT,
-              totalTVA: parsed.totalTVA,
-              totalTTC: parsed.totalTTC,
-              transitFees: parsed.transitFees,
-              billingCountry: parsed.billingCountry,
-              vatExemptionMention: parsed.vatExemptionMention,
-              lineItems: parsed.lineItems,
-            }
-          : undefined,
       };
 
       const { data, error } = await supabase.functions.invoke("invoice-import", { body: payload });
       if (error) throw error;
 
-      const normalized = normalizeSummary(data?.parsed || payload.parsed);
+      const normalized = normalizeSummary(data?.parsed);
       if (normalized) {
         setImportSummary(normalized);
         setLines(mapLinesFromParsed(normalized));
         if (!destination && normalized.billingCountry) setDestination(normalized.billingCountry);
       }
+      const cmp = data?.comparison || data?.parsed?.comparison;
+      if (cmp) setComparison(cmp);
 
       toast({ title: "Facture importée", description: "Le fichier est stocké et la synthèse est disponible." });
       setTimeout(scrollToResults, 120);
@@ -547,6 +543,62 @@ export default function InvoiceCheck() {
                     <Badge variant="outline">Transit: {formatMoney(Number(importSummary.transitFees || 0), currency)}</Badge>
                   ) : null}
                 </div>
+              </div>
+            ) : null}
+
+            {comparison ? (
+              <div className="rounded-xl border border-border bg-white p-4 space-y-3">
+                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Verification HS / pays</div>
+                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <Badge variant="outline">Destination: {comparison.destination || comparison.inputDestination || "?"}</Badge>
+                  <Badge variant="outline">
+                    Couverture: {comparison.coverage?.matched ?? 0}/{comparison.coverage?.withHs ?? 0}
+                  </Badge>
+                  <Badge variant="outline">Lignes: {comparison.coverage?.total ?? 0}</Badge>
+                </div>
+
+                {comparison.issues?.length ? (
+                  <div className="space-y-1 text-xs text-rose-700">
+                    {comparison.issues.map((issue: string, idx: number) => (
+                      <div key={`${issue}-${idx}`} className="flex gap-2">
+                        <span className="text-rose-500">-</span>
+                        <span>{issue}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {comparison.lines?.length ? (
+                  <div className="space-y-2 text-sm text-slate-600">
+                    {comparison.lines.slice(0, 8).map((line: any, idx: number) => (
+                      <div key={line.index ?? idx} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="font-medium text-slate-900">
+                            {line.description || `Ligne ${typeof line.index === "number" ? line.index + 1 : idx + 1}`}
+                          </div>
+                          <div className="text-xs text-muted-foreground">HS: {line.hs || "n/a"}</div>
+                        </div>
+                        <div className="text-xs text-muted-foreground">{renderMatch(line)}</div>
+                        {line.reference ? (
+                          <div className="mt-1 text-xs text-slate-500">
+                            OM {formatPct(line.reference.om_rate)} / OMR {formatPct(line.reference.omr_rate)}
+                            {line.reference.category ? ` - ${line.reference.category}` : ""}
+                          </div>
+                        ) : null}
+                        {line.issues?.length ? (
+                          <div className="mt-1 text-xs text-rose-700">
+                            {line.issues.map((issue: string, i2: number) => (
+                              <div key={`${line.index ?? idx}-${i2}`} className="flex gap-2">
+                                <span className="text-rose-500">-</span>
+                                <span>{issue}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
