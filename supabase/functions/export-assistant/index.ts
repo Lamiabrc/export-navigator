@@ -401,14 +401,17 @@ function isGenericKbHit(hit: KBHit | null) {
   );
 }
 
-async function requireUser(req: Request, supabase: any) {
+async function resolveUser(req: Request, supabase: any) {
   const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
   const token = match?.[1]?.trim();
-  if (!token) return { user: null as AuthUser | null, error: "missing_auth_bearer" };
+  if (!token) return { user: null as AuthUser | null, error: null as string | null };
 
   const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user?.id) return { user: null as AuthUser | null, error: "invalid_auth" };
+  if (error || !data?.user?.id) {
+    console.warn("[export-assistant] invalid bearer token, continuing as anonymous user");
+    return { user: null as AuthUser | null, error: null as string | null };
+  }
   return {
     user: { id: String(data.user.id), email: data.user.email ?? null } as AuthUser,
     error: null as string | null,
@@ -457,8 +460,8 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-  const auth = await requireUser(req, supabase);
-  if (auth.error || !auth.user) {
+  const auth = await resolveUser(req, supabase);
+  if (auth.error) {
     return json(401, {
       ok: false,
       error: auth.error || "invalid_auth",
@@ -561,7 +564,7 @@ Deno.serve(async (req) => {
       privacy_notice: privacyNotice,
       retention_days: 90,
     };
-    await storeToolRun(supabase, auth.user.id, body, resp);
+    if (auth.user?.id) await storeToolRun(supabase, auth.user.id, body, resp);
     return json(200, resp);
   }
 
@@ -608,7 +611,7 @@ Deno.serve(async (req) => {
       privacy_notice: privacyNotice,
       retention_days: 90,
     };
-    await storeToolRun(supabase, auth.user.id, body, resp);
+    if (auth.user?.id) await storeToolRun(supabase, auth.user.id, body, resp);
     return json(200, resp);
   }
 
@@ -662,7 +665,7 @@ Deno.serve(async (req) => {
       privacy_notice: privacyNotice,
       retention_days: 90,
     };
-    await storeToolRun(supabase, auth.user.id, body, resp);
+    if (auth.user?.id) await storeToolRun(supabase, auth.user.id, body, resp);
     return json(200, resp);
   }
 
@@ -689,6 +692,6 @@ Deno.serve(async (req) => {
     privacy_notice: privacyNotice,
     retention_days: 90,
   };
-  await storeToolRun(supabase, auth.user.id, body, resp);
+  if (auth.user?.id) await storeToolRun(supabase, auth.user.id, body, resp);
   return json(200, resp);
 });
