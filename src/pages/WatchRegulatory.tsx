@@ -34,6 +34,15 @@ type Item = {
   feed_id: string | null;
 };
 
+type RssApiItem = {
+  title?: string;
+  summary?: string;
+  link?: string;
+  publishedAt?: string;
+  category?: string;
+  zone?: string;
+};
+
 const CATEGORIES = [
   { value: "sanctions", label: "Sanctions" },
   { value: "taxes", label: "Taxes" },
@@ -49,6 +58,9 @@ export default function WatchRegulatory() {
   const [search, setSearch] = React.useState("");
   const [category, setCategory] = React.useState<string>("all");
   const [zone, setZone] = React.useState<string>("all");
+  const [watchCountry, setWatchCountry] = React.useState<string>("all");
+  const [launchingWatch, setLaunchingWatch] = React.useState(false);
+  const [watchItems, setWatchItems] = React.useState<Item[]>([]);
 
   const feedsQuery = useQuery({
     queryKey: ["reg-feeds"],
@@ -99,6 +111,43 @@ export default function WatchRegulatory() {
     });
   }, [items, category, zone, search]);
 
+  const availableCountries = React.useMemo(() => {
+    const fromItems = items.map((it) => (it.zone || "").toUpperCase()).filter(Boolean);
+    const fromFeeds = feeds.map((f) => (f.zone || "").toUpperCase()).filter(Boolean);
+    return Array.from(new Set([...fromItems, ...fromFeeds, ...ZONES])).sort();
+  }, [items, feeds]);
+
+  const launchWatch = async () => {
+    setLaunchingWatch(true);
+    try {
+      const zoneParam = watchCountry !== "all" ? `&zone=${encodeURIComponent(watchCountry)}` : "";
+      const resp = await fetch(`/api/rss?limit=30${zoneParam}`);
+      const payload = await resp.json().catch(() => ({} as { items?: RssApiItem[] }));
+      const rssItems = Array.isArray(payload?.items) ? payload.items : [];
+
+      const normalized: Item[] = rssItems.map((it, idx) => ({
+        id: `rss_${idx}_${it.link || "x"}`,
+        title: it.title || "Alerte",
+        summary: it.summary || null,
+        url: it.link || null,
+        published_at: it.publishedAt || null,
+        category: it.category || null,
+        zone: it.zone || watchCountry || null,
+        severity: null,
+        feed_id: null,
+      }));
+
+      setWatchItems(normalized);
+      setZone(watchCountry);
+    } catch {
+      setWatchItems([]);
+    } finally {
+      setLaunchingWatch(false);
+    }
+  };
+
+  const displayItems = watchItems.length ? watchItems : filtered;
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -110,7 +159,23 @@ export default function WatchRegulatory() {
               Flux et alertes issus de sources officielles. Filtres par categorie, zone et recherche.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Select value={watchCountry} onValueChange={setWatchCountry}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Choisir un pays" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tous les pays</SelectItem>
+                {availableCountries.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" onClick={launchWatch} disabled={launchingWatch}>
+              {launchingWatch ? "Chargement..." : "Lancer ma veille"}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -178,12 +243,12 @@ export default function WatchRegulatory() {
                 <Badge variant="outline">{filtered.length}</Badge>
               </CardHeader>
               <CardContent className="space-y-3">
-                {itemsQuery.isLoading ? (
-                  <div className="text-sm text-muted-foreground">Chargement...</div>
-                ) : filtered.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">Aucune alerte correspondant aux filtres.</div>
-                ) : (
-                  filtered.slice(0, 30).map((it) => (
+                  {itemsQuery.isLoading ? (
+                    <div className="text-sm text-muted-foreground">Chargement...</div>
+                  ) : displayItems.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Aucune alerte correspondant aux filtres.</div>
+                  ) : (
+                    displayItems.slice(0, 30).map((it) => (
                     <div key={it.id} className="rounded-lg border p-3 bg-card/50 space-y-1">
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1">
