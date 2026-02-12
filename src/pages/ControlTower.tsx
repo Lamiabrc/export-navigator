@@ -1221,6 +1221,32 @@ export default function ControlTower() {
       .sort((a, b) => b.sales - a.sales);
   }, [clientRows]);
 
+  const productAgg = React.useMemo(() => {
+    const map = new Map<string, Agg & { label: string | null }>();
+    filteredRows.forEach((row) => {
+      const existing = map.get(row.hs);
+      if (existing) {
+        existing.revenue += row.totalSales;
+        existing.costs += row.totalCosts;
+        existing.margin += row.margin;
+        existing.quantity += row.quantity;
+        existing.lines += 1;
+      } else {
+        map.set(row.hs, {
+          code: row.hs,
+          name: row.hs,
+          label: row.productLabel,
+          revenue: row.totalSales,
+          costs: row.totalCosts,
+          margin: row.margin,
+          quantity: row.quantity,
+          lines: 1,
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+  }, [filteredRows]);
+
   const improvementSuggestions = React.useMemo(() => {
     const suggestions: string[] = [];
     if (!rowsAll.length) {
@@ -1323,32 +1349,6 @@ export default function ControlTower() {
     const upper = selectedWatchCountry.toUpperCase();
     return COUNTRY_PROFILE[upper] ?? { currency: selectedCurrency, region: "International", note: "Donnees locales." };
   }, [selectedWatchCountry, selectedCurrency]);
-
-  const productAgg = React.useMemo(() => {
-    const map = new Map<string, Agg & { label: string | null }>();
-    filteredRows.forEach((row) => {
-      const existing = map.get(row.hs);
-      if (existing) {
-        existing.revenue += row.totalSales;
-        existing.costs += row.totalCosts;
-        existing.margin += row.margin;
-        existing.quantity += row.quantity;
-        existing.lines += 1;
-      } else {
-        map.set(row.hs, {
-          code: row.hs,
-          name: row.hs,
-          label: row.productLabel,
-          revenue: row.totalSales,
-          costs: row.totalCosts,
-          margin: row.margin,
-          quantity: row.quantity,
-          lines: 1,
-        });
-      }
-    });
-    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
-  }, [filteredRows]);
 
   const byDestinationProduct = React.useMemo(() => {
     const map = new Map<string, Agg & { hs: string; productLabel: string | null }>();
