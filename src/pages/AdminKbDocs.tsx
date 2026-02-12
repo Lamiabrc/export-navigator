@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -71,25 +70,11 @@ export default function AdminKbDocs() {
       const docTitle = title.trim() || file.name.replace(/\.pdf$/i, "");
       const objectPath = `${user?.id || "admin"}/${Date.now()}-${file.name}`;
 
-      let bucket = "kb_admin";
-      let storageError: any = null;
-      const primaryUpload = await supabase.storage.from(bucket).upload(objectPath, file, {
+      const { error: storageError } = await supabase.storage.from("kb_admin").upload(objectPath, file, {
         upsert: false,
         contentType: file.type || "application/pdf",
       });
-      storageError = primaryUpload.error;
-
-      if (storageError) {
-        const fallbackBucket = "kb_docs";
-        const fallbackUpload = await supabase.storage.from(fallbackBucket).upload(objectPath, file, {
-          upsert: false,
-          contentType: file.type || "application/pdf",
-        });
-        if (fallbackUpload.error) {
-          throw fallbackUpload.error;
-        }
-        bucket = fallbackBucket;
-      }
+      if (storageError) throw storageError;
 
       const { data: inserted, error: insertError } = await supabase
         .from("kb_documents")
@@ -99,7 +84,7 @@ export default function AdminKbDocs() {
           file_name: file.name,
           mime_type: file.type || "application/pdf",
           size_bytes: file.size,
-          storage_bucket: bucket,
+          storage_bucket: "kb_admin",
           storage_path: objectPath,
           status: "uploaded",
           enabled: true,
@@ -163,15 +148,7 @@ export default function AdminKbDocs() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="kb-lang">Langue</Label>
-              <Select value={language} onValueChange={setLanguage}>
-                <SelectTrigger id="kb-lang">
-                  <SelectValue placeholder="Langue" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fr">Français (fr)</SelectItem>
-                  <SelectItem value="en">English (en)</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input id="kb-lang" value={language} onChange={(e) => setLanguage(e.target.value)} placeholder="fr" />
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="kb-file">PDF</Label>

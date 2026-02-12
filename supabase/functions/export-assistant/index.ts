@@ -383,24 +383,6 @@ function enforceHumanStyle(answer: string, language: "fr" | "en") {
   return hasThanks ? withGreeting : `${withGreeting}\n\n${language === "fr" ? "Merci." : "Thank you."}`;
 }
 
-function hasQuestionOverlap(question: string, text: string) {
-  const q = pickKeywords(question, 8);
-  if (!q.length) return false;
-  const hay = stripAccents(String(text || "").toLowerCase());
-  return q.some((token) => hay.includes(token));
-}
-
-function isGenericKbHit(hit: KBHit | null) {
-  if (!hit) return true;
-  const t = stripAccents(`${hit.title || ""} ${hit.summary || ""} ${hit.body_md || ""}`.toLowerCase());
-  return (
-    t.includes("encycloped") ||
-    t.includes("pour une reponse precise") ||
-    t.includes("for a precise answer") ||
-    t.includes("donne : **pays")
-  );
-}
-
 async function requireUser(req: Request, supabase: any) {
   const authHeader = req.headers.get("authorization") || req.headers.get("Authorization") || "";
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
@@ -641,10 +623,7 @@ Deno.serve(async (req) => {
       incoterm,
       transport_mode,
       answer: enforceHumanStyle(
-        (language === "fr"
-          ? `Question traitée: ${question}\n\n`
-          : `Question handled: ${question}\n\n`) +
-          sections[language === "fr" ? "RÃ©ponse rapide" : "Quick answer"].join("\n") +
+        sections[language === "fr" ? "RÃ©ponse rapide" : "Quick answer"].join("\n") +
           (rssPreview ? `\n\n${rssPreview}` : ""),
         language
       ),
