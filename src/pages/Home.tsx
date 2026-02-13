@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import heroExportVideo from "@/assets/hero-export.mp4";
 import {
   ArrowRight,
   CheckCircle2,
@@ -60,10 +61,10 @@ export default function Home() {
       <main className="mx-auto max-w-6xl space-y-16 px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
         <section className="grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-6">
-            <Badge variant="secondary" className="w-fit rounded-full px-3 py-1 text-xs">Tour de contr?le export</Badge>
+            <Badge variant="secondary" className="w-fit rounded-full px-3 py-1 text-xs">Tour de contrôle export</Badge>
             <div className="space-y-4">
-              <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">Tour de contr?le export ? Go/No-Go en 60 secondes.</h1>
-              <p className="max-w-2xl text-lg text-slate-600">Un cockpit pro pour s?curiser vos ventes ? l?international: Go/No-Go pays, paiement, Incoterms,
+              <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">Tour de contrôle export ? Go/No-Go en 60 secondes.</h1>
+              <p className="max-w-2xl text-lg text-slate-600">Un cockpit pro pour sécuriser vos ventes à l’international : Go/No-Go pays, paiement, Incoterms,
                 documents et prix export (landed cost).</p>
             </div>
             <ul className="space-y-2 text-slate-700">
@@ -81,17 +82,17 @@ export default function Home() {
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="sm:min-w-60">
                 <a href="#hero-video">
-                  Voir une d?mo / G?n?rer un exemple de rapport <ArrowRight className="ml-2 size-4" />
+                  Voir une démo / Générer un exemple de rapport <ArrowRight className="ml-2 size-4" />
                 </a>
               </Button>
               <Button asChild variant="outline" size="lg" className="sm:min-w-52">
-                <Link to="/login?next=%2Fapp%2Fcontrol-tower">Acc?der au tour de contr?le</Link>
+                <Link to="/login?next=%2Fapp%2Fcontrol-tower">Accéder au tour de contrôle</Link>
               </Button>
               <Button asChild variant="ghost" size="lg" className="sm:min-w-52">
                 <Link to="/contact">Nous contacter pour devis</Link>
               </Button>
             </div>
-            <p className="text-sm text-slate-500">Tour de contr?le accessible uniquement apr?s connexion. Donn?es confidentielles ? H?bergement UE ? RGPD.</p>
+            <p className="text-sm text-slate-500">Tour de contrôle accessible uniquement après connexion. Données confidentielles · Hébergement UE · RGPD.</p>
           </div>
 
           <Card className="border-slate-200 bg-gradient-to-br from-slate-50 to-white shadow-sm">
@@ -117,7 +118,7 @@ export default function Home() {
                 </div>
               </div>
               <div className="rounded-lg border bg-white p-3">
-                <p className="font-semibold text-slate-900">Action 1 : V?rifier Incoterm + assurance</p>
+                <p className="font-semibold text-slate-900">Action 1 : Vérifier Incoterm + assurance</p>
               </div>
               <p className="text-sm text-slate-600">
                 Rapport orienté décision: risques TVA/douane, actions prioritaires, livrables et suivi d’exécution.
@@ -214,9 +215,8 @@ export default function Home() {
           <p className="max-w-3xl text-slate-600">
             Démonstration rapide de la tour de contrôle, de l’analyse facture et du calcul de coûts export.
           </p>
-          <video className="w-full rounded-xl border border-slate-200" controls preload="metadata" poster="/videos/hero-export.jpg">
-            <source src="/videos/hero-export.mp4" type="video/mp4" />
-            <source src="/videos/hero-export.webm" type="video/webm" />
+          <video className="w-full rounded-xl border border-slate-200" controls preload="metadata">
+            <source src={heroExportVideo} type="video/mp4" />
             Votre navigateur ne supporte pas la lecture vidéo.
           </video>
         </section>
