@@ -1143,7 +1143,6 @@ export default function ControlTower() {
     } else {
       setCurrencyFilter("ALL");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currencyList.join("|")]);
 
   const filteredRows = React.useMemo(() => {
@@ -1538,7 +1537,6 @@ export default function ControlTower() {
 
   React.useEffect(() => {
     void loadRssForCountry(selectedWatchCountry);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWatchCountry]);
 
   React.useEffect(() => {
