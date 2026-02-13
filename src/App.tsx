@@ -31,6 +31,7 @@ import WatchRegulatory from "@/pages/WatchRegulatory";
 import WatchCommercial from "@/pages/WatchCommercial";
 import InvoiceCheck from "@/pages/InvoiceCheck";
 import Newsletter from "@/pages/Newsletter";
+import HeroVideoPreview from "@/pages/HeroVideoPreview";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -121,6 +122,7 @@ export default function App() {
                         <Route path="/billing/success" element={<BillingSuccess />} />
                         <Route path="/export-to-france" element={<ExportToFrance />} />
                         <Route path="/newsletter" element={<Newsletter />} />
+                        <Route path="/debug/hero-video" element={<HeroVideoPreview />} />
 
                         {/* ✅ outil gratuit (public) */}
                         <Route path="/export/costing" element={<PublicAppGate mode="costing" />} />

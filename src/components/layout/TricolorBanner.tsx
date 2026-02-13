@@ -16,21 +16,20 @@ export function TricolorBanner({
   return (
     <section
       className={cn(
-        "relative overflow-hidden rounded-3xl border border-blue-200/70 bg-gradient-to-r from-blue-700 via-blue-950 to-red-600 text-white shadow-sm",
-        compact ? "px-5 py-4 md:px-7 md:py-5" : "p-7 md:p-10",
+        "relative overflow-hidden rounded-full border border-blue-200/70 bg-gradient-to-r from-blue-700 via-blue-950 to-red-600 text-white shadow-sm",
+        compact ? "px-4 py-2 md:px-6 md:py-2.5" : "p-7 md:p-10",
         className
       )}
     >
       <div className="pointer-events-none absolute inset-0 opacity-25 [background-image:radial-gradient(circle_at_20%_10%,white,transparent_45%),radial-gradient(circle_at_80%_35%,white,transparent_40%)]" />
-      <div className="relative flex flex-col gap-2">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.35em] text-white/70">
-          MPL Export Conseil
-        </div>
-        <div className="text-lg font-semibold md:text-xl">{title}</div>
+      <div className="relative flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-white/80">
+        <span>MPL Export Conseil</span>
+        <span className="text-white/60">/</span>
+        <span className="text-white">{title}</span>
         {question ? (
-          <div className="text-sm text-white/85">
-            <span className="font-semibold">Question :</span> {question}
-          </div>
+          <span className="hidden text-[11px] font-medium uppercase tracking-[0.2em] text-white/65 sm:inline">
+            • {question}
+          </span>
         ) : null}
       </div>
     </section>
