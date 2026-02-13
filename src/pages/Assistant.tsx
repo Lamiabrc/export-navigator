@@ -19,6 +19,9 @@ type AssistantResponse = {
   summary?: string;
   detail?: string;
   error?: string;
+  actions?: string[];
+  follow_up_questions?: string[];
+  source_links?: Array<{ title: string; url: string; origin?: string }>;
 };
 
 type ChatMessage = {
@@ -103,20 +106,33 @@ export default function Assistant() {
 
       const body = {
         question: msg,
-        destination,
-        incoterm,
-        transport_mode: transportMode,
+        context: {
+          destination,
+          incoterm,
+          transport_mode: transportMode,
+        },
       };
 
       try {
         if (!SUPABASE_ENV_OK) throw new Error("Connexion base indisponible.");
 
-        const { data, error: fnError } = await supabase.functions.invoke<AssistantResponse>("export-assistant", {
-          body,
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (!token) throw new Error("Session invalide");
+
+        const resp = await fetch("/api/ask", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
         });
 
-        if (fnError || data?.error || data?.ok === false) {
-          const msgErr = fnError?.message || data?.detail || data?.error || "Fonction indisponible";
+        const data = (await resp.json().catch(() => ({}))) as AssistantResponse;
+
+        if (!resp.ok || data?.error || data?.ok === false) {
+          const msgErr = data?.detail || data?.error || "Fonction indisponible";
           throw new Error(msgErr);
         }
 
@@ -142,7 +158,7 @@ export default function Assistant() {
         const assistantMsg: ChatMessage = {
           id: uid(),
           role: "assistant",
-          content: "Assistant indisponible. Précisez destination, incoterm, HS et type de marchandise.",
+          content: "Assistant indisponible. Donnez destination, incoterm, HS/produit, mode de paiement, et je poserai des questions ciblées.",
           createdAt: Date.now(),
         };
 
@@ -209,6 +225,46 @@ export default function Assistant() {
                       }`}
                     >
                       {m.content}
+                      {m.role === "assistant" && (m.meta?.follow_up_questions?.length || m.meta?.source_links?.length) ? (
+                        <div className="mt-3 space-y-2 border-t border-border/60 pt-2">
+                          {m.meta?.follow_up_questions?.length ? (
+                            <div>
+                              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Questions de clarification</div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {m.meta.follow_up_questions.map((q) => (
+                                  <button
+                                    key={q}
+                                    type="button"
+                                    onClick={() => setDraft(q)}
+                                    className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted"
+                                  >
+                                    {q}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {m.meta?.source_links?.length ? (
+                            <div>
+                              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Sources</div>
+                              <div className="flex flex-wrap gap-2">
+                                {m.meta.source_links.slice(0, 4).map((src) => (
+                                  <a
+                                    key={`${src.title}-${src.url}`}
+                                    href={src.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] hover:bg-muted"
+                                  >
+                                    {src.title}
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}
