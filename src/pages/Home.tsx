@@ -107,24 +107,36 @@ export default function Home() {
                 <p className="font-medium">Pays: Maroc • Produit: Machines</p>
                 <p className="text-emerald-700">Verdict: GO sous conditions</p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="rounded-lg border bg-white p-3">
-                  <p className="text-slate-500">Risque</p>
-                  <p className="font-semibold">42 / 100</p>
-                </div>
-                <div className="rounded-lg border bg-white p-3">
-                  <p className="text-slate-500">Livrables</p>
-                  <p className="font-semibold">Checklist + email client</p>
-                </div>
+              <ul className="space-y-2 text-slate-700">
+                {[
+                  "Un verdict clair + 3 actions immédiates.",
+                  "Checklists et messages prêts à envoyer.",
+                  "Historique sécurisé + plan d’objectifs.",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <Button asChild size="lg" className="sm:min-w-60">
+                  <a href="#hero-video">
+                    Voir la vidéo de démo <ArrowRight className="ml-2 size-4" />
+                  </a>
+                </Button>
+                <Button asChild variant="outline" size="lg" className="sm:min-w-52">
+                  <Link to="/login?next=%2Fapp%2Fcontrol-tower">Accéder au tour de contrôle</Link>
+                </Button>
+                <Button asChild variant="ghost" size="lg" className="justify-start px-0 text-slate-700 hover:text-slate-900 sm:px-4">
+                  <Link to="/contact">Nous contacter pour devis</Link>
+                </Button>
               </div>
               <div className="rounded-lg border bg-white p-3">
                 <p className="font-semibold text-slate-900">Action 1 : Vérifier Incoterm + assurance</p>
               </div>
-              <p className="text-sm text-slate-600">
-                Rapport orienté décision: risques TVA/douane, actions prioritaires, livrables et suivi d’exécution.
-              </p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </section>
 
         <section className="space-y-6">
