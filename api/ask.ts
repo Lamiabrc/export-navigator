@@ -213,7 +213,6 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     const embedding = await openaiEmbed(question);
     if (!embedding) throw new Error("embedding_missing");
 
-    const admin = supabaseAdmin();
     const { data: chunks, error: matchError } = await admin.rpc("match_kb_chunks", {
       query_embedding: embedding,
       match_count: 6,
