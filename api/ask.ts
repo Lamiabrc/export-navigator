@@ -139,18 +139,14 @@ async function fetchSupabaseFacts(question: string, signals: ReturnType<typeof e
   }
 
   const hsPattern = signals.hsCode ? `${signals.hsCode.slice(0, 6)}%` : null;
-  const hsOr = [
-    hsPattern ? `hs_code.ilike.${hsPattern}` : null,
-    signals.country ? `destination.ilike.%${signals.country}%` : null,
-  ].filter(Boolean);
-
-  let hsQuery = admin
+  const { data: hsRows } = await admin
     .from("export_hs_catalog")
     .select("hs_code,destination,om_rate,omr_rate,notes,source")
-    .limit(8);
-
-  if (hsOr.length) hsQuery = hsQuery.or(hsOr.join(","));
-  const { data: hsRows } = await hsQuery;
+    .limit(8)
+    .or([
+      hsPattern ? `hs_code.ilike.${hsPattern}` : null,
+      signals.country ? `destination.ilike.%${signals.country}%` : null,
+    ].filter(Boolean).join(","));
 
   if (Array.isArray(hsRows) && hsRows.length) {
     snippets.push(
@@ -166,16 +162,12 @@ async function fetchSupabaseFacts(question: string, signals: ReturnType<typeof e
     });
   }
 
-  const regFilter = signals.country
-    ? `jurisdiction.ilike.%${signals.country}%,title.ilike.%${signals.country}%`
-    : `title.ilike.%${question.slice(0, 20)}%`;
-
   const { data: regRows } = await admin
     .from("reg_events")
     .select("title,summary,jurisdiction,impact,created_at")
     .order("created_at", { ascending: false })
     .limit(6)
-    .or(regFilter);
+    .or(signals.country ? `jurisdiction.ilike.%${signals.country}%,title.ilike.%${signals.country}%` : `title.ilike.%${question.slice(0, 20)}%`);
 
   if (Array.isArray(regRows) && regRows.length) {
     snippets.push(
@@ -200,32 +192,6 @@ function buildFollowUpQuestions(question: string, signals: ReturnType<typeof ext
   return asks.slice(0, 3);
 }
 
-function buildDegradedAnswer(question: string, signals: ReturnType<typeof extractSignals>, followUps: string[], snippets: string[]) {
-  const known = [
-    signals.country ? `Destination détectée: ${signals.country}.` : null,
-    signals.incoterm ? `Incoterm détecté: ${signals.incoterm}.` : null,
-    signals.hsCode ? `Code HS détecté: ${signals.hsCode}.` : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const factualHint = snippets.length
-    ? "J'ai trouvé des éléments dans la base Supabase (incoterms/HS/veille) que je peux affiner avec vos précisions."
-    : "Je n'ai pas encore assez d'éléments en base pour répondre précisément.";
-
-  const askBlock = followUps.length
-    ? `Pour vous répondre correctement, j'ai besoin de:\n- ${followUps.join("\n- ")}`
-    : "Je peux déjà proposer un plan d'action opérationnel sur votre cas.";
-
-  return [
-    `Question reçue: "${question}".`,
-    known || "Signaux partiels détectés (infos clés manquantes).",
-    factualHint,
-    askBlock,
-    "Réponse provisoire: commencez par verrouiller pays + HS + incoterm + mode de paiement avant toute validation finale.",
-  ].join("\n\n");
-}
-
 export default allowCors(async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
@@ -243,37 +209,6 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
 
     const signals = extractSignals(question);
     const followUps = buildFollowUpQuestions(question, signals);
-    const supabaseFacts = await fetchSupabaseFacts(question, signals);
-    const specializedLinks = specializedSourcesFor(question);
-
-    const admin = supabaseAdmin();
-
-    if (!OPENAI_API_KEY) {
-      const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
-      const result: AskResult = {
-        answer: buildDegradedAnswer(question, signals, followUps, supabaseFacts.snippets),
-        actions: [
-          "Confirmer destination + pays de transit.",
-          "Fournir HS code (6/8 chiffres) ou description technique.",
-          "Confirmer Incoterm + mode de paiement.",
-        ],
-        follow_up_questions: followUps,
-        source_links,
-      };
-
-      try {
-        await admin.from("tool_runs").insert({
-          user_id: auth.user.id,
-          tool_name: "ask",
-          input_json: { question, context: body?.context ?? null, signals, mode: "degraded_no_openai" },
-          output_json: result,
-        });
-      } catch (e) {
-        console.error("[api/ask] tool_runs insert failed", e);
-      }
-
-      return json(res, 200, { ok: true, mode: "degraded", ...result });
-    }
 
     const embedding = await openaiEmbed(question);
     if (!embedding) throw new Error("embedding_missing");
@@ -292,6 +227,9 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     const contextBlocks = safeChunks
       .map((c: any, idx: number) => `#${idx + 1} (doc ${c.document_id}):\n${c.content}`)
       .join("\n\n");
+
+    const supabaseFacts = await fetchSupabaseFacts(question, signals);
+    const specializedLinks = specializedSourcesFor(question);
 
     const knowledgeBlocks = [
       contextBlocks ? `Base documentaire (RAG):\n${contextBlocks}` : "",
@@ -338,7 +276,10 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       // keep raw text
     }
 
-    const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
+    const source_links = [
+      ...supabaseFacts.links,
+      ...specializedLinks,
+    ].slice(0, 8);
 
     const result: AskResult = {
       answer,
@@ -369,15 +310,10 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     console.error("[api/ask] error", raw);
 
     if (raw === "ai_not_configured") {
-      return json(res, 200, {
-        ok: true,
-        mode: "degraded",
-        answer: "Le moteur IA avancé n'est pas configuré sur cet environnement. Donnez destination, HS, incoterm et paiement: je peux déjà vous guider en mode structuré.",
-        actions: [
-          "Confirmer destination + transit.",
-          "Donner HS ou description technique.",
-          "Confirmer incoterm et mode de paiement.",
-        ],
+      return json(res, 503, {
+        ok: false,
+        error: "ai_temporarily_unavailable",
+        detail: "Le service IA n'est pas configuré pour cet environnement.",
       });
     }
 
