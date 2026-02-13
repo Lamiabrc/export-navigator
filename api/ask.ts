@@ -1,4 +1,4 @@
-﻿import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { allowCors, json, readJson, supabaseAdmin } from "../src/server/supabaseAdmin.js";
 
 type AskPayload = {
@@ -9,7 +9,9 @@ type AskPayload = {
 type AskResult = {
   answer: string;
   actions?: string[];
+  follow_up_questions?: string[];
   sources?: Array<{ document_id: string; chunk_id: string; similarity: number }>;
+  source_links?: Array<{ title: string; url: string; origin: "supabase" | "specialized_site" }>;
 };
 
 const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || "").trim();
@@ -38,7 +40,7 @@ async function requireUser(req: VercelRequest, res: VercelResponse) {
 }
 
 async function openaiEmbed(input: string) {
-  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY manquant");
+  if (!OPENAI_API_KEY) throw new Error("ai_not_configured");
   const resp = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: {
@@ -56,7 +58,7 @@ async function openaiEmbed(input: string) {
 }
 
 async function openaiChat(messages: Array<{ role: "system" | "user" | "assistant"; content: string }>) {
-  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY manquant");
+  if (!OPENAI_API_KEY) throw new Error("ai_not_configured");
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -66,7 +68,7 @@ async function openaiChat(messages: Array<{ role: "system" | "user" | "assistant
     body: JSON.stringify({
       model: CHAT_MODEL,
       messages,
-      temperature: 0.4,
+      temperature: 0.35,
       response_format: { type: "json_object" },
     }),
   });
@@ -76,6 +78,152 @@ async function openaiChat(messages: Array<{ role: "system" | "user" | "assistant
   }
   const data = (await resp.json()) as any;
   return String(data?.choices?.[0]?.message?.content || "");
+}
+
+function extractSignals(question: string) {
+  const q = question.toUpperCase();
+  const incoterm = q.match(/\b(EXW|FCA|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)\b/)?.[1] ?? null;
+  const hsCode = question.match(/\b\d{4,10}\b/)?.[0] ?? null;
+
+  const countryCandidates = [
+    "FRANCE", "ALLEMAGNE", "GERMANY", "ESPAGNE", "SPAIN", "ITALIE", "ITALY", "MAROC", "MOROCCO", "TURQUIE", "TURKEY", "USA", "ETATS-UNIS", "UNITED STATES", "CHINE", "CHINA", "ROYAUME-UNI", "UNITED KINGDOM", "UK",
+  ];
+  const country = countryCandidates.find((c) => q.includes(c)) ?? null;
+
+  const paymentMentioned = /LC|LETTRE DE CREDIT|CREDOC|COMPTE OUVERT|OPEN ACCOUNT|ACOMPTE|VIREMENT|DP|DA/i.test(question);
+  const sanctionsMentioned = /SANCTION|EMBARGO|OFAC|RESTRICTION/i.test(question);
+
+  return { incoterm, hsCode, country, paymentMentioned, sanctionsMentioned };
+}
+
+function specializedSourcesFor(question: string) {
+  const sources: Array<{ title: string; url: string; origin: "specialized_site" }> = [];
+  const q = question.toLowerCase();
+
+  if (/incoterm|ddp|dap|fob|cif|cpt|cip|exw|fca/.test(q)) {
+    sources.push({ title: "ICC – Incoterms 2020", url: "https://iccwbo.org/business-solutions/incoterms-rules/incoterms-2020/", origin: "specialized_site" });
+  }
+  if (/douane|tarif|hs|code/.test(q)) {
+    sources.push({ title: "Commission européenne – TARIC", url: "https://ec.europa.eu/taxation_customs/dds2/taric/taric_consultation.jsp", origin: "specialized_site" });
+    sources.push({ title: "WCO – Harmonized System", url: "https://www.wcoomd.org/en/topics/nomenclature/overview/what-is-the-harmonized-system.aspx", origin: "specialized_site" });
+  }
+  if (/sanction|embargo|ofac/.test(q)) {
+    sources.push({ title: "EU Sanctions Map", url: "https://www.sanctionsmap.eu/", origin: "specialized_site" });
+    sources.push({ title: "OFAC Sanctions", url: "https://ofac.treasury.gov/sanctions-programs-and-country-information", origin: "specialized_site" });
+  }
+  if (/tva|vat/.test(q)) {
+    sources.push({ title: "Douane.gouv.fr – Infos import/export", url: "https://www.douane.gouv.fr", origin: "specialized_site" });
+  }
+
+  return sources.slice(0, 4);
+}
+
+async function fetchSupabaseFacts(question: string, signals: ReturnType<typeof extractSignals>) {
+  const admin = supabaseAdmin();
+  const snippets: string[] = [];
+  const links: Array<{ title: string; url: string; origin: "supabase" }> = [];
+
+  const { data: incotermRows } = await admin
+    .from("export_incoterms")
+    .select("code,title,description,insurance_required,insurance_min_percent")
+    .limit(signals.incoterm ? 3 : 6)
+    .ilike("code", signals.incoterm ? signals.incoterm : "%");
+
+  if (Array.isArray(incotermRows) && incotermRows.length) {
+    snippets.push(
+      "Référentiel incoterms (Supabase):\n" +
+        incotermRows
+          .map((r: any) => `${r.code}: ${r.title || ""} | assurance requise=${Boolean(r.insurance_required)} | min=${r.insurance_min_percent ?? "n/a"} | ${r.description || ""}`)
+          .join("\n")
+    );
+  }
+
+  const hsPattern = signals.hsCode ? `${signals.hsCode.slice(0, 6)}%` : null;
+  const hsOr = [
+    hsPattern ? `hs_code.ilike.${hsPattern}` : null,
+    signals.country ? `destination.ilike.%${signals.country}%` : null,
+  ].filter(Boolean);
+
+  let hsQuery = admin
+    .from("export_hs_catalog")
+    .select("hs_code,destination,om_rate,omr_rate,notes,source")
+    .limit(8);
+
+  if (hsOr.length) hsQuery = hsQuery.or(hsOr.join(","));
+  const { data: hsRows } = await hsQuery;
+
+  if (Array.isArray(hsRows) && hsRows.length) {
+    snippets.push(
+      "Catalogue HS (Supabase):\n" +
+        hsRows
+          .map((r: any) => `${r.hs_code} -> ${r.destination} | OM=${r.om_rate ?? "n/a"} | OMR=${r.omr_rate ?? "n/a"} | ${r.notes || ""}`)
+          .join("\n")
+    );
+    hsRows.forEach((r: any) => {
+      if (r?.source && /^https?:\/\//i.test(String(r.source))) {
+        links.push({ title: `Source HS ${r.hs_code}`, url: String(r.source), origin: "supabase" });
+      }
+    });
+  }
+
+  const regFilter = signals.country
+    ? `jurisdiction.ilike.%${signals.country}%,title.ilike.%${signals.country}%`
+    : `title.ilike.%${question.slice(0, 20)}%`;
+
+  const { data: regRows } = await admin
+    .from("reg_events")
+    .select("title,summary,jurisdiction,impact,created_at")
+    .order("created_at", { ascending: false })
+    .limit(6)
+    .or(regFilter);
+
+  if (Array.isArray(regRows) && regRows.length) {
+    snippets.push(
+      "Veille réglementaire (Supabase reg_events):\n" +
+        regRows
+          .map((r: any) => `${r.title} | ${r.jurisdiction || "n/a"} | impact=${r.impact || "n/a"} | ${r.summary || ""}`)
+          .join("\n")
+    );
+  }
+
+  return { snippets, links: links.slice(0, 4) };
+}
+
+function buildFollowUpQuestions(question: string, signals: ReturnType<typeof extractSignals>) {
+  const asks: string[] = [];
+  if (!signals.country) asks.push("Quel est le pays de destination exact (et éventuellement pays de transit) ?");
+  if (!signals.hsCode) asks.push("As-tu un code HS (6 ou 8 chiffres) ou une description produit plus précise ?");
+  if (!signals.incoterm) asks.push("Quel Incoterm est prévu (EXW/FCA/FOB/CIF/DAP/DDP...) ?");
+  if (!signals.paymentMentioned && /paiement|risque|client|exporter/i.test(question)) {
+    asks.push("Quel mode de paiement est envisagé (acompte, crédit documentaire, compte ouvert, virement) ?");
+  }
+  return asks.slice(0, 3);
+}
+
+function buildDegradedAnswer(question: string, signals: ReturnType<typeof extractSignals>, followUps: string[], snippets: string[]) {
+  const known = [
+    signals.country ? `Destination détectée: ${signals.country}.` : null,
+    signals.incoterm ? `Incoterm détecté: ${signals.incoterm}.` : null,
+    signals.hsCode ? `Code HS détecté: ${signals.hsCode}.` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const factualHint = snippets.length
+    ? "J'ai trouvé des éléments dans la base Supabase (incoterms/HS/veille) que je peux affiner avec vos précisions."
+    : "Je n'ai pas encore assez d'éléments en base pour répondre précisément.";
+
+  const askBlock = followUps.length
+    ? `Pour vous répondre correctement, j'ai besoin de:\n- ${followUps.join("\n- ")}`
+    : "Je peux déjà proposer un plan d'action opérationnel sur votre cas.";
+
+  return [
+    `Question reçue: "${question}".`,
+    known || "Signaux partiels détectés (infos clés manquantes).",
+    factualHint,
+    askBlock,
+    "Réponse provisoire: commencez par verrouiller pays + HS + incoterm + mode de paiement avant toute validation finale.",
+  ].join("\n\n");
 }
 
 export default allowCors(async function handler(req: VercelRequest, res: VercelResponse) {
@@ -93,10 +241,43 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       return json(res, 400, { ok: false, error: "question_required" });
     }
 
+    const signals = extractSignals(question);
+    const followUps = buildFollowUpQuestions(question, signals);
+    const supabaseFacts = await fetchSupabaseFacts(question, signals);
+    const specializedLinks = specializedSourcesFor(question);
+
+    const admin = supabaseAdmin();
+
+    if (!OPENAI_API_KEY) {
+      const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
+      const result: AskResult = {
+        answer: buildDegradedAnswer(question, signals, followUps, supabaseFacts.snippets),
+        actions: [
+          "Confirmer destination + pays de transit.",
+          "Fournir HS code (6/8 chiffres) ou description technique.",
+          "Confirmer Incoterm + mode de paiement.",
+        ],
+        follow_up_questions: followUps,
+        source_links,
+      };
+
+      try {
+        await admin.from("tool_runs").insert({
+          user_id: auth.user.id,
+          tool_name: "ask",
+          input_json: { question, context: body?.context ?? null, signals, mode: "degraded_no_openai" },
+          output_json: result,
+        });
+      } catch (e) {
+        console.error("[api/ask] tool_runs insert failed", e);
+      }
+
+      return json(res, 200, { ok: true, mode: "degraded", ...result });
+    }
+
     const embedding = await openaiEmbed(question);
     if (!embedding) throw new Error("embedding_missing");
 
-    const admin = supabaseAdmin();
     const { data: chunks, error: matchError } = await admin.rpc("match_kb_chunks", {
       query_embedding: embedding,
       match_count: 6,
@@ -112,18 +293,31 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       .map((c: any, idx: number) => `#${idx + 1} (doc ${c.document_id}):\n${c.content}`)
       .join("\n\n");
 
+    const knowledgeBlocks = [
+      contextBlocks ? `Base documentaire (RAG):\n${contextBlocks}` : "",
+      supabaseFacts.snippets.length ? supabaseFacts.snippets.join("\n\n") : "",
+      specializedLinks.length
+        ? "Sources spécialisées suggérées:\n" + specializedLinks.map((s) => `- ${s.title}: ${s.url}`).join("\n")
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
     const system =
-      "Tu es un expert en commerce international et geopolitique. " +
-      "Ton style est humain, pro et cool. " +
-      "Commence toujours par 'Bonjour' et termine par 'Merci'. " +
-      "Propose exactement 3 actions immediates concretes. " +
-      "Si des informations manquent, dis-le clairement. " +
-      "Reponds en JSON avec les cles: answer (string), actions (array de 3 strings).";
+      "Tu es un expert export (incoterms, douane, conformité, risques pays, paiements). " +
+      "Tu réponds en français clair et actionnable. " +
+      "Si des infos critiques manquent, pose d'abord 1 à 3 questions de clarification concrètes. " +
+      "Ensuite donne une réponse provisoire basée sur les données disponibles. " +
+      "Cite les sources disponibles (base Supabase + sites spécialisés). " +
+      "Réponds en JSON avec les clés: answer (string), actions (array max 4), follow_up_questions (array max 3).";
 
     const user =
       `Question: ${question}\n` +
       (body?.context ? `Contexte utilisateur: ${JSON.stringify(body.context)}\n` : "") +
-      (contextBlocks ? `\nBase documentaire (extraits):\n${contextBlocks}` : "");
+      (knowledgeBlocks ? `\nConnaissances disponibles:\n${knowledgeBlocks}` : "") +
+      (followUps.length
+        ? `\nQuestions de clarification suggérées (si infos insuffisantes):\n${followUps.map((q) => `- ${q}`).join("\n")}`
+        : "");
 
     const raw = await openaiChat([
       { role: "system", content: system },
@@ -132,30 +326,37 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
 
     let answer = raw;
     let actions: string[] | undefined;
+    let follow_up_questions: string[] | undefined = followUps;
     try {
       const parsed = JSON.parse(raw);
       if (typeof parsed?.answer === "string") answer = parsed.answer;
-      if (Array.isArray(parsed?.actions)) actions = parsed.actions.filter((x: any) => typeof x === "string");
+      if (Array.isArray(parsed?.actions)) actions = parsed.actions.filter((x: any) => typeof x === "string").slice(0, 4);
+      if (Array.isArray(parsed?.follow_up_questions)) {
+        follow_up_questions = parsed.follow_up_questions.filter((x: any) => typeof x === "string").slice(0, 3);
+      }
     } catch {
       // keep raw text
     }
 
+    const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
+
     const result: AskResult = {
       answer,
       actions,
+      follow_up_questions,
       sources: safeChunks.map((c: any) => ({
         document_id: c.document_id,
         chunk_id: c.id,
         similarity: Number(c.similarity || 0),
       })),
+      source_links,
     };
 
-    // store tool run
     try {
       await admin.from("tool_runs").insert({
         user_id: auth.user.id,
         tool_name: "ask",
-        input_json: { question, context: body?.context ?? null },
+        input_json: { question, context: body?.context ?? null, signals },
         output_json: result,
       });
     } catch (e) {
@@ -164,7 +365,22 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
 
     return json(res, 200, { ok: true, ...result });
   } catch (err: any) {
-    console.error("[api/ask] error", err?.message || err);
-    return json(res, 500, { ok: false, error: err?.message || "ask_failed" });
+    const raw = String(err?.message || "ask_failed");
+    console.error("[api/ask] error", raw);
+
+    if (raw === "ai_not_configured") {
+      return json(res, 200, {
+        ok: true,
+        mode: "degraded",
+        answer: "Le moteur IA avancé n'est pas configuré sur cet environnement. Donnez destination, HS, incoterm et paiement: je peux déjà vous guider en mode structuré.",
+        actions: [
+          "Confirmer destination + transit.",
+          "Donner HS ou description technique.",
+          "Confirmer incoterm et mode de paiement.",
+        ],
+      });
+    }
+
+    return json(res, 500, { ok: false, error: raw || "ask_failed" });
   }
 });

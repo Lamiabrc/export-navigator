@@ -1,10 +1,12 @@
 import type { PostgrestError } from "@supabase/supabase-js";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type PostgrestFilterBuilderLike<T> = any;
+type PostgrestFilterBuilderLike = PromiseLike<{
+  data: unknown[] | null;
+  error: PostgrestError | null;
+}>;
 
 export async function fetchAllWithPagination<T>(
-  buildQuery: (from: number, to: number) => PostgrestFilterBuilderLike<T>,
+  buildQuery: (from: number, to: number) => PostgrestFilterBuilderLike,
   pageSize = 1000
 ): Promise<T[]> {
   const all: T[] = [];
@@ -18,10 +20,11 @@ export async function fetchAllWithPagination<T>(
       const wrapped = new Error(
         `Supabase pagination query failed: ${error.message}`
       ) as Error & { status?: number; details?: string; hint?: string; code?: string };
-      wrapped.status = (error as PostgrestError).code ? (error as any).status : (error as any).status;
-      wrapped.details = (error as any).details;
-      wrapped.hint = (error as any).hint;
-      wrapped.code = (error as any).code;
+      const errorWithStatus = error as PostgrestError & { status?: number };
+      wrapped.status = errorWithStatus.status;
+      wrapped.details = error.details ?? undefined;
+      wrapped.hint = error.hint ?? undefined;
+      wrapped.code = error.code ?? undefined;
       throw wrapped;
     }
 
