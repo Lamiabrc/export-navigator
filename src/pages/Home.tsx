@@ -135,8 +135,8 @@ export default function Home() {
               <div className="rounded-lg border bg-white p-3">
                 <p className="font-semibold text-slate-900">Action 1 : Vérifier Incoterm + assurance</p>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </section>
 
         <section className="space-y-6">
