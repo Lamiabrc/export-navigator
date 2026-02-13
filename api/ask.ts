@@ -38,7 +38,7 @@ async function requireUser(req: VercelRequest, res: VercelResponse) {
 }
 
 async function openaiEmbed(input: string) {
-  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY manquant");
+  if (!OPENAI_API_KEY) throw new Error("ai_not_configured");
   const resp = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: {
@@ -56,7 +56,7 @@ async function openaiEmbed(input: string) {
 }
 
 async function openaiChat(messages: Array<{ role: "system" | "user" | "assistant"; content: string }>) {
-  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY manquant");
+  if (!OPENAI_API_KEY) throw new Error("ai_not_configured");
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -164,7 +164,17 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
 
     return json(res, 200, { ok: true, ...result });
   } catch (err: any) {
-    console.error("[api/ask] error", err?.message || err);
-    return json(res, 500, { ok: false, error: err?.message || "ask_failed" });
+    const raw = String(err?.message || "ask_failed");
+    console.error("[api/ask] error", raw);
+
+    if (raw === "ai_not_configured") {
+      return json(res, 503, {
+        ok: false,
+        error: "ai_temporarily_unavailable",
+        detail: "Le service IA n'est pas configuré pour cet environnement.",
+      });
+    }
+
+    return json(res, 500, { ok: false, error: raw || "ask_failed" });
   }
 });
