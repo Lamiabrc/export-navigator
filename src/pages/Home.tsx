@@ -100,6 +100,65 @@ export default function Home() {
                   isEn ? "A clear verdict + 3 immediate actions." : "Un verdict clair + 3 actions immédiates.",
                   isEn ? "Checklists and ready-to-send messages." : "Checklists et messages prêts à envoyer.",
                   isEn ? "Secure history + action plan." : "Historique sécurisé + plan d’objectifs.",
+              </div>
+              <ul className="space-y-2 text-slate-700">
+                {[
+                  isEn ? "A clear verdict + 3 immediate actions." : "Un verdict clair + 3 actions immédiates.",
+                  isEn ? "Checklists and ready-to-send messages." : "Checklists et messages prêts à envoyer.",
+                  isEn ? "Secure history + action plan." : "Historique sécurisé + plan d’objectifs.",
+        <section className="grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="space-y-6">
+            <Badge variant="secondary" className="w-fit rounded-full px-3 py-1 text-xs">Tour de contrôle export</Badge>
+            <div className="space-y-4">
+              <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">Tour de contrôle export ? Go/No-Go en 60 secondes.</h1>
+              <p className="max-w-2xl text-lg text-slate-600">Un cockpit pro pour sécuriser vos ventes à l’international : Go/No-Go pays, paiement, Incoterms,
+                documents et prix export (landed cost).</p>
+            </div>
+            <ul className="space-y-2 text-slate-700">
+              {[
+                "Un verdict clair + 3 actions immédiates.",
+                "Checklists et messages prêts à envoyer.",
+                "Historique sécurisé + plan d’objectifs.",
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg" className="sm:min-w-60">
+                <a href="#hero-video">
+                  Voir une démo / Générer un exemple de rapport <ArrowRight className="ml-2 size-4" />
+                </a>
+              </Button>
+              <Button asChild variant="outline" size="lg" className="sm:min-w-52">
+                <Link to="/login?next=%2Fapp%2Fcontrol-tower">Accéder au tour de contrôle</Link>
+              </Button>
+              <Button asChild variant="ghost" size="lg" className="sm:min-w-52">
+                <Link to="/contact">Nous contacter pour devis</Link>
+              </Button>
+            </div>
+            <p className="text-sm text-slate-500">Tour de contrôle accessible uniquement après connexion. Données confidentielles · Hébergement UE · RGPD.</p>
+          </div>
+
+          <Card className="border-slate-200 bg-gradient-to-br from-slate-50 to-white shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Radar className="size-5 text-primary" />
+                Mock — Rapport Go/No-Go
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm text-slate-700">
+              <div className="rounded-xl border bg-white p-3">
+                <p className="font-medium">Pays: Maroc • Produit: Machines</p>
+                <p className="text-emerald-700">Verdict: GO sous conditions</p>
+              </div>
+              <ul className="space-y-2 text-slate-700">
+                {[
+                  "Un verdict clair + 3 actions immédiates.",
+                  "Checklists et messages prêts à envoyer.",
+                  "Historique sécurisé + plan d’objectifs.",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" />
@@ -112,6 +171,9 @@ export default function Home() {
                   <Link to="/#hero-video">
                     {isEn ? "Watch the demo video" : "Voir la vidéo de démo"} <ArrowRight className="ml-2 size-4" />
                   </Link>
+                  <a href="#hero-video">
+                    {isEn ? "Watch the demo video" : "Voir la vidéo de démo"} <ArrowRight className="ml-2 size-4" />
+                  </a>
                 </Button>
                 <Button asChild variant="outline" size="lg" className="sm:min-w-52">
                   <Link to="/login?next=%2Fapp%2Fcontrol-tower">{isEn ? "Open the control tower" : "Accéder au tour de contrôle"}</Link>
@@ -163,6 +225,65 @@ export default function Home() {
               </div>
             </div>
           </div>
+              </div>
+              <p className="text-sm text-slate-500">{isEn ? "Control tower available after sign-in only. Confidential data · EU hosting · GDPR." : "Tour de contrôle accessible uniquement après connexion. Données confidentielles · Hébergement UE · RGPD."}</p>
+            </div>
+
+            <div className="space-y-4">
+              <Card className="border-slate-200 bg-white shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Radar className="size-5 text-primary" />
+                    {isEn ? "Mock — Go/No-Go report" : "Mock — Rapport Go/No-Go"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm text-slate-700">
+                  <div className="rounded-xl border bg-slate-50 p-3">
+                    <p className="font-medium">{isEn ? "Country: Morocco • Product: Machinery" : "Pays: Maroc • Produit: Machines"}</p>
+                    <p className="text-emerald-700">{isEn ? "Verdict: GO with conditions" : "Verdict: GO sous conditions"}</p>
+                  </div>
+                  <div className="grid gap-2 grid-cols-2">
+                    <div className="rounded-lg border bg-white p-3">
+                      <p className="text-slate-500">{isEn ? "Risk" : "Risque"}</p>
+                      <p className="font-semibold">42 / 100</p>
+                    </div>
+                    <div className="rounded-lg border bg-white p-3">
+                      <p className="text-slate-500">{isEn ? "Deliverables" : "Livrables"}</p>
+                      <p className="font-semibold">{isEn ? "Checklist + client email" : "Checklist + email client"}</p>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border bg-white p-3">
+                    <p className="font-semibold text-slate-900">{isEn ? "Action 1: Validate Incoterm + insurance" : "Action 1 : Vérifier Incoterm + assurance"}</p>
+                  </div>
+                  <p className="text-sm text-slate-600">
+                    {isEn ? "Decision-oriented report: VAT/customs risks, priority actions, deliverables and execution follow-up." : "Rapport orienté décision : risques TVA/douane, actions prioritaires, livrables et suivi d’exécution."}
+                  </p>
+                </CardContent>
+              </Card>
+
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-950/95 p-2">
+                <video className="aspect-video w-full rounded-lg" autoPlay muted loop playsInline preload="metadata">
+                  <source src={heroExportVideo} type="video/mp4" />
+                </video>
+                <p className="px-1 pt-2 text-xs text-slate-300">{isEn ? "Quick product preview in real conditions." : "Aperçu rapide de la plateforme en conditions réelles."}</p>
+              </div>
+            </div>
+          </div>
+                    Voir la vidéo de démo <ArrowRight className="ml-2 size-4" />
+                  </a>
+                </Button>
+                <Button asChild variant="outline" size="lg" className="sm:min-w-52">
+                  <Link to="/login?next=%2Fapp%2Fcontrol-tower">Accéder au tour de contrôle</Link>
+                </Button>
+                <Button asChild variant="ghost" size="lg" className="justify-start px-0 text-slate-700 hover:text-slate-900 sm:px-4">
+                  <Link to="/contact">Nous contacter pour devis</Link>
+                </Button>
+              </div>
+              <div className="rounded-lg border bg-white p-3">
+                <p className="font-semibold text-slate-900">Action 1 : Vérifier Incoterm + assurance</p>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         <section className="space-y-6">
@@ -255,6 +376,7 @@ export default function Home() {
           <video className="w-full rounded-xl border border-slate-200" controls preload="metadata">
             <source src={heroExportVideo} type="video/mp4" />
             {isEn ? "Your browser does not support video playback." : "Votre navigateur ne supporte pas la lecture vidéo."}
+            Votre navigateur ne supporte pas la lecture vidéo.
           </video>
         </section>
 
