@@ -18,6 +18,8 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
+import { HomeHero } from "@/components/home/HomeHero";
+import { CheckCircle2, FileText, Globe, SearchCheck, ShieldCheck, Target, TrendingUp, Wallet } from "lucide-react";
 
 export default function Home() {
   const { lang } = useI18n();
@@ -379,6 +381,7 @@ export default function Home() {
             </div>
           </div>
         </section>
+        <HomeHero labels={heroLabels} isEn={isEn} />
 
         <section className="space-y-6">
           <h2 className="text-2xl font-semibold text-slate-900">{isEn ? "What you get (in 60 seconds)" : "Ce que vous obtenez (en 60 secondes)"}</h2>
