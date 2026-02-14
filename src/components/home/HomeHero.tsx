@@ -5,7 +5,17 @@ import heroExportVideo from "@/assets/hero-export.mp4";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { HeroLabels } from "@/content/homeContent";
+
+type HeroLabels = {
+  badge: string;
+  title: string;
+  intro: string;
+  bullets: string[];
+  ctaVideo: string;
+  ctaTower: string;
+  ctaContact: string;
+  confidentiality: string;
+};
 
 export function HomeHero({
   labels,
