@@ -579,7 +579,20 @@ export default function ControlTower() {
     incoterm: "",
   });
 
-  const assistantExamples = [
+  
+function toUserFacingAssistantError(message: string) {
+  const normalized = String(message || "").trim();
+  if (!normalized) return "Le service IA est temporairement indisponible.";
+  if (/ai_temporarily_unavailable|ai_not_configured|OPENAI_API_KEY/i.test(normalized)) {
+    return "Le service IA est temporairement indisponible sur cet environnement.";
+  }
+  if (/missing_auth_bearer|invalid_auth|Authentification requise/i.test(normalized)) {
+    return "Votre session a expiré. Reconnectez-vous puis réessayez.";
+  }
+  return normalized;
+}
+
+const assistantExamples = [
     "Comment trouver des distributeurs en Allemagne ?",
     "Quels incoterms recommander pour un premier export ?",
     "Quels risques sanctions pour exporter vers la Turquie ?",
@@ -688,7 +701,7 @@ export default function ControlTower() {
       setAssistantAnswer(result.answer);
       setAssistantActions(result.actions || []);
     } catch (err: any) {
-      setAssistantError(err?.message || "Erreur lors de la demande.");
+      setAssistantError(toUserFacingAssistantError(err?.message || "Erreur lors de la demande."));
     } finally {
       setAssistantLoading(false);
     }
@@ -704,7 +717,7 @@ export default function ControlTower() {
       setDecisionAnswer(result.answer);
       setDecisionActions(result.actions || []);
     } catch (err: any) {
-      setDecisionError(err?.message || "Erreur lors de la demande.");
+      setDecisionError(toUserFacingAssistantError(err?.message || "Erreur lors de la demande."));
     } finally {
       setDecisionLoading(false);
     }
@@ -731,7 +744,7 @@ export default function ControlTower() {
       }
       setGoNoGoResult(data as GoNoGoResult);
     } catch (err: any) {
-      setDecisionError(err?.message || "Erreur Go/No-Go.");
+      setDecisionError(toUserFacingAssistantError(err?.message || "Erreur Go/No-Go."));
     } finally {
       setDecisionLoading(false);
     }
@@ -1143,7 +1156,6 @@ export default function ControlTower() {
     } else {
       setCurrencyFilter("ALL");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currencyList.join("|")]);
 
   const filteredRows = React.useMemo(() => {
@@ -1538,7 +1550,6 @@ export default function ControlTower() {
 
   React.useEffect(() => {
     void loadRssForCountry(selectedWatchCountry);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWatchCountry]);
 
   React.useEffect(() => {
