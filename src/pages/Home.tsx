@@ -4,53 +4,130 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import {
-  ArrowRight,
-  CheckCircle2,
-  FileText,
-  Globe,
-  Radar,
-  SearchCheck,
-  ShieldCheck,
-  Target,
-  TrendingUp,
-  Wallet,
-} from "lucide-react";
-
-const valueCards = [
-  {
-    icon: ShieldCheck,
-    title: "Go / No-Go Export",
-    line1: "Vendez / ne vendez pas / vendez sous conditions.",
-    line2: "Score risque + recommandations + checklist.",
-  },
-  {
-    icon: Wallet,
-    title: "Sécuriser le paiement",
-    line1: "Choisissez le bon mode (LC, CAD, OA…).",
-    line2: "Réduisez le risque d’impayé.",
-  },
-  {
-    icon: TrendingUp,
-    title: "Prix export (Landed Cost)",
-    line1: "Coût complet + marge + prix cible.",
-    line2: "Export PDF/CSV (Pro).",
-  },
-  {
-    icon: FileText,
-    title: "Documents & conformité",
-    line1: "Contrôle facture / packing / mentions.",
-    line2: "Corrections + modèles de mail.",
-  },
-];
-
-const audiences = [
-  "PME & commerciaux export",
-  "ADV export / import",
-  "Consultants & responsables conformité",
-];
+import { useI18n } from "@/contexts/LanguageContext";
+import heroExportVideo from "@/assets/hero-export.mp4";
+import { HomeHero } from "@/components/home/HomeHero";
+import { CheckCircle2, FileText, Globe, SearchCheck, ShieldCheck, Target, TrendingUp, Wallet } from "lucide-react";
 
 export default function Home() {
+  const { lang } = useI18n();
+  const isEn = lang === "en";
+  const audiences = isEn
+    ? ["SMEs & export sales teams", "Export / import operations", "Consultants & compliance managers"]
+    : ["PME & commerciaux export", "ADV export / import", "Consultants & responsables conformité"];
+
+  const heroLabels = isEn
+    ? {
+        badge: "Export control tower",
+        title: "Export control tower? Go/No-Go in 60 seconds.",
+        intro:
+          "A professional cockpit to secure your international deals: country Go/No-Go, payment, Incoterms, documents and landed cost.",
+        bullets: [
+          "A clear verdict + 3 immediate actions.",
+          "Checklists and ready-to-send messages.",
+          "Secure history + action plan.",
+        ],
+        ctaVideo: "Watch the demo video",
+        ctaTower: "Open the control tower",
+        ctaContact: "Contact us for a quote",
+        confidentiality:
+          "Control tower available after sign-in only. Confidential data · EU hosting · GDPR.",
+      }
+    : {
+        badge: "Tour de contrôle export",
+        title: "Tour de contrôle export ? Go/No-Go en 60 secondes.",
+        intro:
+          "Un cockpit pro pour sécuriser vos ventes à l’international : Go/No-Go pays, paiement, Incoterms, documents et prix export (landed cost).",
+        bullets: [
+          "Un verdict clair + 3 actions immédiates.",
+          "Checklists et messages prêts à envoyer.",
+          "Historique sécurisé + plan d’objectifs.",
+        ],
+        ctaVideo: "Voir la vidéo de démo",
+        ctaTower: "Accéder au tour de contrôle",
+        ctaContact: "Nous contacter pour devis",
+        confidentiality:
+          "Tour de contrôle accessible uniquement après connexion. Données confidentielles · Hébergement UE · RGPD.",
+      };
+
+  const valueCards = isEn
+    ? [
+        {
+          icon: ShieldCheck,
+          title: "Go / No-Go Export",
+          line1: "Sell / do not sell / sell with conditions.",
+          line2: "Risk score + recommendations + checklist.",
+        },
+        {
+          icon: Wallet,
+          title: "Secure payment",
+          line1: "Choose the right method (LC, CAD, OA…).",
+          line2: "Reduce non-payment risk.",
+        },
+        {
+          icon: TrendingUp,
+          title: "Export pricing (Landed Cost)",
+          line1: "Full cost + margin + target price.",
+          line2: "PDF/CSV export (Pro).",
+        },
+        {
+          icon: FileText,
+          title: "Documents & compliance",
+          line1: "Invoice / packing list / mention checks.",
+          line2: "Corrections + email templates.",
+        },
+      ]
+    : [
+        {
+          icon: ShieldCheck,
+          title: "Go / No-Go Export",
+          line1: "Vendez / ne vendez pas / vendez sous conditions.",
+          line2: "Score risque + recommandations + checklist.",
+        },
+        {
+          icon: Wallet,
+          title: "Sécuriser le paiement",
+          line1: "Choisissez le bon mode (LC, CAD, OA…).",
+          line2: "Réduisez le risque d’impayé.",
+        },
+        {
+          icon: TrendingUp,
+          title: "Prix export (Landed Cost)",
+          line1: "Coût complet + marge + prix cible.",
+          line2: "Export PDF/CSV (Pro).",
+        },
+        {
+          icon: FileText,
+          title: "Documents & conformité",
+          line1: "Contrôle facture / packing / mentions.",
+          line2: "Corrections + modèles de mail.",
+        },
+      ];
+
+  const howItWorksSteps = isEn
+    ? [
+        "You provide country, product, and scenario.",
+        "We analyze risks, costs, and obligations.",
+        "You leave with an action plan + ready-to-send deliverables.",
+      ]
+    : [
+        "Vous renseignez le pays, le produit et votre scénario.",
+        "On analyse risques, coûts et obligations.",
+        "Vous repartez avec un plan d’actions + des livrables prêts à envoyer.",
+      ];
+
+  const prospectionBullets = isEn
+    ? [
+        "ICP method (ideal customer profile) + target list",
+        "Email sequence with 3 follow-ups + LinkedIn message",
+        "Objections: price, lead-time, risk — ready answers",
+      ]
+    : [
+        "Méthode ICP (profil client idéal) + liste cible",
+        "Séquence email 3 relances + message LinkedIn",
+        "Objections: prix, délais, risque — réponses prêtes",
+      ];
+
   usePageMeta("meta.home.title", "meta.home.description", {
     brandSuffix: "Export Navigator",
   });
@@ -58,76 +135,10 @@ export default function Home() {
   return (
     <PublicLayout>
       <main className="mx-auto max-w-6xl space-y-16 px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
-        <section className="grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-6">
-            <Badge variant="secondary" className="w-fit rounded-full px-3 py-1 text-xs">Tour de contr?le export</Badge>
-            <div className="space-y-4">
-              <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">Tour de contr?le export ? Go/No-Go en 60 secondes.</h1>
-              <p className="max-w-2xl text-lg text-slate-600">Un cockpit pro pour s?curiser vos ventes ? l?international: Go/No-Go pays, paiement, Incoterms,
-                documents et prix export (landed cost).</p>
-            </div>
-            <ul className="space-y-2 text-slate-700">
-              {[
-                "Un verdict clair + 3 actions immédiates.",
-                "Checklists et messages prêts à envoyer.",
-                "Historique sécurisé + plan d’objectifs.",
-              ].map((item) => (
-                <li key={item} className="flex items-start gap-2">
-                  <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="sm:min-w-60">
-                <a href="#hero-video">
-                  Voir une d?mo / G?n?rer un exemple de rapport <ArrowRight className="ml-2 size-4" />
-                </a>
-              </Button>
-              <Button asChild variant="outline" size="lg" className="sm:min-w-52">
-                <Link to="/login?next=%2Fapp%2Fcontrol-tower">Acc?der au tour de contr?le</Link>
-              </Button>
-              <Button asChild variant="ghost" size="lg" className="sm:min-w-52">
-                <Link to="/contact">Nous contacter pour devis</Link>
-              </Button>
-            </div>
-            <p className="text-sm text-slate-500">Tour de contr?le accessible uniquement apr?s connexion. Donn?es confidentielles ? H?bergement UE ? RGPD.</p>
-          </div>
-
-          <Card className="border-slate-200 bg-gradient-to-br from-slate-50 to-white shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Radar className="size-5 text-primary" />
-                Mock — Rapport Go/No-Go
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm text-slate-700">
-              <div className="rounded-xl border bg-white p-3">
-                <p className="font-medium">Pays: Maroc • Produit: Machines</p>
-                <p className="text-emerald-700">Verdict: GO sous conditions</p>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="rounded-lg border bg-white p-3">
-                  <p className="text-slate-500">Risque</p>
-                  <p className="font-semibold">42 / 100</p>
-                </div>
-                <div className="rounded-lg border bg-white p-3">
-                  <p className="text-slate-500">Livrables</p>
-                  <p className="font-semibold">Checklist + email client</p>
-                </div>
-              </div>
-              <div className="rounded-lg border bg-white p-3">
-                <p className="font-semibold text-slate-900">Action 1 : V?rifier Incoterm + assurance</p>
-              </div>
-              <p className="text-sm text-slate-600">
-                Rapport orienté décision: risques TVA/douane, actions prioritaires, livrables et suivi d’exécution.
-              </p>
-            </CardContent>
-          </Card>
-        </section>
+        <HomeHero labels={heroLabels} isEn={isEn} />
 
         <section className="space-y-6">
-          <h2 className="text-2xl font-semibold text-slate-900">Ce que vous obtenez (en 60 secondes)</h2>
+          <h2 className="text-2xl font-semibold text-slate-900">{isEn ? "What you get (in 60 seconds)" : "Ce que vous obtenez (en 60 secondes)"}</h2>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {valueCards.map((card) => {
               const Icon = card.icon;
@@ -148,20 +159,16 @@ export default function Home() {
         </section>
 
         <section className="space-y-6">
-          <h2 className="text-2xl font-semibold text-slate-900">Comment ça marche</h2>
+          <h2 className="text-2xl font-semibold text-slate-900">{isEn ? "How it works" : "Comment ça marche"}</h2>
           <div className="grid gap-4 md:grid-cols-3">
-            {[
-              "Vous renseignez le pays, le produit et votre scénario.",
-              "On analyse risques, coûts et obligations.",
-              "Vous repartez avec un plan d’actions + des livrables prêts à envoyer.",
-            ].map((step, index) => (
+            {howItWorksSteps.map((step, index) => (
               <Card key={step} className="border-slate-200">
                 <CardHeader>
                   <CardTitle className="text-base">
                     <span className="mr-2 inline-flex size-6 items-center justify-center rounded-full bg-primary/10 text-sm text-primary">
                       {index + 1}
                     </span>
-                    Étape {index + 1}
+                    {isEn ? "Step" : "Étape"} {index + 1}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-slate-600">{step}</CardContent>
@@ -171,7 +178,7 @@ export default function Home() {
         </section>
 
         <section className="space-y-6">
-          <h2 className="text-2xl font-semibold text-slate-900">Pour qui</h2>
+          <h2 className="text-2xl font-semibold text-slate-900">{isEn ? "Who it's for" : "Pour qui"}</h2>
           <div className="grid gap-4 md:grid-cols-3">
             {audiences.map((audience) => (
               <Card key={audience} className="border-slate-200">
@@ -183,71 +190,65 @@ export default function Home() {
             ))}
           </div>
           <p className="text-slate-600">
-            Que vous débutiez ou que vous gériez déjà plusieurs pays, l’objectif est le même: gagner du temps,
-            éviter les erreurs, sécuriser les marges.
+            {isEn ? "Whether you are just starting or already managing multiple countries, the goal stays the same: save time, avoid mistakes, protect margins." : "Que vous débutiez ou que vous gériez déjà plusieurs pays, l’objectif est le même: gagner du temps, éviter les erreurs, sécuriser les marges."}
           </p>
         </section>
 
         <section className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-6">
-          <p className="text-sm font-medium uppercase tracking-wide text-primary">Prospection (playbook inclus)</p>
+          <p className="text-sm font-medium uppercase tracking-wide text-primary">{isEn ? "Prospecting (playbook included)" : "Prospection (playbook inclus)"}</p>
           <h2 className="text-2xl font-semibold text-slate-900">
-            Trouver des clients à l’international, sans s’éparpiller.
+            {isEn ? "Find international clients without losing focus." : "Trouver des clients à l’international, sans s’éparpiller."}
           </h2>
           <ul className="space-y-2 text-slate-700">
-            <li className="flex gap-2">
-              <Globe className="mt-0.5 size-5 shrink-0 text-primary" />
-              Méthode ICP (profil client idéal) + liste cible
-            </li>
-            <li className="flex gap-2">
-              <SearchCheck className="mt-0.5 size-5 shrink-0 text-primary" />
-              Séquence email 3 relances + message LinkedIn
-            </li>
-            <li className="flex gap-2">
-              <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
-              Objections: prix, délais, risque — réponses prêtes
-            </li>
+            {prospectionBullets.map((item, idx) => {
+              const Icon = idx === 0 ? Globe : idx === 1 ? SearchCheck : CheckCircle2;
+              return (
+                <li key={item} className="flex gap-2">
+                  <Icon className="mt-0.5 size-5 shrink-0 text-primary" />
+                  {item}
+                </li>
+              );
+            })}
           </ul>
         </section>
 
         <section id="hero-video" className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6">
-          <h2 className="text-2xl font-semibold text-slate-900">Voir l’outil en vidéo</h2>
+          <h2 className="text-2xl font-semibold text-slate-900">{isEn ? "See the tool in video" : "Voir l’outil en vidéo"}</h2>
           <p className="max-w-3xl text-slate-600">
-            Démonstration rapide de la tour de contrôle, de l’analyse facture et du calcul de coûts export.
+            {isEn ? "Quick demo of control tower, invoice check and export costing." : "Démonstration rapide de la tour de contrôle, de l’analyse facture et du calcul de coûts export."}
           </p>
-          <video className="w-full rounded-xl border border-slate-200" controls preload="metadata" poster="/videos/hero-export.jpg">
-            <source src="/videos/hero-export.mp4" type="video/mp4" />
-            <source src="/videos/hero-export.webm" type="video/webm" />
-            Votre navigateur ne supporte pas la lecture vidéo.
+          <video className="w-full rounded-xl border border-slate-200" controls preload="metadata">
+            <source src={heroExportVideo} type="video/mp4" />
+            {isEn ? "Your browser does not support video playback." : "Votre navigateur ne supporte pas la lecture vidéo."}
           </video>
         </section>
 
         <section className="space-y-4 rounded-2xl border border-slate-200 p-6">
-          <h2 className="text-2xl font-semibold text-slate-900">Vos données sont confidentielles.</h2>
+          <h2 className="text-2xl font-semibold text-slate-900">{isEn ? "Your data is confidential." : "Vos données sont confidentielles."}</h2>
           <p className="max-w-3xl text-slate-600">
-            Vos informations sont protégées par des règles d’accès strictes. Vous pouvez supprimer vos données à
-            tout moment. Les données inactives sont automatiquement purgées selon notre politique de rétention.
+            {isEn ? "Your information is protected by strict access rules. You can delete your data at any time. Inactive data is automatically purged according to our retention policy." : "Vos informations sont protégées par des règles d’accès strictes. Vous pouvez supprimer vos données à tout moment. Les données inactives sont automatiquement purgées selon notre politique de rétention."}
           </p>
           <div className="flex flex-wrap gap-3">
             <Button asChild variant="outline">
-              <Link to="/legal">En savoir plus</Link>
+              <Link to="/legal">{isEn ? "Learn more" : "En savoir plus"}</Link>
             </Button>
             <Button asChild variant="ghost" className="text-slate-700">
               <a href="mailto:privacy@exportnavigator.example?subject=Suppression%20de%20mes%20donn%C3%A9es">
-                Supprimer mes données
+                {isEn ? "Delete my data" : "Supprimer mes données"}
               </a>
             </Button>
           </div>
         </section>
 
         <section className="space-y-4 rounded-2xl bg-slate-900 p-8 text-white">
-          <h2 className="text-3xl font-semibold">Prêt à sécuriser votre prochain deal export ?</h2>
-          <p className="text-slate-200">Lancez un Go/No-Go en 60 secondes.</p>
+          <h2 className="text-3xl font-semibold">{isEn ? "Ready to secure your next export deal?" : "Prêt à sécuriser votre prochain deal export ?"}</h2>
+          <p className="text-slate-200">{isEn ? "Run a Go/No-Go in 60 seconds." : "Lancez un Go/No-Go en 60 secondes."}</p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button asChild size="lg" variant="secondary" className="sm:min-w-48">
-              <Link to="/register">Démarrer maintenant</Link>
+              <Link to="/register">{isEn ? "Start now" : "Démarrer maintenant"}</Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="border-white/40 text-white hover:bg-white/10 sm:min-w-48">
-              <Link to="/pricing">Voir les tarifs</Link>
+              <Link to="/pricing">{isEn ? "View pricing" : "Voir les tarifs"}</Link>
             </Button>
           </div>
         </section>
