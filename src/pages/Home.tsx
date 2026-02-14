@@ -26,6 +26,40 @@ export default function Home() {
     ? ["SMEs & export sales teams", "Export / import operations", "Consultants & compliance managers"]
     : ["PME & commerciaux export", "ADV export / import", "Consultants & responsables conformité"];
 
+  const heroLabels = isEn
+    ? {
+        badge: "Export control tower",
+        title: "Export control tower? Go/No-Go in 60 seconds.",
+        intro:
+          "A professional cockpit to secure your international deals: country Go/No-Go, payment, Incoterms, documents and landed cost.",
+        bullets: [
+          "A clear verdict + 3 immediate actions.",
+          "Checklists and ready-to-send messages.",
+          "Secure history + action plan.",
+        ],
+        ctaVideo: "Watch the demo video",
+        ctaTower: "Open the control tower",
+        ctaContact: "Contact us for a quote",
+        confidentiality:
+          "Control tower available after sign-in only. Confidential data · EU hosting · GDPR.",
+      }
+    : {
+        badge: "Tour de contrôle export",
+        title: "Tour de contrôle export ? Go/No-Go en 60 secondes.",
+        intro:
+          "Un cockpit pro pour sécuriser vos ventes à l’international : Go/No-Go pays, paiement, Incoterms, documents et prix export (landed cost).",
+        bullets: [
+          "Un verdict clair + 3 actions immédiates.",
+          "Checklists et messages prêts à envoyer.",
+          "Historique sécurisé + plan d’objectifs.",
+        ],
+        ctaVideo: "Voir la vidéo de démo",
+        ctaTower: "Accéder au tour de contrôle",
+        ctaContact: "Nous contacter pour devis",
+        confidentiality:
+          "Tour de contrôle accessible uniquement après connexion. Données confidentielles · Hébergement UE · RGPD.",
+      };
+
   const valueCards = isEn
     ? [
         {
@@ -160,6 +194,13 @@ export default function Home() {
                   "Checklists et messages prêts à envoyer.",
                   "Historique sécurisé + plan d’objectifs.",
                 ].map((item) => (
+              <Badge variant="secondary" className="w-fit rounded-full px-3 py-1 text-xs">{heroLabels.badge}</Badge>
+              <div className="space-y-4">
+                <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">{heroLabels.title}</h1>
+                <p className="max-w-2xl text-lg text-slate-600">{heroLabels.intro}</p>
+              </div>
+              <ul className="space-y-2 text-slate-700">
+                {heroLabels.bullets.map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" />
                     <span>{item}</span>
@@ -284,6 +325,59 @@ export default function Home() {
               </div>
             </CardContent>
           </Card>
+                    {heroLabels.ctaVideo} <ArrowRight className="ml-2 size-4" />
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="lg" className="sm:min-w-52">
+                  <Link to="/login?next=%2Fapp%2Fcontrol-tower">{heroLabels.ctaTower}</Link>
+                </Button>
+                <Button asChild variant="ghost" size="lg" className="justify-start px-0 text-slate-700 hover:text-slate-900 sm:px-4">
+                  <Link to="/contact">{heroLabels.ctaContact}</Link>
+                </Button>
+              </div>
+              <p className="text-sm text-slate-500">{heroLabels.confidentiality}</p>
+            </div>
+
+            <div className="space-y-4">
+              <Card className="border-slate-200 bg-white shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Radar className="size-5 text-primary" />
+                    {isEn ? "Mock — Go/No-Go report" : "Mock — Rapport Go/No-Go"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 text-sm text-slate-700">
+                  <div className="rounded-xl border bg-slate-50 p-3">
+                    <p className="font-medium">{isEn ? "Country: Morocco • Product: Machinery" : "Pays: Maroc • Produit: Machines"}</p>
+                    <p className="text-emerald-700">{isEn ? "Verdict: GO with conditions" : "Verdict: GO sous conditions"}</p>
+                  </div>
+                  <div className="grid gap-2 grid-cols-2">
+                    <div className="rounded-lg border bg-white p-3">
+                      <p className="text-slate-500">{isEn ? "Risk" : "Risque"}</p>
+                      <p className="font-semibold">42 / 100</p>
+                    </div>
+                    <div className="rounded-lg border bg-white p-3">
+                      <p className="text-slate-500">{isEn ? "Deliverables" : "Livrables"}</p>
+                      <p className="font-semibold">{isEn ? "Checklist + client email" : "Checklist + email client"}</p>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border bg-white p-3">
+                    <p className="font-semibold text-slate-900">{isEn ? "Action 1: Validate Incoterm + insurance" : "Action 1 : Vérifier Incoterm + assurance"}</p>
+                  </div>
+                  <p className="text-sm text-slate-600">
+                    {isEn ? "Decision-oriented report: VAT/customs risks, priority actions, deliverables and execution follow-up." : "Rapport orienté décision : risques TVA/douane, actions prioritaires, livrables et suivi d’exécution."}
+                  </p>
+                </CardContent>
+              </Card>
+
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-950/95 p-2">
+                <video className="aspect-video w-full rounded-lg" autoPlay muted loop playsInline preload="metadata">
+                  <source src={heroExportVideo} type="video/mp4" />
+                </video>
+                <p className="px-1 pt-2 text-xs text-slate-300">{isEn ? "Quick product preview in real conditions." : "Aperçu rapide de la plateforme en conditions réelles."}</p>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section className="space-y-6">
