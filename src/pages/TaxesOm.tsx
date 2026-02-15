@@ -160,6 +160,11 @@ export default function TaxesOm() {
       delete next[id];
       return next;
     });
+    setLookupLoadingByLine((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
   const detectProductTaxes = async (line: ProductLine) => {

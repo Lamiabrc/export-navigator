@@ -151,14 +151,6 @@ async function fetchSupabaseFacts(question: string, signals: ReturnType<typeof e
 
   if (hsOr.length) hsQuery = hsQuery.or(hsOr.join(","));
   const { data: hsRows } = await hsQuery;
-  const { data: hsRows } = await admin
-    .from("export_hs_catalog")
-    .select("hs_code,destination,om_rate,omr_rate,notes,source")
-    .limit(8)
-    .or([
-      hsPattern ? `hs_code.ilike.${hsPattern}` : null,
-      signals.country ? `destination.ilike.%${signals.country}%` : null,
-    ].filter(Boolean).join(","));
 
   if (Array.isArray(hsRows) && hsRows.length) {
     snippets.push(
@@ -184,7 +176,6 @@ async function fetchSupabaseFacts(question: string, signals: ReturnType<typeof e
     .order("created_at", { ascending: false })
     .limit(6)
     .or(regFilter);
-    .or(signals.country ? `jurisdiction.ilike.%${signals.country}%,title.ilike.%${signals.country}%` : `title.ilike.%${question.slice(0, 20)}%`);
 
   if (Array.isArray(regRows) && regRows.length) {
     snippets.push(
@@ -302,9 +293,6 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       .map((c: any, idx: number) => `#${idx + 1} (doc ${c.document_id}):\n${c.content}`)
       .join("\n\n");
 
-    const supabaseFacts = await fetchSupabaseFacts(question, signals);
-    const specializedLinks = specializedSourcesFor(question);
-
     const knowledgeBlocks = [
       contextBlocks ? `Base documentaire (RAG):\n${contextBlocks}` : "",
       supabaseFacts.snippets.length ? supabaseFacts.snippets.join("\n\n") : "",
@@ -351,10 +339,6 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     }
 
     const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
-    const source_links = [
-      ...supabaseFacts.links,
-      ...specializedLinks,
-    ].slice(0, 8);
 
     const result: AskResult = {
       answer,
@@ -394,10 +378,6 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
           "Donner HS ou description technique.",
           "Confirmer incoterm et mode de paiement.",
         ],
-      return json(res, 503, {
-        ok: false,
-        error: "ai_temporarily_unavailable",
-        detail: "Le service IA n'est pas configuré pour cet environnement.",
       });
     }
 
