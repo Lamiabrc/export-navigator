@@ -191,6 +191,36 @@ const GLOBAL_RSS_SOURCES: RssSource[] = [
   { name: "OMC – Dernières nouvelles", url: "https://www.wto.org/library/rss/latest_news_e.xml" },
 ];
 
+const COUNTRY_NAME_ALIASES: Record<string, string> = {
+  france: "FR",
+  maroc: "MA",
+  morocco: "MA",
+  espagne: "ES",
+  spain: "ES",
+  allemagne: "DE",
+  germany: "DE",
+  italie: "IT",
+  italy: "IT",
+  portugal: "PT",
+  belgique: "BE",
+  belgium: "BE",
+  royaumeuni: "GB",
+  uk: "GB",
+  unitedkingdom: "GB",
+  etatsunis: "US",
+  usa: "US",
+  unitedstates: "US",
+  chine: "CN",
+  china: "CN",
+  canada: "CA",
+  bresil: "BR",
+  brazil: "BR",
+  algerie: "DZ",
+  tunisie: "TN",
+  turkey: "TR",
+  turquie: "TR",
+};
+
 const COUNTRY_RSS_SOURCES: Record<string, RssSource[]> = {
   FR: [
     { name: "Economie.gouv.fr – Actualités", url: "https://www.economie.gouv.fr/rss/toutesactualites" },
@@ -235,7 +265,78 @@ function normalizeHS(value: string) {
 function normalizeCountryCode(value: string) {
   const raw = stripDiacritics(String(value || "")).trim();
   if (!raw) return "";
-  return raw.split(/[\s,;/_-]+/)[0].toUpperCase();
+  const token = raw.split(/[\s,;/_-]+/)[0].toUpperCase();
+  if (/^[A-Z]{2}$/.test(token)) return token;
+
+  const compact = stripDiacritics(raw).toLowerCase().replace(/[^a-z]/g, "");
+  if (COUNTRY_NAME_ALIASES[compact]) return COUNTRY_NAME_ALIASES[compact];
+
+  for (const [iso, meta] of Object.entries(COUNTRY_COORDS)) {
+    const name = stripDiacritics(meta.name || "").toLowerCase().replace(/[^a-z]/g, "");
+    if (name && (compact.includes(name) || name.includes(compact))) return iso;
+  }
+
+  return token;
+}
+
+function extractClientRowsFromFreeText(text: string): ClientRegionRow[] {
+  const blocks = text
+    .split(/\n{2,}|\r\n\r\n/)
+    .map((b) => b.trim())
+    .filter(Boolean);
+
+  const fallbackLines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const candidates = blocks.length ? blocks : fallbackLines;
+  const rows: ClientRegionRow[] = [];
+
+  const pick = (src: string, re: RegExp) => src.match(re)?.[1]?.trim() || "";
+
+  for (const c of candidates) {
+    const countryLabel = pick(c, /(?:pays|country|destination|dest)\s*[:=-]\s*([^,;\n]+)/i);
+    const product = pick(c, /(?:produit|product|article|sku|designation|description)\s*[:=-]\s*([^,;\n]+)/i);
+    const clientName = pick(c, /(?:client|customer|societe|company)\s*[:=-]\s*([^,;\n]+)/i);
+
+    let region = normalizeCountryCode(countryLabel);
+    if (!region) {
+      const possibleIso = c.match(/\b([A-Z]{2})\b/g)?.find((iso) =>
+        Boolean(COUNTRY_COORDS[iso as keyof typeof COUNTRY_COORDS]),
+      );
+      if (possibleIso) region = possibleIso;
+    }
+
+    if (!region) {
+      for (const [alias, iso] of Object.entries(COUNTRY_NAME_ALIASES)) {
+        if (stripDiacritics(c).toLowerCase().replace(/[^a-z]/g, "").includes(alias)) {
+          region = iso;
+          break;
+        }
+      }
+    }
+
+    const clients = parseNumber(
+      pick(c, /(?:nb\s*clients?|clients?|customer\s*count)\s*[:=-]\s*([^,;\n]+)/i),
+    ) ?? 1;
+    const sales = parseNumber(
+      pick(c, /(?:ca|sales|revenue|chiffre\s*d\s*affaires)\s*[:=-]\s*([^,;\n]+)/i),
+    ) ?? 0;
+
+    if (!region && !product && !clientName) continue;
+
+    rows.push({
+      id: uid(),
+      region: region || "OTHER",
+      sector: clientName || "",
+      product: product || "",
+      clients: Math.max(0, Number(clients) || 0),
+      sales: Math.max(0, Number(sales) || 0),
+    });
+  }
+
+  return rows;
 }
 
 function parseNumber(value: string | null | undefined) {
@@ -837,7 +938,13 @@ const assistantExamples = [
       const text = await file.text();
       const parsed = parseCsvText(text);
       if (!parsed.headers.length) {
-        setClientCsvError("CSV vide ou illisible.");
+        const extracted = extractClientRowsFromFreeText(text);
+        if (!extracted.length) {
+          setClientCsvError("Fichier illisible: aucun pays/produit/client détecté.");
+          return;
+        }
+        setClientRows(extracted);
+        setClientCsvError(null);
         return;
       }
 
@@ -864,7 +971,13 @@ const assistantExamples = [
       };
 
       if (idx.region === null || idx.clients === null) {
-        setClientCsvError("Colonnes obligatoires manquantes : region + clients.");
+        const extracted = extractClientRowsFromFreeText(text);
+        if (!extracted.length) {
+          setClientCsvError("Colonnes manquantes et aucun pays/produit/client détecté en texte libre.");
+          return;
+        }
+        setClientRows(extracted);
+        setClientCsvError(null);
         return;
       }
 
