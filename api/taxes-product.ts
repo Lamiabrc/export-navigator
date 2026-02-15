@@ -16,11 +16,6 @@ function norm(v: string) {
 }
 
 function parsePercent(v: unknown) {
-  if (typeof v === "string") {
-    const cleaned = v.replace("%", "").replace(",", ".").trim();
-    const parsed = Number(cleaned);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
@@ -99,9 +94,8 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       const n = norm(product);
       selected = rows.find((r: any) => {
         const hay = norm(`${r?.notes || ""} ${r?.hs_code || ""}`);
-        const haySeed = hay.slice(0, 24).trim();
         const destOk = !destNorm || norm(String(r?.destination || "")).includes(destNorm);
-        return destOk && (hay.includes(n) || (haySeed.length > 2 && n.includes(haySeed)));
+        return destOk && (hay.includes(n) || n.includes(hay.slice(0, 24)));
       });
     }
 
@@ -121,6 +115,12 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     }
 
     const hsCode = String(selected?.hs_code || hsHint || "").replace(/[^0-9]/g, "");
+
+    const { data: dutyRows } = await admin
+      .from("export_incoterms")
+      .select("code,title")
+      .limit(5);
+    void dutyRows;
 
     return json(res, 200, {
       ok: true,
