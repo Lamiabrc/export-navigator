@@ -153,7 +153,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
       <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-white/85 via-white/90 to-white" />
 
       <header className="relative z-10 border-b border-blue-100 bg-white/85 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
+        <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between gap-4 px-6 py-3">
           {/* BRAND */}
           <BrandLogo
             href="/"
@@ -254,7 +254,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
         {/* Mobile nav */}
         <div className="md:hidden border-t border-blue-100 bg-white/80">
-          <div className="mx-auto max-w-6xl overflow-x-auto px-4 py-2">
+          <div className="mx-auto w-full max-w-[90rem] overflow-x-auto px-4 py-2">
             <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.25em] text-blue-900/70">
               {navLinks.map((link) => {
                 const active = isActivePath(location.pathname, link.to);
@@ -282,7 +282,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         <div className="h-1 bg-gradient-to-r from-blue-700 via-white to-red-600" />
       </header>
 
-      <main className="relative z-10 mx-auto w-full max-w-7xl px-6 py-10 md:px-10">
+      <main className="relative z-10 mx-auto w-full max-w-[90rem] px-6 py-10 md:px-10">
         <div className="mb-6">
           <TricolorBanner title={banner.title} question={banner.question} />
         </div>
@@ -299,7 +299,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
       ) : null}
 
       <footer className="relative z-10 border-t border-blue-100 bg-white/85">
-        <div className="mx-auto grid max-w-7xl gap-6 px-6 py-10 md:px-10 lg:grid-cols-[1fr_0.95fr]">
+        <div className="mx-auto grid w-full max-w-[90rem] gap-6 px-6 py-10 md:px-10 lg:grid-cols-[1fr_0.95fr]">
           <div className="space-y-3">
             <div className="text-sm font-semibold text-foreground">MPL Export Navigator</div>
             <div className="text-sm text-muted-foreground">
