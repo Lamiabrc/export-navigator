@@ -6,8 +6,6 @@ export type HeroLabels = {
   badge: string;
   title: string;
   intro: string;
-  welcomeTitle: string;
-  welcomeBody: string;
   bullets: string[];
   ctaVideo: string;
   ctaTower: string;
@@ -18,12 +16,9 @@ export type HeroLabels = {
 export const heroByLang: Record<HomeLang, HeroLabels> = {
   en: {
     badge: "Export control tower",
-    title: "Your ally for export (France & Europe).",
+    title: "Export control tower? Go/No-Go in 60 seconds.",
     intro:
-      "From Go/No-Go decisions to recurring operational follow-up: simplify export management, reduce risk and keep control over margin.",
-    welcomeTitle: "Welcome to MPL Conseil Export",
-    welcomeBody:
-      "MPL Export helps SMEs decide where to sell, at what price, and with which compliance checks before sending a quote.",
+      "A professional cockpit to secure your international deals: country Go/No-Go, payment, Incoterms, documents and landed cost.",
     bullets: [
       "A clear verdict + 3 immediate actions.",
       "Checklists and ready-to-send messages.",
@@ -36,12 +31,9 @@ export const heroByLang: Record<HomeLang, HeroLabels> = {
   },
   fr: {
     badge: "Tour de contrôle export",
-    title: "L’allié pour l’export (France & Europe).",
+    title: "Tour de contrôle export ? Go/No-Go en 60 secondes.",
     intro:
-      "Du Go/No-Go à un pilotage récurrent des opérations : simplifiez la gestion export, réduisez les risques et sécurisez la marge.",
-    welcomeTitle: "Bienvenue dans MPL Conseil Export",
-    welcomeBody:
-      "MPL Export aide les PME à décider où vendre, à quel prix et avec quels contrôles conformité avant d’envoyer un devis.",
+      "Un cockpit pro pour sécuriser vos ventes à l’international : Go/No-Go pays, paiement, Incoterms, documents et prix export (landed cost).",
     bullets: [
       "Un verdict clair + 3 actions immédiates.",
       "Checklists et messages prêts à envoyer.",
