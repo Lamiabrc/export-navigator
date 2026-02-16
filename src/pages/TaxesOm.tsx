@@ -1,5 +1,4 @@
 import * as React from "react";
-import * as React from "react";
 import { Link } from "react-router-dom";
 
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -72,6 +71,16 @@ type ProductLine = {
   packaging: number;
 };
 
+type ProductTaxLookup = {
+  hs_code: string | null;
+  om_rate: number;
+  omr_rate: number;
+  taxes_rate: number;
+  source?: string | null;
+  note?: string | null;
+  openai_enabled?: boolean;
+};
+
 const uid = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
 export default function TaxesOm() {
@@ -100,6 +109,8 @@ export default function TaxesOm() {
   const [lines, setLines] = React.useState<ProductLine[]>([
     { id: uid(), description: "", hs: "", qty: 1, unitPrice: 0, packaging: 0 },
   ]);
+  const [lookupByLine, setLookupByLine] = React.useState<Record<string, ProductTaxLookup>>({});
+  const [lookupLoadingByLine, setLookupLoadingByLine] = React.useState<Record<string, boolean>>({});
 
   const [dutyImportRate, setDutyImportRate] = React.useState(0);
   const [dutyExportRate, setDutyExportRate] = React.useState(0);
@@ -142,7 +153,61 @@ export default function TaxesOm() {
   };
 
   const addLine = () => setLines((prev) => [...prev, { id: uid(), description: "", hs: "", qty: 1, unitPrice: 0, packaging: 0 }]);
-  const removeLine = (id: string) => setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.id !== id) : prev));
+  const removeLine = (id: string) => {
+    setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.id !== id) : prev));
+    setLookupByLine((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setLookupLoadingByLine((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const detectProductTaxes = async (line: ProductLine) => {
+    if (!effectiveDestination) return;
+    setLookupLoadingByLine((prev) => ({ ...prev, [line.id]: true }));
+    try {
+      const resp = await fetch("/api/taxes-product", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product_name: line.description,
+          destination: effectiveDestination,
+          hs_hint: line.hs,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data?.ok) throw new Error(data?.error || "lookup_failed");
+      const result: ProductTaxLookup = {
+        hs_code: data?.hs_code ?? null,
+        om_rate: Number(data?.om_rate || 0),
+        omr_rate: Number(data?.omr_rate || 0),
+        taxes_rate: Number(data?.taxes_rate || 0),
+        source: data?.source ?? null,
+        note: data?.note ?? null,
+        openai_enabled: Boolean(data?.openai_enabled),
+      };
+      setLookupByLine((prev) => ({ ...prev, [line.id]: result }));
+      if (result.hs_code) updateLine(line.id, { hs: result.hs_code });
+    } catch (err) {
+      setLookupByLine((prev) => ({
+        ...prev,
+        [line.id]: {
+          hs_code: null,
+          om_rate: 0,
+          omr_rate: 0,
+          taxes_rate: 0,
+          note: err instanceof Error ? err.message : "Détection impossible",
+        },
+      }));
+    } finally {
+      setLookupLoadingByLine((prev) => ({ ...prev, [line.id]: false }));
+    }
+  };
 
   const merchandiseValue = React.useMemo(
     () => lines.reduce((sum, l) => sum + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0), 0),
@@ -208,10 +273,10 @@ export default function TaxesOm() {
       <div className="space-y-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">Taxes & douanes</p>
-            <h1 className="text-2xl font-bold">Taxes, TVA import et Octroi de mer</h1>
+            <p className="text-sm text-muted-foreground">Taxes produit</p>
+            <h1 className="text-2xl font-bold">Taxes produit: HS, taxes & OM par destination</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Renseignez destination, produits et HS pour estimer les taxes locales (DDP) et les droits de douane.
+              Saisissez un produit libre: on détecte le HS, les taxes et OM/OMR selon la destination (sans format tableau imposé).
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -323,7 +388,7 @@ export default function TaxesOm() {
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium">Produits & HS</div>
+                  <div className="text-sm font-medium">Produits, HS & taxes</div>
                   <Button variant="outline" onClick={addLine}>
                     Ajouter un produit
                   </Button>
@@ -331,58 +396,76 @@ export default function TaxesOm() {
 
                 <div className="space-y-3">
                   {lines.map((line) => (
-                    <div
-                      key={line.id}
-                      className="grid gap-3 md:grid-cols-[2fr_0.8fr_0.6fr_0.8fr_0.8fr_auto] items-end"
-                    >
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">Produit</div>
-                        <Input
-                          value={line.description}
-                          onChange={(e) => updateLine(line.id, { description: e.target.value })}
-                          placeholder="Produit / référence"
-                        />
+                    <React.Fragment key={line.id}>
+                      <div
+                        className="grid gap-3 md:grid-cols-[2fr_0.8fr_0.6fr_0.8fr_0.8fr_auto_auto] items-end"
+                      >
+                        <div className="space-y-1">
+                          <div className="text-xs text-muted-foreground">Produit</div>
+                          <Input
+                            value={line.description}
+                            onChange={(e) => updateLine(line.id, { description: e.target.value })}
+                            placeholder="Produit / référence"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs text-muted-foreground">HS code</div>
+                          <Input
+                            value={line.hs}
+                            onChange={(e) => updateLine(line.id, { hs: e.target.value })}
+                            placeholder="Ex : 6109"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs text-muted-foreground">Qté</div>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={line.qty}
+                            onChange={(e) => updateLine(line.id, { qty: Number(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs text-muted-foreground">Prix unitaire</div>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={line.unitPrice}
+                            onChange={(e) => updateLine(line.id, { unitPrice: Number(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-xs text-muted-foreground">Conditionnement</div>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={line.packaging}
+                            onChange={(e) => updateLine(line.id, { packaging: Number(e.target.value) || 0 })}
+                            placeholder="/ unité"
+                          />
+                        </div>
+                        <Button
+                          variant="secondary"
+                          onClick={() => void detectProductTaxes(line)}
+                          disabled={lookupLoadingByLine[line.id]}
+                        >
+                          {lookupLoadingByLine[line.id] ? "Détection..." : "Détecter HS/taxes"}
+                        </Button>
+                        <Button variant="ghost" onClick={() => removeLine(line.id)}>
+                          Retirer
+                        </Button>
                       </div>
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">HS code</div>
-                        <Input
-                          value={line.hs}
-                          onChange={(e) => updateLine(line.id, { hs: e.target.value })}
-                          placeholder="Ex : 6109"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">Qté</div>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={line.qty}
-                          onChange={(e) => updateLine(line.id, { qty: Number(e.target.value) || 0 })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">Prix unitaire</div>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={line.unitPrice}
-                          onChange={(e) => updateLine(line.id, { unitPrice: Number(e.target.value) || 0 })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">Conditionnement</div>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={line.packaging}
-                          onChange={(e) => updateLine(line.id, { packaging: Number(e.target.value) || 0 })}
-                          placeholder="/ unité"
-                        />
-                      </div>
-                      <Button variant="ghost" onClick={() => removeLine(line.id)}>
-                        Retirer
-                      </Button>
-                    </div>
+                      {lookupByLine[line.id] ? (
+                        <div className="md:col-span-7 rounded-lg border bg-muted/30 p-2 text-xs text-muted-foreground">
+                          HS détecté: <span className="font-medium text-foreground">{lookupByLine[line.id].hs_code || "n/a"}</span>
+                          {" · "}Taxes: <span className="font-medium text-foreground">{formatPct(lookupByLine[line.id].taxes_rate)}</span>
+                          {" · "}OM: <span className="font-medium text-foreground">{formatPct(lookupByLine[line.id].om_rate)}</span>
+                          {" · "}OMR: <span className="font-medium text-foreground">{formatPct(lookupByLine[line.id].omr_rate)}</span>
+                          {lookupByLine[line.id].openai_enabled ? " · IA active" : " · IA indisponible"}
+                          {lookupByLine[line.id].note ? <div className="mt-1">Note: {lookupByLine[line.id].note}</div> : null}
+                        </div>
+                      ) : null}
+                    </React.Fragment>
                   ))}
                 </div>
 
