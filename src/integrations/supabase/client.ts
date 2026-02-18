@@ -13,7 +13,6 @@ export const SUPABASE_ENV_OK = Boolean(supabaseUrl && supabaseAnonKey);
 export const DEMO_MODE = !SUPABASE_ENV_OK;
 
 if (!SUPABASE_ENV_OK) {
-  // eslint-disable-next-line no-console
   console.error("[Supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY at build time.", {
     hasUrl: Boolean(supabaseUrl),
     keyLength: (supabaseAnonKey || "").length,
