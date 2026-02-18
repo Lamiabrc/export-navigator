@@ -13,12 +13,12 @@ type LanguageContextValue = {
 type PersistMode = "none" | "session" | "local";
 
 /**
- * ✅ Nouveau projet : on ne persiste rien par défaut (visiteurs)
+ * Persistance de langue activée par défaut pour éviter le reset au rechargement
  * - "none"    : rien stocké
  * - "session" : stocké jusqu’à fermeture onglet
  * - "local"   : stocké durablement
  */
-const DEFAULT_PERSIST: PersistMode = "none";
+const DEFAULT_PERSIST: PersistMode = "local";
 
 const STORAGE_KEY = "mpl-export-lang";
 // compat ancienne clé (si tu l’avais déjà en prod)
@@ -106,7 +106,7 @@ export const LanguageProvider = ({
   const [lang, setLangState] = useState<LanguageCode>(() => getPreferredLang(persist));
 
   useEffect(() => {
-    // ✅ persistance optionnelle (par défaut none)
+    // persistance optionnelle (par défaut local)
     safeStorageSet(persist, STORAGE_KEY, lang);
 
     // ✅ HTML lang (SEO/accessibilité) — safe
@@ -120,7 +120,8 @@ export const LanguageProvider = ({
       const value = getNestedValue(mergedTranslations[lang], key);
       if (value !== undefined) return value;
 
-      return getNestedValue(mergedTranslations.en, key) ?? key;
+      const fallbackLang: LanguageCode = lang === "en" ? "fr" : "en";
+      return getNestedValue(mergedTranslations[fallbackLang], key) ?? key;
     },
     [lang],
   );
