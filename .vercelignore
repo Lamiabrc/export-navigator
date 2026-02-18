@@ -8,3 +8,5 @@ api/pdf.ts
 api/prefs.ts
 api/export/brief.ts
 api/ingest/feeds.ts
+
+api/cron/purge.ts
