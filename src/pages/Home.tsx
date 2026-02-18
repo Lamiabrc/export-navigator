@@ -53,12 +53,17 @@ export default function Home() {
 
   return (
     <PublicLayout>
-      <main className="mx-auto w-full max-w-[90rem] space-y-16 px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+      <main className="mx-auto w-full max-w-[96rem] space-y-14 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         <HomeHero labels={heroLabels} isEn={isEn} />
 
-        <section className="space-y-6">
-          <h2 className="text-2xl font-semibold text-slate-900">{isEn ? "What you get (in 60 seconds)" : "Ce que vous obtenez (en 60 secondes)"}</h2>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.38fr)_minmax(0,0.62fr)] lg:gap-8">
+          <div className="space-y-3">
+            <h2 className="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">{isEn ? "What you get (in 60 seconds)" : "Ce que vous obtenez (en 60 secondes)"}</h2>
+            <p className="text-base leading-relaxed text-slate-600">
+              {isEn ? "A concise export decision package: risk, actions, and ready-to-send deliverables." : "Un package décisionnel export compact : risque, actions et livrables prêts à l’emploi."}
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {valueCards.map((card) => {
               const Icon = card.icon;
               return (
@@ -77,9 +82,14 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="space-y-6">
-          <h2 className="text-2xl font-semibold text-slate-900">{isEn ? "How it works" : "Comment ça marche"}</h2>
-          <div className="grid gap-4 md:grid-cols-3">
+        <section className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.35fr)_minmax(0,0.65fr)] lg:gap-8">
+          <div className="space-y-3">
+            <h2 className="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">{isEn ? "How it works" : "Comment ça marche"}</h2>
+            <p className="text-base leading-relaxed text-slate-600">
+              {isEn ? "Three guided steps to move from profile to market decision." : "Trois étapes guidées pour passer du profil à la décision marché."}
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {howItWorksSteps.map((step, index) => (
               <Card key={step} className="border-slate-200">
                 <CardHeader>
@@ -97,8 +107,8 @@ export default function Home() {
         </section>
 
         <section className="space-y-6">
-          <h2 className="text-2xl font-semibold text-slate-900">{isEn ? "Who it's for" : "Pour qui"}</h2>
-          <div className="grid gap-4 md:grid-cols-3">
+          <h2 className="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">{isEn ? "Who it's for" : "Pour qui"}</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {audiences.map((audience) => (
               <Card key={audience} className="border-slate-200">
                 <CardContent className="flex items-center gap-3 p-5 text-slate-700">
@@ -115,10 +125,10 @@ export default function Home() {
 
         <section className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-6">
           <p className="text-sm font-medium uppercase tracking-wide text-primary">{isEn ? "Prospecting (playbook included)" : "Prospection (playbook inclus)"}</p>
-          <h2 className="text-2xl font-semibold text-slate-900">
+          <h2 className="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">
             {isEn ? "Find international clients without losing focus." : "Trouver des clients à l’international, sans s’éparpiller."}
           </h2>
-          <ul className="space-y-2 text-slate-700">
+          <ul className="grid gap-3 text-slate-700 md:grid-cols-2">
             {prospectionBullets.map((item, idx) => {
               const Icon = idx === 0 ? Globe : idx === 1 ? SearchCheck : CheckCircle2;
               return (
@@ -132,18 +142,18 @@ export default function Home() {
         </section>
 
         <section id="hero-video" className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6">
-          <h2 className="text-2xl font-semibold text-slate-900">{isEn ? "See the tool in video" : "Voir l’outil en vidéo"}</h2>
+          <h2 className="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">{isEn ? "See the tool in video" : "Voir l’outil en vidéo"}</h2>
           <p className="max-w-3xl text-slate-600">
             {isEn ? "Quick demo of control tower, invoice check and export costing." : "Démonstration rapide de la tour de contrôle, de l’analyse facture et du calcul de coûts export."}
           </p>
-          <video className="w-full rounded-xl border border-slate-200" controls preload="metadata">
+          <video className="aspect-video w-full max-w-none rounded-xl border border-slate-200" controls preload="metadata">
             <source src={heroExportVideo} type="video/mp4" />
             {isEn ? "Your browser does not support video playback." : "Votre navigateur ne supporte pas la lecture vidéo."}
           </video>
         </section>
 
         <section className="space-y-4 rounded-2xl border border-slate-200 p-6">
-          <h2 className="text-2xl font-semibold text-slate-900">{privacyLabels.title}</h2>
+          <h2 className="text-3xl font-semibold tracking-tight text-slate-900 md:text-4xl">{privacyLabels.title}</h2>
           <p className="max-w-3xl text-slate-600">{privacyLabels.body}</p>
           <div className="flex flex-wrap gap-3">
             <Button asChild variant="outline">
@@ -157,11 +167,11 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="space-y-4 rounded-2xl bg-slate-900 p-8 text-white">
-          <h2 className="text-3xl font-semibold">{closingCtaLabels.title}</h2>
+        <section className="space-y-4 rounded-2xl bg-slate-900 p-6 text-white md:p-8">
+          <h2 className="text-4xl font-semibold tracking-tight md:text-5xl">{closingCtaLabels.title}</h2>
           <p className="text-slate-200">{closingCtaLabels.subtitle}</p>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Button asChild size="lg" variant="secondary" className="sm:min-w-48">
+            <Button asChild size="lg" variant="secondary" className="w-full sm:min-w-48">
               <Link to="/register">{closingCtaLabels.primaryCta}</Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="border-white/40 text-white hover:bg-white/10 sm:min-w-48">
