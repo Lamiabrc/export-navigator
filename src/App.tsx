@@ -76,7 +76,7 @@ export default function App() {
             <Sonner />
 
             <PlanProvider>
-              <LanguageProvider persist="none">
+              <LanguageProvider persist="local">
                 <CookieConsent />
                 <BrowserRouter>
                   <LanguageChooser />
