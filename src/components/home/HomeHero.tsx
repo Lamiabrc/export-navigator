@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Bot, CheckCircle2, Radar, UserRound } from "lucide-react";
+import { ArrowRight, Bot, CheckCircle2, ClipboardCopy, Download, Loader2, Radar, UserRound } from "lucide-react";
 
 import heroExportVideo from "@/assets/hero-export.mp4";
 import { Badge } from "@/components/ui/badge";
@@ -9,22 +9,37 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { HeroLabels } from "@/content/homeContent";
-
-type CountryInsight = {
-  verdictFr: string;
-  verdictEn: string;
-  risk: number;
-  actionFr: string;
-  actionEn: string;
-  rssFr: [string, string];
-  rssEn: [string, string];
-};
+import { supabase } from "@/integrations/supabase/client";
 
 type ExporterRecord = {
   company: string;
   city: string;
   products: string;
   markets: string;
+};
+
+type GoNoGoRaw = {
+  verdict?: string;
+  decision?: string;
+  score_risque?: number;
+  risk_score?: number;
+  riskScore?: number;
+  actions?: string[];
+  recommendations?: string[];
+  action_prioritaire?: string;
+  priority_action?: string;
+  deliverables?: string[] | string;
+  checklist?: string[];
+  email_draft?: string;
+};
+
+type GoNoGoResult = {
+  verdict: string;
+  riskScore: number | null;
+  actions: string[];
+  priorityAction: string;
+  deliverables: string[];
+  emailDraft: string;
 };
 
 const PRIORITY_COUNTRY_CODES = ["FR", "DE", "ES", "IT", "BE", "NL", "MA", "SN", "CI", "CA", "AE", "US", "CN", "JP"];
@@ -77,104 +92,32 @@ const FRENCH_EXPORTERS_SAMPLE: ExporterRecord[] = [
   },
 ];
 
-const COUNTRY_INSIGHTS: Record<string, CountryInsight> = {
-  MA: {
-    verdictFr: "GO sous conditions",
-    verdictEn: "GO with conditions",
-    risk: 42,
-    actionFr: "Vérifier Incoterm + assurance transport",
-    actionEn: "Validate Incoterm + cargo insurance",
-    rssFr: [
-      "TVA import: valider taux et base taxable avant devis.",
-      "Douane: contrôler documents d’origine + conformité produit.",
-    ],
-    rssEn: [
-      "Import VAT: validate rate and taxable base before quotation.",
-      "Customs: check origin documents and product compliance.",
-    ],
-  },
-  SN: {
-    verdictFr: "GO avec vigilance paiement",
-    verdictEn: "GO with payment vigilance",
-    risk: 51,
-    actionFr: "Sécuriser le règlement (acompte ou crédit doc)",
-    actionEn: "Secure payment terms (deposit or documentary credit)",
-    rssFr: [
-      "Paiement: privilégier acompte confirmé avant expédition.",
-      "Logistique: anticiper délais portuaires et frais locaux.",
-    ],
-    rssEn: [
-      "Payment: prioritize confirmed deposit before shipment.",
-      "Logistics: anticipate port delays and local charges.",
-    ],
-  },
-  CA: {
-    verdictFr: "GO",
-    verdictEn: "GO",
-    risk: 29,
-    actionFr: "Valider classification HS + preuves origine",
-    actionEn: "Validate HS classification + origin evidence",
-    rssFr: [
-      "Conformité: vérifier marquage/étiquetage selon province.",
-      "Douane: consolider code HS et origine préférentielle.",
-    ],
-    rssEn: [
-      "Compliance: confirm labelling rules by province.",
-      "Customs: consolidate HS code and preferential origin.",
-    ],
-  },
-  DE: {
-    verdictFr: "GO",
-    verdictEn: "GO",
-    risk: 24,
-    actionFr: "Confirmer obligations intra-UE (TVA, emballages)",
-    actionEn: "Confirm intra-EU obligations (VAT, packaging)",
-    rssFr: [
-      "TVA: vérifier flux intracommunautaire et justificatifs.",
-      "Emballages: anticiper obligations de reprise et déclaration.",
-    ],
-    rssEn: [
-      "VAT: check intra-community flow and proof documents.",
-      "Packaging: plan take-back and filing obligations.",
-    ],
-  },
-  AE: {
-    verdictFr: "GO sous conformité renforcée",
-    verdictEn: "GO with enhanced compliance",
-    risk: 48,
-    actionFr: "Vérifier restrictions sectorielles et certificats",
-    actionEn: "Check sector restrictions and certificates",
-    rssFr: [
-      "Conformité: confirmer exigences certificat produit.",
-      "Contrat: cadrer responsabilités Incoterm et assurance.",
-    ],
-    rssEn: [
-      "Compliance: confirm product certificate requirements.",
-      "Contract: align Incoterm responsibilities and insurance.",
-    ],
-  },
-};
+function normalizeList(input: unknown): string[] {
+  if (Array.isArray(input)) return input.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+  if (typeof input === "string" && input.trim()) return [input.trim()];
+  return [];
+}
 
-function hsGuidance(hsCode: string, isEn: boolean) {
-  const code = hsCode.replace(/[^0-9]/g, "");
-  if (!code) {
-    return isEn
-      ? "Add an HS code to refine customs/tax checks by destination."
-      : "Ajoutez un code HS pour affiner les contrôles douane/taxes par destination.";
-  }
-  if (code.startsWith("84") || code.startsWith("85")) {
-    return isEn
-      ? "HS in machinery/electrical category: verify technical conformity and local standards."
-      : "HS en catégorie machines/électrique : vérifier conformité technique et normes locales.";
-  }
-  if (code.startsWith("61") || code.startsWith("62")) {
-    return isEn
-      ? "HS in textile category: check labeling, composition and origin proof."
-      : "HS en catégorie textile : contrôler étiquetage, composition et preuve d’origine.";
-  }
-  return isEn
-    ? "HS identified: validate customs duties, VAT and required documents before final quote."
-    : "HS identifié : valider droits de douane, TVA et documents requis avant devis final.";
+function buildResult(raw: GoNoGoRaw, fallbackProduct: string, fallbackCountry: string): GoNoGoResult {
+  const actions = normalizeList(raw.actions).concat(normalizeList(raw.recommendations)).slice(0, 3);
+  const deliverables = normalizeList(raw.deliverables).concat(normalizeList(raw.checklist)).slice(0, 6);
+  const verdict = String(raw.verdict || raw.decision || "Analyse générée").trim();
+  const riskScoreRaw = raw.risk_score ?? raw.score_risque ?? raw.riskScore;
+  const riskScore = Number.isFinite(Number(riskScoreRaw)) ? Number(riskScoreRaw) : null;
+  const priorityAction = String(raw.priority_action || raw.action_prioritaire || actions[0] || "Valider les informations critiques avant engagement").trim();
+
+  const emailDraft =
+    raw.email_draft ||
+    `Objet: Recommandation Go/No-Go export\n\nVerdict: ${verdict}\nProduit: ${fallbackProduct}\nPays: ${fallbackCountry}\n${riskScore !== null ? `Risque: ${riskScore}/100\n` : ""}Action prioritaire: ${priorityAction}\n\nActions:\n${actions.map((a) => `- ${a}`).join("\n")}`;
+
+  return {
+    verdict,
+    riskScore,
+    actions,
+    priorityAction,
+    deliverables,
+    emailDraft,
+  };
 }
 
 export function HomeHero({
@@ -190,12 +133,11 @@ export function HomeHero({
   const [showExporterDirectory, setShowExporterDirectory] = React.useState<boolean>(false);
   const [roleId, setRoleId] = React.useState<string>("seller");
   const [objective, setObjective] = React.useState<string>(isEn ? "Reach 3 new distributors in 90 days" : "Signer 3 nouveaux distributeurs en 90 jours");
+  const [status, setStatus] = React.useState<"idle" | "loading" | "success" | "error">("idle");
+  const [errorMessage, setErrorMessage] = React.useState<string>("");
+  const [analysis, setAnalysis] = React.useState<GoNoGoResult | null>(null);
+  const [showExample, setShowExample] = React.useState<boolean>(false);
 
-  const insight = COUNTRY_INSIGHTS[countryCode] ?? COUNTRY_INSIGHTS.MA;
-  const verdict = isEn ? insight.verdictEn : insight.verdictFr;
-  const action = isEn ? insight.actionEn : insight.actionFr;
-  const rssLines = isEn ? insight.rssEn : insight.rssFr;
-  const hsNote = hsGuidance(hsCode, isEn);
   const countryName = React.useMemo(() => {
     try {
       const dn = new Intl.DisplayNames([isEn ? "en" : "fr"], { type: "region" });
@@ -229,6 +171,67 @@ export function HomeHero({
       setHsCode(selectedProduct.hsHint);
     }
   }, [selectedProduct, hsCode]);
+
+  const onSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setStatus("loading");
+    setErrorMessage("");
+    setAnalysis(null);
+
+    const payload = {
+      role: selectedRole.labelFr,
+      country: countryName,
+      product: isEn ? selectedProduct.labelEn : selectedProduct.labelFr,
+      hsCode: hsCode.trim(),
+      objective: objective.trim(),
+    };
+
+    const { data, error } = await supabase.functions.invoke<GoNoGoRaw>("go-no-go", {
+      body: payload,
+    });
+
+    if (error) {
+      setStatus("error");
+      setErrorMessage(error.message || (isEn ? "Analysis failed" : "L’analyse a échoué"));
+      return;
+    }
+
+    const built = buildResult(data || {}, payload.product, payload.country);
+    setAnalysis(built);
+    setStatus("success");
+  };
+
+  const copyEmail = async () => {
+    if (!analysis?.emailDraft) return;
+    try {
+      await navigator.clipboard.writeText(analysis.emailDraft);
+    } catch {
+      // noop
+    }
+  };
+
+  const downloadChecklist = () => {
+    if (!analysis) return;
+    const lines = [
+      `${isEn ? "Verdict" : "Verdict"}: ${analysis.verdict}`,
+      analysis.riskScore !== null ? `${isEn ? "Risk score" : "Score risque"}: ${analysis.riskScore}/100` : "",
+      `${isEn ? "Priority action" : "Action prioritaire"}: ${analysis.priorityAction}`,
+      "",
+      `${isEn ? "Actions" : "Actions"}:`,
+      ...analysis.actions.map((x) => `- ${x}`),
+      "",
+      `${isEn ? "Deliverables" : "Livrables"}:`,
+      ...analysis.deliverables.map((x) => `- ${x}`),
+    ].filter(Boolean);
+
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "checklist-go-no-go.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 p-6 sm:p-8 lg:p-12">
@@ -279,8 +282,8 @@ export function HomeHero({
             <CardContent className="space-y-4 text-sm text-slate-700">
               <p className="text-xs text-slate-500">
                 {isEn
-                  ? "Go/No-Go + recurring operations follow-up for France and Europe."
-                  : "Go/No-Go + suivi récurrent des opérations export France & Europe."}
+                  ? "Launch a real Go/No-Go analysis based on role, product, HS code, country and objective."
+                  : "Lancez une vraie analyse Go/No-Go à partir du rôle, produit, code HS, pays et objectif."}
               </p>
 
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
@@ -301,89 +304,137 @@ export function HomeHero({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
-                <div className="space-y-1">
-                  <p className="text-xs text-slate-500">{isEn ? "Role" : "Rôle"}</p>
-                  <Select value={roleId} onValueChange={setRoleId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={isEn ? "Select role" : "Choisir un rôle"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ROLE_OPTIONS.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>{isEn ? item.labelEn : item.labelFr}</SelectItem>
+              <form onSubmit={onSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500">{isEn ? "Role" : "Rôle"}</p>
+                    <Select value={roleId} onValueChange={setRoleId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={isEn ? "Select role" : "Choisir un rôle"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ROLE_OPTIONS.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>{isEn ? item.labelEn : item.labelFr}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500">{isEn ? "Destination country" : "Pays destination"}</p>
+                    <Select value={countryCode} onValueChange={setCountryCode}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={isEn ? "Select country" : "Choisir un pays"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {countryOptions.map((item) => (
+                          <SelectItem key={item.code} value={item.code}>{item.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500">{isEn ? "Product" : "Produit"}</p>
+                    <Select value={productId} onValueChange={setProductId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={isEn ? "Select product" : "Choisir un produit"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PRODUCT_OPTIONS.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>{isEn ? item.labelEn : item.labelFr}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500">HS code</p>
+                    <Input value={hsCode} onChange={(e) => setHsCode(e.target.value)} placeholder="Ex: 8471" />
+                  </div>
+                  <div className="space-y-1 md:col-span-2 xl:col-span-4">
+                    <p className="text-xs text-slate-500">{isEn ? "Business objective" : "Objectif business"}</p>
+                    <Input
+                      value={objective}
+                      onChange={(e) => setObjective(e.target.value)}
+                      placeholder={isEn ? "Example: secure 2 distributors in Morocco" : "Ex: sécuriser 2 distributeurs au Maroc"}
+                    />
+                  </div>
+                </div>
+
+                <Button type="submit" className="w-full" disabled={status === "loading"}>
+                  {status === "loading" ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                  {isEn ? "Launch analysis" : "Lancer l’analyse"}
+                </Button>
+              </form>
+
+              {status === "idle" ? (
+                <div className="rounded-lg border bg-white p-3 text-xs text-slate-600">
+                  {isEn ? "No result yet. Fill the fields and run the analysis." : "Aucun résultat pour le moment. Renseignez les champs puis lancez l’analyse."}
+                  <button
+                    type="button"
+                    onClick={() => setShowExample((prev) => !prev)}
+                    className="mt-2 block text-primary underline"
+                  >
+                    {showExample ? (isEn ? "Hide example" : "Masquer l’exemple") : (isEn ? "Show example" : "Voir un exemple")}
+                  </button>
+                  {showExample ? (
+                    <div className="mt-2 rounded border bg-slate-50 p-2">
+                      <p className="font-medium">{isEn ? "Example" : "Exemple"}: GO sous conditions • Risque 42/100</p>
+                      <p>{isEn ? "Priority: validate Incoterm and cargo insurance." : "Priorité : valider Incoterm et assurance transport."}</p>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {status === "error" ? (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                  {errorMessage || (isEn ? "Analysis failed" : "L’analyse a échoué")}
+                </div>
+              ) : null}
+
+              {status === "success" && analysis ? (
+                <div className="space-y-3">
+                  <div className="rounded-xl border bg-slate-50 p-3">
+                    <p className="font-medium">
+                      {isEn ? "Role" : "Rôle"}: {isEn ? selectedRole.labelEn : selectedRole.labelFr} • {isEn ? "Country" : "Pays"}: {countryName} • {isEn ? "Product" : "Produit"}: {isEn ? selectedProduct.labelEn : selectedProduct.labelFr} • HS: {hsCode || "—"}
+                    </p>
+                    <p className="text-emerald-700">{isEn ? "Verdict" : "Verdict"}: {analysis.verdict}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-lg border bg-white p-3">
+                      <p className="text-slate-500">{isEn ? "Risk" : "Risque"}</p>
+                      <p className="font-semibold">{analysis.riskScore !== null ? `${analysis.riskScore} / 100` : "—"}</p>
+                    </div>
+                    <div className="rounded-lg border bg-white p-3">
+                      <p className="text-slate-500">{isEn ? "Deliverables" : "Livrables"}</p>
+                      <p className="font-semibold">{analysis.deliverables.slice(0, 2).join(" • ") || (isEn ? "Checklist + client email" : "Checklist + email client")}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border bg-white p-3">
+                    <p className="font-semibold text-slate-900">{isEn ? "Priority action" : "Action prioritaire"}: {analysis.priorityAction}</p>
+                  </div>
+
+                  <div className="rounded-lg border bg-white p-3">
+                    <p className="mb-1 font-semibold">{isEn ? "Top 3 actions" : "3 actions"}</p>
+                    <ul className="list-disc pl-5">
+                      {analysis.actions.map((item) => (
+                        <li key={item}>{item}</li>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-slate-500">{isEn ? "Destination country" : "Pays destination"}</p>
-                  <Select value={countryCode} onValueChange={setCountryCode}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={isEn ? "Select country" : "Choisir un pays"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {countryOptions.map((item) => (
-                        <SelectItem key={item.code} value={item.code}>{item.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-slate-500">{isEn ? "Product" : "Produit"}</p>
-                  <Select value={productId} onValueChange={setProductId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder={isEn ? "Select product" : "Choisir un produit"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PRODUCT_OPTIONS.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>{isEn ? item.labelEn : item.labelFr}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-slate-500">HS code</p>
-                  <Input value={hsCode} onChange={(e) => setHsCode(e.target.value)} placeholder="Ex: 8471" />
-                </div>
-                <div className="space-y-1 md:col-span-2 xl:col-span-4">
-                  <p className="text-xs text-slate-500">{isEn ? "Business objective" : "Objectif business"}</p>
-                  <Input
-                    value={objective}
-                    onChange={(e) => setObjective(e.target.value)}
-                    placeholder={isEn ? "Example: secure 2 distributors in Morocco" : "Ex: sécuriser 2 distributeurs au Maroc"}
-                  />
-                </div>
-              </div>
+                    </ul>
+                  </div>
 
-              <div className="rounded-xl border bg-slate-50 p-3">
-                <p className="font-medium">
-                  {isEn ? "Role" : "Rôle"}: {isEn ? selectedRole.labelEn : selectedRole.labelFr} • {isEn ? "Country" : "Pays"}: {countryName} • {isEn ? "Product" : "Produit"}: {isEn ? selectedProduct.labelEn : selectedProduct.labelFr} • HS: {hsCode || "—"}
-                </p>
-                <p className="text-emerald-700">{isEn ? "Verdict" : "Verdict"}: {verdict}</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-lg border bg-white p-3">
-                  <p className="text-slate-500">{isEn ? "Risk" : "Risque"}</p>
-                  <p className="font-semibold">{insight.risk} / 100</p>
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" className="w-full" onClick={copyEmail}>
+                      <ClipboardCopy className="mr-2 size-4" />
+                      {isEn ? "Copy email" : "Copier email"}
+                    </Button>
+                    <Button type="button" variant="outline" className="w-full" onClick={downloadChecklist}>
+                      <Download className="mr-2 size-4" />
+                      {isEn ? "Download checklist" : "Télécharger checklist"}
+                    </Button>
+                  </div>
                 </div>
-                <div className="rounded-lg border bg-white p-3">
-                  <p className="text-slate-500">{isEn ? "Deliverables" : "Livrables"}</p>
-                  <p className="font-semibold">{isEn ? "Checklist + client email" : "Checklist + email client"}</p>
-                </div>
-              </div>
-
-              <div className="rounded-lg border bg-white p-3">
-                <p className="font-semibold text-slate-900">{isEn ? "Priority action" : "Action prioritaire"}: {action}</p>
-                <p className="mt-1 text-xs text-slate-600">{hsNote}</p>
-                <p className="mt-1 text-xs text-slate-500">{isEn ? "Objective" : "Objectif"}: {objective || "—"}</p>
-              </div>
-
-              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-primary">RSS</p>
-                <p className="line-clamp-1">• {rssLines[0]}</p>
-                <p className="line-clamp-1">• {rssLines[1]}</p>
-              </div>
+              ) : null}
 
               <div className="space-y-2 rounded-lg border bg-white p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
