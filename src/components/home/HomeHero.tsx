@@ -250,9 +250,9 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
   const chips = isEn ? OBJECTIVE_CHIPS.en : OBJECTIVE_CHIPS.fr;
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 p-6 sm:p-8 lg:p-12">
+    <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 p-6 sm:p-8 lg:p-12 xl:p-14">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-r from-primary/5 via-transparent to-emerald-500/5" />
-      <div className="relative grid items-start gap-8 lg:grid-cols-[minmax(0,1.12fr)_minmax(380px,0.88fr)] lg:gap-10">
+      <div className="relative grid items-start gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] lg:gap-10 xl:gap-12">
         <div className="space-y-6">
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1 text-xs">{labels.badge}</Badge>
           <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-4">
@@ -288,7 +288,7 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
         </div>
 
         <div className="space-y-4">
-          <Card className="border-slate-200 bg-white shadow-sm">
+          <Card className="border-slate-200 bg-white/95 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Radar className="size-5 text-primary" />
@@ -297,7 +297,7 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
             </CardHeader>
 
             <CardContent>
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
                 <div className="space-y-3">
                   <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
                     <div className="mb-2 flex items-start gap-2">
@@ -313,7 +313,7 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
                     </div>
                   </div>
 
-                  <img src="/illustrations/export-ai.svg" alt={isEn ? "AI export copilot" : "Illustration copilote IA export"} className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2" />
+                  <img src="/illustrations/export-ai.svg" alt={isEn ? "AI export copilot" : "Illustration copilote IA export"} className="aspect-video w-full rounded-xl border border-slate-200 bg-slate-50 p-2 object-cover" />
 
                   <div className="rounded-xl border bg-white p-3 text-xs">
                     <p className="mb-2 font-semibold text-slate-700">{isEn ? "Steps" : "Étapes"}</p>
