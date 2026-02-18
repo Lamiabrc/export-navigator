@@ -1,0 +1,34 @@
+<svg width="720" height="520" viewBox="0 0 720 520" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Illustration copilote IA export">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="720" y2="520" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EEF4FF"/>
+      <stop offset="1" stop-color="#E6FFFA"/>
+    </linearGradient>
+    <linearGradient id="card" x1="160" y1="80" x2="560" y2="440" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+  </defs>
+  <rect x="12" y="12" width="696" height="496" rx="28" fill="url(#bg)"/>
+  <circle cx="580" cy="110" r="52" fill="#DBEAFE"/>
+  <circle cx="120" cy="400" r="44" fill="#CCFBF1"/>
+  <rect x="138" y="76" width="444" height="370" rx="24" fill="white" stroke="#BFDBFE" stroke-width="2"/>
+  <rect x="162" y="104" width="396" height="92" rx="18" fill="url(#card)"/>
+  <rect x="190" y="138" width="188" height="12" rx="6" fill="white" fill-opacity="0.9"/>
+  <rect x="190" y="158" width="260" height="10" rx="5" fill="white" fill-opacity="0.7"/>
+
+  <rect x="162" y="220" width="188" height="94" rx="14" fill="#F8FAFC" stroke="#E2E8F0"/>
+  <rect x="180" y="242" width="120" height="10" rx="5" fill="#94A3B8"/>
+  <rect x="180" y="262" width="150" height="10" rx="5" fill="#CBD5E1"/>
+  <rect x="180" y="282" width="108" height="10" rx="5" fill="#CBD5E1"/>
+
+  <rect x="370" y="220" width="188" height="94" rx="14" fill="#ECFEFF" stroke="#BAE6FD"/>
+  <rect x="388" y="242" width="124" height="10" rx="5" fill="#0369A1"/>
+  <rect x="388" y="262" width="150" height="10" rx="5" fill="#0EA5E9"/>
+  <rect x="388" y="282" width="98" height="10" rx="5" fill="#7DD3FC"/>
+
+  <rect x="162" y="336" width="396" height="86" rx="14" fill="#F8FAFC" stroke="#E2E8F0"/>
+  <circle cx="194" cy="368" r="9" fill="#16A34A"/>
+  <rect x="210" y="362" width="180" height="12" rx="6" fill="#16A34A" fill-opacity="0.75"/>
+  <rect x="210" y="382" width="300" height="10" rx="5" fill="#94A3B8"/>
+</svg>
