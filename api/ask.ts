@@ -6,6 +6,11 @@ type AskPayload = {
   context?: Record<string, any> | null;
 };
 
+type ConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 type AskResult = {
   answer: string;
   actions?: string[];
@@ -311,6 +316,13 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       "Cite les sources disponibles (base Supabase + sites spécialisés). " +
       "Réponds en JSON avec les clés: answer (string), actions (array max 4), follow_up_questions (array max 3).";
 
+    const system =
+      "Tu es un agent IA export opérationnel (incoterms, douane, conformité, risques pays, paiements). " +
+      "Tu échanges de manière humaine et professionnelle, en français clair. " +
+      "Tu dois collecter les infos critiques (produit, code HS, pays, incoterm, paiement, objectif) et combler les manques avec 1 à 3 questions max. " +
+      "Si l'utilisateur indique que la réponse n'est pas satisfaisante, excuse-toi brièvement puis reformule avec un plan amélioré. " +
+      "Fournis un plan actionnable et court, plus une demande de validation de satisfaction. " +
+      "Réponds strictement en JSON avec les clés: answer (string), actions (array max 4), follow_up_questions (array max 3).";
     const user =
       `Question: ${question}\n` +
       (body?.context ? `Contexte utilisateur: ${JSON.stringify(body.context)}\n` : "") +
@@ -341,7 +353,7 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
 
     const result: AskResult = {
-      answer,
+      answer: `${apology}${answer}`,
       actions,
       follow_up_questions,
       sources: safeChunks.map((c: any) => ({

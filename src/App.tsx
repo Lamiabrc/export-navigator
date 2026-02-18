@@ -109,7 +109,7 @@ export default function App() {
                         <Route path="/methodologie" element={<Methodologie />} />
 
                         {/* ✅ guides */}
-                        <Route path="/guides" element={<Navigate to="/guides/incoterms" replace />} />
+                        <Route path="/guides" element={<Navigate to="/resources" replace />} />
                         <Route path="/guides/incoterms" element={<Incoterms />} />
                         <Route path="/guides/incoterms-:code" element={<IncotermDetail />} />
                         <Route path="/guides/:slug" element={<Guide />} />

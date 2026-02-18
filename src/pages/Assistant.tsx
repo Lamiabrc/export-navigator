@@ -41,6 +41,11 @@ const QUICK_PROMPTS = [
   "Effets de la géopolitique sur un flux export",
 ];
 
+
+function toChatHistory(messages: ChatMessage[]) {
+  return messages.slice(-10).map((m) => ({ role: m.role, content: m.content }));
+}
+
 export default function Assistant() {
   const { toast } = useToast();
 
@@ -88,7 +93,7 @@ export default function Assistant() {
   }, [toast]);
 
   const send = React.useCallback(
-    async (override?: string) => {
+    async (override?: string, extraContext?: Record<string, unknown>) => {
       const msg = (override ?? draft).trim();
       if (loading) return;
       if (!msg) {
@@ -167,7 +172,7 @@ export default function Assistant() {
         setLoading(false);
       }
     },
-    [draft, loading, destination, incoterm, transportMode, toast]
+    [draft, loading, destination, incoterm, transportMode, messages, toast]
   );
 
   return (
