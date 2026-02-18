@@ -6,6 +6,8 @@
 
 export const navLinks: NavLinkConfig[] = [
   { key: "header.menu.home", to: "/", fallback: "Accueil" },
+  { key: "header.menu.copilot", to: "/copilote", fallback: "Copilote IA (gratuit)" },
+  { key: "header.menu.controlTower", to: "/tour-de-controle", fallback: "Tour de contrôle (pro)" },
   { key: "header.menu.tool", to: "/tool", fallback: "Outil" },
   { key: "header.menu.services", to: "/services", fallback: "Offre" },
   { key: "header.menu.prospection", to: "/prospection", fallback: "Prospection" },

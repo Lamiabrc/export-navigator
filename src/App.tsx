@@ -63,6 +63,8 @@ import Legal from "@/pages/Legal";
 import AdminKbDocs from "@/pages/AdminKbDocs";
 import TaxesOm from "@/pages/TaxesOm";
 import Prospection from "@/pages/Prospection";
+import Copilote from "@/pages/Copilote";
+import TourDeControle from "@/pages/TourDeControle";
 
 const queryClient = new QueryClient();
 const LazyFallback = () => <div className="p-6 text-sm text-muted-foreground">Chargement…</div>;
@@ -87,6 +89,7 @@ export default function App() {
                       <Routes>
                         {/* ===================== Marketing / Public ===================== */}
                         <Route path="/" element={<Home />} />
+                        <Route path="/copilote" element={<Copilote />} />
 
                         {/* ✅ Outils publics => accès app uniquement */}
                         <Route path="/verifier-facture" element={<PublicAppGate mode="invoice-check" />} />
@@ -186,6 +189,15 @@ export default function App() {
                         />
 
                         {/* ===================== App (privé) ===================== */}
+                        <Route
+                          path="/tour-de-controle"
+                          element={
+                            <ProtectedRoute>
+                              <TourDeControle />
+                            </ProtectedRoute>
+                          }
+                        />
+
                         <Route
                           path="/app/control-tower"
                           element={
