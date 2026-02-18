@@ -17,6 +17,8 @@ type AskResult = {
   follow_up_questions?: string[];
   sources?: Array<{ document_id: string; chunk_id: string; similarity: number }>;
   source_links?: Array<{ title: string; url: string; origin: "supabase" | "specialized_site" }>;
+  context_summary?: string;
+  satisfaction_prompt?: string;
 };
 
 const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || "").trim();
@@ -85,6 +87,34 @@ async function openaiChat(messages: Array<{ role: "system" | "user" | "assistant
   return String(data?.choices?.[0]?.message?.content || "");
 }
 
+
+async function storeConversationEmbedding(params: {
+  userId: string;
+  message: string;
+  embedding: number[];
+  role?: "user" | "assistant";
+  sessionId?: string | null;
+  metadata?: Record<string, any>;
+}) {
+  const admin = supabaseAdmin();
+  try {
+    const { error } = await admin.from("llm_message_embeddings").insert({
+      user_id: params.userId,
+      source: "api_ask",
+      session_id: params.sessionId ?? null,
+      role: params.role ?? "user",
+      message: params.message,
+      embedding: params.embedding,
+      metadata: params.metadata ?? {},
+    });
+    if (error) {
+      console.error("[api/ask] llm_message_embeddings insert failed", error.message);
+    }
+  } catch (e: any) {
+    console.error("[api/ask] llm_message_embeddings insert exception", e?.message || e);
+  }
+}
+
 function extractSignals(question: string) {
   const q = question.toUpperCase();
   const incoterm = q.match(/\b(EXW|FCA|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)\b/)?.[1] ?? null;
@@ -121,6 +151,54 @@ function specializedSourcesFor(question: string) {
   }
 
   return sources.slice(0, 4);
+}
+
+
+function normalizeHistory(context: Record<string, any> | null | undefined): ConversationMessage[] {
+  const raw = Array.isArray(context?.chat_history) ? context?.chat_history : [];
+  return raw
+    .filter((m: any) => m && typeof m === "object")
+    .map((m: any) => ({
+      role: m?.role === "assistant" ? "assistant" : "user",
+      content: typeof m?.content === "string" ? m.content.trim() : "",
+    }))
+    .filter((m: ConversationMessage) => m.content.length > 0)
+    .slice(-12);
+}
+
+function summarizeContext(question: string, context: Record<string, any> | null | undefined, signals: ReturnType<typeof extractSignals>) {
+  const history = normalizeHistory(context);
+  const corpus = [
+    ...history.filter((m) => m.role === "user").map((m) => m.content),
+    question,
+    typeof context?.product === "string" ? context.product : "",
+    typeof context?.destination === "string" ? context.destination : "",
+  ]
+    .filter(Boolean)
+    .join("
+");
+
+  const merged = extractSignals(corpus);
+  const product = typeof context?.product === "string" ? context.product.trim() : "";
+  const destination = typeof context?.destination === "string" ? context.destination.trim() : "";
+  const objective = typeof context?.objective === "string" ? context.objective.trim() : "";
+
+  const summaryParts = [
+    merged.country || signals.country || destination ? `Pays: ${merged.country || signals.country || destination}` : "Pays: manquant",
+    merged.hsCode || signals.hsCode ? `HS: ${merged.hsCode || signals.hsCode}` : "HS: manquant",
+    merged.incoterm || signals.incoterm || (typeof context?.incoterm === "string" ? context?.incoterm : "")
+      ? `Incoterm: ${merged.incoterm || signals.incoterm || context?.incoterm}`
+      : "Incoterm: manquant",
+    product ? `Produit: ${product}` : "Produit: manquant",
+    objective ? `Objectif: ${objective}` : null,
+  ].filter(Boolean);
+
+  return {
+    mergedSignals: merged,
+    history,
+    contextSummary: summaryParts.join(" | "),
+    satisfaction: context?.feedback?.satisfied,
+  };
 }
 
 async function fetchSupabaseFacts(question: string, signals: ReturnType<typeof extractSignals>) {
@@ -246,31 +324,52 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       return json(res, 400, { ok: false, error: "question_required" });
     }
 
-    const signals = extractSignals(question);
+    const initialSignals = extractSignals(question);
+    const contextual = summarizeContext(question, body?.context ?? null, initialSignals);
+    const signals = {
+      ...initialSignals,
+      ...contextual.mergedSignals,
+      country: contextual.mergedSignals.country || initialSignals.country,
+      hsCode: contextual.mergedSignals.hsCode || initialSignals.hsCode,
+      incoterm: contextual.mergedSignals.incoterm || initialSignals.incoterm,
+      paymentMentioned: initialSignals.paymentMentioned || contextual.mergedSignals.paymentMentioned,
+      sanctionsMentioned: initialSignals.sanctionsMentioned || contextual.mergedSignals.sanctionsMentioned,
+    };
+
     const followUps = buildFollowUpQuestions(question, signals);
     const supabaseFacts = await fetchSupabaseFacts(question, signals);
-    const specializedLinks = specializedSourcesFor(question);
+    const specializedLinks = specializedSourcesFor(`${question}
+${contextual.contextSummary}`);
 
     const admin = supabaseAdmin();
 
     if (!OPENAI_API_KEY) {
       const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
+      const degradedBase = buildDegradedAnswer(question, signals, followUps, supabaseFacts.snippets);
+      const feedbackPrefix = contextual.satisfaction === false
+        ? "Merci pour le retour. Je vais corriger ma proposition et repartir sur les informations essentielles.
+
+"
+        : "";
       const result: AskResult = {
-        answer: buildDegradedAnswer(question, signals, followUps, supabaseFacts.snippets),
+        answer: `${feedbackPrefix}${degradedBase}`,
         actions: [
           "Confirmer destination + pays de transit.",
           "Fournir HS code (6/8 chiffres) ou description technique.",
           "Confirmer Incoterm + mode de paiement.",
+          "Valider si la réponse est satisfaisante (oui/non).",
         ],
         follow_up_questions: followUps,
         source_links,
+        context_summary: contextual.contextSummary,
+        satisfaction_prompt: "Cette réponse vous aide-t-elle ? Si non, précisez ce qui manque et je reformule.",
       };
 
       try {
         await admin.from("tool_runs").insert({
           user_id: auth.user.id,
           tool_name: "ask",
-          input_json: { question, context: body?.context ?? null, signals, mode: "degraded_no_openai" },
+          input_json: { question, context: body?.context ?? null, signals, context_summary: contextual.contextSummary, history: contextual.history, feedback_satisfied: contextual.satisfaction, mode: "degraded_no_openai" },
           output_json: result,
         });
       } catch (e) {
@@ -282,6 +381,18 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
 
     const embedding = await openaiEmbed(question);
     if (!embedding) throw new Error("embedding_missing");
+
+    await storeConversationEmbedding({
+      userId: auth.user.id,
+      message: question,
+      embedding,
+      role: "user",
+      sessionId: typeof body?.context?.session_id === "string" ? body.context.session_id : null,
+      metadata: {
+        context_summary: contextual.contextSummary,
+        signals,
+      },
+    });
 
     const { data: chunks, error: matchError } = await admin.rpc("match_kb_chunks", {
       query_embedding: embedding,
@@ -309,14 +420,6 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       .join("\n\n");
 
     const system =
-      "Tu es un expert export (incoterms, douane, conformité, risques pays, paiements). " +
-      "Tu réponds en français clair et actionnable. " +
-      "Si des infos critiques manquent, pose d'abord 1 à 3 questions de clarification concrètes. " +
-      "Ensuite donne une réponse provisoire basée sur les données disponibles. " +
-      "Cite les sources disponibles (base Supabase + sites spécialisés). " +
-      "Réponds en JSON avec les clés: answer (string), actions (array max 4), follow_up_questions (array max 3).";
-
-    const system =
       "Tu es un agent IA export opérationnel (incoterms, douane, conformité, risques pays, paiements). " +
       "Tu échanges de manière humaine et professionnelle, en français clair. " +
       "Tu dois collecter les infos critiques (produit, code HS, pays, incoterm, paiement, objectif) et combler les manques avec 1 à 3 questions max. " +
@@ -324,11 +427,26 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       "Fournis un plan actionnable et court, plus une demande de validation de satisfaction. " +
       "Réponds strictement en JSON avec les clés: answer (string), actions (array max 4), follow_up_questions (array max 3).";
     const user =
-      `Question: ${question}\n` +
-      (body?.context ? `Contexte utilisateur: ${JSON.stringify(body.context)}\n` : "") +
-      (knowledgeBlocks ? `\nConnaissances disponibles:\n${knowledgeBlocks}` : "") +
+      `Question courante: ${question}
+` +
+      `Résumé du contexte: ${contextual.contextSummary}
+` +
+      (contextual.history.length
+        ? `Historique conversation (récent):
+${contextual.history.map((m) => `- ${m.role}: ${m.content}`).join("\n")}
+`
+        : "") +
+      (body?.context ? `Contexte utilisateur brut: ${JSON.stringify(body.context)}
+` : "") +
+      (contextual.satisfaction === false ? "Retour utilisateur: la réponse précédente n'est pas satisfaisante.
+" : "") +
+      (knowledgeBlocks ? `
+Connaissances disponibles:
+${knowledgeBlocks}` : "") +
       (followUps.length
-        ? `\nQuestions de clarification suggérées (si infos insuffisantes):\n${followUps.map((q) => `- ${q}`).join("\n")}`
+        ? `
+Questions de clarification suggérées (si infos insuffisantes):
+${followUps.map((q) => `- ${q}`).join("\n")}`
         : "");
 
     const raw = await openaiChat([
@@ -352,6 +470,7 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
 
     const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
 
+    const apology = contextual.satisfaction === false ? "Merci pour votre retour — voici une version améliorée.\n\n" : "";
     const result: AskResult = {
       answer: `${apology}${answer}`,
       actions,
@@ -362,13 +481,15 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
         similarity: Number(c.similarity || 0),
       })),
       source_links,
+      context_summary: contextual.contextSummary,
+      satisfaction_prompt: "Cette réponse vous semble-t-elle satisfaisante ? Si non, dites ce qui manque et je corrige.",
     };
 
     try {
       await admin.from("tool_runs").insert({
         user_id: auth.user.id,
         tool_name: "ask",
-        input_json: { question, context: body?.context ?? null, signals },
+        input_json: { question, context: body?.context ?? null, signals, context_summary: contextual.contextSummary, history: contextual.history, feedback_satisfied: contextual.satisfaction },
         output_json: result,
       });
     } catch (e) {

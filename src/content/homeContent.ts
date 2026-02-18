@@ -6,6 +6,8 @@ export type HeroLabels = {
   badge: string;
   title: string;
   intro: string;
+  welcomeTitle: string;
+  welcomeBody: string;
   bullets: string[];
   ctaVideo: string;
   ctaTower: string;
@@ -16,9 +18,12 @@ export type HeroLabels = {
 export const heroByLang: Record<HomeLang, HeroLabels> = {
   en: {
     badge: "Export control tower",
-    title: "Export control tower? Go/No-Go in 60 seconds.",
+    title: "Your AI export ally for sellers, negotiators and business developers.",
     intro:
-      "A professional cockpit to secure your international deals: country Go/No-Go, payment, Incoterms, documents and landed cost.",
+      "Tell MPL who you are, which product you sell, and in which country: our copilot proposes objectives, plan and the path to get there.",
+    welcomeTitle: "Welcome to MPL Conseil Export",
+    welcomeBody:
+      "MPL Export guides sellers, negotiators, introducers and business developers with country + HS + product intelligence and actionable next steps.",
     bullets: [
       "A clear verdict + 3 immediate actions.",
       "Checklists and ready-to-send messages.",
@@ -31,9 +36,12 @@ export const heroByLang: Record<HomeLang, HeroLabels> = {
   },
   fr: {
     badge: "Tour de contrôle export",
-    title: "Tour de contrôle export ? Go/No-Go en 60 secondes.",
+    title: "L’allié IA export des vendeurs, négociateurs et business developers.",
     intro:
-      "Un cockpit pro pour sécuriser vos ventes à l’international : Go/No-Go pays, paiement, Incoterms, documents et prix export (landed cost).",
+      "Dites à MPL qui vous êtes, quel produit vous vendez et vers quel pays : le copilote propose objectifs, plan d’action et chemin de réussite.",
+    welcomeTitle: "Bienvenue dans MPL Conseil Export",
+    welcomeBody:
+      "MPL Export accompagne vendeurs, négociateurs, apporteurs d’affaires et business developers avec des conseils actionnables par pays, produit et code HS.",
     bullets: [
       "Un verdict clair + 3 actions immédiates.",
       "Checklists et messages prêts à envoyer.",

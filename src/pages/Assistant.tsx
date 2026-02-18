@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
 const STORAGE_KEY = "mpl_assistant_chat_v3";
+const SESSION_STORAGE_KEY = "mpl_assistant_session_id_v1";
 
 type AssistantResponse = {
   ok?: boolean;
@@ -22,6 +23,14 @@ type AssistantResponse = {
   actions?: string[];
   follow_up_questions?: string[];
   source_links?: Array<{ title: string; url: string; origin?: string }>;
+  context_summary?: string;
+  satisfaction_prompt?: string;
+};
+
+
+type LlmChatResponse = {
+  session_id?: string;
+  reply?: string;
 };
 
 type ChatMessage = {
@@ -53,6 +62,7 @@ export default function Assistant() {
   const [draft, setDraft] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [sessionId, setSessionId] = React.useState<string | null>(null);
 
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -62,6 +72,8 @@ export default function Assistant() {
 
   React.useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
+    const storedSessionId = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (storedSessionId) setSessionId(storedSessionId);
     if (!raw) return;
     try {
       const parsed = JSON.parse(raw) as ChatMessage[];
@@ -74,6 +86,14 @@ export default function Assistant() {
   React.useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-50)));
   }, [messages]);
+
+  React.useEffect(() => {
+    if (!sessionId) {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+  }, [sessionId]);
 
   React.useEffect(() => {
     const el = scrollRef.current;
@@ -89,6 +109,8 @@ export default function Assistant() {
     setDraft("");
     setError(null);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    setSessionId(null);
     toast({ title: "Chat effacé", description: "Historique supprimé sur cet appareil." });
   }, [toast]);
 
@@ -115,42 +137,65 @@ export default function Assistant() {
           destination,
           incoterm,
           transport_mode: transportMode,
+          chat_history: toChatHistory(messages),
+          session_id: sessionId,
+          ...extraContext,
         },
       };
 
       try {
         if (!SUPABASE_ENV_OK) throw new Error("Connexion base indisponible.");
 
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData.session?.access_token;
-        if (!token) throw new Error("Session invalide");
-
-        const resp = await fetch("/api/ask", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(body),
-        });
-
-        const data = (await resp.json().catch(() => ({}))) as AssistantResponse;
-
-        if (!resp.ok || data?.error || data?.ok === false) {
-          const msgErr = data?.detail || data?.error || "Fonction indisponible";
-          throw new Error(msgErr);
-        }
-
-        const answer = String(data?.answer || data?.summary || "").trim();
-        const assistantMsg: ChatMessage = {
-          id: uid(),
-          role: "assistant",
-          content: answer || "Assistant indisponible. Précisez destination, incoterm, HS et type de marchandise.",
-          createdAt: Date.now(),
-          meta: data,
+        const llmPayload = {
+          session_id: sessionId,
+          message: msg,
         };
 
-        setMessages((prev) => [...prev, assistantMsg]);
+        const { data: llmData, error: llmError } = await supabase.functions.invoke<LlmChatResponse>("llm-chat", {
+          body: llmPayload,
+        });
+
+        if (llmError) {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData.session?.access_token;
+          if (!token) throw new Error("Session invalide");
+
+          const resp = await fetch("/api/ask", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(body),
+          });
+
+          const data = (await resp.json().catch(() => ({}))) as AssistantResponse;
+          if (!resp.ok || data?.error || data?.ok === false) {
+            const msgErr = data?.detail || data?.error || llmError.message || "Fonction indisponible";
+            throw new Error(msgErr);
+          }
+
+          const answer = String(data?.answer || data?.summary || "").trim();
+          const assistantMsg: ChatMessage = {
+            id: uid(),
+            role: "assistant",
+            content: answer || "Assistant indisponible. Précisez destination, incoterm, HS et type de marchandise.",
+            createdAt: Date.now(),
+            meta: data,
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
+        } else {
+          const nextSessionId = String(llmData?.session_id || "").trim();
+          if (nextSessionId) setSessionId(nextSessionId);
+          const reply = String(llmData?.reply || "").trim();
+          const assistantMsg: ChatMessage = {
+            id: uid(),
+            role: "assistant",
+            content: reply || "Réponse vide de l'agent LLM. Merci de reformuler votre demande.",
+            createdAt: Date.now(),
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
+        }
       } catch (err: any) {
         const msgErr = err?.message || "Assistant indisponible";
         setError(msgErr);
@@ -172,7 +217,7 @@ export default function Assistant() {
         setLoading(false);
       }
     },
-    [draft, loading, destination, incoterm, transportMode, messages, toast]
+    [draft, loading, destination, incoterm, transportMode, messages, sessionId, toast]
   );
 
   return (
@@ -184,6 +229,7 @@ export default function Assistant() {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold">Posez vos questions</h1>
               <Badge variant="outline">Chat IA</Badge>
+              {sessionId ? <Badge variant="secondary">Session active</Badge> : null}
             </div>
             <p className="text-sm text-muted-foreground">
               Incoterms, taxes, documents, géopolitique, risques pays, erreurs de process export.
@@ -268,6 +314,38 @@ export default function Assistant() {
                               </div>
                             </div>
                           ) : null}
+
+                          <div>
+                            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              {m.meta?.satisfaction_prompt || "Réponse satisfaisante ?"}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  send(
+                                    "Oui, c'est satisfaisant. Peux-tu me donner le plan final en 3 actions ?",
+                                    { feedback: { satisfied: true } }
+                                  )
+                                }
+                                className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted"
+                              >
+                                ✅ Oui
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  send(
+                                    "Non, la réponse n'est pas satisfaisante. Repose-moi les bonnes questions et corrige.",
+                                    { feedback: { satisfied: false } }
+                                  )
+                                }
+                                className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted"
+                              >
+                                🔁 Non, à corriger
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       ) : null}
                     </div>
