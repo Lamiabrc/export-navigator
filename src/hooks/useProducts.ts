@@ -67,7 +67,6 @@ export function useProducts(options: UseProductsOptions = {}) {
       let from = 0;
 
       // Pagination: .range(from, to)
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         const to = from + pageSize - 1;
 
