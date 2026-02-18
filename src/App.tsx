@@ -35,6 +35,7 @@ import HeroVideoPreview from "@/pages/HeroVideoPreview";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
+import Welcome from "@/pages/Welcome";
 import SetPassword from "@/pages/SetPassword";
 import ControlTower from "@/pages/ControlTower";
 import ExportSimulator from "@/pages/ExportSimulator";
@@ -368,7 +369,7 @@ export default function App() {
                         />
 
                         {/* ===================== Aliases / Legacy ===================== */}
-                        <Route path="/welcome" element={<Navigate to="/solutions" replace />} />
+                        <Route path="/welcome" element={<Welcome />} />
                         <Route path="/ressources" element={<Navigate to="/resources" replace />} />
 
                         <Route path="/hub" element={<Navigate to="/app/control-tower" replace />} />
