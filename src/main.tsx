@@ -1,3 +1,4 @@
+import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
@@ -5,19 +6,26 @@ import "@/styles/svgmap.css";
 
 // Auto-reload once if a lazy chunk fails to load (common after new deploy)
 const CHUNK_RETRY_KEY = "mpl_chunk_retry_at";
+const CHUNK_RETRY_COUNT_KEY = "mpl_chunk_retry_count";
+const MAX_HARD_RELOAD_ATTEMPTS = 3;
 const shouldReloadForChunkError = (reason: unknown) => {
   const msg = String((reason as any)?.message || reason || "");
-  return /Failed to fetch dynamically imported module|ChunkLoadError|Loading chunk \d+ failed/i.test(msg);
+  return /Failed to fetch dynamically imported module|ChunkLoadError|Loading chunk \d+ failed|Card is not defined/i.test(msg);
 };
 
 const tryReloadForChunkError = () => {
   try {
     const last = Number(sessionStorage.getItem(CHUNK_RETRY_KEY) || 0);
+    const count = Number(sessionStorage.getItem(CHUNK_RETRY_COUNT_KEY) || 0);
     const now = Date.now();
     // prevent infinite reload loops
-    if (now - last < 10_000) return false;
+    if (now - last < 10_000 || count >= MAX_HARD_RELOAD_ATTEMPTS) return false;
     sessionStorage.setItem(CHUNK_RETRY_KEY, String(now));
-    window.location.reload();
+    sessionStorage.setItem(CHUNK_RETRY_COUNT_KEY, String(count + 1));
+
+    const cacheBustedUrl = new URL(window.location.href);
+    cacheBustedUrl.searchParams.set("_refresh", String(now));
+    window.location.replace(cacheBustedUrl.toString());
     return true;
   } catch {
     return false;
@@ -36,6 +44,52 @@ window.addEventListener("error", (event) => {
     tryReloadForChunkError();
   }
 });
+
+type RootErrorBoundaryState = {
+  hasError: boolean;
+  message: string;
+};
+
+class RootErrorBoundary extends React.Component<React.PropsWithChildren, RootErrorBoundaryState> {
+  state: RootErrorBoundaryState = { hasError: false, message: "" };
+
+  static getDerivedStateFromError(error: unknown): RootErrorBoundaryState {
+    const message = String((error as { message?: string })?.message || error || "");
+    return { hasError: true, message };
+  }
+
+  componentDidCatch(error: unknown) {
+    if (shouldReloadForChunkError(error)) {
+      tryReloadForChunkError();
+    }
+  }
+
+  componentDidMount() {
+    // app loaded successfully: clear retry counter to avoid stale lock state
+    sessionStorage.removeItem(CHUNK_RETRY_KEY);
+    sessionStorage.removeItem(CHUNK_RETRY_COUNT_KEY);
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+        <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+          <h1 className="text-xl font-semibold text-slate-900">Oups, un problème de chargement est survenu.</h1>
+          <p className="mt-2 text-sm text-slate-600">Actualisez la page pour récupérer la dernière version.</p>
+          <button
+            type="button"
+            className="mt-4 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+            onClick={() => window.location.reload()}
+          >
+            Recharger
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
 
 /**
  * IMPORTANT:
@@ -66,4 +120,8 @@ const applyTheme = () => {
 // ✅ Appliquer avant le render => moins de "flash" visuel
 applyTheme();
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <RootErrorBoundary>
+    <App />
+  </RootErrorBoundary>
+);

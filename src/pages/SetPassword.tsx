@@ -11,9 +11,8 @@ function getErrorMessage(err: unknown): string {
   if (!err) return "Une erreur inconnue est survenue.";
   if (typeof err === "string") return err;
   if (err instanceof Error) return err.message;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const anyErr = err as any;
-  if (typeof anyErr?.message === "string") return anyErr.message;
+  const errWithMessage = err as { message?: unknown };
+  if (typeof errWithMessage?.message === "string") return errWithMessage.message;
   return "Une erreur est survenue. Réessaie.";
 }
 

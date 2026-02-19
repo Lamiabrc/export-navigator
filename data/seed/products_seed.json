@@ -1,0 +1,52 @@
+[
+  {
+    "id": null,
+    "canonical_name": "Fraises fraîches",
+    "category": "Agroalimentaire"
+  },
+  {
+    "id": null,
+    "canonical_name": "Pommes",
+    "category": "Agroalimentaire"
+  },
+  {
+    "id": null,
+    "canonical_name": "Huile d'olive",
+    "category": "Agroalimentaire"
+  },
+  {
+    "id": null,
+    "canonical_name": "Textiles coton",
+    "category": "Textile"
+  },
+  {
+    "id": null,
+    "canonical_name": "Pièces automobiles",
+    "category": "Industrie"
+  },
+  {
+    "id": null,
+    "canonical_name": "Machines agricoles",
+    "category": "Industrie"
+  },
+  {
+    "id": null,
+    "canonical_name": "Cosmétiques naturels",
+    "category": "Beauté"
+  },
+  {
+    "id": null,
+    "canonical_name": "Fromages affinés",
+    "category": "Agroalimentaire"
+  },
+  {
+    "id": null,
+    "canonical_name": "Médicaments génériques",
+    "category": "Pharma"
+  },
+  {
+    "id": null,
+    "canonical_name": "Équipements électriques",
+    "category": "Industrie"
+  }
+]
