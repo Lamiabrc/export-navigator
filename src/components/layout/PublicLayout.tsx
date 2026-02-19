@@ -82,6 +82,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const nextPath = `${location.pathname}${location.search}` || "/";
   const authNext = nextPath === "/" ? "/app/control-tower" : nextPath;
   const authNextParam = encodeURIComponent(authNext);
+  const isHome = location.pathname === "/";
 
   const [supportReady, setSupportReady] = React.useState(false);
   const [supportOpen, setSupportOpen] = React.useState(false);
@@ -267,6 +268,15 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         <div className="mb-6">
           <TricolorBanner title={banner.title} question={banner.question} />
         </div>
+      <main className={cn(
+        "relative z-10 mx-auto w-full",
+        isHome ? "max-w-none px-0 py-0" : "max-w-[90rem] px-4 py-8 sm:px-6 md:px-10 md:py-10"
+      )}>
+        {isHome ? null : (
+          <div className="mb-6">
+            <TricolorBanner title={banner.title} question={banner.question} />
+          </div>
+        )}
         {children ?? <Outlet />}
       </main>
 

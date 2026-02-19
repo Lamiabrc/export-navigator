@@ -6,6 +6,8 @@ import "@/styles/svgmap.css";
 
 // Auto-reload once if a lazy chunk fails to load (common after new deploy)
 const CHUNK_RETRY_KEY = "mpl_chunk_retry_at";
+const CHUNK_RETRY_COUNT_KEY = "mpl_chunk_retry_count";
+const MAX_HARD_RELOAD_ATTEMPTS = 3;
 const shouldReloadForChunkError = (reason: unknown) => {
   const msg = String((reason as any)?.message || reason || "");
   return /Failed to fetch dynamically imported module|ChunkLoadError|Loading chunk \d+ failed|Card is not defined/i.test(msg);
@@ -14,11 +16,16 @@ const shouldReloadForChunkError = (reason: unknown) => {
 const tryReloadForChunkError = () => {
   try {
     const last = Number(sessionStorage.getItem(CHUNK_RETRY_KEY) || 0);
+    const count = Number(sessionStorage.getItem(CHUNK_RETRY_COUNT_KEY) || 0);
     const now = Date.now();
     // prevent infinite reload loops
-    if (now - last < 10_000) return false;
+    if (now - last < 10_000 || count >= MAX_HARD_RELOAD_ATTEMPTS) return false;
     sessionStorage.setItem(CHUNK_RETRY_KEY, String(now));
-    window.location.reload();
+    sessionStorage.setItem(CHUNK_RETRY_COUNT_KEY, String(count + 1));
+
+    const cacheBustedUrl = new URL(window.location.href);
+    cacheBustedUrl.searchParams.set("_refresh", String(now));
+    window.location.replace(cacheBustedUrl.toString());
     return true;
   } catch {
     return false;
@@ -55,6 +62,12 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, RootErr
     if (shouldReloadForChunkError(error)) {
       tryReloadForChunkError();
     }
+  }
+
+  componentDidMount() {
+    // app loaded successfully: clear retry counter to avoid stale lock state
+    sessionStorage.removeItem(CHUNK_RETRY_KEY);
+    sessionStorage.removeItem(CHUNK_RETRY_COUNT_KEY);
   }
 
   render() {

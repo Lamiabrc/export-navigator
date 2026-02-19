@@ -46,6 +46,11 @@ export default function Home() {
         secondaryCta: "Voir les tarifs",
       };
 
+
+export default function Home() {
+  const { lang } = useI18n();
+  const isEn = lang === "en";
+
   usePageMeta("meta.home.title", "meta.home.description", {
     brandSuffix: "Export Navigator",
   });
@@ -179,6 +184,10 @@ export default function Home() {
           </div>
         </section>
 
+      <main className="w-full space-y-6 pb-2 pt-4 sm:space-y-8 sm:pt-6 lg:space-y-10 lg:pt-8">
+        <VideoBanner isEn={isEn} />
+        <CopilotChatWide isEn={isEn} />
+        <HomeCtas isEn={isEn} />
       </main>
     </PublicLayout>
   );

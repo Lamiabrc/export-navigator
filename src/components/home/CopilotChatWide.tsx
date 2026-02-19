@@ -61,6 +61,11 @@ export function CopilotChatWide({ isEn }: Props) {
             <div className="flex items-center gap-2">
               <Sparkles className="size-5 text-primary" />
               <CardTitle>{isEn ? "Export AI Chatbot" : "Chatbot IA export"}</CardTitle>
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm">
+          <div className="space-y-3 border-b border-slate-200 bg-slate-50/60 p-6">
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-5 text-primary" />
+              <h2 className="text-lg font-semibold">{isEn ? "Export AI Chatbot" : "Chatbot IA export"}</h2>
               <Badge variant="secondary">{isEn ? "Free" : "Gratuit"}</Badge>
             </div>
             <p className="text-sm font-medium text-primary">
@@ -86,6 +91,9 @@ export function CopilotChatWide({ isEn }: Props) {
           </CardHeader>
 
           <CardContent className="p-0">
+          </div>
+
+          <div className="p-0">
             <div className="max-h-[56vh] min-h-[320px] space-y-3 overflow-y-auto p-4 md:min-h-[420px]">
               {messages.map((message, index) => (
                 <div
@@ -130,6 +138,8 @@ export function CopilotChatWide({ isEn }: Props) {
             </div>
           </CardContent>
         </Card>
+          </div>
+        </div>
       </div>
     </section>
   );

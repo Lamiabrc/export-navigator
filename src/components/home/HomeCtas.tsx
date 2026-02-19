@@ -19,6 +19,13 @@ export function HomeCtas({ isEn }: Props) {
             <Badge variant="secondary" className="w-fit">{isEn ? "Free" : "Gratuit"}</Badge>
           </CardHeader>
           <CardContent className="space-y-3">
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="space-y-2 p-6 pb-3">
+            <Headset className="size-5 text-primary" />
+            <h3 className="text-lg font-semibold">{isEn ? "Contact an expert" : "Contactez un expert"}</h3>
+            <Badge variant="secondary" className="w-fit">{isEn ? "Free" : "Gratuit"}</Badge>
+          </div>
+          <div className="space-y-3 px-6 pb-6">
             <p className="text-sm text-slate-600">
               {isEn ? "Send your context and get a human review." : "Envoyez votre contexte et obtenez un retour humain."}
             </p>
@@ -35,6 +42,16 @@ export function HomeCtas({ isEn }: Props) {
             <Badge variant="outline" className="w-fit">08:30–18:30</Badge>
           </CardHeader>
           <CardContent className="space-y-3">
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="space-y-2 p-6 pb-3">
+            <Phone className="size-5 text-primary" />
+            <h3 className="text-lg font-semibold">{isEn ? "Call us" : "Appelez"}</h3>
+            <Badge variant="outline" className="w-fit">08:30–18:30</Badge>
+          </div>
+          <div className="space-y-3 px-6 pb-6">
             <p className="text-sm text-slate-600">
               {isEn ? "Direct support for urgent export decisions." : "Support direct pour vos décisions export urgentes."}
             </p>
@@ -51,6 +68,16 @@ export function HomeCtas({ isEn }: Props) {
             <Badge className="w-fit">Pro</Badge>
           </CardHeader>
           <CardContent className="space-y-3">
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="space-y-2 p-6 pb-3">
+            <Radar className="size-5 text-primary" />
+            <h3 className="text-lg font-semibold">{isEn ? "Export tracking & growth tool" : "Outil de suivi & développement export"}</h3>
+            <Badge className="w-fit">Pro</Badge>
+          </div>
+          <div className="space-y-3 px-6 pb-6">
             <p className="text-sm text-slate-600">
               {isEn ? "Manage dossiers, tasks and strategic growth plans." : "Pilotez dossiers, tâches et plan de croissance export."}
             </p>
@@ -59,6 +86,8 @@ export function HomeCtas({ isEn }: Props) {
             </Button>
           </CardContent>
         </Card>
+          </div>
+        </div>
       </div>
     </section>
   );

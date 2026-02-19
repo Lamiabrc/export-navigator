@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { HsAutocomplete } from "@/components/hs/HsAutocomplete";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { HeroLabels } from "@/content/homeContent";
 import { supabase } from "@/integrations/supabase/client";
@@ -254,6 +255,8 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-r from-primary/5 via-transparent to-emerald-500/5" />
       <div className="relative grid items-start gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] lg:gap-10 xl:gap-12">
         <div className="space-y-6">
+      <div className="relative space-y-8">
+        <div className="space-y-5">
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1 text-xs">{labels.badge}</Badge>
           <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-primary">{labels.welcomeTitle}</p>
@@ -262,6 +265,9 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
           <div className="space-y-4">
             <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 md:text-5xl lg:text-6xl">{labels.title}</h1>
             <p className="max-w-2xl text-base leading-relaxed text-slate-600 md:text-lg">{labels.intro}</p>
+            <p className="max-w-2xl text-base leading-relaxed text-slate-600 md:text-lg">{labels.intro}
+            </p>
+            <p className="text-base font-semibold text-primary">{isEn ? "Ask your export question now." : "Posez votre question export maintenant."}</p>
           </div>
           <ul className="space-y-2 text-slate-700">
             {labels.bullets.map((item) => (
@@ -288,6 +294,13 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
         </div>
 
         <div className="space-y-4">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-950/95 p-2">
+            <video className="aspect-[21/7] w-full rounded-lg object-cover" autoPlay muted loop playsInline preload="metadata">
+              <source src={heroExportVideo} type="video/mp4" />
+            </video>
+            <p className="px-1 pt-2 text-xs text-slate-300">{isEn ? "Quick product preview in real conditions." : "Aperçu rapide de la plateforme en conditions réelles."}</p>
+          </div>
+
           <Card className="border-slate-200 bg-white/95 shadow-sm">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -367,6 +380,7 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
                       <div className="space-y-1">
                         <p className="text-xs text-slate-500">HS code</p>
                         <Input value={hsCode} onChange={(e) => setHsCode(e.target.value)} placeholder="Ex: 8471" />
+                        <HsAutocomplete value={hsCode} onChange={setHsCode} productContext={isEn ? selectedProduct.labelEn : selectedProduct.labelFr} />
                       </div>
                     </div>
 
@@ -449,6 +463,19 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
             </video>
             <p className="px-1 pt-2 text-xs text-slate-300">{isEn ? "Quick product preview in real conditions." : "Aperçu rapide de la plateforme en conditions réelles."}</p>
           </div>
+
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-900">{isEn ? "Need a human expert?" : "Besoin d’un expert humain ?"}</p>
+                <p className="mt-1 text-sm text-slate-600">{isEn ? "Contact us, call us, or use our export tracking and development tool." : "Contactez un expert, appelez-nous, ou utilisez notre outil de suivi et de développement export."}</p>
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <Button asChild variant="outline" className="w-full"><Link to="/contact">{isEn ? "Contact an expert" : "Contacter un expert"}</Link></Button>
+                  <Button asChild variant="outline" className="w-full"><a href="tel:+33676435551">{isEn ? "Call" : "Appeler"}</a></Button>
+                  <Button asChild className="w-full"><Link to="/tour-de-controle">{isEn ? "Export growth tool" : "Outil de suivi export"}</Link></Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
         </div>
       </div>
     </section>

@@ -177,6 +177,7 @@ function summarizeContext(question: string, context: Record<string, any> | null 
     .filter(Boolean)
     .join("
 ");
+    .join("\n");
 
   const merged = extractSignals(corpus);
   const product = typeof context?.product === "string" ? context.product.trim() : "";
@@ -340,6 +341,7 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     const supabaseFacts = await fetchSupabaseFacts(question, signals);
     const specializedLinks = specializedSourcesFor(`${question}
 ${contextual.contextSummary}`);
+    const specializedLinks = specializedSourcesFor(`${question}\n${contextual.contextSummary}`);
 
     const admin = supabaseAdmin();
 
@@ -350,6 +352,7 @@ ${contextual.contextSummary}`);
         ? "Merci pour le retour. Je vais corriger ma proposition et repartir sur les informations essentielles.
 
 "
+        ? "Merci pour le retour. Je vais corriger ma proposition et repartir sur les informations essentielles.\n\n"
         : "";
       const result: AskResult = {
         answer: `${feedbackPrefix}${degradedBase}`,
@@ -440,6 +443,7 @@ ${contextual.history.map((m) => `- ${m.role}: ${m.content}`).join("\n")}
 ` : "") +
       (contextual.satisfaction === false ? "Retour utilisateur: la réponse précédente n'est pas satisfaisante.
 " : "") +
+      (contextual.satisfaction === false ? "Retour utilisateur: la réponse précédente n'est pas satisfaisante.\n" : "") +
       (knowledgeBlocks ? `
 Connaissances disponibles:
 ${knowledgeBlocks}` : "") +
