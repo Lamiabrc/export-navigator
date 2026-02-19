@@ -1,6 +1,5 @@
 import * as React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { Menu, X } from "lucide-react";
 import { ChevronDown, ChevronRight, Menu, X } from "lucide-react";
 
 import { BrandLogo } from "@/components/BrandLogo";
@@ -110,7 +109,6 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   };
 
   const ctaLabel = isFr ? "Demander un devis" : "Request a quote";
-  const payLabel = isFr ? "Payer" : "Pay";
 
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
@@ -141,13 +139,6 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
       <CinematicBackdrop variant="public" className="z-0 opacity-20" />
       <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-white/85 via-white/90 to-white" />
 
-      <header className="relative z-20 border-b border-blue-100 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between gap-3 px-4 py-3 md:px-6">
-          <BrandLogo
-            href="/"
-            size="md"
-            imageClassName="h-9 w-auto md:h-10"
-            textClassName="text-[12px] md:text-[13px]"
       <header className="relative z-20 border-b border-blue-100 bg-white/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between gap-3 px-4 py-2 md:px-6">
           <BrandLogo
@@ -161,13 +152,6 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             className="group"
           />
 
-          <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-semibold text-blue-900/70 md:flex">
-            {navLinks.map((link) => {
-              const label = navLabel(link.key, link.fallback);
-              const active = isActivePath(location.pathname, link.to);
-              return (
-                <Link key={link.key} to={link.to} className={cx("transition-colors hover:text-blue-900", active && "text-blue-900")} aria-label={label}>
-                  <span className={cx(active && "border-b-2 border-blue-900 pb-1")}>{label}</span>
           <nav className="hidden flex-1 items-center justify-center gap-3 text-sm font-semibold text-blue-900/70 md:flex">
             {navLinks.map((link) => {
               const label = navLabel(link.key, link.fallback);
@@ -217,23 +201,12 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                 <Link to={`/register?next=${authNextParam}`} className="inline-flex rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#B0231D]">
                   {ctaLabel}
                 </Link>
-                <Link to="/pricing#plans" className="inline-flex rounded-full border border-blue-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-900 transition hover:border-blue-300">
-                  {isFr ? "Payer en ligne" : "Pay online"}
-                </Link>
               </>
             )}
           </div>
 
           <div className="flex items-center gap-2 md:hidden">
             {!isAuthenticated ? (
-              <>
-                <Link to={`/register?next=${authNextParam}`} className="inline-flex rounded-full bg-[#DC2626] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white">
-                  {ctaLabel}
-                </Link>
-                <Link to="/pricing#plans" className="inline-flex rounded-full border border-blue-200 bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-blue-900">
-                  {payLabel}
-                </Link>
-              </>
               <Link to={`/register?next=${authNextParam}`} className="inline-flex rounded-full bg-[#DC2626] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white">
                 {ctaLabel}
               </Link>
@@ -289,7 +262,6 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                     key={`${link.key}-drawer`}
                     to={link.to}
                     className={cn(
-                      "rounded-xl border px-3 py-2 text-sm font-semibold",
                       "flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-sm font-semibold",
                       active ? "border-blue-900 bg-blue-900 text-white" : "border-blue-200 bg-white text-blue-900"
                     )}
@@ -332,10 +304,6 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         <div className="h-1 bg-gradient-to-r from-blue-700 via-white to-red-600" />
       </header>
 
-      <main className="relative z-10 mx-auto w-full max-w-[90rem] px-4 py-8 sm:px-6 md:px-10 md:py-10">
-        <div className="mb-6">
-          <TricolorBanner title={banner.title} question={banner.question} />
-        </div>
       <main className={cn(
         "relative z-10 mx-auto w-full",
         isHome ? "max-w-none px-0 py-0" : "max-w-[90rem] px-4 py-8 sm:px-6 md:px-10 md:py-10"
