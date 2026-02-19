@@ -1,8 +1,7 @@
-import { Link } from "react-router-dom";
 import { PublicLayout } from "@/components/layout/PublicLayout";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { VideoBanner } from "@/components/home/VideoBanner";
+import { CopilotChatWide } from "@/components/home/CopilotChatWide";
+import { HomeCtas } from "@/components/home/HomeCtas";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { useI18n } from "@/contexts/LanguageContext";
 import heroExportVideo from "@/assets/hero-export.mp4";
