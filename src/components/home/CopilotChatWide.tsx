@@ -3,6 +3,7 @@ import { Mic, Send, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 
 type Props = {
@@ -55,11 +56,11 @@ export function CopilotChatWide({ isEn }: Props) {
   return (
     <section className="w-full px-4 sm:px-6 lg:px-10">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm">
-          <div className="space-y-3 border-b border-slate-200 bg-slate-50/60 p-6">
+        <Card className="overflow-hidden rounded-3xl border-slate-200 bg-white/95 shadow-sm">
+          <CardHeader className="space-y-3 border-b border-slate-200 bg-slate-50/60">
             <div className="flex items-center gap-2">
               <Sparkles className="size-5 text-primary" />
-              <h2 className="text-lg font-semibold">{isEn ? "Export AI Chatbot" : "Chatbot IA export"}</h2>
+              <CardTitle>{isEn ? "Export AI Chatbot" : "Chatbot IA export"}</CardTitle>
               <Badge variant="secondary">{isEn ? "Free" : "Gratuit"}</Badge>
             </div>
             <p className="text-sm font-medium text-primary">
@@ -82,9 +83,9 @@ export function CopilotChatWide({ isEn }: Props) {
                 </button>
               ))}
             </div>
-          </div>
+          </CardHeader>
 
-          <div className="p-0">
+          <CardContent className="p-0">
             <div className="max-h-[56vh] min-h-[320px] space-y-3 overflow-y-auto p-4 md:min-h-[420px]">
               {messages.map((message, index) => (
                 <div
@@ -127,8 +128,8 @@ export function CopilotChatWide({ isEn }: Props) {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </section>
   );

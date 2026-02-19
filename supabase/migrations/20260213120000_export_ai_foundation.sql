@@ -57,33 +57,6 @@ create index if not exists kb_chunks_document_idx on public.kb_chunks(document_i
 create index if not exists kb_chunks_content_idx on public.kb_chunks using gin (to_tsvector('french', content));
 create index if not exists kb_chunks_embedding_idx on public.kb_chunks using ivfflat (embedding vector_cosine_ops) with (lists = 100);
 
-alter table public.kb_documents add column if not exists source text;
-alter table public.kb_documents add column if not exists universe text;
-alter table public.kb_documents add column if not exists lang text;
-alter table public.kb_documents add column if not exists content text;
-do $$
-begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'kb_documents' and column_name = 'language'
-  ) then
-    execute 'update public.kb_documents set lang = coalesce(lang, language, ''fr'') where lang is null';
-  else
-    update public.kb_documents set lang = coalesce(lang, 'fr') where lang is null;
-  end if;
-end $$;
-alter table public.kb_documents alter column lang set default 'fr';
-
-alter table public.kb_chunks add column if not exists chunk_index int;
-alter table public.kb_chunks add column if not exists content text;
-alter table public.kb_chunks add column if not exists embedding vector(1536);
-update public.kb_chunks set chunk_index = coalesce(chunk_index, 0) where chunk_index is null;
-
--- Ensure function signature conflicts from previous migrations are removed first.
-drop function if exists public.match_kb_chunks(vector, integer, double precision, text);
-drop function if exists public.match_kb_chunks(vector, integer, text);
-drop function if exists public.match_kb_chunks(vector, integer);
-
 create or replace function public.match_kb_chunks(
   query_embedding vector(1536),
   match_count int default 8,
@@ -108,7 +81,7 @@ as $$
   from public.kb_chunks c
   join public.kb_documents d on d.id = c.document_id
   where c.embedding is not null
-    and (filter_universe is null or coalesce(d.universe,'') = filter_universe)
+    and (filter_universe is null or d.universe = filter_universe)
   order by c.embedding <=> query_embedding
   limit greatest(1, coalesce(match_count, 8));
 $$;

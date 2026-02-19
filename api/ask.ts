@@ -175,7 +175,8 @@ function summarizeContext(question: string, context: Record<string, any> | null 
     typeof context?.destination === "string" ? context.destination : "",
   ]
     .filter(Boolean)
-    .join("\n");
+    .join("
+");
 
   const merged = extractSignals(corpus);
   const product = typeof context?.product === "string" ? context.product.trim() : "";
@@ -337,7 +338,8 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
 
     const followUps = buildFollowUpQuestions(question, signals);
     const supabaseFacts = await fetchSupabaseFacts(question, signals);
-    const specializedLinks = specializedSourcesFor(`${question}\n${contextual.contextSummary}`);
+    const specializedLinks = specializedSourcesFor(`${question}
+${contextual.contextSummary}`);
 
     const admin = supabaseAdmin();
 
@@ -345,7 +347,9 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
       const degradedBase = buildDegradedAnswer(question, signals, followUps, supabaseFacts.snippets);
       const feedbackPrefix = contextual.satisfaction === false
-        ? "Merci pour le retour. Je vais corriger ma proposition et repartir sur les informations essentielles.\n\n"
+        ? "Merci pour le retour. Je vais corriger ma proposition et repartir sur les informations essentielles.
+
+"
         : "";
       const result: AskResult = {
         answer: `${feedbackPrefix}${degradedBase}`,
@@ -434,7 +438,8 @@ ${contextual.history.map((m) => `- ${m.role}: ${m.content}`).join("\n")}
         : "") +
       (body?.context ? `Contexte utilisateur brut: ${JSON.stringify(body.context)}
 ` : "") +
-      (contextual.satisfaction === false ? "Retour utilisateur: la réponse précédente n'est pas satisfaisante.\n" : "") +
+      (contextual.satisfaction === false ? "Retour utilisateur: la réponse précédente n'est pas satisfaisante.
+" : "") +
       (knowledgeBlocks ? `
 Connaissances disponibles:
 ${knowledgeBlocks}` : "") +
