@@ -108,6 +108,7 @@ as $$
   from public.kb_chunks c
   join public.kb_documents d on d.id = c.document_id
   where c.embedding is not null
+    and (filter_universe is null or d.universe = filter_universe)
     and (filter_universe is null or coalesce(d.universe,'') = filter_universe)
   order by c.embedding <=> query_embedding
   limit greatest(1, coalesce(match_count, 8));

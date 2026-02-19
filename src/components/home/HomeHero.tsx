@@ -253,6 +253,8 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
   return (
     <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50/70 p-6 sm:p-8 lg:p-12 xl:p-14">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-r from-primary/5 via-transparent to-emerald-500/5" />
+      <div className="relative grid items-start gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] lg:gap-10 xl:gap-12">
+        <div className="space-y-6">
       <div className="relative space-y-8">
         <div className="space-y-5">
           <Badge variant="secondary" className="w-fit rounded-full px-3 py-1 text-xs">{labels.badge}</Badge>
@@ -262,6 +264,7 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
           </div>
           <div className="space-y-4">
             <h1 className="text-balance text-4xl font-bold tracking-tight text-slate-900 md:text-5xl lg:text-6xl">{labels.title}</h1>
+            <p className="max-w-2xl text-base leading-relaxed text-slate-600 md:text-lg">{labels.intro}</p>
             <p className="max-w-2xl text-base leading-relaxed text-slate-600 md:text-lg">{labels.intro}
             </p>
             <p className="text-base font-semibold text-primary">{isEn ? "Ask your export question now." : "Posez votre question export maintenant."}</p>
@@ -376,6 +379,7 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
 
                       <div className="space-y-1">
                         <p className="text-xs text-slate-500">HS code</p>
+                        <Input value={hsCode} onChange={(e) => setHsCode(e.target.value)} placeholder="Ex: 8471" />
                         <HsAutocomplete value={hsCode} onChange={setHsCode} productContext={isEn ? selectedProduct.labelEn : selectedProduct.labelFr} />
                       </div>
                     </div>
@@ -450,6 +454,15 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
                   </div>
                 ) : null}
               </div>
+            </CardContent>
+          </Card>
+
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-950/95 p-2">
+            <video className="aspect-video w-full rounded-lg" autoPlay muted loop playsInline preload="metadata">
+              <source src={heroExportVideo} type="video/mp4" />
+            </video>
+            <p className="px-1 pt-2 text-xs text-slate-300">{isEn ? "Quick product preview in real conditions." : "Aperçu rapide de la plateforme en conditions réelles."}</p>
+          </div>
 
               <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-sm font-semibold text-slate-900">{isEn ? "Need a human expert?" : "Besoin d’un expert humain ?"}</p>
