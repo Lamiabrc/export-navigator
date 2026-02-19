@@ -264,6 +264,10 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         <div className="h-1 bg-gradient-to-r from-blue-700 via-white to-red-600" />
       </header>
 
+      <main className="relative z-10 mx-auto w-full max-w-[90rem] px-4 py-8 sm:px-6 md:px-10 md:py-10">
+        <div className="mb-6">
+          <TricolorBanner title={banner.title} question={banner.question} />
+        </div>
       <main className={cn(
         "relative z-10 mx-auto w-full",
         isHome ? "max-w-none px-0 py-0" : "max-w-[90rem] px-4 py-8 sm:px-6 md:px-10 md:py-10"
