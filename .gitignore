@@ -63,3 +63,7 @@ data/
 .cache/
 .tmp/
 temp/
+
+!data/seed/
+!data/seed/**
+!data/

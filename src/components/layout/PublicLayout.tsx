@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { Menu, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Menu, X } from "lucide-react";
 
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
@@ -87,6 +88,20 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const [supportReady, setSupportReady] = React.useState(false);
   const [supportOpen, setSupportOpen] = React.useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [mobileResourcesOpen, setMobileResourcesOpen] = React.useState(false);
+
+  const resourceLinks = React.useMemo(
+    () => [
+      { to: "/guides/incoterms", label: isFr ? "Incoterms" : "Incoterms" },
+      { to: "/methodologie", label: isFr ? "Méthodologie" : "Methodology" },
+      { to: "/veille", label: isFr ? "Veille" : "Watch" },
+      { to: "/prospection", label: isFr ? "Prospection" : "Prospection" },
+      { to: "/services", label: isFr ? "Offre" : "Offer" },
+      { to: "/about", label: isFr ? "À propos" : "About" },
+      { to: "/pricing#plans", label: isFr ? "Payer en ligne" : "Pay online" },
+    ],
+    [isFr]
+  );
 
   const navLabel = (key: string, fallback: string) => {
     const candidate = (t(key) as string) ?? "";
@@ -118,6 +133,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
   React.useEffect(() => {
     setMobileMenuOpen(false);
+    setMobileResourcesOpen(false);
   }, [location.pathname, location.search]);
 
   return (
@@ -132,6 +148,13 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             size="md"
             imageClassName="h-9 w-auto md:h-10"
             textClassName="text-[12px] md:text-[13px]"
+      <header className="relative z-20 border-b border-blue-100 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between gap-3 px-4 py-2 md:px-6">
+          <BrandLogo
+            href="/"
+            size="sm"
+            imageClassName="h-8 w-auto md:h-9"
+            textClassName="text-[11px] md:text-[12px]"
             title="MPL Export Navigator"
             subtitle="par MPL Export Conseil"
             location="Conseil Export"
@@ -145,6 +168,19 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
               return (
                 <Link key={link.key} to={link.to} className={cx("transition-colors hover:text-blue-900", active && "text-blue-900")} aria-label={label}>
                   <span className={cx(active && "border-b-2 border-blue-900 pb-1")}>{label}</span>
+          <nav className="hidden flex-1 items-center justify-center gap-3 text-sm font-semibold text-blue-900/70 md:flex">
+            {navLinks.map((link) => {
+              const label = navLabel(link.key, link.fallback);
+              const active = isActivePath(location.pathname, link.to);
+              const badge = link.to === "/copilote" ? (isFr ? "Gratuit" : "Free") : link.to === "/tour-de-controle" ? "Pro" : null;
+              return (
+                <Link key={link.key} to={link.to} className={cx("transition-colors hover:text-blue-900", active && "text-blue-900")} aria-label={label}>
+                  <span className={cx("inline-flex items-center gap-1", active && "border-b-2 border-blue-900 pb-1")}>
+                    {label}
+                    {badge ? (
+                      <span className={cx("rounded-full px-1.5 py-0.5 text-[10px] font-semibold", badge === "Pro" ? "bg-blue-900 text-white" : "bg-emerald-100 text-emerald-700")}>{badge}</span>
+                    ) : null}
+                  </span>
                 </Link>
               );
             })}
@@ -198,6 +234,9 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                   {payLabel}
                 </Link>
               </>
+              <Link to={`/register?next=${authNextParam}`} className="inline-flex rounded-full bg-[#DC2626] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white">
+                {ctaLabel}
+              </Link>
             ) : null}
             <button
               type="button"
@@ -244,19 +283,48 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
               {navLinks.map((link) => {
                 const active = isActivePath(location.pathname, link.to);
                 const label = navLabel(link.key, link.fallback);
+                const badge = link.to === "/copilote" ? (isFr ? "Gratuit" : "Free") : link.to === "/tour-de-controle" ? "Pro" : null;
                 return (
                   <Link
                     key={`${link.key}-drawer`}
                     to={link.to}
                     className={cn(
                       "rounded-xl border px-3 py-2 text-sm font-semibold",
+                      "flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-sm font-semibold",
                       active ? "border-blue-900 bg-blue-900 text-white" : "border-blue-200 bg-white text-blue-900"
                     )}
                   >
-                    {label}
+                    <span>{label}</span>
+                    {badge ? (
+                      <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold", badge === "Pro" ? "bg-blue-900/20 text-white" : "bg-emerald-100 text-emerald-700")}>{badge}</span>
+                    ) : null}
                   </Link>
                 );
               })}
+
+              <div className="rounded-xl border border-blue-200 bg-white">
+                <button
+                  type="button"
+                  onClick={() => setMobileResourcesOpen((prev) => !prev)}
+                  className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-sm font-semibold text-blue-900"
+                >
+                  <span>{isFr ? "Ressources" : "Resources"}</span>
+                  {mobileResourcesOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                </button>
+                {mobileResourcesOpen ? (
+                  <div className="grid grid-cols-1 gap-2 border-t border-blue-100 p-2">
+                    {resourceLinks.map((item) => (
+                      <Link
+                        key={`mobile-resource-${item.to}`}
+                        to={item.to}
+                        className="flex min-h-11 items-center rounded-lg border border-blue-100 bg-blue-50/40 px-3 py-2 text-sm font-medium text-blue-900"
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </nav>
           </div>
         ) : null}

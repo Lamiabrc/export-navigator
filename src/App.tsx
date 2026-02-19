@@ -61,6 +61,7 @@ import PublicAppGate from "@/pages/PublicAppGate";
 import VipRentability from "@/pages/VipRentability";
 import Legal from "@/pages/Legal";
 import AdminKbDocs from "@/pages/AdminKbDocs";
+import AdminData from "@/pages/AdminData";
 import TaxesOm from "@/pages/TaxesOm";
 import Prospection from "@/pages/Prospection";
 import Copilote from "@/pages/Copilote";
@@ -353,6 +354,15 @@ export default function App() {
                         />
 
                         {/* ✅ NOUVEAU : gestion PDFs (privé) */}
+                        <Route
+                          path="/app/admin/data"
+                          element={
+                            <ProtectedRoute>
+                              <AdminData />
+                            </ProtectedRoute>
+                          }
+                        />
+
                         <Route
                           path="/app/admin/kb-docs"
                           element={

@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
 
 type Props = {
   isEn: boolean;
@@ -30,6 +32,18 @@ type SpeechWindow = Window & {
   webkitSpeechRecognition?: SpeechRecognitionConstructor;
 };
 
+type ChatFreeResponse = {
+  session_id?: string;
+  reply?: string;
+  remaining?: number;
+  detected_context?: {
+    countryIso2?: string;
+    product?: string;
+    hs6?: string;
+  };
+  follow_up_questions?: string[];
+};
+
 const SUGGESTIONS = {
   fr: ["Choisir un HS", "Sécuriser un paiement", "Incoterm recommandé", "Email client"],
   en: ["Pick an HS code", "Secure payment", "Recommended Incoterm", "Client email"],
@@ -47,6 +61,10 @@ export function CopilotChatWide({ isEn }: Props) {
   const [draft, setDraft] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [listening, setListening] = React.useState(false);
+  const [sessionId, setSessionId] = React.useState<string | undefined>(undefined);
+  const [remaining, setRemaining] = React.useState<number | null>(null);
+  const [detectedContext, setDetectedContext] = React.useState<ChatFreeResponse["detected_context"]>({});
+  const [followUps, setFollowUps] = React.useState<string[]>([]);
   const recognitionRef = React.useRef<InstanceType<SpeechRecognitionConstructor> | null>(null);
 
   const send = async (preset?: string) => {
@@ -71,6 +89,29 @@ export function CopilotChatWide({ isEn }: Props) {
           : `Connexion IA en cours. Voici une première réponse pour : "${text}". Ajoutez le pays destination, le produit et le code HS pour un plan d’action précis.`,
       },
     ]);
+    const { data, error } = await supabase.functions.invoke<ChatFreeResponse>("chat-free", {
+      body: { session_id: sessionId, message: text },
+    });
+
+    if (error) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: isEn
+            ? "AI connection in progress. I can already guide you: share destination country, product and HS code."
+            : "Connexion IA en cours. Je peux déjà vous guider: partagez pays destination, produit et code HS.",
+        },
+      ]);
+      setLoading(false);
+      return;
+    }
+
+    setSessionId(data?.session_id);
+    setRemaining(typeof data?.remaining === "number" ? data.remaining : null);
+    setDetectedContext(data?.detected_context || {});
+    setFollowUps((data?.follow_up_questions || []).slice(0, 2));
+    setMessages((prev) => [...prev, { role: "assistant", content: data?.reply || "Réponse vide" }]);
     setLoading(false);
   };
 
@@ -102,6 +143,7 @@ export function CopilotChatWide({ isEn }: Props) {
 
   return (
     <section className="w-full">
+    <section id="copilote" className="w-full">
       <div className="w-full overflow-hidden rounded-3xl border border-slate-200 bg-white/95 shadow-sm">
         <div className="space-y-3 border-b border-slate-200 bg-slate-50/60 p-5 sm:p-6">
           <div className="flex items-center gap-2">
@@ -122,6 +164,27 @@ export function CopilotChatWide({ isEn }: Props) {
               </button>
             ))}
           </div>
+          <div className="text-xs text-slate-500">
+            {isEn ? "Remaining today" : "Restant aujourd'hui"}: {remaining ?? "--"}/30
+          </div>
+          {detectedContext?.countryIso2 || detectedContext?.product || detectedContext?.hs6 ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-semibold text-slate-600">{isEn ? "Detected context:" : "Contexte détecté:"}</span>
+              {detectedContext.countryIso2 ? <Badge variant="outline">{detectedContext.countryIso2}</Badge> : null}
+              {detectedContext.product ? <Badge variant="outline">{detectedContext.product}</Badge> : null}
+              {detectedContext.hs6 ? <Badge variant="outline">HS {detectedContext.hs6}</Badge> : null}
+            </div>
+          ) : null}
+          {followUps.length ? (
+            <div className="space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+              <p className="font-semibold">{isEn ? "To refine, answer:" : "Pour affiner, répondez à:"}</p>
+              {followUps.map((q) => (
+                <button key={q} type="button" onClick={() => setDraft(q)} className="block text-left underline">
+                  {q}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="max-h-[60vh] min-h-[320px] space-y-3 overflow-y-auto p-4 md:min-h-[420px] md:p-5">

@@ -16,5 +16,8 @@ export const navLinks: NavLinkConfig[] = [
   { key: "header.menu.incoterms", to: "/guides/incoterms", fallback: "Incoterms" },
   { key: "header.menu.methodologie", to: "/methodologie", fallback: "Méthodologie" },
   { key: "header.menu.about", to: "/about", fallback: "À propos" },
+  { key: "header.menu.copilot", to: "/copilote", fallback: "Copilote IA (gratuit)" },
+  { key: "header.menu.controlTower", to: "/tour-de-controle", fallback: "Tour de contrôle (pro)" },
+  { key: "header.menu.guides", to: "/guides", fallback: "Guides" },
   { key: "header.menu.contact", to: "/contact", fallback: "Contact" },
 ];

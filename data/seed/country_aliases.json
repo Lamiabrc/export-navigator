@@ -1,0 +1,72 @@
+[
+  {
+    "iso2": "FR",
+    "alias": "france",
+    "lang": "fr"
+  },
+  {
+    "iso2": "FR",
+    "alias": "république de france",
+    "lang": "fr"
+  },
+  {
+    "iso2": "MA",
+    "alias": "maroc",
+    "lang": "fr"
+  },
+  {
+    "iso2": "MA",
+    "alias": "république de maroc",
+    "lang": "fr"
+  },
+  {
+    "iso2": "MA",
+    "alias": "morocco",
+    "lang": "en"
+  },
+  {
+    "iso2": "US",
+    "alias": "états-unis",
+    "lang": "fr"
+  },
+  {
+    "iso2": "US",
+    "alias": "république de états-unis",
+    "lang": "fr"
+  },
+  {
+    "iso2": "US",
+    "alias": "united states",
+    "lang": "en"
+  },
+  {
+    "iso2": "CL",
+    "alias": "chili",
+    "lang": "fr"
+  },
+  {
+    "iso2": "CL",
+    "alias": "république du chili",
+    "lang": "fr"
+  },
+  {
+    "iso2": "CL",
+    "alias": "chile",
+    "lang": "en"
+  },
+  {
+    "iso2": "MA",
+    "alias": "kingdom of morocco",
+    "lang": "en"
+  },
+  {
+    "iso2": "SN",
+    "alias": "sénégal",
+    "lang": "fr"
+  },
+  {
+    "iso2": "SN",
+    "alias": "senegal",
+    "lang": "en"
+  }
+]
