@@ -1,5 +1,7 @@
-﻿import * as React from "react";
+import * as React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
+import { Menu, X } from "lucide-react";
+
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -12,9 +14,6 @@ import { navLinks } from "@/config/navLinks";
 import { getBannerContent } from "@/config/bannerContent";
 import SupportChatWidget from "@/components/support/SupportChatWidget";
 
-type RssItem = { title: string; link: string; pubDate?: string };
-
-// Encoding-safe flags (avoid broken emoji bytes)
 const flags: Record<LanguageCode, string> = {
   fr: String.fromCodePoint(0x1f1eb, 0x1f1f7),
   en: String.fromCodePoint(0x1f1ec, 0x1f1e7),
@@ -24,24 +23,6 @@ function cx(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
 }
 
-function formatDate(value?: string) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
-}
-
-function safeExternalUrl(url?: string) {
-  if (!url) return null;
-  if (!/^https?:\/\//i.test(url)) return null;
-  return url;
-}
-
-/**
- * "Active" rules:
- * - exact match for root pages
- * - prefix match for sections like /guides/... or /veille/...
- */
 function isActivePath(pathname: string, to: string) {
   if (to === "/") return pathname === "/";
   if (pathname === to) return true;
@@ -52,21 +33,9 @@ function FooterSocial() {
   const { lang } = useI18n();
   const isFr = lang === "fr";
   const links = [
-    {
-      label: "Facebook",
-      href: "https://www.facebook.com/profile.php?id=61587254986176",
-      icon: "/facebook.svg",
-    },
-    {
-      label: "YouTube",
-      href: "https://www.youtube.com/channel/UCxRRjAnotPJahv9SzaPJsAw",
-      icon: "/youtube.svg",
-    },
-    {
-      label: "LinkedIn",
-      href: "https://www.linkedin.com/company/mpl-conseil-export/?viewAsMember=true",
-      icon: "/linkedin.svg",
-    },
+    { label: "Facebook", href: "https://www.facebook.com/profile.php?id=61587254986176", icon: "/facebook.svg" },
+    { label: "YouTube", href: "https://www.youtube.com/channel/UCxRRjAnotPJahv9SzaPJsAw", icon: "/youtube.svg" },
+    { label: "LinkedIn", href: "https://www.linkedin.com/company/mpl-conseil-export/?viewAsMember=true", icon: "/linkedin.svg" },
   ];
 
   return (
@@ -96,9 +65,7 @@ function FooterSocial() {
       </ul>
       <div className="mt-5">
         <Button asChild className="bg-[#DC2626] text-white hover:bg-[#B0231D]">
-          <Link to="/contact?offer=diagnostic">
-            {isFr ? "Nous contacter" : "Contact us"}
-          </Link>
+          <Link to="/contact?offer=diagnostic">{isFr ? "Nous contacter" : "Contact us"}</Link>
         </Button>
       </div>
     </div>
@@ -113,11 +80,13 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const banner = getBannerContent(location.pathname);
   const siteDisclaimers = (t("disclaimers") as string[]) ?? [];
   const nextPath = `${location.pathname}${location.search}` || "/";
-  const nextParam = encodeURIComponent(nextPath);
   const authNext = nextPath === "/" ? "/app/control-tower" : nextPath;
   const authNextParam = encodeURIComponent(authNext);
+  const isHome = location.pathname === "/";
+
   const [supportReady, setSupportReady] = React.useState(false);
   const [supportOpen, setSupportOpen] = React.useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
   const navLabel = (key: string, fallback: string) => {
     const candidate = (t(key) as string) ?? "";
@@ -126,6 +95,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   };
 
   const ctaLabel = isFr ? "Demander un devis" : "Request a quote";
+  const payLabel = isFr ? "Payer" : "Pay";
 
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
@@ -146,56 +116,41 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
     };
   }, []);
 
+  React.useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname, location.search]);
+
   return (
-    <div className="relative min-h-screen bg-white text-foreground">
-      {/* Backdrop “light-friendly” */}
+    <div className="relative min-h-screen overflow-x-hidden bg-white text-foreground">
       <CinematicBackdrop variant="public" className="z-0 opacity-20" />
       <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-white/85 via-white/90 to-white" />
 
-      <header className="relative z-10 border-b border-blue-100 bg-white/85 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
-          {/* BRAND */}
+      <header className="relative z-20 border-b border-blue-100 bg-white/90 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between gap-3 px-4 py-3 md:px-6">
           <BrandLogo
             href="/"
             size="md"
-            imageClassName="h-10 w-auto"
-            textClassName="text-[13px]"
+            imageClassName="h-9 w-auto md:h-10"
+            textClassName="text-[12px] md:text-[13px]"
             title="MPL Export Navigator"
             subtitle="par MPL Export Conseil"
             location="Conseil Export"
             className="group"
           />
 
-          {/* NAV */}
           <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-semibold text-blue-900/70 md:flex">
             {navLinks.map((link) => {
               const label = navLabel(link.key, link.fallback);
-              const isActive =
-                link.to === "/"
-                  ? location.pathname === "/"
-                  : location.pathname === link.to || location.pathname.startsWith(`${link.to}/`);
-
+              const active = isActivePath(location.pathname, link.to);
               return (
-                <Link
-                  key={link.key}
-                  to={link.to}
-                  className={cx(
-                    "transition-colors hover:text-blue-900",
-                    isActive && "text-blue-900"
-                  )}
-                  aria-label={label}
-                >
-                  <span className={cx(isActive && "border-b-2 border-blue-900 pb-1")}>
-                    {label}
-                  </span>
+                <Link key={link.key} to={link.to} className={cx("transition-colors hover:text-blue-900", active && "text-blue-900")} aria-label={label}>
+                  <span className={cx(active && "border-b-2 border-blue-900 pb-1")}>{label}</span>
                 </Link>
               );
             })}
           </nav>
 
-          {/* RIGHT */}
-          <div className="flex items-center gap-3">
-            {/* Language */}
+          <div className="hidden items-center gap-3 md:flex">
             <div
               role="group"
               aria-label={navLabel("header.languageAria", "Langue")}
@@ -210,7 +165,6 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                     "flex items-center gap-1 rounded-full px-2 py-1 transition",
                     lang === code ? "bg-blue-900 text-white" : "text-blue-900/70 hover:text-blue-900"
                   )}
-                  aria-label={navLabel("header.languageLabel", "Changer la langue")}
                 >
                   <span aria-hidden="true">{flags[code]}</span>
                   <span>{code.toUpperCase()}</span>
@@ -219,87 +173,120 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             </div>
 
             {isAuthenticated ? (
-              <Link
-                to="/app/control-tower"
-                className="inline-flex rounded-full bg-blue-900 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-blue-800"
-              >
+              <Link to="/app/control-tower" className="inline-flex rounded-full bg-blue-900 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-blue-800">
                 Tour de contrôle
               </Link>
             ) : (
               <>
-                {/* CTA */}
-                <Link
-                  to={`/register?next=${authNextParam}`}
-                  className="inline-flex rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#B0231D]"
-                >
+                <Link to={`/register?next=${authNextParam}`} className="inline-flex rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#B0231D]">
                   {ctaLabel}
                 </Link>
-
-                <Link
-                  to="/pricing#plans"
-                  className="hidden rounded-full border border-blue-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-900 transition hover:border-blue-300 md:inline-flex"
-                >
+                <Link to="/pricing#plans" className="inline-flex rounded-full border border-blue-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-900 transition hover:border-blue-300">
                   {isFr ? "Payer en ligne" : "Pay online"}
-                </Link>
-                <Link
-                  to={`/login?next=${authNextParam}`}
-                  className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-blue-900/70 transition hover:text-blue-900 md:inline-flex"
-                >
-                  {isFr ? "Connexion" : "Sign in"}
                 </Link>
               </>
             )}
           </div>
+
+          <div className="flex items-center gap-2 md:hidden">
+            {!isAuthenticated ? (
+              <>
+                <Link to={`/register?next=${authNextParam}`} className="inline-flex rounded-full bg-[#DC2626] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white">
+                  {ctaLabel}
+                </Link>
+                <Link to="/pricing#plans" className="inline-flex rounded-full border border-blue-200 bg-white px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-blue-900">
+                  {payLabel}
+                </Link>
+              </>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              aria-label={mobileMenuOpen ? (isFr ? "Fermer le menu" : "Close menu") : (isFr ? "Ouvrir le menu" : "Open menu")}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-blue-200 bg-white text-blue-900"
+            >
+              {mobileMenuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
+            </button>
+          </div>
         </div>
 
-        {/* Mobile nav */}
-        <div className="md:hidden border-t border-blue-100 bg-white/80">
-          <div className="mx-auto max-w-6xl overflow-x-auto px-4 py-2">
-            <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.25em] text-blue-900/70">
+        {mobileMenuOpen ? (
+          <div className="md:hidden border-t border-blue-100 bg-white/95 px-4 py-3 shadow-lg">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-1 rounded-full border border-blue-200 bg-white px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-blue-900/70">
+                {(["fr", "en"] as LanguageCode[]).map((code) => (
+                  <button
+                    key={`mob-${code}`}
+                    type="button"
+                    onClick={() => setLang(code)}
+                    className={cn(
+                      "rounded-full px-2 py-1",
+                      lang === code ? "bg-blue-900 text-white" : "text-blue-900"
+                    )}
+                  >
+                    {flags[code]} {code.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+
+              {isAuthenticated ? (
+                <Link to="/app/control-tower" className="rounded-full bg-blue-900 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white">
+                  Tour de contrôle
+                </Link>
+              ) : (
+                <Link to={`/login?next=${authNextParam}`} className="text-xs font-semibold text-blue-900/80 underline">
+                  {isFr ? "Connexion" : "Sign in"}
+                </Link>
+              )}
+            </div>
+
+            <nav className="grid grid-cols-1 gap-2">
               {navLinks.map((link) => {
                 const active = isActivePath(location.pathname, link.to);
                 const label = navLabel(link.key, link.fallback);
                 return (
                   <Link
-                    key={`${link.key}-m`}
+                    key={`${link.key}-drawer`}
                     to={link.to}
                     className={cn(
-                      "whitespace-nowrap rounded-full border px-3 py-2 transition",
-                      active
-                        ? "border-blue-900 bg-blue-900 text-white"
-                        : "border-blue-200 bg-white text-blue-900/80 hover:border-blue-300"
+                      "rounded-xl border px-3 py-2 text-sm font-semibold",
+                      active ? "border-blue-900 bg-blue-900 text-white" : "border-blue-200 bg-white text-blue-900"
                     )}
                   >
                     {label}
                   </Link>
                 );
               })}
-            </div>
+            </nav>
           </div>
-        </div>
+        ) : null}
 
-        {/* Tricolore */}
         <div className="h-1 bg-gradient-to-r from-blue-700 via-white to-red-600" />
       </header>
 
-      <main className="relative z-10 mx-auto w-full max-w-7xl px-6 py-10 md:px-10">
-        <div className="mb-6">
-          <TricolorBanner title={banner.title} question={banner.question} />
-        </div>
+      <main className={cn(
+        "relative z-10 mx-auto w-full",
+        isHome ? "max-w-none px-0 py-0" : "max-w-[90rem] px-4 py-8 sm:px-6 md:px-10 md:py-10"
+      )}>
+        {isHome ? null : (
+          <div className="mb-6">
+            <TricolorBanner title={banner.title} question={banner.question} />
+          </div>
+        )}
         {children ?? <Outlet />}
       </main>
 
       {isAuthenticated ? (
         <Link
           to="/app/control-tower"
-          className="fixed bottom-6 left-6 z-[80] inline-flex items-center rounded-full border border-blue-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-900 shadow-lg hover:bg-blue-50"
+          className="fixed bottom-6 left-4 z-[80] inline-flex items-center rounded-full border border-blue-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-900 shadow-lg hover:bg-blue-50 md:left-6"
         >
           Retour tour de contrôle
         </Link>
       ) : null}
 
       <footer className="relative z-10 border-t border-blue-100 bg-white/85">
-        <div className="mx-auto grid max-w-7xl gap-6 px-6 py-10 md:px-10 lg:grid-cols-[1fr_0.95fr]">
+        <div className="mx-auto grid w-full max-w-[90rem] gap-6 px-4 py-8 sm:px-6 md:px-10 md:py-10 lg:grid-cols-[1fr_0.95fr]">
           <div className="space-y-3">
             <div className="text-sm font-semibold text-foreground">MPL Export Navigator</div>
             <div className="text-sm text-muted-foreground">
@@ -307,45 +294,26 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             </div>
 
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <Link to="/methodologie" className="hover:text-foreground hover:underline">
-                Méthodologie
-              </Link>
-              <Link to="/about" className="hover:text-foreground hover:underline">
-                À propos
-              </Link>
-              <Link to="/guides" className="hover:text-foreground hover:underline">
-                Guides
-              </Link>
-              <Link to="/veille" className="hover:text-foreground hover:underline">
-                Veille
-              </Link>
-              <Link to="/contact" className="hover:text-foreground hover:underline">
-                Contact
-              </Link>
+              <Link to="/methodologie" className="hover:text-foreground hover:underline">Méthodologie</Link>
+              <Link to="/about" className="hover:text-foreground hover:underline">À propos</Link>
+              <Link to="/guides" className="hover:text-foreground hover:underline">Guides</Link>
+              <Link to="/veille" className="hover:text-foreground hover:underline">Veille</Link>
+              <Link to="/contact" className="hover:text-foreground hover:underline">Contact</Link>
             </div>
 
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <a href={`tel:${phoneRaw}`} className="hover:text-foreground hover:underline">
-                {phonePretty}
-              </a>
-              <a href={`mailto:${emailMain}`} className="hover:text-foreground hover:underline">
-                {emailMain}
-              </a>
+              <a href={`tel:${phoneRaw}`} className="hover:text-foreground hover:underline">{phonePretty}</a>
+              <a href={`mailto:${emailMain}`} className="hover:text-foreground hover:underline">{emailMain}</a>
             </div>
 
-            <div className="text-xs text-muted-foreground">
-              © {new Date().getFullYear()} MPL Export Conseil — outil d’aide à la décision.
-            </div>
+            <div className="text-xs text-muted-foreground">© {new Date().getFullYear()} MPL Export Conseil — outil d’aide à la décision.</div>
             <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground md:mt-2">
               {siteDisclaimers.map((text, index) => (
-                <span key={`foot-disclaimer-${index}`} className="leading-snug">
-                  {text}
-                </span>
+                <span key={`foot-disclaimer-${index}`} className="leading-snug">{text}</span>
               ))}
             </div>
           </div>
 
-          {/* Reseaux sociaux */}
           <FooterSocial />
         </div>
       </footer>
@@ -359,7 +327,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             setSupportReady(true);
             setSupportOpen(true);
           }}
-          className="fixed bottom-6 right-6 z-[90] inline-flex items-center gap-2 rounded-full bg-[#0B1220] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-[#16233a]"
+          className="fixed bottom-6 right-4 z-[90] inline-flex items-center gap-2 rounded-full bg-[#0B1220] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-[#16233a] md:right-6"
           aria-label={isFr ? "Ouvrir MPL Export Expert" : "Open MPL Export Expert"}
         >
           {isFr ? "MPL Export Expert" : "MPL Export Expert"}
