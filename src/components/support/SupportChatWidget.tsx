@@ -250,29 +250,36 @@ export default function SupportChatWidget({
       return;
     }
 
-    const payload = {
-      email,
-      name: contactName.trim() || null,
-      message: contactMessage.trim(),
+    const context = {
+      destination,
+      incoterm,
+      transport_mode: transportMode,
+      last_mode: lastMode || null,
+      last_question: lastUser?.content || null,
       page_url: typeof window !== "undefined" ? window.location.href : null,
-      context: {
-        destination,
-        incoterm,
-        transport_mode: transportMode,
-        last_mode: lastMode || null,
-        last_question: lastUser?.content || null,
-      },
+    };
+
+    const payload = {
+      firstName: contactName.trim() || "Support widget",
+      email,
+      topic: "support-message",
+      subject: "Demande support depuis le widget",
+      source: "support-widget",
+      message: `${contactMessage.trim()}\n\nContexte:\n${JSON.stringify(context, null, 2)}`,
+      scenarioSummary: JSON.stringify(context),
     };
 
     try {
       setContactLoading(true);
-      const { data, error: fnError } = await supabase.functions.invoke<{ ok: boolean; error?: string }>(
-        "support-message",
-        { body: payload }
-      );
+      const resp = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json().catch(() => ({} as { ok?: boolean; error?: string }));
 
-      if (fnError || data?.ok === false) {
-        throw new Error(fnError?.message || data?.error || "Envoi impossible");
+      if (!resp.ok || data?.ok === false) {
+        throw new Error(data?.error || `contact_failed_${resp.status}`);
       }
 
       toast({ title: "Message envoye", description: "Le support revient vers toi sous 24-48h." });

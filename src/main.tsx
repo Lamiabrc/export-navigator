@@ -7,7 +7,7 @@ import "@/styles/svgmap.css";
 const CHUNK_RETRY_KEY = "mpl_chunk_retry_at";
 const shouldReloadForChunkError = (reason: unknown) => {
   const msg = String((reason as any)?.message || reason || "");
-  return /Failed to fetch dynamically imported module|ChunkLoadError|Loading chunk \d+ failed/i.test(msg);
+  return /Failed to fetch dynamically imported module|ChunkLoadError|Loading chunk \d+ failed|Card is not defined/i.test(msg);
 };
 
 const tryReloadForChunkError = () => {
