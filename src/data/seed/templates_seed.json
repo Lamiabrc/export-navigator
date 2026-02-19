@@ -1,0 +1,332 @@
+[
+  {
+    "type": "email",
+    "key": "template_1",
+    "title": "Template 1 email",
+    "content": "Contenu email 1\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "email",
+      "pack-1"
+    ]
+  },
+  {
+    "type": "checklist",
+    "key": "template_2",
+    "title": "Template 2 checklist",
+    "content": "Contenu checklist 2\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "checklist",
+      "pack-1"
+    ]
+  },
+  {
+    "type": "clause",
+    "key": "template_3",
+    "title": "Template 3 clause",
+    "content": "Contenu clause 3\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "clause",
+      "pack-1"
+    ]
+  },
+  {
+    "type": "questions",
+    "key": "template_4",
+    "title": "Template 4 questions",
+    "content": "Contenu questions 4\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "questions",
+      "pack-1"
+    ]
+  },
+  {
+    "type": "email",
+    "key": "template_5",
+    "title": "Template 5 email",
+    "content": "Contenu email 5\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "email",
+      "pack-1"
+    ]
+  },
+  {
+    "type": "checklist",
+    "key": "template_6",
+    "title": "Template 6 checklist",
+    "content": "Contenu checklist 6\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "checklist",
+      "pack-2"
+    ]
+  },
+  {
+    "type": "clause",
+    "key": "template_7",
+    "title": "Template 7 clause",
+    "content": "Contenu clause 7\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "clause",
+      "pack-2"
+    ]
+  },
+  {
+    "type": "questions",
+    "key": "template_8",
+    "title": "Template 8 questions",
+    "content": "Contenu questions 8\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "questions",
+      "pack-2"
+    ]
+  },
+  {
+    "type": "email",
+    "key": "template_9",
+    "title": "Template 9 email",
+    "content": "Contenu email 9\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "email",
+      "pack-2"
+    ]
+  },
+  {
+    "type": "checklist",
+    "key": "template_10",
+    "title": "Template 10 checklist",
+    "content": "Contenu checklist 10\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "checklist",
+      "pack-2"
+    ]
+  },
+  {
+    "type": "clause",
+    "key": "template_11",
+    "title": "Template 11 clause",
+    "content": "Contenu clause 11\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "clause",
+      "pack-3"
+    ]
+  },
+  {
+    "type": "questions",
+    "key": "template_12",
+    "title": "Template 12 questions",
+    "content": "Contenu questions 12\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "questions",
+      "pack-3"
+    ]
+  },
+  {
+    "type": "email",
+    "key": "template_13",
+    "title": "Template 13 email",
+    "content": "Contenu email 13\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "email",
+      "pack-3"
+    ]
+  },
+  {
+    "type": "checklist",
+    "key": "template_14",
+    "title": "Template 14 checklist",
+    "content": "Contenu checklist 14\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "checklist",
+      "pack-3"
+    ]
+  },
+  {
+    "type": "clause",
+    "key": "template_15",
+    "title": "Template 15 clause",
+    "content": "Contenu clause 15\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "clause",
+      "pack-3"
+    ]
+  },
+  {
+    "type": "questions",
+    "key": "template_16",
+    "title": "Template 16 questions",
+    "content": "Contenu questions 16\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "questions",
+      "pack-4"
+    ]
+  },
+  {
+    "type": "email",
+    "key": "template_17",
+    "title": "Template 17 email",
+    "content": "Contenu email 17\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "email",
+      "pack-4"
+    ]
+  },
+  {
+    "type": "checklist",
+    "key": "template_18",
+    "title": "Template 18 checklist",
+    "content": "Contenu checklist 18\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "checklist",
+      "pack-4"
+    ]
+  },
+  {
+    "type": "clause",
+    "key": "template_19",
+    "title": "Template 19 clause",
+    "content": "Contenu clause 19\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "clause",
+      "pack-4"
+    ]
+  },
+  {
+    "type": "questions",
+    "key": "template_20",
+    "title": "Template 20 questions",
+    "content": "Contenu questions 20\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "questions",
+      "pack-4"
+    ]
+  },
+  {
+    "type": "email",
+    "key": "template_21",
+    "title": "Template 21 email",
+    "content": "Contenu email 21\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "email",
+      "pack-5"
+    ]
+  },
+  {
+    "type": "checklist",
+    "key": "template_22",
+    "title": "Template 22 checklist",
+    "content": "Contenu checklist 22\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "checklist",
+      "pack-5"
+    ]
+  },
+  {
+    "type": "clause",
+    "key": "template_23",
+    "title": "Template 23 clause",
+    "content": "Contenu clause 23\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "clause",
+      "pack-5"
+    ]
+  },
+  {
+    "type": "questions",
+    "key": "template_24",
+    "title": "Template 24 questions",
+    "content": "Contenu questions 24\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "questions",
+      "pack-5"
+    ]
+  },
+  {
+    "type": "email",
+    "key": "template_25",
+    "title": "Template 25 email",
+    "content": "Contenu email 25\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "email",
+      "pack-5"
+    ]
+  },
+  {
+    "type": "checklist",
+    "key": "template_26",
+    "title": "Template 26 checklist",
+    "content": "Contenu checklist 26\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "checklist",
+      "pack-6"
+    ]
+  },
+  {
+    "type": "clause",
+    "key": "template_27",
+    "title": "Template 27 clause",
+    "content": "Contenu clause 27\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "clause",
+      "pack-6"
+    ]
+  },
+  {
+    "type": "questions",
+    "key": "template_28",
+    "title": "Template 28 questions",
+    "content": "Contenu questions 28\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "questions",
+      "pack-6"
+    ]
+  },
+  {
+    "type": "email",
+    "key": "template_29",
+    "title": "Template 29 email",
+    "content": "Contenu email 29\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "email",
+      "pack-6"
+    ]
+  },
+  {
+    "type": "checklist",
+    "key": "template_30",
+    "title": "Template 30 checklist",
+    "content": "Contenu checklist 30\n- Point 1\n- Point 2",
+    "tags": [
+      "export",
+      "checklist",
+      "pack-6"
+    ]
+  }
+]

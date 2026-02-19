@@ -11,10 +11,24 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { isAdminUser } from "@/lib/authz";
 
+
+const isMissingStatusColumn = (message: string) =>
+  /status/i.test(message) && /kb_documents/i.test(message);
+
+const normalizeUploadError = (message: string) => {
+  if (isMissingStatusColumn(message)) {
+    return "Base KB partiellement migrée (colonne status absente). Lancez les migrations Supabase puis réessayez.";
+  }
+  if (/OPENAI_API_KEY manquant/i.test(message)) {
+    return "Le service IA n'est pas configuré (OPENAI_API_KEY manquante).";
+  }
+  return message;
+};
+
 type KbDocRow = {
   id: string;
   title: string;
-  status: string;
+  status?: string;
   enabled: boolean;
   language: string;
   created_at: string;
@@ -32,19 +46,34 @@ export default function AdminKbDocs() {
   const [language, setLanguage] = React.useState("fr");
   const [file, setFile] = React.useState<File | null>(null);
 
+
   const loadDocs = React.useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const primary = await supabase
         .from("kb_documents")
         .select("id,title,status,enabled,language,created_at")
         .order("created_at", { ascending: false })
         .limit(50);
 
-      if (error) throw error;
-      setRows((data || []) as KbDocRow[]);
+      if (!primary.error) {
+        setRows((primary.data || []) as KbDocRow[]);
+        return;
+      }
+
+      if (!isMissingStatusColumn(primary.error.message || "")) throw primary.error;
+
+      const fallback = await supabase
+        .from("kb_documents")
+        .select("id,title,enabled,language,created_at")
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      if (fallback.error) throw fallback.error;
+      setRows(((fallback.data || []) as Omit<KbDocRow, "status">[]).map((row) => ({ ...row, status: "uploaded" })));
     } catch (e: any) {
-      toast({ title: "Erreur chargement", description: e?.message || "Impossible de charger les documents." });
+      const raw = e?.message || "Impossible de charger les documents.";
+      toast({ title: "Erreur chargement", description: normalizeUploadError(raw) });
     } finally {
       setLoading(false);
     }
@@ -91,7 +120,8 @@ export default function AdminKbDocs() {
         bucket = fallbackBucket;
       }
 
-      const { data: inserted, error: insertError } = await supabase
+      let insertedId: string | null = null;
+      const withStatus = await supabase
         .from("kb_documents")
         .insert({
           title: docTitle,
@@ -107,7 +137,29 @@ export default function AdminKbDocs() {
         .select("id")
         .single();
 
-      if (insertError || !inserted?.id) throw insertError || new Error("Insertion impossible");
+      if (!withStatus.error && withStatus.data?.id) {
+        insertedId = withStatus.data.id;
+      } else if (isMissingStatusColumn(withStatus.error?.message || "")) {
+        const withoutStatus = await supabase
+          .from("kb_documents")
+          .insert({
+            title: docTitle,
+            language,
+            file_name: file.name,
+            mime_type: file.type || "application/pdf",
+            size_bytes: file.size,
+            storage_bucket: bucket,
+            storage_path: objectPath,
+            enabled: true,
+          })
+          .select("id")
+          .single();
+
+        if (withoutStatus.error || !withoutStatus.data?.id) throw withoutStatus.error || new Error("Insertion impossible");
+        insertedId = withoutStatus.data.id;
+      } else {
+        throw withStatus.error || new Error("Insertion impossible");
+      }
 
       const resp = await fetch("/api/kb/ingest", {
         method: "POST",
@@ -115,7 +167,7 @@ export default function AdminKbDocs() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ document_id: inserted.id }),
+        body: JSON.stringify({ document_id: insertedId }),
       });
       const payload = await resp.json().catch(() => ({}));
       if (!resp.ok || payload?.ok === false) {
@@ -127,7 +179,8 @@ export default function AdminKbDocs() {
       setFile(null);
       await loadDocs();
     } catch (e: any) {
-      toast({ title: "Erreur upload", description: e?.message || "Échec de l'upload." });
+      const raw = e?.message || "Échec de l'upload.";
+      toast({ title: "Erreur upload", description: normalizeUploadError(raw) });
     } finally {
       setUploading(false);
     }
@@ -193,7 +246,7 @@ export default function AdminKbDocs() {
               <div key={r.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2">
                 <span className="font-medium">{r.title}</span>
                 <Badge variant="outline">{r.language}</Badge>
-                <Badge variant={r.status === "ready" ? "default" : "secondary"}>{r.status}</Badge>
+                <Badge variant={r.status === "ready" ? "default" : "secondary"}>{r.status || "uploaded"}</Badge>
                 <Badge variant="outline">{r.enabled ? "actif" : "désactivé"}</Badge>
               </div>
             ))}
