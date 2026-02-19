@@ -57,6 +57,12 @@ export default function Home() {
 
   return (
     <PublicLayout>
+      <main className="w-full overflow-x-clip pb-8 pt-4 sm:pt-6 lg:pt-8">
+        <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-4 sm:gap-8 sm:px-6 lg:gap-10 lg:px-10">
+          <VideoBanner isEn={isEn} />
+          <CopilotChatWide isEn={isEn} />
+          <HomeCtas isEn={isEn} />
+        </div>
       <main className="mx-auto w-full max-w-[96rem] space-y-14 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         <HomeHero labels={heroLabels} isEn={isEn} />
 
