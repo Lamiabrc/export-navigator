@@ -1,0 +1,26 @@
+[
+  {
+    "iso2": "FR",
+    "iso3": "",
+    "name_fr": "France",
+    "name_en": "France",
+    "region": "Europe",
+    "currency": "EUR"
+  },
+  {
+    "iso2": "MA",
+    "iso3": "",
+    "name_fr": "Maroc",
+    "name_en": "Morocco",
+    "region": "Africa",
+    "currency": "MAD"
+  },
+  {
+    "iso2": "US",
+    "iso3": "",
+    "name_fr": "États-Unis",
+    "name_en": "United States",
+    "region": "North America",
+    "currency": "USD"
+  }
+]

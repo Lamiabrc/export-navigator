@@ -1,0 +1,1562 @@
+[
+  {
+    "product_index": 0,
+    "term": "fraises",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 1,
+    "term": "strawberries",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 2,
+    "term": "fraise congelée",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 3,
+    "term": "berries",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 4,
+    "term": "pommes",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 5,
+    "term": "apples",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 6,
+    "term": "huile olive",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 7,
+    "term": "olive oil",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 8,
+    "term": "textile coton",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 9,
+    "term": "cotton textile",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 0,
+    "term": "tshirt",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 1,
+    "term": "t-shirt",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 2,
+    "term": "pièce auto",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 3,
+    "term": "auto parts",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 4,
+    "term": "machines agricoles",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 5,
+    "term": "farm machinery",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 6,
+    "term": "tracteur",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 7,
+    "term": "tractor",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 8,
+    "term": "cosmétiques",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 9,
+    "term": "cosmetics",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fromages",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 1,
+    "term": "cheese",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 2,
+    "term": "médicament",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 3,
+    "term": "medicine",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 4,
+    "term": "équipement électrique",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 5,
+    "term": "electrical equipment",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fraises 2",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 1,
+    "term": "strawberries 2",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 2,
+    "term": "fraise congelée 2",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 3,
+    "term": "berries 2",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 4,
+    "term": "pommes 2",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 5,
+    "term": "apples 2",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 6,
+    "term": "huile olive 2",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 7,
+    "term": "olive oil 2",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 8,
+    "term": "textile coton 2",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 9,
+    "term": "cotton textile 2",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 0,
+    "term": "tshirt 2",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 1,
+    "term": "t-shirt 2",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 2,
+    "term": "pièce auto 2",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 3,
+    "term": "auto parts 2",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 4,
+    "term": "machines agricoles 2",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 5,
+    "term": "farm machinery 2",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 6,
+    "term": "tracteur 2",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 7,
+    "term": "tractor 2",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 8,
+    "term": "cosmétiques 2",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 9,
+    "term": "cosmetics 2",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fromages 2",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 1,
+    "term": "cheese 2",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 2,
+    "term": "médicament 2",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 3,
+    "term": "medicine 2",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 4,
+    "term": "équipement électrique 2",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 5,
+    "term": "electrical equipment 2",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fraises 3",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 1,
+    "term": "strawberries 3",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 2,
+    "term": "fraise congelée 3",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 3,
+    "term": "berries 3",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 4,
+    "term": "pommes 3",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 5,
+    "term": "apples 3",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 6,
+    "term": "huile olive 3",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 7,
+    "term": "olive oil 3",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 8,
+    "term": "textile coton 3",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 9,
+    "term": "cotton textile 3",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 0,
+    "term": "tshirt 3",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 1,
+    "term": "t-shirt 3",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 2,
+    "term": "pièce auto 3",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 3,
+    "term": "auto parts 3",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 4,
+    "term": "machines agricoles 3",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 5,
+    "term": "farm machinery 3",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 6,
+    "term": "tracteur 3",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 7,
+    "term": "tractor 3",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 8,
+    "term": "cosmétiques 3",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 9,
+    "term": "cosmetics 3",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fromages 3",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 1,
+    "term": "cheese 3",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 2,
+    "term": "médicament 3",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 3,
+    "term": "medicine 3",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 4,
+    "term": "équipement électrique 3",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 5,
+    "term": "electrical equipment 3",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fraises 4",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 1,
+    "term": "strawberries 4",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 2,
+    "term": "fraise congelée 4",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 3,
+    "term": "berries 4",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 4,
+    "term": "pommes 4",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 5,
+    "term": "apples 4",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 6,
+    "term": "huile olive 4",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 7,
+    "term": "olive oil 4",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 8,
+    "term": "textile coton 4",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 9,
+    "term": "cotton textile 4",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 0,
+    "term": "tshirt 4",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 1,
+    "term": "t-shirt 4",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 2,
+    "term": "pièce auto 4",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 3,
+    "term": "auto parts 4",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 4,
+    "term": "machines agricoles 4",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 5,
+    "term": "farm machinery 4",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 6,
+    "term": "tracteur 4",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 7,
+    "term": "tractor 4",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 8,
+    "term": "cosmétiques 4",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 9,
+    "term": "cosmetics 4",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fromages 4",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 1,
+    "term": "cheese 4",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 2,
+    "term": "médicament 4",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 3,
+    "term": "medicine 4",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 4,
+    "term": "équipement électrique 4",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 5,
+    "term": "electrical equipment 4",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fraises 5",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 1,
+    "term": "strawberries 5",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 2,
+    "term": "fraise congelée 5",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 3,
+    "term": "berries 5",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 4,
+    "term": "pommes 5",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 5,
+    "term": "apples 5",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 6,
+    "term": "huile olive 5",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 7,
+    "term": "olive oil 5",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 8,
+    "term": "textile coton 5",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 9,
+    "term": "cotton textile 5",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 0,
+    "term": "tshirt 5",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 1,
+    "term": "t-shirt 5",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 2,
+    "term": "pièce auto 5",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 3,
+    "term": "auto parts 5",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 4,
+    "term": "machines agricoles 5",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 5,
+    "term": "farm machinery 5",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 6,
+    "term": "tracteur 5",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 7,
+    "term": "tractor 5",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 8,
+    "term": "cosmétiques 5",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 9,
+    "term": "cosmetics 5",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fromages 5",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 1,
+    "term": "cheese 5",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 2,
+    "term": "médicament 5",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 3,
+    "term": "medicine 5",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 4,
+    "term": "équipement électrique 5",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 5,
+    "term": "electrical equipment 5",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fraises 6",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 1,
+    "term": "strawberries 6",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 2,
+    "term": "fraise congelée 6",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 3,
+    "term": "berries 6",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 4,
+    "term": "pommes 6",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 5,
+    "term": "apples 6",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 6,
+    "term": "huile olive 6",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 7,
+    "term": "olive oil 6",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 8,
+    "term": "textile coton 6",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 9,
+    "term": "cotton textile 6",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 0,
+    "term": "tshirt 6",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 1,
+    "term": "t-shirt 6",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 2,
+    "term": "pièce auto 6",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 3,
+    "term": "auto parts 6",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 4,
+    "term": "machines agricoles 6",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 5,
+    "term": "farm machinery 6",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 6,
+    "term": "tracteur 6",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 7,
+    "term": "tractor 6",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 8,
+    "term": "cosmétiques 6",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 9,
+    "term": "cosmetics 6",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fromages 6",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 1,
+    "term": "cheese 6",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 2,
+    "term": "médicament 6",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 3,
+    "term": "medicine 6",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 4,
+    "term": "équipement électrique 6",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 5,
+    "term": "electrical equipment 6",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fraises 7",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 1,
+    "term": "strawberries 7",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 2,
+    "term": "fraise congelée 7",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 3,
+    "term": "berries 7",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 4,
+    "term": "pommes 7",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 5,
+    "term": "apples 7",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 6,
+    "term": "huile olive 7",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 7,
+    "term": "olive oil 7",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 8,
+    "term": "textile coton 7",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 9,
+    "term": "cotton textile 7",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 0,
+    "term": "tshirt 7",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 1,
+    "term": "t-shirt 7",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 2,
+    "term": "pièce auto 7",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 3,
+    "term": "auto parts 7",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 4,
+    "term": "machines agricoles 7",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 5,
+    "term": "farm machinery 7",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 6,
+    "term": "tracteur 7",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 7,
+    "term": "tractor 7",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 8,
+    "term": "cosmétiques 7",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 9,
+    "term": "cosmetics 7",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fromages 7",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 1,
+    "term": "cheese 7",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 2,
+    "term": "médicament 7",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 3,
+    "term": "medicine 7",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 4,
+    "term": "équipement électrique 7",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 5,
+    "term": "electrical equipment 7",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fraises 8",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 1,
+    "term": "strawberries 8",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 2,
+    "term": "fraise congelée 8",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 3,
+    "term": "berries 8",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 4,
+    "term": "pommes 8",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 5,
+    "term": "apples 8",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 6,
+    "term": "huile olive 8",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 7,
+    "term": "olive oil 8",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 8,
+    "term": "textile coton 8",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 9,
+    "term": "cotton textile 8",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 0,
+    "term": "tshirt 8",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 1,
+    "term": "t-shirt 8",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 2,
+    "term": "pièce auto 8",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 3,
+    "term": "auto parts 8",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 4,
+    "term": "machines agricoles 8",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 5,
+    "term": "farm machinery 8",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 6,
+    "term": "tracteur 8",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 7,
+    "term": "tractor 8",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 8,
+    "term": "cosmétiques 8",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 9,
+    "term": "cosmetics 8",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fromages 8",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 1,
+    "term": "cheese 8",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 2,
+    "term": "médicament 8",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 3,
+    "term": "medicine 8",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 4,
+    "term": "équipement électrique 8",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 5,
+    "term": "electrical equipment 8",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fraises 9",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 1,
+    "term": "strawberries 9",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 2,
+    "term": "fraise congelée 9",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 3,
+    "term": "berries 9",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 4,
+    "term": "pommes 9",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 5,
+    "term": "apples 9",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 6,
+    "term": "huile olive 9",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 7,
+    "term": "olive oil 9",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 8,
+    "term": "textile coton 9",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 9,
+    "term": "cotton textile 9",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 0,
+    "term": "tshirt 9",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 1,
+    "term": "t-shirt 9",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 2,
+    "term": "pièce auto 9",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 3,
+    "term": "auto parts 9",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 4,
+    "term": "machines agricoles 9",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 5,
+    "term": "farm machinery 9",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 6,
+    "term": "tracteur 9",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 7,
+    "term": "tractor 9",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 8,
+    "term": "cosmétiques 9",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 9,
+    "term": "cosmetics 9",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fromages 9",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 1,
+    "term": "cheese 9",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 2,
+    "term": "médicament 9",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 3,
+    "term": "medicine 9",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 4,
+    "term": "équipement électrique 9",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 5,
+    "term": "electrical equipment 9",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fraises 10",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 1,
+    "term": "strawberries 10",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 2,
+    "term": "fraise congelée 10",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 3,
+    "term": "berries 10",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 4,
+    "term": "pommes 10",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 5,
+    "term": "apples 10",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 6,
+    "term": "huile olive 10",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 7,
+    "term": "olive oil 10",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 8,
+    "term": "textile coton 10",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 9,
+    "term": "cotton textile 10",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 0,
+    "term": "tshirt 10",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 1,
+    "term": "t-shirt 10",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 2,
+    "term": "pièce auto 10",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 3,
+    "term": "auto parts 10",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 4,
+    "term": "machines agricoles 10",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 5,
+    "term": "farm machinery 10",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 6,
+    "term": "tracteur 10",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 7,
+    "term": "tractor 10",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 8,
+    "term": "cosmétiques 10",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 9,
+    "term": "cosmetics 10",
+    "lang": "en",
+    "weight": 2
+  },
+  {
+    "product_index": 0,
+    "term": "fromages 10",
+    "lang": "fr",
+    "weight": 3
+  },
+  {
+    "product_index": 1,
+    "term": "cheese 10",
+    "lang": "en",
+    "weight": 1
+  },
+  {
+    "product_index": 2,
+    "term": "médicament 10",
+    "lang": "fr",
+    "weight": 2
+  },
+  {
+    "product_index": 3,
+    "term": "medicine 10",
+    "lang": "en",
+    "weight": 3
+  },
+  {
+    "product_index": 4,
+    "term": "équipement électrique 10",
+    "lang": "fr",
+    "weight": 1
+  },
+  {
+    "product_index": 5,
+    "term": "electrical equipment 10",
+    "lang": "en",
+    "weight": 2
+  }
+]

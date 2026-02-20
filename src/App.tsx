@@ -35,6 +35,7 @@ import HeroVideoPreview from "@/pages/HeroVideoPreview";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
+import Welcome from "@/pages/Welcome";
 import SetPassword from "@/pages/SetPassword";
 import ControlTower from "@/pages/ControlTower";
 import ExportSimulator from "@/pages/ExportSimulator";
@@ -60,8 +61,11 @@ import PublicAppGate from "@/pages/PublicAppGate";
 import VipRentability from "@/pages/VipRentability";
 import Legal from "@/pages/Legal";
 import AdminKbDocs from "@/pages/AdminKbDocs";
+import AdminData from "@/pages/AdminData";
 import TaxesOm from "@/pages/TaxesOm";
 import Prospection from "@/pages/Prospection";
+import Copilote from "@/pages/Copilote";
+import TourDeControle from "@/pages/TourDeControle";
 
 const queryClient = new QueryClient();
 const LazyFallback = () => <div className="p-6 text-sm text-muted-foreground">Chargement…</div>;
@@ -76,7 +80,7 @@ export default function App() {
             <Sonner />
 
             <PlanProvider>
-              <LanguageProvider persist="none">
+              <LanguageProvider persist="local">
                 <CookieConsent />
                 <BrowserRouter>
                   <LanguageChooser />
@@ -86,6 +90,7 @@ export default function App() {
                       <Routes>
                         {/* ===================== Marketing / Public ===================== */}
                         <Route path="/" element={<Home />} />
+                        <Route path="/copilote" element={<Copilote />} />
 
                         {/* ✅ Outils publics => accès app uniquement */}
                         <Route path="/verifier-facture" element={<PublicAppGate mode="invoice-check" />} />
@@ -108,7 +113,7 @@ export default function App() {
                         <Route path="/methodologie" element={<Methodologie />} />
 
                         {/* ✅ guides */}
-                        <Route path="/guides" element={<Navigate to="/guides/incoterms" replace />} />
+                        <Route path="/guides" element={<Navigate to="/resources" replace />} />
                         <Route path="/guides/incoterms" element={<Incoterms />} />
                         <Route path="/guides/incoterms-:code" element={<IncotermDetail />} />
                         <Route path="/guides/:slug" element={<Guide />} />
@@ -185,6 +190,15 @@ export default function App() {
                         />
 
                         {/* ===================== App (privé) ===================== */}
+                        <Route
+                          path="/tour-de-controle"
+                          element={
+                            <ProtectedRoute>
+                              <TourDeControle />
+                            </ProtectedRoute>
+                          }
+                        />
+
                         <Route
                           path="/app/control-tower"
                           element={
@@ -341,6 +355,15 @@ export default function App() {
 
                         {/* ✅ NOUVEAU : gestion PDFs (privé) */}
                         <Route
+                          path="/app/admin/data"
+                          element={
+                            <ProtectedRoute>
+                              <AdminData />
+                            </ProtectedRoute>
+                          }
+                        />
+
+                        <Route
                           path="/app/admin/kb-docs"
                           element={
                             <ProtectedRoute>
@@ -368,7 +391,7 @@ export default function App() {
                         />
 
                         {/* ===================== Aliases / Legacy ===================== */}
-                        <Route path="/welcome" element={<Navigate to="/solutions" replace />} />
+                        <Route path="/welcome" element={<Welcome />} />
                         <Route path="/ressources" element={<Navigate to="/resources" replace />} />
 
                         <Route path="/hub" element={<Navigate to="/app/control-tower" replace />} />

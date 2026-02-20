@@ -1,62 +1,25 @@
+<<<<<<< HEAD
 ﻿import { Link } from "react-router-dom";
+=======
+>>>>>>> f9ab2e9fab937da37ca18291efd739125200b9c1
 import { PublicLayout } from "@/components/layout/PublicLayout";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { VideoBanner } from "@/components/home/VideoBanner";
+import { CopilotChatWide } from "@/components/home/CopilotChatWide";
+import { HomeCtas } from "@/components/home/HomeCtas";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import {
-  ArrowRight,
-  CheckCircle2,
-  FileText,
-  Globe,
-  Radar,
-  SearchCheck,
-  ShieldCheck,
-  Target,
-  TrendingUp,
-  Wallet,
-} from "lucide-react";
-
-const valueCards = [
-  {
-    icon: ShieldCheck,
-    title: "Go / No-Go Export",
-    line1: "Vendez / ne vendez pas / vendez sous conditions.",
-    line2: "Score risque + recommandations + checklist.",
-  },
-  {
-    icon: Wallet,
-    title: "Sécuriser le paiement",
-    line1: "Choisissez le bon mode (LC, CAD, OA…).",
-    line2: "Réduisez le risque d’impayé.",
-  },
-  {
-    icon: TrendingUp,
-    title: "Prix export (Landed Cost)",
-    line1: "Coût complet + marge + prix cible.",
-    line2: "Export PDF/CSV (Pro).",
-  },
-  {
-    icon: FileText,
-    title: "Documents & conformité",
-    line1: "Contrôle facture / packing / mentions.",
-    line2: "Corrections + modèles de mail.",
-  },
-];
-
-const audiences = [
-  "PME & commerciaux export",
-  "ADV export / import",
-  "Consultants & responsables conformité",
-];
+import { useI18n } from "@/contexts/LanguageContext";
 
 export default function Home() {
+  const { lang } = useI18n();
+  const isEn = lang === "en";
+
   usePageMeta("meta.home.title", "meta.home.description", {
     brandSuffix: "Export Navigator",
   });
 
   return (
     <PublicLayout>
+<<<<<<< HEAD
       <main className="mx-auto max-w-6xl space-y-16 px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
         <section className="grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="space-y-6">
@@ -259,6 +222,14 @@ export default function Home() {
             </Button>
           </div>
         </section>
+=======
+      <main className="w-full overflow-x-clip pb-8 pt-4 sm:pt-6 lg:pt-8">
+        <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-4 sm:gap-8 sm:px-6 lg:gap-10 lg:px-10">
+          <VideoBanner isEn={isEn} />
+          <CopilotChatWide isEn={isEn} />
+          <HomeCtas isEn={isEn} />
+        </div>
+>>>>>>> f9ab2e9fab937da37ca18291efd739125200b9c1
       </main>
     </PublicLayout>
   );
