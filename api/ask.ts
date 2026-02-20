@@ -24,6 +24,8 @@ type AskResult = {
 const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || "").trim();
 const CHAT_MODEL = (process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini").trim();
 const EMBED_MODEL = (process.env.OPENAI_EMBED_MODEL || "text-embedding-3-small").trim();
+const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || "").trim();
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || "gemini-2.0-flash").trim();
 
 function getBearerToken(req: VercelRequest) {
   const header = String(req.headers.authorization || "");
@@ -85,6 +87,37 @@ async function openaiChat(messages: Array<{ role: "system" | "user" | "assistant
   }
   const data = (await resp.json()) as any;
   return String(data?.choices?.[0]?.message?.content || "");
+}
+
+async function geminiChat(prompt: string) {
+  if (!GEMINI_API_KEY) throw new Error("ai_not_configured");
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    GEMINI_MODEL
+  )}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.35,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.text().catch(() => "");
+    throw new Error(`gemini_chat_failed: ${resp.status} ${err}`);
+  }
+
+  const data = (await resp.json()) as any;
+  const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => String(p?.text || "")).join("\n").trim();
+  return text || "";
 }
 
 
@@ -341,7 +374,7 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
 
     const admin = supabaseAdmin();
 
-    if (!OPENAI_API_KEY) {
+    if (!OPENAI_API_KEY && !GEMINI_API_KEY) {
       const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
       const degradedBase = buildDegradedAnswer(question, signals, followUps, supabaseFacts.snippets);
       const feedbackPrefix = contextual.satisfaction === false
@@ -375,32 +408,35 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       return json(res, 200, { ok: true, mode: "degraded", ...result });
     }
 
-    const embedding = await openaiEmbed(question);
-    if (!embedding) throw new Error("embedding_missing");
+    let safeChunks: any[] = [];
+    if (OPENAI_API_KEY) {
+      const embedding = await openaiEmbed(question);
+      if (!embedding) throw new Error("embedding_missing");
 
-    await storeConversationEmbedding({
-      userId: auth.user.id,
-      message: question,
-      embedding,
-      role: "user",
-      sessionId: typeof body?.context?.session_id === "string" ? body.context.session_id : null,
-      metadata: {
-        context_summary: contextual.contextSummary,
-        signals,
-      },
-    });
+      await storeConversationEmbedding({
+        userId: auth.user.id,
+        message: question,
+        embedding,
+        role: "user",
+        sessionId: typeof body?.context?.session_id === "string" ? body.context.session_id : null,
+        metadata: {
+          context_summary: contextual.contextSummary,
+          signals,
+        },
+      });
 
-    const { data: chunks, error: matchError } = await admin.rpc("match_kb_chunks", {
-      query_embedding: embedding,
-      match_count: 6,
-      min_similarity: 0.15,
-    });
+      const { data: chunks, error: matchError } = await admin.rpc("match_kb_chunks", {
+        query_embedding: embedding,
+        match_count: 6,
+        min_similarity: 0.15,
+      });
 
-    if (matchError) {
-      console.error("[api/ask] match_kb_chunks", matchError);
+      if (matchError) {
+        console.error("[api/ask] match_kb_chunks", matchError);
+      }
+
+      safeChunks = Array.isArray(chunks) ? chunks : [];
     }
-
-    const safeChunks = Array.isArray(chunks) ? chunks : [];
     const contextBlocks = safeChunks
       .map((c: any, idx: number) => `#${idx + 1} (doc ${c.document_id}):\n${c.content}`)
       .join("\n\n");
@@ -444,10 +480,12 @@ Questions de clarification suggérées (si infos insuffisantes):
 ${followUps.map((q) => `- ${q}`).join("\n")}`
         : "");
 
-    const raw = await openaiChat([
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ]);
+    const raw = OPENAI_API_KEY
+      ? await openaiChat([
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ])
+      : await geminiChat(`${system}\n\n${user}`);
 
     let answer = raw;
     let actions: string[] | undefined;
@@ -491,7 +529,8 @@ ${followUps.map((q) => `- ${q}`).join("\n")}`
       console.error("[api/ask] tool_runs insert failed", e);
     }
 
-    return json(res, 200, { ok: true, ...result });
+    const mode = OPENAI_API_KEY ? "openai" : "gemini";
+    return json(res, 200, { ok: true, mode, ...result });
   } catch (err: any) {
     const raw = String(err?.message || "ask_failed");
     console.error("[api/ask] error", raw);
