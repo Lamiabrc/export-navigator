@@ -341,6 +341,80 @@ function buildDegradedAnswer(question: string, signals: ReturnType<typeof extrac
   ].join("\n\n");
 }
 
+
+function parseModelJson(raw: string) {
+  const trimmed = raw.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
+  const candidate = fenced || trimmed;
+  try {
+    return JSON.parse(candidate) as { answer?: unknown; actions?: unknown; follow_up_questions?: unknown };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeModelAnswer(params: {
+  raw: string;
+  followUps: string[];
+  contextSummary: string;
+}) {
+  const parsed = parseModelJson(params.raw);
+  const parsedAnswer = typeof parsed?.answer === "string" ? parsed.answer.trim() : "";
+  const parsedActions = Array.isArray(parsed?.actions)
+    ? parsed.actions.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean).slice(0, 4)
+    : [];
+  const parsedFollowUps = Array.isArray(parsed?.follow_up_questions)
+    ? parsed.follow_up_questions.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean).slice(0, 3)
+    : [];
+
+  const answer = (parsedAnswer || params.raw || "").trim();
+  const fallbackAnswer = [
+    "Voici une réponse opérationnelle avec les informations disponibles.",
+    `Contexte: ${params.contextSummary}.`,
+    "Je peux affiner le plan dès que vous confirmez le pays, le code HS et l'incoterm.",
+  ].join(" ");
+
+  return {
+    answer: answer || fallbackAnswer,
+    actions: parsedActions.length
+      ? parsedActions
+      : [
+          "Valider destination + pays de transit.",
+          "Confirmer code HS (6/8 chiffres) et description technique.",
+          "Confirmer Incoterm + mode de paiement + assurance.",
+        ],
+    follow_up_questions: parsedFollowUps.length ? parsedFollowUps : params.followUps,
+  };
+}
+
+async function fetchLexicalKbChunks(admin: ReturnType<typeof supabaseAdmin>, question: string) {
+  try {
+    const q = question.trim().slice(0, 80);
+    if (!q) return [] as Array<{ id: string; document_id: string; content: string; similarity: number }>;
+
+    const { data: chunks, error } = await admin
+      .from("kb_chunks")
+      .select("id,document_id,content")
+      .ilike("content", `%${q}%`)
+      .limit(4);
+
+    if (error) {
+      console.error("[api/ask] lexical kb_chunks", error.message);
+      return [];
+    }
+
+    return (Array.isArray(chunks) ? chunks : []).map((c: any) => ({
+      id: String(c.id),
+      document_id: String(c.document_id),
+      content: String(c.content || ""),
+      similarity: 0,
+    }));
+  } catch (e: any) {
+    console.error("[api/ask] lexical retrieval exception", e?.message || e);
+    return [];
+  }
+}
+
 export default allowCors(async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
@@ -436,6 +510,9 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       }
 
       safeChunks = Array.isArray(chunks) ? chunks : [];
+    } else {
+      safeChunks = await fetchLexicalKbChunks(admin, `${question}
+${contextual.contextSummary}`);
     }
     const contextBlocks = safeChunks
       .map((c: any, idx: number) => `#${idx + 1} (doc ${c.document_id}):\n${c.content}`)
@@ -452,11 +529,11 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       .join("\n\n");
 
     const system =
-      "Tu es un agent IA export opérationnel (incoterms, douane, conformité, risques pays, paiements). " +
-      "Tu échanges de manière humaine et professionnelle, en français clair. " +
-      "Tu dois collecter les infos critiques (produit, code HS, pays, incoterm, paiement, objectif) et combler les manques avec 1 à 3 questions max. " +
+      "Tu es un agent IA export senior (incoterms, douane, conformité, risques pays, paiements). " +
+      "Tu dois être précis, actionnable et pédagogique, en français clair. " +
+      "Tu dois systématiquement: 1) synthétiser le diagnostic, 2) donner 3 à 4 actions priorisées, 3) poser au plus 3 questions de clarification si nécessaire. " +
+      "Évite les généralités vagues: adapte la réponse au contexte fourni et cite les limites si une donnée manque. " +
       "Si l'utilisateur indique que la réponse n'est pas satisfaisante, excuse-toi brièvement puis reformule avec un plan amélioré. " +
-      "Fournis un plan actionnable et court, plus une demande de validation de satisfaction. " +
       "Réponds strictement en JSON avec les clés: answer (string), actions (array max 4), follow_up_questions (array max 3).";
     const user =
       `Question courante: ${question}
@@ -500,14 +577,19 @@ ${followUps.map((q) => `- ${q}`).join("\n")}`
     } catch {
       // keep raw text
     }
+    const normalized = normalizeModelAnswer({
+      raw,
+      followUps,
+      contextSummary: contextual.contextSummary,
+    });
 
     const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
 
     const apology = contextual.satisfaction === false ? "Merci pour votre retour — voici une version améliorée.\n\n" : "";
     const result: AskResult = {
-      answer: `${apology}${answer}`,
-      actions,
-      follow_up_questions,
+      answer: `${apology}${normalized.answer}`,
+      actions: normalized.actions,
+      follow_up_questions: normalized.follow_up_questions,
       sources: safeChunks.map((c: any) => ({
         document_id: c.document_id,
         chunk_id: c.id,
