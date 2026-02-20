@@ -24,6 +24,8 @@ type AskResult = {
 const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || "").trim();
 const CHAT_MODEL = (process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini").trim();
 const EMBED_MODEL = (process.env.OPENAI_EMBED_MODEL || "text-embedding-3-small").trim();
+const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || "").trim();
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || "gemini-2.0-flash").trim();
 
 function getBearerToken(req: VercelRequest) {
   const header = String(req.headers.authorization || "");
@@ -85,6 +87,37 @@ async function openaiChat(messages: Array<{ role: "system" | "user" | "assistant
   }
   const data = (await resp.json()) as any;
   return String(data?.choices?.[0]?.message?.content || "");
+}
+
+async function geminiChat(prompt: string) {
+  if (!GEMINI_API_KEY) throw new Error("ai_not_configured");
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    GEMINI_MODEL
+  )}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.35,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.text().catch(() => "");
+    throw new Error(`gemini_chat_failed: ${resp.status} ${err}`);
+  }
+
+  const data = (await resp.json()) as any;
+  const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => String(p?.text || "")).join("\n").trim();
+  return text || "";
 }
 
 
@@ -308,6 +341,80 @@ function buildDegradedAnswer(question: string, signals: ReturnType<typeof extrac
   ].join("\n\n");
 }
 
+
+function parseModelJson(raw: string) {
+  const trimmed = raw.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
+  const candidate = fenced || trimmed;
+  try {
+    return JSON.parse(candidate) as { answer?: unknown; actions?: unknown; follow_up_questions?: unknown };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeModelAnswer(params: {
+  raw: string;
+  followUps: string[];
+  contextSummary: string;
+}) {
+  const parsed = parseModelJson(params.raw);
+  const parsedAnswer = typeof parsed?.answer === "string" ? parsed.answer.trim() : "";
+  const parsedActions = Array.isArray(parsed?.actions)
+    ? parsed.actions.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean).slice(0, 4)
+    : [];
+  const parsedFollowUps = Array.isArray(parsed?.follow_up_questions)
+    ? parsed.follow_up_questions.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean).slice(0, 3)
+    : [];
+
+  const answer = (parsedAnswer || params.raw || "").trim();
+  const fallbackAnswer = [
+    "Voici une réponse opérationnelle avec les informations disponibles.",
+    `Contexte: ${params.contextSummary}.`,
+    "Je peux affiner le plan dès que vous confirmez le pays, le code HS et l'incoterm.",
+  ].join(" ");
+
+  return {
+    answer: answer || fallbackAnswer,
+    actions: parsedActions.length
+      ? parsedActions
+      : [
+          "Valider destination + pays de transit.",
+          "Confirmer code HS (6/8 chiffres) et description technique.",
+          "Confirmer Incoterm + mode de paiement + assurance.",
+        ],
+    follow_up_questions: parsedFollowUps.length ? parsedFollowUps : params.followUps,
+  };
+}
+
+async function fetchLexicalKbChunks(admin: ReturnType<typeof supabaseAdmin>, question: string) {
+  try {
+    const q = question.trim().slice(0, 80);
+    if (!q) return [] as Array<{ id: string; document_id: string; content: string; similarity: number }>;
+
+    const { data: chunks, error } = await admin
+      .from("kb_chunks")
+      .select("id,document_id,content")
+      .ilike("content", `%${q}%`)
+      .limit(4);
+
+    if (error) {
+      console.error("[api/ask] lexical kb_chunks", error.message);
+      return [];
+    }
+
+    return (Array.isArray(chunks) ? chunks : []).map((c: any) => ({
+      id: String(c.id),
+      document_id: String(c.document_id),
+      content: String(c.content || ""),
+      similarity: 0,
+    }));
+  } catch (e: any) {
+    console.error("[api/ask] lexical retrieval exception", e?.message || e);
+    return [];
+  }
+}
+
 export default allowCors(async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
@@ -341,7 +448,7 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
 
     const admin = supabaseAdmin();
 
-    if (!OPENAI_API_KEY) {
+    if (!OPENAI_API_KEY && !GEMINI_API_KEY) {
       const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
       const degradedBase = buildDegradedAnswer(question, signals, followUps, supabaseFacts.snippets);
       const feedbackPrefix = contextual.satisfaction === false
@@ -375,32 +482,38 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       return json(res, 200, { ok: true, mode: "degraded", ...result });
     }
 
-    const embedding = await openaiEmbed(question);
-    if (!embedding) throw new Error("embedding_missing");
+    let safeChunks: any[] = [];
+    if (OPENAI_API_KEY) {
+      const embedding = await openaiEmbed(question);
+      if (!embedding) throw new Error("embedding_missing");
 
-    await storeConversationEmbedding({
-      userId: auth.user.id,
-      message: question,
-      embedding,
-      role: "user",
-      sessionId: typeof body?.context?.session_id === "string" ? body.context.session_id : null,
-      metadata: {
-        context_summary: contextual.contextSummary,
-        signals,
-      },
-    });
+      await storeConversationEmbedding({
+        userId: auth.user.id,
+        message: question,
+        embedding,
+        role: "user",
+        sessionId: typeof body?.context?.session_id === "string" ? body.context.session_id : null,
+        metadata: {
+          context_summary: contextual.contextSummary,
+          signals,
+        },
+      });
 
-    const { data: chunks, error: matchError } = await admin.rpc("match_kb_chunks", {
-      query_embedding: embedding,
-      match_count: 6,
-      min_similarity: 0.15,
-    });
+      const { data: chunks, error: matchError } = await admin.rpc("match_kb_chunks", {
+        query_embedding: embedding,
+        match_count: 6,
+        min_similarity: 0.15,
+      });
 
-    if (matchError) {
-      console.error("[api/ask] match_kb_chunks", matchError);
+      if (matchError) {
+        console.error("[api/ask] match_kb_chunks", matchError);
+      }
+
+      safeChunks = Array.isArray(chunks) ? chunks : [];
+    } else {
+      safeChunks = await fetchLexicalKbChunks(admin, `${question}
+${contextual.contextSummary}`);
     }
-
-    const safeChunks = Array.isArray(chunks) ? chunks : [];
     const contextBlocks = safeChunks
       .map((c: any, idx: number) => `#${idx + 1} (doc ${c.document_id}):\n${c.content}`)
       .join("\n\n");
@@ -416,11 +529,11 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       .join("\n\n");
 
     const system =
-      "Tu es un agent IA export opérationnel (incoterms, douane, conformité, risques pays, paiements). " +
-      "Tu échanges de manière humaine et professionnelle, en français clair. " +
-      "Tu dois collecter les infos critiques (produit, code HS, pays, incoterm, paiement, objectif) et combler les manques avec 1 à 3 questions max. " +
+      "Tu es un agent IA export senior (incoterms, douane, conformité, risques pays, paiements). " +
+      "Tu dois être précis, actionnable et pédagogique, en français clair. " +
+      "Tu dois systématiquement: 1) synthétiser le diagnostic, 2) donner 3 à 4 actions priorisées, 3) poser au plus 3 questions de clarification si nécessaire. " +
+      "Évite les généralités vagues: adapte la réponse au contexte fourni et cite les limites si une donnée manque. " +
       "Si l'utilisateur indique que la réponse n'est pas satisfaisante, excuse-toi brièvement puis reformule avec un plan amélioré. " +
-      "Fournis un plan actionnable et court, plus une demande de validation de satisfaction. " +
       "Réponds strictement en JSON avec les clés: answer (string), actions (array max 4), follow_up_questions (array max 3).";
     const user =
       `Question courante: ${question}
@@ -444,32 +557,26 @@ Questions de clarification suggérées (si infos insuffisantes):
 ${followUps.map((q) => `- ${q}`).join("\n")}`
         : "");
 
-    const raw = await openaiChat([
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ]);
+    const raw = OPENAI_API_KEY
+      ? await openaiChat([
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ])
+      : await geminiChat(`${system}\n\n${user}`);
 
-    let answer = raw;
-    let actions: string[] | undefined;
-    let follow_up_questions: string[] | undefined = followUps;
-    try {
-      const parsed = JSON.parse(raw);
-      if (typeof parsed?.answer === "string") answer = parsed.answer;
-      if (Array.isArray(parsed?.actions)) actions = parsed.actions.filter((x: any) => typeof x === "string").slice(0, 4);
-      if (Array.isArray(parsed?.follow_up_questions)) {
-        follow_up_questions = parsed.follow_up_questions.filter((x: any) => typeof x === "string").slice(0, 3);
-      }
-    } catch {
-      // keep raw text
-    }
+    const normalized = normalizeModelAnswer({
+      raw,
+      followUps,
+      contextSummary: contextual.contextSummary,
+    });
 
     const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
 
     const apology = contextual.satisfaction === false ? "Merci pour votre retour — voici une version améliorée.\n\n" : "";
     const result: AskResult = {
-      answer: `${apology}${answer}`,
-      actions,
-      follow_up_questions,
+      answer: `${apology}${normalized.answer}`,
+      actions: normalized.actions,
+      follow_up_questions: normalized.follow_up_questions,
       sources: safeChunks.map((c: any) => ({
         document_id: c.document_id,
         chunk_id: c.id,
@@ -491,7 +598,8 @@ ${followUps.map((q) => `- ${q}`).join("\n")}`
       console.error("[api/ask] tool_runs insert failed", e);
     }
 
-    return json(res, 200, { ok: true, ...result });
+    const mode = OPENAI_API_KEY ? "openai" : "gemini";
+    return json(res, 200, { ok: true, mode, ...result });
   } catch (err: any) {
     const raw = String(err?.message || "ask_failed");
     console.error("[api/ask] error", raw);
