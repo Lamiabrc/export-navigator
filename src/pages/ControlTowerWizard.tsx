@@ -13,6 +13,8 @@ import { useI18n } from "@/contexts/LanguageContext";
 import { exportAnswer, tradeBilateral } from "@/services/supabaseAI";
 import type { CountrySuggestion, ExportAnswerResult, HsSuggestion, ScreeningResult, TradeBilateralResult } from "@/types/supabaseAI";
 import { supabase } from "@/integrations/supabase/client";
+import { countryFunnel, exportAnswer, hsFunnel, tradeBilateral } from "@/services/supabaseAI";
+import type { CountrySuggestion, ExportAnswerResult, HsSuggestion, ScreeningResult, TradeBilateralResult } from "@/types/supabaseAI";
 
 export default function ControlTowerWizard() {
   const { lang } = useI18n();
@@ -60,6 +62,41 @@ export default function ControlTowerWizard() {
       reference_sources: reference_sources.count ?? 0,
       rpc_export_answer_sample: rpc.data,
       errors: [countries.error?.message, hs_codes.error?.message, reference_sources.error?.message, rpc.error?.message].filter(Boolean),
+    const errors: string[] = [];
+
+    let countriesCount: number | null = null;
+    let hsCount: number | null = null;
+    let sourcesCount: number | null = null;
+    let exportSample: unknown = null;
+
+    try {
+      const res = await countryFunnel("chile", "en", true);
+      countriesCount = res.suggestions.length;
+    } catch (e) {
+      errors.push((e as Error).message);
+    }
+
+    try {
+      const res = await hsFunnel("strawberries", "en");
+      hsCount = res.suggestions.length;
+    } catch (e) {
+      errors.push((e as Error).message);
+    }
+
+    try {
+      const res = await exportAnswer("CL", "081010", "en");
+      exportSample = res.raw;
+      sourcesCount = res.update_sources?.length ?? 0;
+    } catch (e) {
+      errors.push((e as Error).message);
+    }
+
+    setDbHealth({
+      countries: countriesCount,
+      hs_codes: hsCount,
+      reference_sources: sourcesCount,
+      rpc_export_answer_sample: exportSample,
+      errors,
     });
   };
 

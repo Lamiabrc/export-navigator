@@ -10,6 +10,9 @@ import type { CountrySuggestion, ExportAnswerResult, HsSuggestion, ScreeningResu
 import { ExportAnswerPanel } from "@/components/ExportAnswerPanel";
 import { TradePanel } from "@/components/TradePanel";
 import { SanctionsScreening } from "@/components/SanctionsScreening";
+import { CountryPicker } from "@/components/CountryPicker";
+import { HsPicker } from "@/components/HsPicker";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type Mode = "export" | "import" | null;
 
@@ -27,6 +30,8 @@ export function WizardEntry() {
   const [partyName, setPartyName] = React.useState("");
   const [screening, setScreening] = React.useState<ScreeningResult | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [countryOptions, setCountryOptions] = React.useState<CountrySuggestion[]>([]);
+  const [hsOptions, setHsOptions] = React.useState<HsSuggestion[]>([]);
 
   const essentials =
     lang === "fr"
@@ -49,6 +54,8 @@ export function WizardEntry() {
       const [countryRes, hsRes] = await Promise.all([countryFunnel(question, lang), hsFunnel(question, lang)]);
       const chosenCountry = countryRes.suggestions[0] ?? null;
       const chosenHs = hsRes.suggestions[0] ?? null;
+      setCountryOptions(countryRes.suggestions);
+      setHsOptions(hsRes.suggestions);
       setCountry(chosenCountry);
       setHs(chosenHs);
 
@@ -134,6 +141,8 @@ export function WizardEntry() {
               <li>{lang === "fr" ? "Estimer les risques conformité" : "Estimate compliance risks"}</li>
               <li>{lang === "fr" ? "Préparer une checklist documents" : "Prepare a document checklist"}</li>
             </ul>
+            <p className="font-medium">{lang === "fr" ? "Votre pays de livraison ?" : "Your delivery country?"}</p>
+            <CountryPicker value={country} onSelect={setCountry} />
             <Button onClick={() => navigate("/control-tower", { state: { mode: "import", questionText: question } })}>
               {lang === "fr" ? "Démarrer un diagnostic" : "Start diagnostics"}
             </Button>
@@ -159,6 +168,47 @@ export function WizardEntry() {
             <p className="text-xs text-muted-foreground">
               {country ? `${country.label} (${country.iso2})` : "?"} · {hs ? `${hs.hs_code}` : "?"}
             </p>
+          ) : null}
+
+          {(countryOptions.length > 1 || hsOptions.length > 1) && (
+            <Alert>
+              <AlertDescription className="space-y-3">
+                <p>{lang === "fr" ? "J’ai une ambiguïté, pouvez-vous confirmer ?" : "I detected ambiguity, can you confirm?"}</p>
+                {countryOptions.length > 1 ? (
+                  <div>
+                    <p className="mb-1 text-xs font-medium">{lang === "fr" ? "Pays possibles" : "Possible countries"}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {countryOptions.slice(0, 3).map((item) => (
+                        <Button key={`${item.iso2}-${item.label}`} type="button" variant="outline" size="sm" onClick={() => setCountry(item)}>
+                          {item.label} ({item.iso2})
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {hsOptions.length > 1 ? (
+                  <div>
+                    <p className="mb-1 text-xs font-medium">{lang === "fr" ? "Produits possibles" : "Possible products"}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {hsOptions.slice(0, 3).map((item) => (
+                        <Button key={`${item.hs_code}-${item.label}`} type="button" variant="outline" size="sm" onClick={() => setHs(item)}>
+                          {item.hs_code}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {(countryOptions.length > 1 || hsOptions.length > 1) && mode === "export" ? (
+            <div className="space-y-2 rounded-md border p-3">
+              <p className="text-xs font-medium">{lang === "fr" ? "Affiner (optionnel)" : "Refine (optional)"}</p>
+              <CountryPicker value={country} onSelect={setCountry} />
+              <HsPicker value={hs} onSelect={setHs} />
+            </div>
           ) : null}
         </div>
 

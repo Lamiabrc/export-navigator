@@ -12,6 +12,17 @@ import type {
 } from "@/types/supabaseAI";
 
 const asArray = (input: unknown): unknown[] => (Array.isArray(input) ? input : []);
+const missingRpcCache = new Set<string>();
+
+function isMissingRpcError(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("could not find the function") ||
+    normalized.includes("no route matched") ||
+    normalized.includes("404") ||
+    normalized.includes("pgrst")
+  );
+}
 
 function asErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error) return error.message;
@@ -25,8 +36,40 @@ async function callRpc<T>(name: string, params: Record<string, unknown>): Promis
     if (error) throw new Error(error.message);
     return data as T;
   } catch (error) {
+  if (missingRpcCache.has(name)) {
+    throw new Error(`${name}: unavailable`);
+  }
+  try {
+    const { data, error } = await supabase.rpc(name, params);
+    if (error) {
+      if (isMissingRpcError(error.message)) {
+        missingRpcCache.add(name);
+      }
+      throw new Error(error.message);
+    }
+    return data as T;
+  } catch (error) {
+    if (isMissingRpcError(asErrorMessage(error, ""))) {
+      missingRpcCache.add(name);
+    }
     throw new Error(`${name}: ${asErrorMessage(error, "unknown RPC error")}`);
   }
+}
+
+async function callRpcFallback<T>(names: string[], params: Record<string, unknown>): Promise<T> {
+  const errors: string[] = [];
+  for (const name of names) {
+    if (missingRpcCache.has(name)) continue;
+    try {
+      return await callRpc<T>(name, params);
+    } catch (error) {
+      errors.push(asErrorMessage(error, "unknown error"));
+      if (!isMissingRpcError(asErrorMessage(error, ""))) {
+        throw error;
+      }
+    }
+  }
+  throw new Error(errors[0] ?? `RPC unavailable (${names.join(", ")})`);
 }
 
 const mapCountrySuggestions = (raw: unknown): CountrySuggestion[] => {
@@ -68,6 +111,12 @@ const mapHsSuggestions = (raw: unknown): HsSuggestion[] => {
 
 export async function countryFunnel(q: string, lang: string, ignoreLearning = false): Promise<CountryFunnelResult> {
   const raw = await callRpc<unknown>("rpc_country_funnel", { q, lang, lim: 8, ignore_learning: ignoreLearning });
+  const raw = await callRpcFallback<unknown>(["rpc_country_funnel", "country_funnel"], {
+    q,
+    lang,
+    lim: 8,
+    ignore_learning: ignoreLearning,
+  });
   const suggestions = mapCountrySuggestions(raw);
   return { suggestions, needsClarification: suggestions.length > 1, raw };
 }
@@ -78,18 +127,30 @@ export async function confirmCountry(term: string, lang: string, code_iso2: stri
 
 export async function hsFunnel(q: string, lang: string): Promise<HsFunnelResult> {
   const raw = await callRpc<unknown>("rpc_hs_funnel", { q, lang, lim: 8 });
+  const raw = await callRpcFallback<unknown>(["rpc_hs_funnel", "hs_funnel"], { q, lang, lim: 8 });
   const suggestions = mapHsSuggestions(raw);
   return { suggestions, needsClarification: suggestions.length > 1, raw };
 }
 
 export async function hsSuggestInChapter(q: string, chapter: string, lang: string): Promise<HsFunnelResult> {
   const raw = await callRpc<unknown>("rpc_suggest_hs_in_chapter", { q, chapter, lang, lim: 8 });
+  const raw = await callRpcFallback<unknown>(["rpc_suggest_hs_in_chapter", "rpc_suggest_hs_bi", "suggest_hs_in_chapter"], {
+    q,
+    chapter,
+    lang,
+    lim: 8,
+  });
   const suggestions = mapHsSuggestions(raw);
   return { suggestions, needsClarification: suggestions.length > 1, raw };
 }
 
 export async function exportAnswer(destination_iso2: string, hs_code: string, lang: string): Promise<ExportAnswerResult> {
   const raw = await callRpc<Record<string, unknown>>("rpc_export_answer", { destination_iso2, hs_code, lang });
+  const raw = await callRpcFallback<Record<string, unknown>>(["rpc_export_answer", "export_answer"], {
+    destination_iso2,
+    hs_code,
+    lang,
+  });
   return {
     destination: (raw.destination as ExportAnswerResult["destination"]) ?? undefined,
     country_rules: (raw.country_rules as Record<string, unknown>) ?? undefined,
@@ -106,6 +167,13 @@ export async function tradeBilateral(
   flow: "exports" | "imports" = "exports",
 ): Promise<TradeBilateralResult> {
   const raw = await callRpc<unknown>("rpc_trade_bilateral", { reporter, partner, year, flow, lim: 6 });
+  const raw = await callRpcFallback<unknown>(["rpc_trade_bilateral", "trade_bilateral"], {
+    reporter,
+    partner,
+    year,
+    flow,
+    lim: 6,
+  });
   const rows = asArray(raw);
   const topHs6: TradePartnerLine[] = rows.map((row) => {
     const line = (row ?? {}) as Record<string, unknown>;
@@ -121,6 +189,7 @@ export async function tradeBilateral(
 
 export async function screenParty(name: string, lim = 5): Promise<ScreeningResult> {
   const raw = await callRpc<unknown>("rpc_screen_party", { name, lim });
+  const raw = await callRpcFallback<unknown>(["rpc_screen_party", "screen_party"], { name, lim });
   const hits: ScreeningHit[] = asArray(raw).map((row) => {
     const value = (row ?? {}) as Record<string, unknown>;
     return {
