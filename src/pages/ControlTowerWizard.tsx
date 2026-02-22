@@ -264,6 +264,16 @@ export default function ControlTowerWizard() {
         </Card>
 
         <ExportAnswerPanel data={answer} />
+        <TradePanel data={trade} />
+        <TradePanel
+          data={trade}
+          selectedCountryIso2={country?.iso2}
+          defaultYear={defaultTradeYear}
+          onImported={async () => {
+            if (!country) return;
+            const nextTrade = await tradeBilateral("FR", country.iso2, defaultTradeYear, "export");
+            setTrade(nextTrade);
+          }}
         <TradePanel
           data={trade}
           isImporting={loading}
