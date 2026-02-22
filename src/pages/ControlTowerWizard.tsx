@@ -53,11 +53,23 @@ function readWizardState(state: unknown): WizardState {
     questionText: typeof source.questionText === "string" ? source.questionText : undefined,
   };
 }
+type LiveStatus = "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "CHANNEL_ERROR" | "FALLBACK_PUBLIC" | "IDLE";
+
+const toWizardState = (state: unknown): WizardState => {
+  if (!state || typeof state !== "object") return {};
+  const raw = state as Record<string, unknown>;
+
+  return {
+    mode: raw.mode === "export" || raw.mode === "import" ? raw.mode : undefined,
+    questionText: typeof raw.questionText === "string" ? raw.questionText : undefined,
+  };
+};
 
 export default function ControlTowerWizard() {
   const { lang } = useI18n();
   const location = useLocation();
   const wizardState = React.useMemo(() => readWizardState(location.state), [location.state]);
+  const wizardState = React.useMemo(() => toWizardState(location.state), [location.state]);
 
   const [country, setCountry] = React.useState<CountrySuggestion | null>(null);
   const [hs, setHs] = React.useState<HsSuggestion | null>(null);
@@ -72,6 +84,11 @@ export default function ControlTowerWizard() {
 
   const run = async () => {
   const [liveStatus, setLiveStatus] = React.useState<"SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "CHANNEL_ERROR" | "FALLBACK_PUBLIC" | "IDLE">("IDLE");
+  const [dbHealth, setDbHealth] = React.useState<Record<string, unknown> | null>(null);
+
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [liveStatus, setLiveStatus] = React.useState<LiveStatus>("IDLE");
   const [liveIngestion, setLiveIngestion] = React.useState<IngestionRun[]>([]);
 
   const countryRef = React.useRef<CountrySuggestion | null>(null);
@@ -183,6 +200,7 @@ export default function ControlTowerWizard() {
 
   React.useEffect(() => {
     const privateMode = String(import.meta.env.VITE_CT_REALTIME_PRIVATE || "false").toLowerCase() === "true";
+    const isPrivate = String(import.meta.env.VITE_CT_REALTIME_PRIVATE || "false").toLowerCase() === "true";
     let cleanupRefresh: (() => Promise<void>) | null = null;
     let cleanupIngestion: (() => Promise<void>) | null = null;
     let cancelled = false;
@@ -191,6 +209,7 @@ export default function ControlTowerWizard() {
       cleanupRefresh = await subscribeControlTowerRefresh({
         supabase,
         isPrivate: privateMode,
+        isPrivate,
         onStatus: (status) => {
           if (!cancelled) setLiveStatus(status);
         },
@@ -207,6 +226,10 @@ export default function ControlTowerWizard() {
                 if (cancelled) return;
                 setAnswer(answerData);
                 setTrade(tradeData);
+              .then(([nextAnswer, nextTrade]) => {
+                if (cancelled) return;
+                setAnswer(nextAnswer);
+                setTrade(nextTrade);
               })
               .catch((exception) => {
                 if (!cancelled) setError((exception as Error).message);
@@ -215,6 +238,8 @@ export default function ControlTowerWizard() {
             void tradeBilateral("FR", selectedCountry.iso2, new Date().getFullYear(), "exports")
               .then((data) => {
                 if (!cancelled) setTrade(data);
+              .then((nextTrade) => {
+                if (!cancelled) setTrade(nextTrade);
               })
               .catch((exception) => {
                 if (!cancelled) setError((exception as Error).message);
@@ -232,6 +257,9 @@ export default function ControlTowerWizard() {
           const next = payload.new as IngestionRun | null;
           if (!next?.id) return;
           setLiveIngestion((prev) => [next, ...prev.filter((run) => run.id !== next.id)].slice(0, 5));
+          const nextRun = payload.new as IngestionRun | null;
+          if (!nextRun?.id) return;
+          setLiveIngestion((prev) => [nextRun, ...prev.filter((run) => run.id !== nextRun.id)].slice(0, 5));
         })
         .subscribe((status) => {
           if (status === "CHANNEL_ERROR") {
@@ -279,6 +307,9 @@ export default function ControlTowerWizard() {
             <div className="flex items-center justify-between gap-3">
               <CardTitle>{lang === "fr" ? "Tour de contrôle" : "Control Tower"}</CardTitle>
               <Badge variant="secondary">{lang === "fr" ? "Live" : "Live"}</Badge>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle>{lang === "fr" ? "Tour de contrôle" : "Control Tower"}</CardTitle>
+              <Badge variant="secondary">Live</Badge>
             </div>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
