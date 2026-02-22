@@ -264,6 +264,7 @@ export default function ControlTowerWizard() {
         </Card>
 
         <ExportAnswerPanel data={answer} />
+        <TradePanel data={trade} />
         <TradePanel
           data={trade}
           selectedCountryIso2={country?.iso2}
