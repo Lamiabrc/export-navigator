@@ -191,6 +191,30 @@ export async function tradeBilateral(
 
 export async function screenParty(name: string, lim = 5): Promise<ScreeningResult> {
   const raw = await callRpc<unknown>("rpc_screen_party", { name, lim });
+      hs_code: String(line.hs_code ?? line.hs6 ?? "") || undefined,
+      value: Number(line.value ?? line.trade_value ?? line.value_usd ?? 0) || 0,
+      value_usd: Number(line.value_usd ?? line.value ?? line.trade_value ?? 0) || 0,
+      label: String(line.label ?? line.product_label ?? "") || undefined,
+    };
+  });
+
+  const totalValue = topHs6.reduce((sum, item) => sum + (item.value_usd ?? item.value ?? 0), 0);
+
+  return {
+    total: totalValue,
+    total_value_usd: totalValue,
+    currency: "USD",
+    flow,
+    year,
+    reporter,
+    partner,
+    topHs6,
+    top_hs6: topHs6,
+    raw,
+  };
+}
+
+export async function screenParty(name: string, lim = 5): Promise<ScreeningResult> {
   const raw = await callRpcFallback<unknown>(["rpc_screen_party", "screen_party"], { name, lim });
   const hits: ScreeningHit[] = asArray(raw).map((row) => {
     const value = (row ?? {}) as Record<string, unknown>;
