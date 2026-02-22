@@ -10,6 +10,11 @@ import { ExportAnswerPanel } from "@/components/ExportAnswerPanel";
 import { TradePanel } from "@/components/TradePanel";
 import { SanctionsScreening } from "@/components/SanctionsScreening";
 import { useI18n } from "@/contexts/LanguageContext";
+import { exportAnswer, tradeBilateral } from "@/services/supabaseAI";
+import type { CountrySuggestion, ExportAnswerResult, HsSuggestion, ScreeningResult, TradeBilateralResult } from "@/types/supabaseAI";
+import { supabase } from "@/integrations/supabase/client";
+import { countryFunnel, exportAnswer, hsFunnel, tradeBilateral } from "@/services/supabaseAI";
+import type { CountrySuggestion, ExportAnswerResult, HsSuggestion, ScreeningResult, TradeBilateralResult } from "@/types/supabaseAI";
 import { countryFunnel, exportAnswer, hsFunnel, tradeBilateral } from "@/services/supabaseAI";
 import type {
   CountrySuggestion,
@@ -37,6 +42,11 @@ export default function ControlTowerWizard() {
   const { lang } = useI18n();
   const location = useLocation();
   const wizardState = React.useMemo(() => readWizardState(location.state), [location.state]);
+export default function ControlTowerWizard() {
+  const { lang } = useI18n();
+  const location = useLocation();
+  const initialState = (location.state ?? {}) as { mode?: "export" | "import"; questionText?: string };
+  const initialState = (location.state ?? {}) as WizardState;
 
   const [country, setCountry] = React.useState<CountrySuggestion | null>(null);
   const [hs, setHs] = React.useState<HsSuggestion | null>(null);
@@ -61,6 +71,8 @@ export default function ControlTowerWizard() {
       ]);
       setAnswer(answerData);
       setTrade(tradeData);
+    } catch (e) {
+      setError((e as Error).message);
     } catch (exception) {
       setError((exception as Error).message);
     } finally {
@@ -69,6 +81,21 @@ export default function ControlTowerWizard() {
   };
 
   const testDbHealth = async () => {
+    const [countries, hs_codes, reference_sources, rpc] = await Promise.all([
+      supabase.from("countries").select("id", { head: true, count: "exact" }),
+      supabase.from("hs_codes").select("id", { head: true, count: "exact" }),
+      supabase.from("reference_sources").select("id", { head: true, count: "exact" }),
+      supabase.rpc("rpc_export_answer", { destination_iso2: "CL", hs_code: "081010", lang: "en" }),
+    ]);
+
+    setDbHealth({
+      countries: countries.count ?? 0,
+      hs_codes: hs_codes.count ?? 0,
+      reference_sources: reference_sources.count ?? 0,
+      rpc_export_answer_sample: rpc.data,
+      errors: [countries.error?.message, hs_codes.error?.message, reference_sources.error?.message, rpc.error?.message].filter(Boolean),
+    const errors: string[] = [];
+
     const errors: string[] = [];
     let countriesCount: number | null = null;
     let hsCount: number | null = null;
@@ -76,6 +103,25 @@ export default function ControlTowerWizard() {
     let exportSample: unknown = null;
 
     try {
+      const res = await countryFunnel("chile", "en", true);
+      countriesCount = res.suggestions.length;
+    } catch (e) {
+      errors.push((e as Error).message);
+    }
+
+    try {
+      const res = await hsFunnel("strawberries", "en");
+      hsCount = res.suggestions.length;
+    } catch (e) {
+      errors.push((e as Error).message);
+    }
+
+    try {
+      const res = await exportAnswer("CL", "081010", "en");
+      exportSample = res.raw;
+      sourcesCount = res.update_sources?.length ?? 0;
+    } catch (e) {
+      errors.push((e as Error).message);
       const result = await countryFunnel("chile", "en", true);
       countriesCount = result.suggestions.length;
     } catch (exception) {
@@ -118,6 +164,11 @@ export default function ControlTowerWizard() {
               {lang === "fr" ? "Mode" : "Mode"}: <strong>{wizardState.mode ?? "export"}</strong>
             </p>
             {wizardState.questionText ? <p className="text-muted-foreground">{wizardState.questionText}</p> : null}
+              {lang === "fr" ? "Mode" : "Mode"}: <strong>{initialState.mode ?? "export"}</strong>
+            </p>
+            {initialState.questionText ? <p className="text-muted-foreground">{initialState.questionText}</p> : null}
+            <CountryPicker value={country} onSelect={setCountry} />
+            <HsPicker value={hs} onSelect={setHs} />
 
             <CountryPicker value={country} onSelect={setCountry} />
             <HsPicker value={hs} onSelect={setHs} />
@@ -138,6 +189,10 @@ export default function ControlTowerWizard() {
             <CardTitle>DB Health</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
+            <Button variant="outline" onClick={testDbHealth}>
+              {lang === "fr" ? "Tester la base" : "Run DB health check"}
+            </Button>
+            {dbHealth ? <pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs">{JSON.stringify(dbHealth, null, 2)}</pre> : null}
             <Button type="button" variant="outline" onClick={testDbHealth}>
               {lang === "fr" ? "Tester la base" : "Run DB health check"}
             </Button>
