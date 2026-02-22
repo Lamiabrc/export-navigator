@@ -10,6 +10,9 @@ import { ExportAnswerPanel } from "@/components/ExportAnswerPanel";
 import { TradePanel } from "@/components/TradePanel";
 import { SanctionsScreening } from "@/components/SanctionsScreening";
 import { useI18n } from "@/contexts/LanguageContext";
+import { exportAnswer, tradeBilateral } from "@/services/supabaseAI";
+import type { CountrySuggestion, ExportAnswerResult, HsSuggestion, ScreeningResult, TradeBilateralResult } from "@/types/supabaseAI";
+import { supabase } from "@/integrations/supabase/client";
 import { countryFunnel, exportAnswer, hsFunnel, tradeBilateral } from "@/services/supabaseAI";
 import type { CountrySuggestion, ExportAnswerResult, HsSuggestion, ScreeningResult, TradeBilateralResult } from "@/types/supabaseAI";
 
@@ -46,6 +49,19 @@ export default function ControlTowerWizard() {
   };
 
   const testDbHealth = async () => {
+    const [countries, hs_codes, reference_sources, rpc] = await Promise.all([
+      supabase.from("countries").select("id", { head: true, count: "exact" }),
+      supabase.from("hs_codes").select("id", { head: true, count: "exact" }),
+      supabase.from("reference_sources").select("id", { head: true, count: "exact" }),
+      supabase.rpc("rpc_export_answer", { destination_iso2: "CL", hs_code: "081010", lang: "en" }),
+    ]);
+
+    setDbHealth({
+      countries: countries.count ?? 0,
+      hs_codes: hs_codes.count ?? 0,
+      reference_sources: reference_sources.count ?? 0,
+      rpc_export_answer_sample: rpc.data,
+      errors: [countries.error?.message, hs_codes.error?.message, reference_sources.error?.message, rpc.error?.message].filter(Boolean),
     const errors: string[] = [];
 
     let countriesCount: number | null = null;
