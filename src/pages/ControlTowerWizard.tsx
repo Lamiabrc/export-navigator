@@ -15,23 +15,40 @@ import type { CountrySuggestion, ExportAnswerResult, HsSuggestion, ScreeningResu
 import { supabase } from "@/integrations/supabase/client";
 import { countryFunnel, exportAnswer, hsFunnel, tradeBilateral } from "@/services/supabaseAI";
 import type { CountrySuggestion, ExportAnswerResult, HsSuggestion, ScreeningResult, TradeBilateralResult } from "@/types/supabaseAI";
+import { countryFunnel, exportAnswer, hsFunnel, tradeBilateral } from "@/services/supabaseAI";
+import type {
+  CountrySuggestion,
+  ExportAnswerResult,
+  HsSuggestion,
+  ScreeningResult,
+  TradeBilateralResult,
+} from "@/types/supabaseAI";
+
+type WizardState = {
+  mode?: "export" | "import";
+  questionText?: string;
+};
 
 export default function ControlTowerWizard() {
   const { lang } = useI18n();
   const location = useLocation();
   const initialState = (location.state ?? {}) as { mode?: "export" | "import"; questionText?: string };
+  const initialState = (location.state ?? {}) as WizardState;
+
   const [country, setCountry] = React.useState<CountrySuggestion | null>(null);
   const [hs, setHs] = React.useState<HsSuggestion | null>(null);
   const [partyName, setPartyName] = React.useState("");
   const [screening, setScreening] = React.useState<ScreeningResult | null>(null);
   const [answer, setAnswer] = React.useState<ExportAnswerResult | null>(null);
   const [trade, setTrade] = React.useState<TradeBilateralResult | null>(null);
+
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [dbHealth, setDbHealth] = React.useState<Record<string, unknown> | null>(null);
 
   const run = async () => {
     if (!country || !hs) return;
+
     setLoading(true);
     setError(null);
     try {
@@ -43,6 +60,8 @@ export default function ControlTowerWizard() {
       setTrade(tradeData);
     } catch (e) {
       setError((e as Error).message);
+    } catch (exception) {
+      setError((exception as Error).message);
     } finally {
       setLoading(false);
     }
@@ -64,6 +83,7 @@ export default function ControlTowerWizard() {
       errors: [countries.error?.message, hs_codes.error?.message, reference_sources.error?.message, rpc.error?.message].filter(Boolean),
     const errors: string[] = [];
 
+    const errors: string[] = [];
     let countriesCount: number | null = null;
     let hsCount: number | null = null;
     let sourcesCount: number | null = null;
@@ -89,6 +109,25 @@ export default function ControlTowerWizard() {
       sourcesCount = res.update_sources?.length ?? 0;
     } catch (e) {
       errors.push((e as Error).message);
+      const result = await countryFunnel("chile", "en", true);
+      countriesCount = result.suggestions.length;
+    } catch (exception) {
+      errors.push((exception as Error).message);
+    }
+
+    try {
+      const result = await hsFunnel("strawberries", "en");
+      hsCount = result.suggestions.length;
+    } catch (exception) {
+      errors.push((exception as Error).message);
+    }
+
+    try {
+      const result = await exportAnswer("CL", "081010", "en");
+      exportSample = result.raw;
+      sourcesCount = result.update_sources?.length ?? 0;
+    } catch (exception) {
+      errors.push((exception as Error).message);
     }
 
     setDbHealth({
@@ -114,6 +153,10 @@ export default function ControlTowerWizard() {
             {initialState.questionText ? <p className="text-muted-foreground">{initialState.questionText}</p> : null}
             <CountryPicker value={country} onSelect={setCountry} />
             <HsPicker value={hs} onSelect={setHs} />
+
+            <CountryPicker value={country} onSelect={setCountry} />
+            <HsPicker value={hs} onSelect={setHs} />
+
             <Button onClick={run} disabled={loading || !country || !hs}>
               {loading ? "..." : lang === "fr" ? "Lancer l'analyse" : "Run analysis"}
             </Button>
@@ -134,6 +177,12 @@ export default function ControlTowerWizard() {
               {lang === "fr" ? "Tester la base" : "Run DB health check"}
             </Button>
             {dbHealth ? <pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs">{JSON.stringify(dbHealth, null, 2)}</pre> : null}
+            <Button type="button" variant="outline" onClick={testDbHealth}>
+              {lang === "fr" ? "Tester la base" : "Run DB health check"}
+            </Button>
+            {dbHealth ? (
+              <pre className="overflow-x-auto rounded-md bg-muted p-2 text-xs">{JSON.stringify(dbHealth, null, 2)}</pre>
+            ) : null}
           </CardContent>
         </Card>
       </main>
