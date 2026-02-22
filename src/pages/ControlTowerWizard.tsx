@@ -113,6 +113,10 @@ export default function ControlTowerWizard() {
       setTrade(tradeData);
     } catch (e) {
       setError((e as Error).message);
+        tradeBilateral("FR", country.iso2, new Date().getFullYear() - 1, "export"),
+      ]);
+      setAnswer(answerData);
+      setTrade(tradeData);
     } catch (exception) {
       setError((exception as Error).message);
     } finally {
@@ -226,6 +230,8 @@ export default function ControlTowerWizard() {
                 if (cancelled) return;
                 setAnswer(answerData);
                 setTrade(tradeData);
+              tradeBilateral("FR", selectedCountry.iso2, new Date().getFullYear() - 1, "export"),
+            ])
               .then(([nextAnswer, nextTrade]) => {
                 if (cancelled) return;
                 setAnswer(nextAnswer);
@@ -238,6 +244,7 @@ export default function ControlTowerWizard() {
             void tradeBilateral("FR", selectedCountry.iso2, new Date().getFullYear(), "exports")
               .then((data) => {
                 if (!cancelled) setTrade(data);
+            void tradeBilateral("FR", selectedCountry.iso2, new Date().getFullYear() - 1, "export")
               .then((nextTrade) => {
                 if (!cancelled) setTrade(nextTrade);
               })
@@ -331,6 +338,16 @@ export default function ControlTowerWizard() {
 
         <ExportAnswerPanel data={answer} />
         <TradePanel data={trade} />
+        <TradePanel
+          data={trade}
+          selectedCountryIso2={country?.iso2}
+          defaultYear={new Date().getFullYear() - 1}
+          onImported={async () => {
+            if (!country) return;
+            const nextTrade = await tradeBilateral("FR", country.iso2, new Date().getFullYear() - 1, "export");
+            setTrade(nextTrade);
+          }}
+        />
         <SanctionsScreening value={partyName} onValueChange={setPartyName} result={screening} onResult={setScreening} />
 
         <Card>

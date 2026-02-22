@@ -167,6 +167,8 @@ export async function tradeBilateral(
   flow: "exports" | "imports" = "exports",
 ): Promise<TradeBilateralResult> {
   const raw = await callRpc<unknown>("rpc_trade_bilateral", { reporter, partner, year, flow, lim: 6 });
+  flow: "export" | "import" = "export",
+): Promise<TradeBilateralResult> {
   const raw = await callRpcFallback<unknown>(["rpc_trade_bilateral", "trade_bilateral"], {
     reporter,
     partner,

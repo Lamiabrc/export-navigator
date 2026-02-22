@@ -63,6 +63,7 @@ export function WizardEntry() {
         const [answer, trade] = await Promise.all([
           exportAnswer(chosenCountry.iso2, chosenHs.hs_code, lang),
           tradeBilateral("FR", chosenCountry.iso2, new Date().getFullYear(), "exports"),
+          tradeBilateral("FR", chosenCountry.iso2, new Date().getFullYear() - 1, "export"),
         ]);
         setExportData(answer);
         setTradeData(trade);
