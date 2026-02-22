@@ -69,9 +69,17 @@ export function CopilotChatWide({ isEn }: Props) {
     setDraft("");
     setLoading(true);
 
-    const { data, error } = await supabase.functions.invoke<ChatFreeResponse>("chat-free", {
-      body: { session_id: sessionId, message: text },
-    });
+    let data: ChatFreeResponse | null = null;
+    let error: Error | null = null;
+    try {
+      const response = await supabase.functions.invoke<ChatFreeResponse>("chat-free", {
+        body: { session_id: sessionId, message: text },
+      });
+      data = response.data ?? null;
+      error = response.error as Error | null;
+    } catch (exception) {
+      error = exception as Error;
+    }
 
     if (error) {
       setMessages((prev) => [

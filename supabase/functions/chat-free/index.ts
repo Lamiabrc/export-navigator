@@ -8,11 +8,16 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini";
 const DAILY_LIMIT = 30;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+function buildCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") ?? "*";
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, accept, origin",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
+  };
+}
 
 type ChatRequest = {
   session_id?: string;
@@ -33,7 +38,11 @@ type DetectedContext = {
 };
 
 async function callOpenAI(prompt: string, previousResponseId?: string) {
-  if (!OPENAI_API_KEY) return { reply: "Le moteur IA n'est pas encore configuré. Je peux déjà vous aider: donnez pays, produit et code HS pour un plan concret.", responseId: undefined };
+  if (!OPENAI_API_KEY)
+    return {
+      reply: "Le moteur IA n'est pas encore configuré. Je peux déjà vous aider: donnez pays, produit et code HS pour un plan concret.",
+      responseId: undefined,
+    };
 
   const payload: Record<string, unknown> = {
     model: OPENAI_MODEL,
@@ -64,7 +73,10 @@ function extractHs(message: string): string | undefined {
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const corsHeaders = buildCorsHeaders(req);
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
 
   try {
     const authHeader = req.headers.get("Authorization") || "";
@@ -164,7 +176,9 @@ serve(async (req) => {
       !detected.countryIso2 ? "Quel pays de destination visez-vous ?" : null,
       !detected.product ? "Quel est le produit exact ?" : null,
       !detected.hs6 ? "Avez-vous déjà un code HS (4 à 6 chiffres) ?" : null,
-    ].filter(Boolean).slice(0, 2) as string[];
+    ]
+      .filter(Boolean)
+      .slice(0, 2) as string[];
 
     const prompt = [
       "Tu es un copilote export humain, concret et empathique.",
@@ -202,7 +216,7 @@ serve(async (req) => {
         sources,
         remaining: DAILY_LIMIT - (current + 1),
       },
-      { headers: corsHeaders }
+      { headers: corsHeaders },
     );
   } catch (error) {
     return Response.json({ error: (error as Error).message }, { status: 400, headers: corsHeaders });

@@ -1,7 +1,7 @@
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { VideoBanner } from "@/components/home/VideoBanner";
-import { CopilotChatWide } from "@/components/home/CopilotChatWide";
 import { HomeCtas } from "@/components/home/HomeCtas";
+import { WizardEntry } from "@/components/WizardEntry";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { useI18n } from "@/contexts/LanguageContext";
 
@@ -17,8 +17,8 @@ export default function Home() {
     <PublicLayout>
       <main className="w-full overflow-x-clip pb-8 pt-4 sm:pt-6 lg:pt-8">
         <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-4 sm:gap-8 sm:px-6 lg:gap-10 lg:px-10">
+          <WizardEntry />
           <VideoBanner isEn={isEn} />
-          <CopilotChatWide isEn={isEn} />
           <HomeCtas isEn={isEn} />
         </div>
       </main>
