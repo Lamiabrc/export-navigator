@@ -25,25 +25,41 @@ export function HsAutocomplete({ value, onChange, productContext }: Props) {
     const q = query.trim();
     const t = setTimeout(async () => {
       setLoading(true);
-      const { data } = await supabase.functions.invoke<{ items?: HsItem[] }>("hs-suggest", {
-        body: { query: q, limit: 8 },
-      });
-      setItems(data?.items || []);
-      setLoading(false);
+      try {
+        const { data, error } = await supabase.functions.invoke<{ items?: HsItem[] }>("hs-suggest", {
+          body: { query: q, limit: 8 },
+        });
+        if (error) throw error;
+        setItems(data?.items || []);
+      } catch {
+        const { data: rpcRows } = await supabase.rpc("rpc_hs_funnel", { q, lang: "fr", lim: 8 });
+        const fallback = Array.isArray(rpcRows)
+          ? rpcRows.map((row: any) => ({ hs6: String(row.hs6 ?? row.hs_code ?? ""), label_fr: String(row.label_fr ?? row.label ?? ""), score: Number(row.score ?? 0) }))
+          : [];
+        setItems(fallback.filter((row) => row.hs6));
+      } finally {
+        setLoading(false);
+      }
     }, 240);
     return () => clearTimeout(t);
   }, [query]);
 
   const askWizard = async () => {
     setWizardLoading(true);
-    const wizardPrompt = `Je ne connais pas mon HS. Produit: ${productContext || "non renseigné"}. Donne 3 propositions JSON [{hs6,reason}]`;
-    const { data } = await supabase.functions.invoke<{ reply?: string }>("chat-free", {
-      body: { message: wizardPrompt, context: { product: productContext } },
-    });
-    const text = data?.reply || "";
-    const found = text.match(/\b\d{6}\b/);
-    if (found) onChange(found[0]);
-    setWizardLoading(false);
+    try {
+      const wizardPrompt = `Je ne connais pas mon HS. Produit: ${productContext || "non renseigné"}. Donne 3 propositions JSON [{hs6,reason}]`;
+      const { data, error } = await supabase.functions.invoke<{ reply?: string }>("chat-free", {
+        body: { message: wizardPrompt, context: { product: productContext } },
+      });
+      if (error) throw error;
+      const text = data?.reply || "";
+      const found = text.match(/\b\d{6}\b/);
+      if (found) onChange(found[0]);
+    } catch {
+      // no-op fallback when edge function is temporarily unreachable
+    } finally {
+      setWizardLoading(false);
+    }
   };
 
   return (
