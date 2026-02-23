@@ -16,6 +16,7 @@ const SESSION_STORAGE_KEY = "mpl_assistant_session_id_v1";
 type AssistantResponse = {
   ok?: boolean;
   mode?: string;
+  session_id?: string;
   answer?: string;
   summary?: string;
   detail?: string;
@@ -174,6 +175,9 @@ export default function Assistant() {
             const msgErr = data?.detail || data?.error || llmError.message || "Fonction indisponible";
             throw new Error(msgErr);
           }
+
+          const nextSessionId = String(data?.session_id || "").trim();
+          if (nextSessionId) setSessionId(nextSessionId);
 
           const answer = String(data?.answer || data?.summary || "").trim();
           const assistantMsg: ChatMessage = {

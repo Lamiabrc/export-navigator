@@ -603,6 +603,7 @@ function formatDate(ts: number | null) {
 }
 
 const uid = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+const CONTROL_TOWER_ASSISTANT_SESSION_KEY = "mpl_control_tower_assistant_session_v1";
 
 export default function ControlTower() {
   const { profile } = useCompanyProfile();
@@ -634,6 +635,7 @@ export default function ControlTower() {
   const [assistantActions, setAssistantActions] = React.useState<string[]>([]);
   const [assistantLoading, setAssistantLoading] = React.useState(false);
   const [assistantError, setAssistantError] = React.useState<string | null>(null);
+  const [assistantSessionId, setAssistantSessionId] = React.useState<string | null>(null);
 
   const [decisionOpen, setDecisionOpen] = React.useState<DecisionKey | null>(null);
   const [decisionCollapsed, setDecisionCollapsed] = React.useState(false);
@@ -648,6 +650,27 @@ export default function ControlTower() {
   React.useEffect(() => {
     if (decisionOpen) setDecisionCollapsed(false);
   }, [decisionOpen]);
+
+  React.useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(CONTROL_TOWER_ASSISTANT_SESSION_KEY);
+      if (stored) setAssistantSessionId(stored);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  React.useEffect(() => {
+    try {
+      if (!assistantSessionId) {
+        window.localStorage.removeItem(CONTROL_TOWER_ASSISTANT_SESSION_KEY);
+        return;
+      }
+      window.localStorage.setItem(CONTROL_TOWER_ASSISTANT_SESSION_KEY, assistantSessionId);
+    } catch {
+      // ignore
+    }
+  }, [assistantSessionId]);
 
   const [goNoGoResult, setGoNoGoResult] = React.useState<GoNoGoResult | null>(null);
   const [goNoGoForm, setGoNoGoForm] = React.useState({
@@ -773,17 +796,23 @@ const assistantExamples = [
 
   const callAsk = React.useCallback(
     async (question: string, context?: Record<string, any>) => {
+      const payloadContext = {
+        ...(context || {}),
+        session_id: assistantSessionId,
+      };
       const resp = await authFetch("/api/ask", {
         method: "POST",
-        body: JSON.stringify({ question, context }),
+        body: JSON.stringify({ question, context: payloadContext }),
       });
       const data = await resp.json();
       if (!resp.ok || !data?.ok) {
         throw new Error(data?.error || "Erreur IA");
       }
-      return data as { answer: string; actions?: string[] };
+      const nextSessionId = typeof data?.session_id === "string" ? data.session_id.trim() : "";
+      if (nextSessionId) setAssistantSessionId(nextSessionId);
+      return data as { answer: string; actions?: string[]; session_id?: string };
     },
-    [authFetch],
+    [authFetch, assistantSessionId],
   );
 
   const handleAssistantAsk = async (override?: string) => {

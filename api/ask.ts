@@ -11,8 +11,14 @@ type ConversationMessage = {
   content: string;
 };
 
+type StoredConversationRow = {
+  role: "user" | "assistant" | "system";
+  content: string;
+};
+
 type AskResult = {
   answer: string;
+  session_id?: string;
   actions?: string[];
   follow_up_questions?: string[];
   sources?: Array<{ document_id: string; chunk_id: string; similarity: number }>;
@@ -148,6 +154,117 @@ async function storeConversationEmbedding(params: {
   }
 }
 
+function normalizeSessionId(input: unknown) {
+  const value = typeof input === "string" ? input.trim() : "";
+  return value || null;
+}
+
+function mergeConversationHistory(dbHistory: ConversationMessage[], contextHistory: ConversationMessage[]) {
+  const merged: ConversationMessage[] = [];
+  for (const entry of [...dbHistory, ...contextHistory]) {
+    const content = String(entry?.content || "").trim();
+    if (!content) continue;
+    const role: ConversationMessage["role"] = entry?.role === "assistant" ? "assistant" : "user";
+    const previous = merged[merged.length - 1];
+    if (previous && previous.role === role && previous.content === content) continue;
+    merged.push({ role, content });
+  }
+  return merged.slice(-12);
+}
+
+async function resolveChatSession(params: {
+  userId: string;
+  requestedSessionId: string | null;
+  fallbackTitle: string;
+}) {
+  const admin = supabaseAdmin();
+
+  let sessionId = params.requestedSessionId;
+  if (sessionId) {
+    const { data, error } = await admin
+      .from("chat_sessions")
+      .select("id")
+      .eq("id", sessionId)
+      .eq("user_id", params.userId)
+      .maybeSingle();
+    if (error || !data?.id) sessionId = null;
+  }
+
+  if (!sessionId) {
+    const { data, error } = await admin
+      .from("chat_sessions")
+      .insert({
+        user_id: params.userId,
+        title: params.fallbackTitle.slice(0, 120),
+      })
+      .select("id")
+      .single();
+    if (error || !data?.id) {
+      throw new Error(`chat_session_create_failed: ${error?.message || "unknown_error"}`);
+    }
+    sessionId = String(data.id);
+  }
+
+  const { data: rows, error: historyError } = await admin
+    .from("chat_messages")
+    .select("role,content")
+    .eq("session_id", sessionId)
+    .eq("user_id", params.userId)
+    .order("created_at", { ascending: false })
+    .limit(40);
+
+  if (historyError) {
+    console.error("[api/ask] chat_messages load failed", historyError.message);
+    return { sessionId, history: [] as ConversationMessage[] };
+  }
+
+  const history = (Array.isArray(rows) ? rows : [])
+    .reverse()
+    .map((row) => {
+      const value = row as StoredConversationRow;
+      return {
+        role: value.role === "assistant" ? "assistant" : "user",
+        content: String(value.content || "").trim(),
+      } as ConversationMessage;
+    })
+    .filter((entry) => entry.content.length > 0)
+    .slice(-20);
+
+  return { sessionId, history };
+}
+
+async function persistChatExchange(params: {
+  userId: string;
+  sessionId: string | null;
+  question: string;
+  answer: string;
+}) {
+  if (!params.sessionId) return;
+  const admin = supabaseAdmin();
+  try {
+    const { error } = await admin.from("chat_messages").insert([
+      {
+        session_id: params.sessionId,
+        user_id: params.userId,
+        role: "user",
+        content: params.question,
+      },
+      {
+        session_id: params.sessionId,
+        user_id: params.userId,
+        role: "assistant",
+        content: params.answer,
+      },
+    ]);
+
+    if (error) {
+      console.error("[api/ask] chat_messages insert failed", error.message);
+    }
+  } catch (e: any) {
+    console.error("[api/ask] chat_messages insert exception", e?.message || e);
+  }
+}
+
 function extractSignals(question: string) {
   const q = question.toUpperCase();
   const incoterm = q.match(/\b(EXW|FCA|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)\b/)?.[1] ?? null;
@@ -199,8 +316,12 @@ function normalizeHistory(context: Record<string, any> | null | undefined): Conv
     .slice(-12);
 }
 
-function summarizeContext(question: string, context: Record<string, any> | null | undefined, signals: ReturnType<typeof extractSignals>) {
-  const history = normalizeHistory(context);
+function summarizeContext(
+  question: string,
+  context: Record<string, any> | null | undefined,
+  signals: ReturnType<typeof extractSignals>,
+  history: ConversationMessage[],
+) {
   const corpus = [
     ...history.filter((m) => m.role === "user").map((m) => m.content),
     question,
@@ -430,8 +551,19 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       return json(res, 400, { ok: false, error: "question_required" });
     }
 
+    const admin = supabaseAdmin();
+    const requestedSessionId = normalizeSessionId(body?.context?.session_id);
+    const session = await resolveChatSession({
+      userId: auth.user.id,
+      requestedSessionId,
+      fallbackTitle: question,
+    });
+
+    const contextHistory = normalizeHistory(body?.context ?? null);
+    const mergedHistory = mergeConversationHistory(session.history, contextHistory);
+
     const initialSignals = extractSignals(question);
-    const contextual = summarizeContext(question, body?.context ?? null, initialSignals);
+    const contextual = summarizeContext(question, body?.context ?? null, initialSignals, mergedHistory);
     const signals = {
       ...initialSignals,
       ...contextual.mergedSignals,
@@ -445,8 +577,6 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     const followUps = buildFollowUpQuestions(question, signals);
     const supabaseFacts = await fetchSupabaseFacts(question, signals);
     const specializedLinks = specializedSourcesFor(`${question}\n${contextual.contextSummary}`);
-
-    const admin = supabaseAdmin();
 
     if (!OPENAI_API_KEY && !GEMINI_API_KEY) {
       const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
@@ -468,18 +598,25 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
         satisfaction_prompt: "Cette réponse vous aide-t-elle ? Si non, précisez ce qui manque et je reformule.",
       };
 
+      await persistChatExchange({
+        userId: auth.user.id,
+        sessionId: session.sessionId,
+        question,
+        answer: result.answer,
+      });
+
       try {
         await admin.from("tool_runs").insert({
           user_id: auth.user.id,
           tool_name: "ask",
-          input_json: { question, context: body?.context ?? null, signals, context_summary: contextual.contextSummary, history: contextual.history, feedback_satisfied: contextual.satisfaction, mode: "degraded_no_openai" },
+          input_json: { question, context: body?.context ?? null, signals, session_id: session.sessionId, context_summary: contextual.contextSummary, history: contextual.history, feedback_satisfied: contextual.satisfaction, mode: "degraded_no_openai" },
           output_json: result,
         });
       } catch (e) {
         console.error("[api/ask] tool_runs insert failed", e);
       }
 
-      return json(res, 200, { ok: true, mode: "degraded", ...result });
+      return json(res, 200, { ok: true, mode: "degraded", session_id: session.sessionId, ...result });
     }
 
     let safeChunks: any[] = [];
@@ -600,19 +737,26 @@ ${followUps.map((q) => `- ${q}`).join("\n")}`
       satisfaction_prompt: "Cette réponse vous semble-t-elle satisfaisante ? Si non, dites ce qui manque et je corrige.",
     };
 
-    try {
-      await admin.from("tool_runs").insert({
-        user_id: auth.user.id,
-        tool_name: "ask",
-        input_json: { question, context: body?.context ?? null, signals, context_summary: contextual.contextSummary, history: contextual.history, feedback_satisfied: contextual.satisfaction },
-        output_json: result,
+      try {
+        await admin.from("tool_runs").insert({
+          user_id: auth.user.id,
+          tool_name: "ask",
+          input_json: { question, context: body?.context ?? null, signals, session_id: session.sessionId, context_summary: contextual.contextSummary, history: contextual.history, feedback_satisfied: contextual.satisfaction },
+          output_json: result,
+        });
+      } catch (e) {
+        console.error("[api/ask] tool_runs insert failed", e);
+      }
+
+      await persistChatExchange({
+        userId: auth.user.id,
+        sessionId: session.sessionId,
+        question,
+        answer: result.answer,
       });
-    } catch (e) {
-      console.error("[api/ask] tool_runs insert failed", e);
-    }
 
     const mode = OPENAI_API_KEY ? "openai" : "gemini";
-    return json(res, 200, { ok: true, mode, ...result });
+    return json(res, 200, { ok: true, mode, session_id: session.sessionId, ...result });
   } catch (err: any) {
     const raw = String(err?.message || "ask_failed");
     console.error("[api/ask] error", raw);
