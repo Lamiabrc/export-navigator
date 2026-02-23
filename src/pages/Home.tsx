@@ -17,7 +17,7 @@ export default function Home() {
   return (
     <PublicLayout>
       <main className="w-full overflow-x-clip pb-8 pt-0">
-        <section className="min-h-[calc(100svh-57px)] w-full">
+        <section className="w-full" style={{ height: "calc(100vh - 57px)", minHeight: "640px" }}>
           <ArrivalGuide className="h-full rounded-none border-x-0 border-t-0" />
         </section>
 
