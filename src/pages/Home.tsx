@@ -16,9 +16,11 @@ export default function Home() {
 
   return (
     <PublicLayout>
-      <main className="w-full overflow-x-clip pb-8 pt-4 sm:pt-6 lg:pt-8">
+      <main className="w-full overflow-x-clip pb-8 pt-2 sm:pt-3 lg:pt-4">
         <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-4 sm:gap-8 sm:px-6 lg:gap-10 lg:px-10">
-          <ArrivalGuide />
+          <section className="min-h-[calc(100svh-5.5rem)]">
+            <ArrivalGuide className="h-full" />
+          </section>
           <WizardEntry />
           <VideoBanner isEn={isEn} />
           <HomeCtas isEn={isEn} />
