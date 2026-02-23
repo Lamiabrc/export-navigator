@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { MessageCircle, PhoneCall, Radar, Sparkles } from "lucide-react";
+import { Info, MessageCircle, Package, PhoneCall, Sparkles } from "lucide-react";
 import heroExportVideo from "@/assets/hero-export.mp4";
 import { useI18n } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
@@ -20,46 +20,46 @@ export function ArrivalGuide({ className }: { className?: string }) {
   const actions: ActionItem[] = isFr
     ? [
         {
-          key: "chat",
-          title: "Poser ma premiere question",
-          subtitle: "Chatbot intelligent",
-          to: "/copilote",
-          icon: MessageCircle,
+          key: "products",
+          title: "Voir nos produits",
+          subtitle: "Services et solutions export",
+          to: "/services",
+          icon: Package,
         },
         {
-          key: "tower",
-          title: "Suivre mes operations",
-          subtitle: "Tour de controle",
-          to: "/control-tower",
-          icon: Radar,
+          key: "about",
+          title: "A propos de MPL",
+          subtitle: "Vision, mission et methodologie",
+          to: "/about",
+          icon: Info,
         },
         {
-          key: "human",
-          title: "Parler a un expert",
-          subtitle: "Conseil humain personnalise",
+          key: "contact",
+          title: "Contact",
+          subtitle: "Parler a un expert export",
           to: "/contact",
           icon: PhoneCall,
         },
       ]
     : [
         {
-          key: "chat",
-          title: "Ask my first question",
-          subtitle: "Intelligent chatbot",
-          to: "/copilote",
-          icon: MessageCircle,
+          key: "products",
+          title: "Discover our products",
+          subtitle: "Export services and solutions",
+          to: "/services",
+          icon: Package,
         },
         {
-          key: "tower",
-          title: "Track my operations",
-          subtitle: "Control Tower",
-          to: "/control-tower",
-          icon: Radar,
+          key: "about",
+          title: "About MPL",
+          subtitle: "Vision, mission and method",
+          to: "/about",
+          icon: Info,
         },
         {
-          key: "human",
-          title: "Talk to an expert",
-          subtitle: "Personalized human advice",
+          key: "contact",
+          title: "Contact",
+          subtitle: "Talk to an export expert",
           to: "/contact",
           icon: PhoneCall,
         },
@@ -84,12 +84,12 @@ export function ArrivalGuide({ className }: { className?: string }) {
       <style>
         {`
           @keyframes heroBackdropDrift {
-            0%, 100% { transform: scale(1.005) translate3d(0, 0, 0); }
-            50% { transform: scale(1.02) translate3d(0, -0.6%, 0); }
+            0%, 100% { transform: scale(1) translate3d(0, 0, 0); }
+            50% { transform: scale(1.006) translate3d(0, -0.3%, 0); }
           }
           @keyframes heroOrbZoom {
-            0%, 100% { transform: scale(1.02); }
-            50% { transform: scale(1.1); }
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.04); }
           }
           @keyframes heroOrbFloat {
             0%, 100% { transform: translateY(0px); }
@@ -117,22 +117,22 @@ export function ArrivalGuide({ className }: { className?: string }) {
       </style>
 
       <video
-        className="absolute inset-0 h-full w-full object-cover opacity-90"
-        style={{ animation: "heroBackdropDrift 22s ease-in-out infinite" }}
+        className="absolute inset-0 h-full w-full object-cover opacity-100 [transform:translateZ(0)]"
+        style={{ animation: "heroBackdropDrift 34s linear infinite", filter: "contrast(1.08) saturate(1.08)" }}
         autoPlay
         muted
         loop
         playsInline
-        preload="metadata"
+        preload="auto"
         poster="/videos/hero-export.jpg"
       >
         <source src={heroExportVideo} type="video/mp4" />
-        <source src="/videos/hero-export.webm" type="video/webm" />
       </video>
 
-      <div className="absolute inset-0 bg-gradient-to-b from-[#020814]/26 via-[#030812]/38 to-[#02060f]/56" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_41%,rgba(24,78,148,0.24)_0%,rgba(3,7,15,0)_58%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_78%,rgba(168,52,78,0.1)_0%,rgba(0,0,0,0)_48%)]" />
+      <div className="absolute inset-0 bg-[url('/videos/hero-export.jpg')] bg-cover bg-center opacity-20 mix-blend-soft-light" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#020814]/16 via-[#030812]/26 to-[#02060f]/42" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_41%,rgba(24,78,148,0.16)_0%,rgba(3,7,15,0)_60%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_78%,rgba(168,52,78,0.08)_0%,rgba(0,0,0,0)_48%)]" />
 
       <div className="relative z-10 flex h-full flex-col justify-between px-4 py-4 sm:px-8 sm:py-6">
         <div className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-300/35 bg-[#050b16]/72 px-3 py-1 text-xs font-semibold tracking-wide text-slate-100 backdrop-blur">
@@ -183,7 +183,6 @@ export function ArrivalGuide({ className }: { className?: string }) {
                 poster="/videos/hero-export.jpg"
               >
                 <source src={heroExportVideo} type="video/mp4" />
-                <source src="/videos/hero-export.webm" type="video/webm" />
               </video>
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_20%,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0)_42%)]" />
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_72%,rgba(0,0,0,0.22)_0%,rgba(0,0,0,0.06)_35%,rgba(0,0,0,0.36)_100%)]" />
