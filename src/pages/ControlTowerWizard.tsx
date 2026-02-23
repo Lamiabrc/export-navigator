@@ -13,7 +13,7 @@ import { TradePanel } from "@/components/TradePanel";
 import { SanctionsScreening } from "@/components/SanctionsScreening";
 
 import { useI18n } from "@/contexts/LanguageContext";
-import { exportAnswer, tradeBilateral, countryFunnel, hsFunnel } from "@/services/supabaseAI";
+import { countryFunnel, exportAnswer, hsFunnel, tradeBilateral } from "@/services/supabaseAI";
 import { subscribeControlTowerRefresh } from "@/services/controlTowerRealtime";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -42,6 +42,7 @@ type LiveStatus = "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "CHANNEL_ERROR" | "FAL
 function readWizardState(state: unknown): WizardState {
   if (!state || typeof state !== "object") return {};
   const source = state as Record<string, unknown>;
+
   return {
     mode: source.mode === "import" ? "import" : source.mode === "export" ? "export" : undefined,
     questionText: typeof source.questionText === "string" ? source.questionText : undefined,
@@ -77,9 +78,7 @@ export default function ControlTowerWizard() {
     hsRef.current = hs;
   }, [country, hs]);
 
-  // ⚠️ important:
-  // - year courant est souvent vide, on prend N-1 par défaut
-  // - flow doit être "export" (pas "exports")
+  // Current year can be sparse in trade datasets, so default to N-1.
   const defaultTradeYear = React.useMemo(() => new Date().getFullYear() - 1, []);
 
   const runAnalysis = React.useCallback(async () => {
@@ -105,6 +104,7 @@ export default function ControlTowerWizard() {
 
   const testDbHealth = React.useCallback(async () => {
     const errors: string[] = [];
+
     try {
       const [countriesRes, hsRes, sourcesRes, sampleRes] = await Promise.all([
         supabase.from("countries").select("code_iso2", { head: true, count: "exact" }),
@@ -125,31 +125,29 @@ export default function ControlTowerWizard() {
         errors,
         updated_at: new Date().toISOString(),
       });
-    } catch (e) {
+    } catch (exception) {
       setDbHealth({
         countries: null,
         hs_codes: null,
         reference_sources: null,
         rpc_export_answer_sample: null,
-        errors: [(e as Error).message],
+        errors: [(exception as Error).message],
         updated_at: new Date().toISOString(),
       });
     }
 
-    // BONUS (soft check funnels)
+    // Soft-check funnels without failing main health snapshot.
     try {
       await countryFunnel("korea", "en", false);
       await hsFunnel("strawberries", "en");
     } catch {
-      // ignore (DB Health reste focus sur counts + export_answer)
+      // ignore
     }
   }, []);
 
   React.useEffect(() => {
-    const privateMode =
-      String(import.meta.env.VITE_CT_REALTIME_PRIVATE || "false").toLowerCase() === "true";
-    const ingestionLive =
-      String(import.meta.env.VITE_CT_INGESTION_LIVE || "false").toLowerCase() === "true";
+    const privateMode = String(import.meta.env.VITE_CT_REALTIME_PRIVATE || "false").toLowerCase() === "true";
+    const ingestionLive = String(import.meta.env.VITE_CT_INGESTION_LIVE || "false").toLowerCase() === "true";
 
     let cleanupRefresh: (() => Promise<void>) | null = null;
     let cleanupIngestion: (() => Promise<void>) | null = null;
@@ -214,6 +212,7 @@ export default function ControlTowerWizard() {
           } catch {
             // ignore
           }
+
           try {
             await supabase.removeChannel(ingestionChannel);
           } catch {
@@ -232,14 +231,13 @@ export default function ControlTowerWizard() {
     };
   }, [lang, testDbHealth, defaultTradeYear]);
 
-<<<<<<< ours
-=======
   const handleImportComtrade = React.useMemo(() => {
     if (!country) return undefined;
 
     return async () => {
       setLoading(true);
       setError(null);
+
       try {
         const body = {
           reporter_iso2: "FR",
@@ -251,11 +249,13 @@ export default function ControlTowerWizard() {
         const cronSecret = String(import.meta.env.VITE_COMTRADE_CRON_SECRET || "").trim();
         const accessToken = (await supabase.auth.getSession()).data.session?.access_token;
         const headers: Record<string, string> = { "Content-Type": "application/json" };
+
         if (cronSecret) headers["x-cron-secret"] = cronSecret;
         if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
         const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/comtrade-ingest`;
         const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+
         if (!response.ok) {
           const json = await response.json().catch(() => ({}));
           throw new Error(String(json.error || `HTTP ${response.status}`));
@@ -271,15 +271,14 @@ export default function ControlTowerWizard() {
     };
   }, [country, defaultTradeYear]);
 
->>>>>>> theirs
   return (
     <PublicLayout>
       <main className="mx-auto w-full max-w-screen-xl space-y-6 px-4 py-6">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-3">
-              <CardTitle>{lang === "fr" ? "Tour de contrôle" : "Control Tower"}</CardTitle>
-              <Badge variant="secondary">{lang === "fr" ? "Live" : "Live"}</Badge>
+              <CardTitle>{lang === "fr" ? "Tour de controle" : "Control Tower"}</CardTitle>
+              <Badge variant="secondary">Live</Badge>
             </div>
           </CardHeader>
 
@@ -288,9 +287,7 @@ export default function ControlTowerWizard() {
               {lang === "fr" ? "Mode" : "Mode"}: <strong>{wizardState.mode ?? "export"}</strong>
             </p>
 
-            {wizardState.questionText ? (
-              <p className="text-muted-foreground">{wizardState.questionText}</p>
-            ) : null}
+            {wizardState.questionText ? <p className="text-muted-foreground">{wizardState.questionText}</p> : null}
 
             <CountryPicker value={country} onSelect={setCountry} />
             <HsPicker value={hs} onSelect={setHs} />
@@ -304,60 +301,7 @@ export default function ControlTowerWizard() {
         </Card>
 
         <ExportAnswerPanel data={answer} />
-<<<<<<< ours
-        <TradePanel data={trade} />
-        <TradePanel
-          data={trade}
-          selectedCountryIso2={country?.iso2}
-          defaultYear={defaultTradeYear}
-          onImported={async () => {
-            if (!country) return;
-            const nextTrade = await tradeBilateral("FR", country.iso2, defaultTradeYear, "export");
-            setTrade(nextTrade);
-          }}
-        <TradePanel
-          data={trade}
-          isImporting={loading}
-          onImportComtrade={
-            country
-              ? async () => {
-                  setLoading(true);
-                  setError(null);
-                  try {
-                    const body = {
-                      reporter_iso2: "FR",
-                      partner_iso2: country.iso2,
-                      year: defaultTradeYear,
-                      flow: "export",
-                    };
-
-                    const cronSecret = String(import.meta.env.VITE_COMTRADE_CRON_SECRET || "").trim();
-                    const accessToken = (await supabase.auth.getSession()).data.session?.access_token;
-                    const headers: Record<string, string> = { "Content-Type": "application/json" };
-                    if (cronSecret) headers["x-cron-secret"] = cronSecret;
-                    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-
-                    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/comtrade-ingest`;
-                    const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
-                    if (!response.ok) {
-                      const json = await response.json().catch(() => ({}));
-                      throw new Error(String(json.error || `HTTP ${response.status}`));
-                    }
-
-                    const nextTrade = await tradeBilateral("FR", country.iso2, defaultTradeYear, "export");
-                    setTrade(nextTrade);
-                  } catch (exception) {
-                    setError((exception as Error).message);
-                  } finally {
-                    setLoading(false);
-                  }
-                }
-              : undefined
-          }
-        />
-=======
         <TradePanel data={trade} isImporting={loading} onImportComtrade={handleImportComtrade} />
->>>>>>> theirs
         <SanctionsScreening
           value={partyName}
           onValueChange={setPartyName}
@@ -369,10 +313,10 @@ export default function ControlTowerWizard() {
           <CardHeader>
             <CardTitle>DB Health</CardTitle>
           </CardHeader>
+
           <CardContent className="space-y-2">
             <p className="text-xs text-muted-foreground">
-              {lang === "fr" ? "État canal Realtime" : "Realtime channel status"}:{" "}
-              <strong>{liveStatus}</strong>
+              {lang === "fr" ? "Etat canal Realtime" : "Realtime channel status"}: <strong>{liveStatus}</strong>
             </p>
 
             <Button type="button" variant="outline" onClick={testDbHealth}>
@@ -390,7 +334,7 @@ export default function ControlTowerWizard() {
                 <p className="font-medium">{lang === "fr" ? "Derniers runs" : "Latest runs"}</p>
                 {liveIngestion.map((run) => (
                   <p key={run.id}>
-                    {run.status} · {run.started_at ?? "-"}
+                    {run.status} - {run.started_at ?? "-"}
                   </p>
                 ))}
               </div>

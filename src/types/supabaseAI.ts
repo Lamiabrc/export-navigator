@@ -38,10 +38,6 @@ export type ExportAnswerResult = {
 
 export type TradePartnerLine = {
   hs6?: string;
-<<<<<<< ours
-  value?: number;
-=======
->>>>>>> theirs
   hs_code?: string;
   value?: number;
   value_usd?: number;
@@ -50,11 +46,6 @@ export type TradePartnerLine = {
 
 export type TradeBilateralResult = {
   total?: number;
-<<<<<<< ours
-  currency?: string;
-  topHs6: TradePartnerLine[];
-=======
->>>>>>> theirs
   total_value_usd?: number;
   currency?: string;
   flow?: string;
