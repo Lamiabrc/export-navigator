@@ -13,6 +13,13 @@ import type {
 
 const asArray = (input: unknown): unknown[] => (Array.isArray(input) ? input : []);
 const missingRpcCache = new Set<string>();
+const PUBLIC_SCHEMA_ERROR_HINT =
+  "Supabase API: schema 'public' not exposed. Add 'public' in Settings > API > Exposed schemas.";
+
+function isSchemaExposureError(message: string) {
+  const normalized = message.toLowerCase();
+  return normalized.includes("invalid schema") && normalized.includes("public");
+}
 
 function isMissingRpcError(message: string) {
   const normalized = message.toLowerCase();
@@ -20,7 +27,8 @@ function isMissingRpcError(message: string) {
     normalized.includes("could not find the function") ||
     normalized.includes("no route matched") ||
     normalized.includes("404") ||
-    normalized.includes("pgrst")
+    normalized.includes("pgrst") ||
+    isSchemaExposureError(normalized)
   );
 }
 
@@ -40,12 +48,19 @@ async function callRpc<T>(name: string, params: Record<string, unknown>): Promis
       if (isMissingRpcError(error.message)) {
         missingRpcCache.add(name);
       }
+      if (isSchemaExposureError(error.message)) {
+        throw new Error(PUBLIC_SCHEMA_ERROR_HINT);
+      }
       throw new Error(error.message);
     }
     return data as T;
   } catch (error) {
-    if (isMissingRpcError(asErrorMessage(error, ""))) {
+    const message = asErrorMessage(error, "");
+    if (isMissingRpcError(message)) {
       missingRpcCache.add(name);
+    }
+    if (isSchemaExposureError(message)) {
+      throw new Error(`${name}: ${PUBLIC_SCHEMA_ERROR_HINT}`);
     }
     throw new Error(`${name}: ${asErrorMessage(error, "unknown RPC error")}`);
   }
@@ -58,8 +73,12 @@ async function callRpcFallback<T>(names: string[], params: Record<string, unknow
     try {
       return await callRpc<T>(name, params);
     } catch (error) {
-      errors.push(asErrorMessage(error, "unknown error"));
-      if (!isMissingRpcError(asErrorMessage(error, ""))) {
+      const message = asErrorMessage(error, "unknown error");
+      errors.push(message);
+      if (isSchemaExposureError(message)) {
+        throw new Error(PUBLIC_SCHEMA_ERROR_HINT);
+      }
+      if (!isMissingRpcError(message)) {
         throw error;
       }
     }
