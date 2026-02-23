@@ -39,7 +39,7 @@ export function ArrivalGuide({ className }: { className?: string }) {
       ];
 
   return (
-    <Card className={cn("overflow-hidden border-blue-200/80 bg-gradient-to-br from-blue-50 via-white to-red-50", className)}>
+    <Card className={cn("overflow-hidden border-blue-300/90 bg-gradient-to-br from-blue-100 via-slate-50 to-red-100 text-black", className)}>
       <CardContent className="flex h-full flex-col justify-center space-y-5 p-5 sm:space-y-6 sm:p-6">
         <div className="flex items-start gap-3 sm:gap-4">
           <Avatar className="h-12 w-12 border border-blue-300 bg-white shadow-[0_0_0_4px_rgba(255,255,255,0.6)]">
@@ -49,15 +49,15 @@ export function ArrivalGuide({ className }: { className?: string }) {
           </Avatar>
 
           <div className="space-y-2">
-            <h2 className="text-xl font-semibold sm:text-2xl">
+            <h2 className="text-xl font-semibold text-black sm:text-2xl">
               {isFr ? "Bienvenue sur MPL Export Navigator" : "Welcome to MPL Export Navigator"}
             </h2>
-            <p className="max-w-4xl text-sm text-muted-foreground sm:text-base">
+            <p className="max-w-4xl text-sm text-black/90 sm:text-base">
               {isFr
                 ? "Si tu es arrive jusqu'ici, tu cherches des infos sur des operations de commerce international liees a la France. Utilise la carte mentale pour choisir ton prochain pas."
                 : "If you are here, you probably need support on international trade operations connected to France. Use the mind map to choose your next step."}
             </p>
-            <p className="text-sm font-medium text-foreground sm:text-base">
+            <p className="text-sm font-semibold text-black sm:text-base">
               {isFr ? "Tu veux faire quoi ?" : "What do you want to do?"}
             </p>
           </div>
@@ -141,7 +141,7 @@ export function ArrivalGuide({ className }: { className?: string }) {
                 onClick={() => navigate(node.to)}
                 className={cn(
                   "absolute flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm font-medium shadow-sm transition",
-                  "border-blue-200/90 text-slate-800 hover:border-blue-400 hover:shadow-md",
+                  "border-blue-200/90 text-black hover:border-blue-500 hover:shadow-md",
                 )}
                 style={{ left: `${node.x}%`, top: `${node.y}%`, transform: "translate(-50%, -50%)" }}
               >
@@ -153,7 +153,7 @@ export function ArrivalGuide({ className }: { className?: string }) {
             );
           })}
 
-          <div className="absolute bottom-4 left-4 rounded-full border border-blue-200 bg-white px-3 py-1 text-xs text-slate-600 shadow-sm">
+          <div className="absolute bottom-4 left-4 rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-medium text-black shadow-sm">
             <span className="inline-flex items-center gap-1">
               <Sparkles className="h-3.5 w-3.5 text-blue-600" />
               {isFr ? "Carte mentale interactive" : "Interactive mind map"}
