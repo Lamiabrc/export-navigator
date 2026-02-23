@@ -84,12 +84,12 @@ export function ArrivalGuide({ className }: { className?: string }) {
       <style>
         {`
           @keyframes heroBackdropDrift {
-            0%, 100% { transform: scale(1.02) translate3d(0, 0, 0); }
-            50% { transform: scale(1.08) translate3d(0, -1.5%, 0); }
+            0%, 100% { transform: scale(1.005) translate3d(0, 0, 0); }
+            50% { transform: scale(1.02) translate3d(0, -0.6%, 0); }
           }
           @keyframes heroOrbZoom {
-            0%, 100% { transform: scale(1.12); }
-            50% { transform: scale(1.32); }
+            0%, 100% { transform: scale(1.02); }
+            50% { transform: scale(1.1); }
           }
           @keyframes heroOrbFloat {
             0%, 100% { transform: translateY(0px); }
@@ -117,7 +117,7 @@ export function ArrivalGuide({ className }: { className?: string }) {
       </style>
 
       <video
-        className="absolute inset-0 h-full w-full object-cover opacity-76"
+        className="absolute inset-0 h-full w-full object-cover opacity-90"
         style={{ animation: "heroBackdropDrift 22s ease-in-out infinite" }}
         autoPlay
         muted
@@ -126,13 +126,13 @@ export function ArrivalGuide({ className }: { className?: string }) {
         preload="metadata"
         poster="/videos/hero-export.jpg"
       >
-        <source src="/videos/hero-export.webm" type="video/webm" />
         <source src={heroExportVideo} type="video/mp4" />
+        <source src="/videos/hero-export.webm" type="video/webm" />
       </video>
 
-      <div className="absolute inset-0 bg-gradient-to-b from-[#020814]/56 via-[#030812]/70 to-[#02060f]/86" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_41%,rgba(24,78,148,0.42)_0%,rgba(3,7,15,0)_56%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_78%,rgba(168,52,78,0.2)_0%,rgba(0,0,0,0)_48%)]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#020814]/26 via-[#030812]/38 to-[#02060f]/56" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_41%,rgba(24,78,148,0.24)_0%,rgba(3,7,15,0)_58%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_78%,rgba(168,52,78,0.1)_0%,rgba(0,0,0,0)_48%)]" />
 
       <div className="relative z-10 flex h-full flex-col justify-between px-4 py-4 sm:px-8 sm:py-6">
         <div className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-300/35 bg-[#050b16]/72 px-3 py-1 text-xs font-semibold tracking-wide text-slate-100 backdrop-blur">
@@ -182,11 +182,11 @@ export function ArrivalGuide({ className }: { className?: string }) {
                 preload="metadata"
                 poster="/videos/hero-export.jpg"
               >
-                <source src="/videos/hero-export.webm" type="video/webm" />
                 <source src={heroExportVideo} type="video/mp4" />
+                <source src="/videos/hero-export.webm" type="video/webm" />
               </video>
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_20%,rgba(255,255,255,0.24)_0%,rgba(255,255,255,0)_42%)]" />
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_72%,rgba(0,0,0,0.42)_0%,rgba(0,0,0,0.1)_35%,rgba(0,0,0,0.58)_100%)]" />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_20%,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0)_42%)]" />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_72%,rgba(0,0,0,0.22)_0%,rgba(0,0,0,0.06)_35%,rgba(0,0,0,0.36)_100%)]" />
             </div>
 
             <div className="absolute -right-7 -top-5 rounded-full border border-slate-300/35 bg-[#040b16]/88 px-4 py-1 text-lg font-semibold text-slate-100 shadow-2xl backdrop-blur">

@@ -136,8 +136,8 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-white text-foreground">
-      <CinematicBackdrop variant="public" className="z-0 opacity-20" />
-      <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-white/85 via-white/90 to-white" />
+      {!isHome ? <CinematicBackdrop variant="public" className="z-0 opacity-20" /> : null}
+      {!isHome ? <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-white/85 via-white/90 to-white" /> : null}
 
       <header className="relative z-20 border-b border-blue-100 bg-white/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between gap-3 px-4 py-2 md:px-6">
