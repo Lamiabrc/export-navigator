@@ -232,6 +232,46 @@ export default function ControlTowerWizard() {
     };
   }, [lang, testDbHealth, defaultTradeYear]);
 
+<<<<<<< ours
+=======
+  const handleImportComtrade = React.useMemo(() => {
+    if (!country) return undefined;
+
+    return async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const body = {
+          reporter_iso2: "FR",
+          partner_iso2: country.iso2,
+          year: defaultTradeYear,
+          flow: "export",
+        };
+
+        const cronSecret = String(import.meta.env.VITE_COMTRADE_CRON_SECRET || "").trim();
+        const accessToken = (await supabase.auth.getSession()).data.session?.access_token;
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (cronSecret) headers["x-cron-secret"] = cronSecret;
+        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/comtrade-ingest`;
+        const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+        if (!response.ok) {
+          const json = await response.json().catch(() => ({}));
+          throw new Error(String(json.error || `HTTP ${response.status}`));
+        }
+
+        const nextTrade = await tradeBilateral("FR", country.iso2, defaultTradeYear, "export");
+        setTrade(nextTrade);
+      } catch (exception) {
+        setError((exception as Error).message);
+      } finally {
+        setLoading(false);
+      }
+    };
+  }, [country, defaultTradeYear]);
+
+>>>>>>> theirs
   return (
     <PublicLayout>
       <main className="mx-auto w-full max-w-screen-xl space-y-6 px-4 py-6">
@@ -264,6 +304,7 @@ export default function ControlTowerWizard() {
         </Card>
 
         <ExportAnswerPanel data={answer} />
+<<<<<<< ours
         <TradePanel data={trade} />
         <TradePanel
           data={trade}
@@ -314,6 +355,9 @@ export default function ControlTowerWizard() {
               : undefined
           }
         />
+=======
+        <TradePanel data={trade} isImporting={loading} onImportComtrade={handleImportComtrade} />
+>>>>>>> theirs
         <SanctionsScreening
           value={partyName}
           onValueChange={setPartyName}

@@ -1,3 +1,4 @@
+<<<<<<< ours
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { TradeBilateralResult } from "@/types/supabaseAI";
 import { useI18n } from "@/contexts/LanguageContext";
@@ -61,6 +62,8 @@ export function TradePanel({ data, selectedCountryIso2, defaultYear, onImported 
   };
 
   if (!data && !selectedCountryIso2) return null;
+=======
+>>>>>>> theirs
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -127,6 +130,7 @@ export function TradePanel({ data, onImportComtrade, isImporting }: Props) {
   return (
     <Card>
       <CardHeader>
+<<<<<<< ours
         <CardTitle>{lang === "fr" ? "Relations commerciales" : "Trade relations"}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
@@ -164,6 +168,8 @@ export function TradePanel({ data, onImportComtrade, isImporting }: Props) {
             ))}
           </ul>
         )}
+=======
+>>>>>>> theirs
         <CardTitle>{lang === "fr" ? "Relations commerciales" : "Trade snapshot"}</CardTitle>
       </CardHeader>
 
