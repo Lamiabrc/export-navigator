@@ -114,7 +114,7 @@ export function ArrivalGuide({ className }: { className?: string }) {
   }, []);
 
   return (
-    <section className={cn("relative isolate h-full overflow-hidden border-0 text-slate-100", className)}>
+    <section className={cn("relative isolate h-full overflow-hidden border-0 text-white", className)}>
       <style>
         {`
           @keyframes heroBackdropDrift {
@@ -170,24 +170,24 @@ export function ArrivalGuide({ className }: { className?: string }) {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_78%,rgba(168,52,78,0.08)_0%,rgba(0,0,0,0)_48%)]" />
 
       <div className="relative z-10 flex h-full flex-col justify-between px-4 py-4 sm:px-8 sm:py-6">
-        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-300/35 bg-[#050b16]/72 px-3 py-1 text-xs font-semibold tracking-wide text-slate-100 backdrop-blur">
+        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-300/35 bg-[#050b16]/72 px-3 py-1 text-xs font-semibold tracking-wide text-white backdrop-blur">
           <Sparkles className="h-3.5 w-3.5 text-sky-200" />
           MPL EXPORT NAVIGATOR
         </div>
 
         <div className="relative mx-auto flex w-full max-w-6xl flex-1 items-center justify-center">
-          <div className="absolute top-[10%] rounded-2xl border border-slate-300/30 bg-[#040b17]/76 px-4 py-2 text-sm font-semibold text-slate-100 shadow-xl backdrop-blur md:px-5">
+          <div className="absolute top-[10%] rounded-2xl border border-slate-300/30 bg-[#040b17]/76 px-4 py-2 text-sm font-semibold text-white shadow-xl backdrop-blur md:px-5">
             {bubbleText.top}
           </div>
 
           <div
-            className="absolute left-[13%] top-[30%] hidden rounded-2xl border border-slate-300/30 bg-[#040b17]/74 px-4 py-2 text-sm font-medium text-slate-100 shadow-xl backdrop-blur md:block"
+            className="absolute left-[13%] top-[30%] hidden rounded-2xl border border-slate-300/30 bg-[#040b17]/74 px-4 py-2 text-sm font-medium text-white shadow-xl backdrop-blur md:block"
             style={{ animation: "heroTagPulse 5s ease-in-out infinite" }}
           >
             {bubbleText.left}
           </div>
           <div
-            className="absolute right-[13%] top-[28%] hidden rounded-2xl border border-slate-300/30 bg-[#040b17]/74 px-4 py-2 text-sm font-medium text-slate-100 shadow-xl backdrop-blur md:block"
+            className="absolute right-[13%] top-[28%] hidden rounded-2xl border border-slate-300/30 bg-[#040b17]/74 px-4 py-2 text-sm font-medium text-white shadow-xl backdrop-blur md:block"
             style={{ animation: "heroTagPulse 5s ease-in-out infinite 1.3s" }}
           >
             {bubbleText.right}
@@ -224,7 +224,7 @@ export function ArrivalGuide({ className }: { className?: string }) {
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_72%,rgba(0,0,0,0.22)_0%,rgba(0,0,0,0.06)_35%,rgba(0,0,0,0.36)_100%)]" />
             </div>
 
-            <div className="absolute -right-7 -top-5 rounded-full border border-slate-300/35 bg-[#040b16]/88 px-4 py-1 text-lg font-semibold text-slate-100 shadow-2xl backdrop-blur">
+            <div className="absolute -right-7 -top-5 rounded-full border border-slate-300/35 bg-[#040b16]/88 px-4 py-1 text-lg font-semibold text-white shadow-2xl backdrop-blur">
               {bubbleText.hi}
             </div>
           </div>
@@ -237,15 +237,15 @@ export function ArrivalGuide({ className }: { className?: string }) {
           />
 
           <div className="relative">
-            <h2 className="text-lg font-semibold text-slate-100 sm:text-2xl">
+            <h2 className="text-lg font-semibold text-white sm:text-2xl">
               {isFr ? "Bienvenue sur MPL Export Navigator" : "Welcome to MPL Export Navigator"}
             </h2>
-            <p className="mt-2 text-sm text-slate-200 sm:text-base">
+            <p className="mt-2 text-sm text-white sm:text-base">
               {isFr
                 ? "Tu veux des informations sur des operations de commerce international liees a la France. Choisis ton point de depart."
                 : "You need guidance on international trade operations connected to France. Choose your starting point."}
             </p>
-            <p className="mt-2 text-sm font-semibold text-slate-100 sm:text-base">{isFr ? "Tu veux faire quoi ?" : "What do you want to do?"}</p>
+            <p className="mt-2 text-sm font-semibold text-white sm:text-base">{isFr ? "Tu veux faire quoi ?" : "What do you want to do?"}</p>
 
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
               {actions.map((item) => {
@@ -261,8 +261,8 @@ export function ArrivalGuide({ className }: { className?: string }) {
                       <Icon className="h-4 w-4" />
                     </span>
                     <span className="flex flex-col">
-                      <span className="text-sm font-semibold text-slate-100">{item.title}</span>
-                      <span className="text-xs font-normal text-slate-300 group-hover:text-slate-100">{item.subtitle}</span>
+                      <span className="text-sm font-semibold text-white">{item.title}</span>
+                      <span className="text-xs font-normal text-white group-hover:text-white">{item.subtitle}</span>
                     </span>
                   </button>
                 );
