@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Info, MessageCircle, Package, PhoneCall, Sparkles } from "lucide-react";
 import heroExportVideo from "@/assets/hero-export.mp4";
@@ -16,6 +17,9 @@ export function ArrivalGuide({ className }: { className?: string }) {
   const navigate = useNavigate();
   const { lang } = useI18n();
   const isFr = lang !== "en";
+  const bgVideoRef = useRef<HTMLVideoElement | null>(null);
+  const orbVideoRef = useRef<HTMLVideoElement | null>(null);
+  const videoStartOffset = 2.4;
 
   const actions: ActionItem[] = isFr
     ? [
@@ -79,17 +83,47 @@ export function ArrivalGuide({ className }: { className?: string }) {
         hi: "Hi!",
       };
 
+  useEffect(() => {
+    const seekLater = (video: HTMLVideoElement | null) => {
+      if (!video) return () => {};
+      const applyOffset = () => {
+        try {
+          video.currentTime = videoStartOffset;
+        } catch {
+          // Some browsers can block seek before metadata; event listener handles retry.
+        }
+      };
+
+      if (video.readyState >= 1) {
+        applyOffset();
+      } else {
+        video.addEventListener("loadedmetadata", applyOffset, { once: true });
+      }
+
+      return () => {
+        video.removeEventListener("loadedmetadata", applyOffset);
+      };
+    };
+
+    const cleanupBg = seekLater(bgVideoRef.current);
+    const cleanupOrb = seekLater(orbVideoRef.current);
+    return () => {
+      cleanupBg();
+      cleanupOrb();
+    };
+  }, []);
+
   return (
     <section className={cn("relative isolate h-full overflow-hidden border-0 text-slate-100", className)}>
       <style>
         {`
           @keyframes heroBackdropDrift {
-            0%, 100% { transform: scale(1) translate3d(0, 0, 0); }
-            50% { transform: scale(1.006) translate3d(0, -0.3%, 0); }
+            0%, 45% { transform: scale(1) translate3d(0, 0, 0); }
+            100% { transform: scale(1.006) translate3d(0, -0.3%, 0); }
           }
           @keyframes heroOrbZoom {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.04); }
+            0%, 55% { transform: scale(1); }
+            100% { transform: scale(1.04); }
           }
           @keyframes heroOrbFloat {
             0%, 100% { transform: translateY(0px); }
@@ -117,6 +151,7 @@ export function ArrivalGuide({ className }: { className?: string }) {
       </style>
 
       <video
+        ref={bgVideoRef}
         className="absolute inset-0 h-full w-full object-cover opacity-100 [transform:translateZ(0)]"
         style={{ animation: "heroBackdropDrift 34s linear infinite", filter: "contrast(1.08) saturate(1.08)" }}
         autoPlay
@@ -173,6 +208,7 @@ export function ArrivalGuide({ className }: { className?: string }) {
 
             <div className="absolute inset-[11px] overflow-hidden rounded-full border border-slate-300/30 bg-[#020916]">
               <video
+                ref={orbVideoRef}
                 className="h-full w-full object-cover"
                 style={{ animation: "heroOrbZoom 10.8s ease-in-out infinite" }}
                 autoPlay
