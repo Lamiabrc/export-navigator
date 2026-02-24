@@ -39,18 +39,13 @@ function getBearerToken(req: VercelRequest) {
   return m?.[1]?.trim() || null;
 }
 
-async function requireUser(req: VercelRequest, res: VercelResponse) {
+async function resolveOptionalUser(req: VercelRequest) {
   const token = getBearerToken(req);
-  if (!token) {
-    json(res, 401, { ok: false, error: "missing_auth_bearer" });
-    return null;
-  }
+  if (!token) return null;
+
   const admin = supabaseAdmin();
   const { data, error } = await admin.auth.getUser(token);
-  if (error || !data?.user) {
-    json(res, 401, { ok: false, error: "invalid_auth", detail: error?.message || null });
-    return null;
-  }
+  if (error || !data?.user) return null;
   return { user: data.user, token };
 }
 
@@ -545,8 +540,7 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
   }
 
   try {
-    const auth = await requireUser(req, res);
-    if (!auth) return;
+    const auth = await resolveOptionalUser(req);
 
     const body = await readJson<AskPayload>(req);
     const question = String(body?.question || "").trim();
@@ -556,11 +550,13 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
 
     const admin = supabaseAdmin();
     const requestedSessionId = normalizeSessionId(body?.context?.session_id);
-    const session = await resolveChatSession({
-      userId: auth.user.id,
-      requestedSessionId,
-      fallbackTitle: question,
-    });
+    const session = auth
+      ? await resolveChatSession({
+          userId: auth.user.id,
+          requestedSessionId,
+          fallbackTitle: question,
+        })
+      : { sessionId: null as string | null, history: [] as ConversationMessage[] };
 
     const contextHistory = normalizeHistory(body?.context ?? null);
     const mergedHistory = mergeConversationHistory(session.history, contextHistory);
@@ -601,22 +597,24 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
         satisfaction_prompt: "Cette réponse vous aide-t-elle ? Si non, précisez ce qui manque et je reformule.",
       };
 
-      await persistChatExchange({
-        userId: auth.user.id,
-        sessionId: session.sessionId,
-        question,
-        answer: result.answer,
-      });
-
-      try {
-        await admin.from("tool_runs").insert({
-          user_id: auth.user.id,
-          tool_name: "ask",
-          input_json: { question, context: body?.context ?? null, signals, session_id: session.sessionId, context_summary: contextual.contextSummary, history: contextual.history, feedback_satisfied: contextual.satisfaction, mode: "degraded_no_openai" },
-          output_json: result,
+      if (auth) {
+        await persistChatExchange({
+          userId: auth.user.id,
+          sessionId: session.sessionId,
+          question,
+          answer: result.answer,
         });
-      } catch (e) {
-        console.error("[api/ask] tool_runs insert failed", e);
+
+        try {
+          await admin.from("tool_runs").insert({
+            user_id: auth.user.id,
+            tool_name: "ask",
+            input_json: { question, context: body?.context ?? null, signals, session_id: session.sessionId, context_summary: contextual.contextSummary, history: contextual.history, feedback_satisfied: contextual.satisfaction, mode: "degraded_no_openai" },
+            output_json: result,
+          });
+        } catch (e) {
+          console.error("[api/ask] tool_runs insert failed", e);
+        }
       }
 
       return json(res, 200, { ok: true, mode: "degraded", session_id: session.sessionId, ...result });
@@ -627,17 +625,19 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       const embedding = await openaiEmbed(question);
       if (!embedding) throw new Error("embedding_missing");
 
-      await storeConversationEmbedding({
-        userId: auth.user.id,
-        message: question,
-        embedding,
-        role: "user",
-        sessionId: typeof body?.context?.session_id === "string" ? body.context.session_id : null,
-        metadata: {
-          context_summary: contextual.contextSummary,
-          signals,
-        },
-      });
+      if (auth) {
+        await storeConversationEmbedding({
+          userId: auth.user.id,
+          message: question,
+          embedding,
+          role: "user",
+          sessionId: typeof body?.context?.session_id === "string" ? body.context.session_id : null,
+          metadata: {
+            context_summary: contextual.contextSummary,
+            signals,
+          },
+        });
+      }
 
       const { data: chunks, error: matchError } = await admin.rpc("match_kb_chunks", {
         query_embedding: embedding,
@@ -740,23 +740,25 @@ ${followUps.map((q) => `- ${q}`).join("\n")}`
       satisfaction_prompt: "Cette réponse vous semble-t-elle satisfaisante ? Si non, dites ce qui manque et je corrige.",
     };
 
-      try {
-        await admin.from("tool_runs").insert({
-          user_id: auth.user.id,
-          tool_name: "ask",
-          input_json: { question, context: body?.context ?? null, signals, session_id: session.sessionId, context_summary: contextual.contextSummary, history: contextual.history, feedback_satisfied: contextual.satisfaction },
-          output_json: result,
-        });
-      } catch (e) {
-        console.error("[api/ask] tool_runs insert failed", e);
-      }
+      if (auth) {
+        try {
+          await admin.from("tool_runs").insert({
+            user_id: auth.user.id,
+            tool_name: "ask",
+            input_json: { question, context: body?.context ?? null, signals, session_id: session.sessionId, context_summary: contextual.contextSummary, history: contextual.history, feedback_satisfied: contextual.satisfaction },
+            output_json: result,
+          });
+        } catch (e) {
+          console.error("[api/ask] tool_runs insert failed", e);
+        }
 
-      await persistChatExchange({
-        userId: auth.user.id,
-        sessionId: session.sessionId,
-        question,
-        answer: result.answer,
-      });
+        await persistChatExchange({
+          userId: auth.user.id,
+          sessionId: session.sessionId,
+          question,
+          answer: result.answer,
+        });
+      }
 
     const mode = OPENAI_API_KEY ? "openai" : "gemini";
     return json(res, 200, { ok: true, mode, session_id: session.sessionId, ...result });

@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ingestChatExchange } from "@/lib/chatIngest";
-import { getSupabaseAiFallback } from "@/lib/supabaseAiFallback";
 import { supabase } from "@/integrations/supabase/client";
 
 type ChatMessage = {
@@ -18,8 +17,15 @@ type ChatMessage = {
 };
 
 type ChatResponse = {
+  ok?: boolean;
+  mode?: string;
   session_id?: string;
-  reply?: string;
+  answer?: string;
+  summary?: string;
+  detail?: string;
+  error?: string;
+  source_links?: Array<{ title: string; url: string; origin?: string }>;
+  follow_up_questions?: string[];
   remaining?: number;
 };
 
@@ -100,16 +106,45 @@ export default function Copilote() {
     setError(null);
 
     try {
-      const response = await supabase.functions.invoke<ChatResponse>("chat-free", {
-        body: { session_id: sessionId, message: question },
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const resp = await fetch("/api/ask", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          question,
+          context: {
+            session_id: sessionId || null,
+            destination: "UE",
+            incoterm: "DAP",
+            transport_mode: "Route",
+            chat_history: messages
+              .slice(-8)
+              .map((m) => ({ role: m.role, content: m.content })),
+          },
+        }),
       });
+      const data = (await resp.json().catch(() => ({}))) as ChatResponse;
+      if (!resp.ok || data?.ok === false || data?.error) {
+        throw new Error(data?.detail || data?.error || `ask_failed_${resp.status}`);
+      }
 
-      if (response.error) throw response.error;
-
-      const data = response.data ?? null;
-      const answerRaw = String(data?.reply || "").trim();
+      const answerRaw = String(data?.answer || data?.summary || "").trim();
       const uncertain = isUncertainAnswer(answerRaw);
-      const links = uncertain ? buildResearchLinks(question) : [];
+      const links = [
+        ...(Array.isArray(data?.source_links)
+          ? data.source_links
+              .filter((x): x is { title: string; url: string } => Boolean(x?.title && x?.url))
+              .map((x) => ({ title: x.title, url: x.url }))
+          : []),
+        ...(uncertain ? buildResearchLinks(question) : []),
+      ].slice(0, 4);
       const answer =
         answerRaw ||
         "Je n'ai pas de reponse certaine sur ce point. J'ai ajoute des liens internet fiables pour continuer rapidement.";
@@ -130,7 +165,7 @@ export default function Copilote() {
         source: "CopilotePage",
         question,
         answer,
-        mode: uncertain ? "chat_free_with_links" : "chat_free",
+        mode: data?.mode || (uncertain ? "api_ask_with_links" : "api_ask"),
         context: {
           session_id: data?.session_id || sessionId || null,
           remaining: typeof data?.remaining === "number" ? data.remaining : null,
@@ -138,29 +173,6 @@ export default function Copilote() {
         },
       });
     } catch (err: any) {
-      const fallback = await getSupabaseAiFallback(question).catch(() => null);
-      if (fallback?.answer) {
-        const links = [...(fallback.sourceLinks || []), ...buildResearchLinks(question)]
-          .map((item) => ({ title: item.title, url: item.url }))
-          .slice(0, 4);
-        const answer = String(fallback.answer || "").trim();
-
-        setMessages((prev) => [...prev, { id: uid(), role: "assistant", content: answer, links }]);
-        void ingestChatExchange({
-          channel: "copilote_page",
-          source: "CopilotePage",
-          question,
-          answer,
-          mode: "supabase_ai_fallback",
-          context: {
-            session_id: sessionId || null,
-            source_links_count: links.length,
-          },
-        });
-        setLoading(false);
-        return;
-      }
-
       const links = buildResearchLinks(question);
       const answer =
         "Je n'ai pas pu repondre de facon fiable maintenant. Utilisez les liens internet ci-dessous pour trouver la source officielle.";
@@ -176,7 +188,7 @@ export default function Copilote() {
         mode: "assistant_error_with_links",
         context: {
           session_id: sessionId || null,
-          error: String(err?.message || "chat_free_error"),
+          error: String(err?.message || "api_ask_error"),
           source_links_count: links.length,
         },
       });

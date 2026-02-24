@@ -4,8 +4,7 @@ import { Bot, ExternalLink, Loader2, MessageCircle, Send, X } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ingestChatExchange } from "@/lib/chatIngest";
-import { getSupabaseAiFallback } from "@/lib/supabaseAiFallback";
-import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 type AssistantResponse = {
   ok?: boolean;
@@ -18,12 +17,6 @@ type AssistantResponse = {
   follow_up_questions?: string[];
   source_links?: Array<{ title: string; url: string; origin?: string }>;
   context_summary?: string;
-};
-
-type ChatFreeResponse = {
-  session_id?: string;
-  reply?: string;
-  follow_up_questions?: string[];
 };
 
 type ChatMessage = {
@@ -45,7 +38,7 @@ type SupportChatWidgetProps = {
   };
 };
 
-const STORAGE_KEY = "mpl_support_widget_chat_v2";
+const STORAGE_KEY = "mpl_support_widget_chat_v3";
 const uid = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
 function safeLSGet(key: string) {
@@ -142,7 +135,7 @@ export default function SupportChatWidget({
   const transportMode = defaultContext?.transport_mode || "Route";
 
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
-  const [chatFreeSessionId, setChatFreeSessionId] = React.useState<string | null>(null);
+  const [sessionId, setSessionId] = React.useState<string | null>(null);
   const [draft, setDraft] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -189,57 +182,28 @@ export default function SupportChatWidget({
     []
   );
 
-  const invokeExportAssistant = React.useCallback(
-    async (msg: string) => {
-      if (!SUPABASE_ENV_OK) throw new Error("connexion_base_indisponible");
-
-      const timeoutMs = 18000;
-      let timeoutId: number | undefined;
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = window.setTimeout(() => reject(new Error("assistant_timeout")), timeoutMs);
-      });
-
-      try {
-        const invokePromise = supabase.functions.invoke<AssistantResponse>("export-assistant", {
-          body: {
-            question: msg,
-            destination,
-            incoterm,
-            transport_mode: transportMode,
-          },
-        });
-
-        const { data, error: fnError } = (await Promise.race([invokePromise, timeoutPromise])) as Awaited<typeof invokePromise>;
-        if (fnError || data?.error || data?.ok === false) {
-          const msgErr = fnError?.message || data?.detail || data?.error || "assistant_indisponible";
-          throw new Error(msgErr);
-        }
-
-        return data;
-      } finally {
-        if (typeof timeoutId === "number") window.clearTimeout(timeoutId);
-      }
-    },
-    [destination, incoterm, transportMode]
-  );
-
-  const invokeApiFallback = React.useCallback(
+  const invokeApiAsk = React.useCallback(
     async (msg: string, history: ChatMessage[]) => {
-      if (!SUPABASE_ENV_OK) return null;
+      let token: string | undefined;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        token = sessionData.session?.access_token;
+      } catch {
+        token = undefined;
+      }
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) return null;
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
 
       const resp = await fetch("/api/ask", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify({
           question: msg,
           context: {
+            session_id: sessionId,
             destination,
             incoterm,
             transport_mode: transportMode,
@@ -256,42 +220,7 @@ export default function SupportChatWidget({
 
       return data;
     },
-    [destination, incoterm, transportMode, toChatHistory]
-  );
-
-  const invokeChatFreeFallback = React.useCallback(
-    async (msg: string) => {
-      if (!SUPABASE_ENV_OK) return null;
-
-      const { data, error: fnError } = await supabase.functions.invoke<ChatFreeResponse>("chat-free", {
-        body: {
-          session_id: chatFreeSessionId || undefined,
-          message: msg,
-          context: {
-            destination,
-            incoterm,
-            transport_mode: transportMode,
-          },
-        },
-      });
-
-      if (fnError) throw new Error(fnError.message || "chat_free_failed");
-
-      const reply = String(data?.reply || "").trim();
-      if (!reply) return null;
-
-      const nextSessionId = String(data?.session_id || "").trim();
-      if (nextSessionId) setChatFreeSessionId(nextSessionId);
-
-      return {
-        ok: true,
-        mode: "chat_free_fallback",
-        session_id: nextSessionId || undefined,
-        answer: reply,
-        follow_up_questions: (data?.follow_up_questions || []).slice(0, 3),
-      } satisfies AssistantResponse;
-    },
-    [chatFreeSessionId, destination, incoterm, transportMode]
+    [destination, incoterm, sessionId, toChatHistory, transportMode]
   );
 
   const send = React.useCallback(
@@ -307,42 +236,16 @@ export default function SupportChatWidget({
       setError(null);
 
       try {
-        let data: AssistantResponse | null = null;
-        let primaryErr: unknown = null;
-
-        try {
-          data = await invokeExportAssistant(msg);
-        } catch (err) {
-          primaryErr = err;
-        }
-
-        if (!data) {
-          try {
-            data = await invokeApiFallback(msg, [...messages, userMsg]);
-          } catch (err) {
-            if (!primaryErr) primaryErr = err;
-          }
-        }
-
-        if (!data) {
-          try {
-            data = await invokeChatFreeFallback(msg);
-          } catch (err) {
-            if (!primaryErr) primaryErr = err;
-          }
-        }
-
-        if (!data) {
-          const primaryErrMessage =
-            primaryErr instanceof Error ? primaryErr.message : primaryErr ? String(primaryErr) : "assistant_indisponible";
-          throw new Error(primaryErrMessage);
-        }
+        const data = await invokeApiAsk(msg, [...messages, userMsg]);
 
         const answerRaw = String(data?.answer || data?.summary || "").trim();
         const uncertain = isUncertainAnswer(answerRaw, data?.mode);
         const internetLinks = uncertain ? buildResearchLinks(msg) : [];
         const sourceLinks = [...(data?.source_links || []), ...internetLinks].slice(0, 4);
         const answer = answerRaw || "Je n'ai pas de reponse certaine. Voici des liens internet fiables pour verifier rapidement.";
+
+        const nextSessionId = String(data?.session_id || "").trim();
+        if (nextSessionId) setSessionId(nextSessionId);
 
         const assistantMsg: ChatMessage = {
           id: uid(),
@@ -367,50 +270,10 @@ export default function SupportChatWidget({
             incoterm,
             transport_mode: transportMode,
             source_links_count: sourceLinks.length,
+            session_id: nextSessionId || sessionId,
           },
         });
       } catch (err: any) {
-        const fallback = await getSupabaseAiFallback(msg).catch(() => null);
-        if (fallback) {
-          setError(null);
-          const sourceLinks = [...(fallback.sourceLinks || []), ...buildResearchLinks(msg)].slice(0, 4);
-          const answer =
-            String(fallback.answer || "").trim() ||
-            "Je n'ai pas de reponse fiable sur ce point. Utilisez les liens ci-dessous pour trouver la source officielle.";
-
-          const assistantMsg: ChatMessage = {
-            id: uid(),
-            role: "assistant",
-            content: answer,
-            createdAt: Date.now(),
-            meta: {
-              ok: true,
-              mode: "supabase_ai_fallback",
-              answer,
-              summary: fallback.summary,
-              follow_up_questions: fallback.followUpQuestions,
-              source_links: sourceLinks,
-              context_summary: fallback.contextSummary,
-            },
-          };
-
-          setMessages((prev) => [...prev, assistantMsg]);
-          void ingestChatExchange({
-            channel: "support_widget",
-            source: "SupportChatWidget",
-            question: msg,
-            answer: assistantMsg.content,
-            mode: "supabase_ai_fallback",
-            context: {
-              destination,
-              incoterm,
-              transport_mode: transportMode,
-              source_links_count: sourceLinks.length,
-            },
-          });
-          return;
-        }
-
         const answer =
           "Je n'ai pas pu produire une reponse fiable maintenant. J'ai ajoute des liens internet pour continuer la recherche.";
         const sourceLinks = buildResearchLinks(msg);
@@ -443,13 +306,14 @@ export default function SupportChatWidget({
             transport_mode: transportMode,
             error: String(err?.message || "assistant_error"),
             source_links_count: sourceLinks.length,
+            session_id: sessionId,
           },
         });
       } finally {
         setLoading(false);
       }
     },
-    [draft, loading, invokeApiFallback, invokeChatFreeFallback, invokeExportAssistant, messages, destination, incoterm, transportMode]
+    [draft, loading, invokeApiAsk, messages, destination, incoterm, sessionId, transportMode]
   );
 
   return (
@@ -570,10 +434,6 @@ export default function SupportChatWidget({
               <div className="mt-2 text-[11px] text-muted-foreground">
                 Entree = envoyer, Shift+Entree = nouvelle ligne.
               </div>
-
-              {!SUPABASE_ENV_OK ? (
-                <div className="mt-1 text-[11px] text-rose-600">Connexion Supabase indisponible: mode limite.</div>
-              ) : null}
             </div>
           </div>
         </div>

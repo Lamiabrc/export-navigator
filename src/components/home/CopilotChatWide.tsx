@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ingestChatExchange } from "@/lib/chatIngest";
-import { getSupabaseAiFallback } from "@/lib/supabaseAiFallback";
 import { supabase } from "@/integrations/supabase/client";
 
 type Props = {
@@ -28,9 +27,14 @@ type SpeechWindow = Window & {
   webkitSpeechRecognition?: SpeechRecognitionConstructor;
 };
 
-type ChatFreeResponse = {
+type ChatApiResponse = {
+  ok?: boolean;
+  mode?: string;
   session_id?: string;
-  reply?: string;
+  answer?: string;
+  summary?: string;
+  detail?: string;
+  error?: string;
   remaining?: number;
   detected_context?: {
     countryIso2?: string;
@@ -59,7 +63,7 @@ export function CopilotChatWide({ isEn }: Props) {
   const [listening, setListening] = React.useState(false);
   const [sessionId, setSessionId] = React.useState<string | undefined>(undefined);
   const [remaining, setRemaining] = React.useState<number | null>(null);
-  const [detectedContext, setDetectedContext] = React.useState<ChatFreeResponse["detected_context"]>({});
+  const [detectedContext, setDetectedContext] = React.useState<ChatApiResponse["detected_context"]>({});
   const [followUps, setFollowUps] = React.useState<string[]>([]);
   const recognitionRef = React.useRef<InstanceType<SpeechRecognitionConstructor> | null>(null);
 
@@ -71,25 +75,41 @@ export function CopilotChatWide({ isEn }: Props) {
     setDraft("");
     setLoading(true);
 
-    let data: ChatFreeResponse | null = null;
+    let data: ChatApiResponse | null = null;
     let error: Error | null = null;
     try {
-      const response = await supabase.functions.invoke<ChatFreeResponse>("chat-free", {
-        body: { session_id: sessionId, message: text },
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const resp = await fetch("/api/ask", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          question: text,
+          context: {
+            session_id: sessionId || null,
+            chat_history: messages.slice(-8).map((m) => ({ role: m.role, content: m.content })),
+          },
+        }),
       });
-      data = response.data ?? null;
-      error = response.error as Error | null;
+      const json = (await resp.json().catch(() => ({}))) as ChatApiResponse;
+      if (!resp.ok || json?.ok === false || json?.error) {
+        throw new Error(json?.detail || json?.error || `ask_failed_${resp.status}`);
+      }
+      data = json;
     } catch (exception) {
       error = exception as Error;
     }
 
     if (error) {
-      const fallback = await getSupabaseAiFallback(text).catch(() => null);
-      const answer = fallback?.answer
-        ? fallback.answer
-        : isEn
-          ? "AI connection in progress. I can already guide you: share destination country, product and HS code."
-          : "Connexion IA en cours. Je peux deja vous guider: partagez pays destination, produit et code HS.";
+      const answer = isEn
+        ? "AI service is temporarily unavailable. Please try again in a few seconds."
+        : "Le service IA est temporairement indisponible. Reessayez dans quelques secondes.";
       setMessages((prev) => [
         ...prev,
         {
@@ -102,11 +122,10 @@ export function CopilotChatWide({ isEn }: Props) {
         source: "CopilotChatWide",
         question: text,
         answer,
-        mode: fallback?.answer ? "supabase_ai_fallback" : "chat_free_error",
+        mode: "api_ask_error",
         context: {
           session_id: sessionId ?? null,
           error: error.message || null,
-          fallback_mode: fallback?.answer ? "supabase_ai_fallback" : null,
         },
       });
       setLoading(false);
@@ -117,14 +136,14 @@ export function CopilotChatWide({ isEn }: Props) {
     setRemaining(typeof data?.remaining === "number" ? data.remaining : null);
     setDetectedContext(data?.detected_context || {});
     setFollowUps((data?.follow_up_questions || []).slice(0, 2));
-    const answer = data?.reply || "Reponse vide";
+    const answer = data?.answer || data?.summary || "Reponse vide";
     setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
     void ingestChatExchange({
       channel: "home_copilot",
       source: "CopilotChatWide",
       question: text,
       answer,
-      mode: "chat_free",
+      mode: data?.mode || "api_ask",
       context: {
         session_id: data?.session_id || sessionId || null,
         remaining: typeof data?.remaining === "number" ? data.remaining : null,
