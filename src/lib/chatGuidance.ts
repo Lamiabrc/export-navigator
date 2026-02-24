@@ -13,17 +13,19 @@ function detectFlow(question: string): "export" | "import" | "trade" {
 function detectCountry(question: string) {
   const q = question.toLowerCase();
   const map: Array<[RegExp, string]> = [
+    [/\bportugal\b/, "Portugal"],
     [/\bjapon|japan\b/, "Japon"],
     [/\ballemagne|germany\b/, "Allemagne"],
+    [/\bespagne|spain\b/, "Espagne"],
+    [/\bitalie|italy\b/, "Italie"],
+    [/\bbelgique|belgium\b/, "Belgique"],
+    [/\bpays[-\s]?bas|netherlands|hollande\b/, "Pays-Bas"],
     [/\busa|etats?-unis|united states\b/, "USA"],
     [/\bturquie|turkey\b/, "Turquie"],
     [/\bchine|china\b/, "Chine"],
     [/\bmaroc|morocco\b/, "Maroc"],
     [/\bcoree|korea\b/, "Coree"],
     [/\bcanada\b/, "Canada"],
-    [/\bespagne|spain\b/, "Espagne"],
-    [/\bitalie|italy\b/, "Italie"],
-    [/\bbelgique|belgium\b/, "Belgique"],
   ];
   for (const [re, label] of map) {
     if (re.test(q)) return label;

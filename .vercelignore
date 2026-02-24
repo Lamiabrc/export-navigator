@@ -1,4 +1,3 @@
-api/hs/search.ts
 api/rss-proxy.ts
 api/_supabase.ts
 api/_lib/http.ts
@@ -8,7 +7,8 @@ api/pdf.ts
 api/prefs.ts
 api/export/brief.ts
 api/ingest/feeds.ts
-api/rss-proxy.ts
 api/kb/ingest.ts
 
 api/cron/purge.ts
+api/delete-data.ts
+api/stripe/portal.ts

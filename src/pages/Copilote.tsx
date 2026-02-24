@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ingestChatExchange } from "@/lib/chatIngest";
 import { buildGuidedFallback, buildResearchLinks } from "@/lib/chatGuidance";
+import { detectCountryFromShortInput } from "@/lib/countryInput";
 import { supabase } from "@/integrations/supabase/client";
 
 type ChatMessage = {
@@ -31,7 +32,18 @@ type ChatResponse = {
   remaining?: number;
 };
 
+type QuotaResponse = {
+  ok?: boolean;
+  limit?: number;
+  used?: number;
+  remaining?: number;
+  error?: string;
+  detail?: string;
+};
+
 const uid = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+const COUNTRY_FOLLOWUP_RE = /(quel est le pays|pays de destination|destination exact)/i;
+const COUNTRY_MISSING_RE = /(pays.*(a confirmer|manquant)|quel est le pays de destination|destination exacte)/i;
 
 function isUncertainAnswer(answer: string) {
   const txt = answer.trim().toLowerCase();
@@ -52,7 +64,10 @@ export default function Copilote() {
   const [sessionId, setSessionId] = React.useState<string | undefined>();
   const [draft, setDraft] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [quotaLimit, setQuotaLimit] = React.useState(30);
   const [remaining, setRemaining] = React.useState<number | null>(null);
+  const [quotaStatus, setQuotaStatus] = React.useState<"loading" | "ready" | "error">("loading");
+  const [destinationCountry, setDestinationCountry] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -66,6 +81,33 @@ export default function Copilote() {
     return () => window.cancelAnimationFrame(raf);
   }, [messages, loading]);
 
+  const refreshQuota = React.useCallback(async () => {
+    try {
+      const resp = await fetch("/api/hs/quota", { method: "GET" });
+      const data = (await resp.json().catch(() => ({}))) as QuotaResponse;
+      if (!resp.ok || data?.ok === false || typeof data?.remaining !== "number" || typeof data?.limit !== "number") {
+        throw new Error(data?.detail || data?.error || `quota_failed_${resp.status}`);
+      }
+      setQuotaLimit(data.limit);
+      setRemaining(data.remaining);
+      setQuotaStatus("ready");
+    } catch {
+      setQuotaStatus("error");
+      setRemaining(null);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void refreshQuota();
+  }, [refreshQuota]);
+
+  const quotaLabel =
+    quotaStatus === "loading"
+      ? ".../30"
+      : quotaStatus === "error"
+        ? "indisponible"
+        : `${Math.max(0, Number(remaining ?? 0))}/${quotaLimit}`;
+
   const send = React.useCallback(async (preset?: string) => {
     const question = (preset ?? draft).trim();
     if (!question || loading) return;
@@ -77,6 +119,38 @@ export default function Copilote() {
     setError(null);
 
     try {
+      let trackedRemaining: number | null = null;
+      const trackingResp = await fetch(
+        `/api/hs/search?mode=track&q=${encodeURIComponent(question)}&universe=copilote&locale=fr`,
+        { method: "GET" }
+      );
+      const trackingData = (await trackingResp.json().catch(() => ({}))) as QuotaResponse;
+      if (typeof trackingData?.limit === "number") setQuotaLimit(trackingData.limit);
+      if (typeof trackingData?.remaining === "number") {
+        trackedRemaining = trackingData.remaining;
+        setRemaining(trackedRemaining);
+        setQuotaStatus("ready");
+      }
+
+      if (trackingResp.status === 429 || trackingData?.error === "daily_limit_reached") {
+        const blockedAnswer = "Quota gratuit atteint pour les 24h. Reessayez plus tard ou contactez l'equipe MPL.";
+        setError(blockedAnswer);
+        setMessages((prev) => [...prev, { id: uid(), role: "assistant", content: blockedAnswer }]);
+        return;
+      }
+      if (!trackingResp.ok || trackingData?.ok === false) {
+        throw new Error(trackingData?.detail || trackingData?.error || `quota_track_failed_${trackingResp.status}`);
+      }
+
+      const detectedCountry = detectCountryFromShortInput(question);
+      if (detectedCountry) {
+        setDestinationCountry(detectedCountry);
+      }
+      const resolvedDestination = detectedCountry || destinationCountry || null;
+      const questionForApi = detectedCountry
+        ? `Destination: ${detectedCountry}. Je n'ai donne que le pays pour l'instant. Aide-moi a cadrer l'export et demande ensuite produit + code HS + incoterm.`
+        : question;
+
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
@@ -89,10 +163,10 @@ export default function Copilote() {
         method: "POST",
         headers,
         body: JSON.stringify({
-          question,
+          question: questionForApi,
           context: {
             session_id: sessionId || null,
-            destination: "UE",
+            destination: resolvedDestination,
             incoterm: "DAP",
             transport_mode: "Route",
             chat_history: messages
@@ -107,10 +181,19 @@ export default function Copilote() {
       }
 
       const answerRaw = String(data?.answer || data?.summary || "").trim();
-      const uncertain = isUncertainAnswer(answerRaw);
-      const guided = buildGuidedFallback(question);
+      const guided = buildGuidedFallback(resolvedDestination ? `export vers ${resolvedDestination}` : question);
       const modelFollowUps = (data?.follow_up_questions || []).filter(Boolean).slice(0, 3);
-      const followUpQuestions = modelFollowUps.length ? modelFollowUps : guided.followUpQuestions;
+      const filteredModelFollowUps = resolvedDestination
+        ? modelFollowUps.filter((q) => !COUNTRY_FOLLOWUP_RE.test(q))
+        : modelFollowUps;
+      const filteredGuidedFollowUps = resolvedDestination
+        ? guided.followUpQuestions.filter((q) => !COUNTRY_FOLLOWUP_RE.test(q))
+        : guided.followUpQuestions;
+      const followUpQuestions = filteredModelFollowUps.length
+        ? filteredModelFollowUps
+        : (filteredGuidedFollowUps.length ? filteredGuidedFollowUps : guided.followUpQuestions);
+      const countryStillMissing = Boolean(resolvedDestination && COUNTRY_MISSING_RE.test(answerRaw.toLowerCase()));
+      const uncertain = isUncertainAnswer(answerRaw) || countryStillMissing;
       const links = [
         ...(Array.isArray(data?.source_links)
           ? data.source_links
@@ -122,7 +205,10 @@ export default function Copilote() {
       const answer = uncertain ? guided.answer : (answerRaw || guided.answer);
 
       if (data?.session_id) setSessionId(data.session_id);
-      if (typeof data?.remaining === "number") setRemaining(data.remaining);
+      if (typeof trackedRemaining === "number") {
+        setRemaining(trackedRemaining);
+        setQuotaStatus("ready");
+      }
 
       const assistantMsg: ChatMessage = {
         id: uid(),
@@ -141,9 +227,10 @@ export default function Copilote() {
         mode: data?.mode || (uncertain ? "api_ask_with_links" : "api_ask"),
         context: {
           session_id: data?.session_id || sessionId || null,
-          remaining: typeof data?.remaining === "number" ? data.remaining : null,
+          remaining: trackedRemaining,
           source_links_count: links.length,
           follow_up_questions_count: followUpQuestions.length,
+          destination_country: resolvedDestination,
         },
       });
     } catch (err: any) {
@@ -165,12 +252,13 @@ export default function Copilote() {
           error: String(err?.message || "api_ask_error"),
           source_links_count: links.length,
           follow_up_questions_count: guided.followUpQuestions.length,
+          destination_country: destinationCountry,
         },
       });
     } finally {
       setLoading(false);
     }
-  }, [draft, loading, messages, sessionId]);
+  }, [draft, loading, messages, sessionId, destinationCountry]);
 
   return (
     <PublicLayout>
@@ -182,7 +270,7 @@ export default function Copilote() {
               <Badge variant="secondary">Gratuit</Badge>
             </div>
             <p className="text-sm text-slate-600">Une seule zone de saisie. Reponses claires. Liens internet proposes si besoin.</p>
-            <p className="text-xs text-slate-500">Quota restant: {remaining ?? "--"} / 30</p>
+            <p className="text-xs text-slate-500">Quota restant: {quotaLabel}</p>
           </CardHeader>
 
           <CardContent className="space-y-3">

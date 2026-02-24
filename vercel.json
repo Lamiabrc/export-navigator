@@ -71,7 +71,6 @@
     }
   ],
   "rewrites": [
-    { "source": "/api/hs/search", "destination": "/api/lead-magnet?mode=hs_search" },
     { "source": "/api/lead", "destination": "/api/lead-magnet?mode=lead" },
     { "source": "/api/pdf", "destination": "/api/lead-magnet?mode=pdf" },
     { "source": "/api/alerts", "destination": "/api/lead-magnet?mode=alerts" },
