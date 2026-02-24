@@ -7,6 +7,47 @@ type Props = {
 
 export function VideoBanner({ isEn }: Props) {
   const [useImageFallback, setUseImageFallback] = React.useState(false);
+  const videoRef = React.useRef<HTMLVideoElement | null>(null);
+
+  React.useEffect(() => {
+    const video = videoRef.current;
+    if (!video || useImageFallback) return;
+
+    let loopStart = 0;
+    const tailLoopSeconds = 5;
+    const loopEndPadding = 0.08;
+
+    const applyTailOffset = () => {
+      const duration = video.duration;
+      if (!Number.isFinite(duration) || duration <= 0) return;
+      loopStart = Math.max(duration - tailLoopSeconds, 0);
+      try {
+        video.currentTime = loopStart;
+      } catch {
+        // Metadata not available yet or seek blocked momentarily.
+      }
+    };
+
+    const keepTailLoop = () => {
+      const duration = video.duration;
+      if (!Number.isFinite(duration) || duration <= 0) return;
+      if (video.currentTime >= duration - loopEndPadding) {
+        video.currentTime = loopStart;
+      }
+    };
+
+    if (video.readyState >= 1) {
+      applyTailOffset();
+    } else {
+      video.addEventListener("loadedmetadata", applyTailOffset, { once: true });
+    }
+    video.addEventListener("timeupdate", keepTailLoop);
+
+    return () => {
+      video.removeEventListener("loadedmetadata", applyTailOffset);
+      video.removeEventListener("timeupdate", keepTailLoop);
+    };
+  }, [useImageFallback]);
 
   return (
     <section className="w-full">
@@ -21,10 +62,10 @@ export function VideoBanner({ isEn }: Props) {
             />
           ) : (
             <video
+              ref={videoRef}
               className="h-full w-full object-cover"
               autoPlay
               muted
-              loop
               playsInline
               preload="metadata"
               poster="/videos/hero-export.jpg"

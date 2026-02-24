@@ -19,7 +19,8 @@ export function ArrivalGuide({ className }: { className?: string }) {
   const isFr = lang !== "en";
   const bgVideoRef = useRef<HTMLVideoElement | null>(null);
   const orbVideoRef = useRef<HTMLVideoElement | null>(null);
-  const videoStartOffset = 2.4;
+  const videoTailLoopSeconds = 5;
+  const videoLoopEndPadding = 0.08;
 
   const actions: ActionItem[] = isFr
     ? [
@@ -86,11 +87,28 @@ export function ArrivalGuide({ className }: { className?: string }) {
   useEffect(() => {
     const seekLater = (video: HTMLVideoElement | null) => {
       if (!video) return () => {};
+      let loopStart = 0;
+
       const applyOffset = () => {
+        const duration = video.duration;
+        if (!Number.isFinite(duration) || duration <= 0) return;
+        loopStart = Math.max(duration - videoTailLoopSeconds, 0);
         try {
-          video.currentTime = videoStartOffset;
+          video.currentTime = loopStart;
         } catch {
           // Some browsers can block seek before metadata; event listener handles retry.
+        }
+      };
+      const keepTailLoop = () => {
+        const duration = video.duration;
+        if (!Number.isFinite(duration) || duration <= 0) return;
+        if (video.currentTime >= duration - videoLoopEndPadding) {
+          video.currentTime = loopStart;
+          if (video.paused) {
+            void video.play().catch(() => {
+              // Ignore autoplay/play rejection; next user interaction will resume.
+            });
+          }
         }
       };
 
@@ -99,9 +117,11 @@ export function ArrivalGuide({ className }: { className?: string }) {
       } else {
         video.addEventListener("loadedmetadata", applyOffset, { once: true });
       }
+      video.addEventListener("timeupdate", keepTailLoop);
 
       return () => {
         video.removeEventListener("loadedmetadata", applyOffset);
+        video.removeEventListener("timeupdate", keepTailLoop);
       };
     };
 
@@ -156,7 +176,6 @@ export function ArrivalGuide({ className }: { className?: string }) {
         style={{ animation: "heroBackdropDrift 34s linear infinite", filter: "contrast(1.08) saturate(1.08)" }}
         autoPlay
         muted
-        loop
         playsInline
         preload="auto"
         poster="/videos/hero-export.jpg"
@@ -213,7 +232,6 @@ export function ArrivalGuide({ className }: { className?: string }) {
                 style={{ animation: "heroOrbZoom 10.8s ease-in-out infinite" }}
                 autoPlay
                 muted
-                loop
                 playsInline
                 preload="metadata"
                 poster="/videos/hero-export.jpg"
