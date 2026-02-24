@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ingestChatExchange } from "@/lib/chatIngest";
-import { getSupabaseAiFallback } from "@/lib/supabaseAiFallback";
+import { getSupabaseAiFallback } from "@/services/supabaseAI";
 
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
