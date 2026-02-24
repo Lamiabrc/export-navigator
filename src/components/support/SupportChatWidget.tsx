@@ -4,6 +4,7 @@ import { Bot, ExternalLink, Loader2, MessageCircle, Send, X } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ingestChatExchange } from "@/lib/chatIngest";
+import { buildGuidedFallback, buildResearchLinks } from "@/lib/chatGuidance";
 import { supabase } from "@/integrations/supabase/client";
 
 type AssistantResponse = {
@@ -66,53 +67,6 @@ function isUncertainAnswer(answer: string, mode?: string) {
   if (/(pas de reponse|indisponible|reessaye|reessaie|erreur|vide)/i.test(txt)) return true;
   if (/(fallback|error|timeout)/i.test(String(mode || ""))) return true;
   return false;
-}
-
-function buildResearchLinks(question: string) {
-  const q = question.trim();
-  const lower = q.toLowerCase();
-  const links: Array<{ title: string; url: string; origin: "internet" }> = [
-    {
-      title: "Recherche web ciblee",
-      url: `https://www.google.com/search?q=${encodeURIComponent(`${q} reglementation export`)}`,
-      origin: "internet",
-    },
-  ];
-
-  if (/(incoterm|fob|dap|ddp|cif|cip|exw|fca)/i.test(lower)) {
-    links.push({
-      title: "Guide ICC Incoterms",
-      url: "https://iccwbo.org/business-solutions/incoterms-rules/",
-      origin: "internet",
-    });
-  }
-
-  if (/(douane|droit|tarif|taric|hs|code hs|tva)/i.test(lower)) {
-    links.push(
-      {
-        title: "Douane francaise",
-        url: "https://www.douane.gouv.fr/",
-        origin: "internet",
-      },
-      {
-        title: "Taric UE",
-        url: "https://ec.europa.eu/taxation_customs/dds2/taric/taric_consultation.jsp",
-        origin: "internet",
-      }
-    );
-  }
-
-  if (/(sanction|embargo|restriction|compliance|conformite)/i.test(lower)) {
-    links.push({
-      title: "EU Sanctions Map",
-      url: "https://www.sanctionsmap.eu/",
-      origin: "internet",
-    });
-  }
-
-  const deduped = new Map<string, { title: string; url: string; origin: "internet" }>();
-  for (const item of links) deduped.set(item.url, item);
-  return Array.from(deduped.values()).slice(0, 4);
 }
 
 export default function SupportChatWidget({
@@ -240,9 +194,12 @@ export default function SupportChatWidget({
 
         const answerRaw = String(data?.answer || data?.summary || "").trim();
         const uncertain = isUncertainAnswer(answerRaw, data?.mode);
+        const guided = buildGuidedFallback(msg);
+        const modelFollowUps = (data?.follow_up_questions || []).filter(Boolean).slice(0, 3);
+        const followUpQuestions = modelFollowUps.length ? modelFollowUps : guided.followUpQuestions;
         const internetLinks = uncertain ? buildResearchLinks(msg) : [];
         const sourceLinks = [...(data?.source_links || []), ...internetLinks].slice(0, 4);
-        const answer = answerRaw || "Je n'ai pas de reponse certaine. Voici des liens internet fiables pour verifier rapidement.";
+        const answer = uncertain ? guided.answer : (answerRaw || guided.answer);
 
         const nextSessionId = String(data?.session_id || "").trim();
         if (nextSessionId) setSessionId(nextSessionId);
@@ -255,6 +212,7 @@ export default function SupportChatWidget({
           meta: {
             ...data,
             source_links: sourceLinks,
+            follow_up_questions: followUpQuestions,
           },
         };
 
@@ -270,15 +228,16 @@ export default function SupportChatWidget({
             incoterm,
             transport_mode: transportMode,
             source_links_count: sourceLinks.length,
+            follow_up_questions_count: followUpQuestions.length,
             session_id: nextSessionId || sessionId,
           },
         });
       } catch (err: any) {
-        const answer =
-          "Je n'ai pas pu produire une reponse fiable maintenant. J'ai ajoute des liens internet pour continuer la recherche.";
+        const guided = buildGuidedFallback(msg);
+        const answer = guided.answer;
         const sourceLinks = buildResearchLinks(msg);
 
-        setError("Reponse indisponible. Liens de secours proposes.");
+        setError("Reponse serveur indisponible: je passe en mode guide pour avancer pas a pas.");
 
         const assistantMsg: ChatMessage = {
           id: uid(),
@@ -290,6 +249,7 @@ export default function SupportChatWidget({
             mode: "assistant_error_with_links",
             answer,
             source_links: sourceLinks,
+            follow_up_questions: guided.followUpQuestions,
           },
         };
 
@@ -306,6 +266,7 @@ export default function SupportChatWidget({
             transport_mode: transportMode,
             error: String(err?.message || "assistant_error"),
             source_links_count: sourceLinks.length,
+            follow_up_questions_count: guided.followUpQuestions.length,
             session_id: sessionId,
           },
         });
@@ -392,6 +353,21 @@ export default function SupportChatWidget({
                               {src.title}
                               <ExternalLink className="h-3 w-3" />
                             </a>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {m.role === "assistant" && m.meta?.follow_up_questions?.length ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/70 pt-2">
+                          {m.meta.follow_up_questions.slice(0, 3).map((q) => (
+                            <button
+                              key={`${m.id}-${q}`}
+                              type="button"
+                              onClick={() => setDraft(q)}
+                              className="rounded-full border border-border bg-muted/40 px-2 py-1 text-[11px] text-slate-700 hover:bg-muted"
+                            >
+                              {q}
+                            </button>
                           ))}
                         </div>
                       ) : null}

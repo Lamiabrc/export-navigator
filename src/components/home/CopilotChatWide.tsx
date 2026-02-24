@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ingestChatExchange } from "@/lib/chatIngest";
+import { buildGuidedFallback } from "@/lib/chatGuidance";
 import { supabase } from "@/integrations/supabase/client";
 
 type Props = {
@@ -107,9 +108,9 @@ export function CopilotChatWide({ isEn }: Props) {
     }
 
     if (error) {
-      const answer = isEn
-        ? "AI service is temporarily unavailable. Please try again in a few seconds."
-        : "Le service IA est temporairement indisponible. Reessayez dans quelques secondes.";
+      const guided = buildGuidedFallback(text);
+      const answer = guided.answer;
+      setFollowUps(guided.followUpQuestions.slice(0, 2));
       setMessages((prev) => [
         ...prev,
         {
@@ -135,8 +136,12 @@ export function CopilotChatWide({ isEn }: Props) {
     setSessionId(data?.session_id);
     setRemaining(typeof data?.remaining === "number" ? data.remaining : null);
     setDetectedContext(data?.detected_context || {});
-    setFollowUps((data?.follow_up_questions || []).slice(0, 2));
-    const answer = data?.answer || data?.summary || "Reponse vide";
+    const answerRaw = String(data?.answer || data?.summary || "").trim();
+    const uncertain = !answerRaw || answerRaw.length < 60 || /(indisponible|pas de reponse|erreur|reessaye|reessaie)/i.test(answerRaw);
+    const guided = buildGuidedFallback(text);
+    const modelFollowUps = (data?.follow_up_questions || []).slice(0, 2);
+    setFollowUps(modelFollowUps.length ? modelFollowUps : guided.followUpQuestions.slice(0, 2));
+    const answer = uncertain ? guided.answer : answerRaw;
     setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
     void ingestChatExchange({
       channel: "home_copilot",

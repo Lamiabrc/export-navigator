@@ -434,32 +434,63 @@ function buildFollowUpQuestions(question: string, signals: ReturnType<typeof ext
   return asks.slice(0, 3);
 }
 
-function buildDegradedAnswer(question: string, signals: ReturnType<typeof extractSignals>, followUps: string[], snippets: string[]) {
+function normalizeFollowUpQuestion(input: string) {
+  const value = input.trim();
+  if (!value) return value;
+  return /[?]$/.test(value) ? value : `${value} ?`;
+}
+
+function buildActionPlan(signals: ReturnType<typeof extractSignals>) {
+  const actions: string[] = [];
+  if (!signals.country) actions.push("Confirmer le pays de destination exact et les pays de transit.");
+  if (!signals.hsCode) actions.push("Valider le code HS (6/8 chiffres) et la description technique du produit.");
+  if (!signals.incoterm) actions.push("Choisir l'Incoterm cible (FCA, FOB, CIF, DAP, DDP...) et qui paie quoi.");
+  actions.push("Verifier droits/taxes, exigences documentaires et restrictions avant expedition.");
+  return actions.slice(0, 4);
+}
+
+function buildGuidedConversationAnswer(params: {
+  question: string;
+  signals: ReturnType<typeof extractSignals>;
+  followUps: string[];
+  contextSummary: string;
+  snippets?: string[];
+}) {
   const known = [
-    signals.country ? `Destination détectée: ${signals.country}.` : null,
-    signals.incoterm ? `Incoterm détecté: ${signals.incoterm}.` : null,
-    signals.hsCode ? `Code HS détecté: ${signals.hsCode}.` : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
+    params.signals.country ? `- Pays detecte: ${params.signals.country}` : "- Pays: a confirmer",
+    params.signals.hsCode ? `- HS detecte: ${params.signals.hsCode}` : "- HS: a confirmer",
+    params.signals.incoterm ? `- Incoterm detecte: ${params.signals.incoterm}` : "- Incoterm: a confirmer",
+  ].join("\n");
 
-  const factualHint = snippets.length
-    ? "J'ai trouvé des éléments dans la base Supabase (incoterms/HS/veille) que je peux affiner avec vos précisions."
-    : "Je n'ai pas encore assez d'éléments en base pour répondre précisément.";
+  const questions = (params.followUps.length ? params.followUps : buildFollowUpQuestions(params.question, params.signals))
+    .slice(0, 3)
+    .map((q) => `- ${normalizeFollowUpQuestion(q)}`)
+    .join("\n");
 
-  const askBlock = followUps.length
-    ? `Pour vous répondre correctement, j'ai besoin de:\n- ${followUps.join("\n- ")}`
-    : "Je peux déjà proposer un plan d'action opérationnel sur votre cas.";
+  const dataHint = params.snippets?.length
+    ? "J'ai trouve des elements dans la base export pour appuyer la suite."
+    : "Je n'ai pas encore assez de donnees fiables pour conclure sans precision complementaire.";
 
   return [
-    `Question reçue: "${question}".`,
-    known || "Signaux partiels détectés (infos clés manquantes).",
-    factualHint,
-    askBlock,
-    "Réponse provisoire: commencez par verrouiller pays + HS + incoterm + mode de paiement avant toute validation finale.",
+    `J'ai bien compris votre demande: "${params.question}".`,
+    `Diagnostic provisoire:\n${known}`,
+    dataHint,
+    "Plan immediat:\n- Verifier la classification douaniere (HS)\n- Verifier droits/taxes et restrictions\n- Verrouiller Incoterm + transport + paiement",
+    `Pour vous donner une reponse finale precise, merci de confirmer:\n${questions}`,
+    `Contexte courant: ${params.contextSummary}`,
   ].join("\n\n");
 }
 
+function isVagueModelAnswer(answer: string, mode?: string) {
+  const txt = answer.trim().toLowerCase();
+  if (!txt) return true;
+  if (txt.length < 80) return true;
+  if (/(je ne peux pas|je ne sais pas|pas de reponse|indisponible|reessayez|reessaie|erreur|aucune donnee fiable)/i.test(txt)) {
+    return true;
+  }
+  if (/(fallback|timeout|error)/i.test(String(mode || ""))) return true;
+  return false;
+}
 
 function parseModelJson(raw: string) {
   const trimmed = raw.trim();
@@ -539,6 +570,14 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     return json(res, 405, { ok: false, error: "Method not allowed" });
   }
 
+  let fallbackQuestion = "";
+  let fallbackSessionId: string | null = null;
+  let fallbackSignals = extractSignals("");
+  let fallbackFollowUps: string[] = [];
+  let fallbackContextSummary = "Pays: manquant | HS: manquant | Incoterm: manquant | Produit: manquant";
+  let fallbackSourceLinks: Array<{ title: string; url: string; origin: "supabase" | "specialized_site" }> = [];
+  let fallbackSnippets: string[] = [];
+
   try {
     const auth = await resolveOptionalUser(req);
 
@@ -576,21 +615,29 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     const followUps = buildFollowUpQuestions(question, signals);
     const supabaseFacts = await fetchSupabaseFacts(question, signals);
     const specializedLinks = specializedSourcesFor(`${question}\n${contextual.contextSummary}`);
+    fallbackQuestion = question;
+    fallbackSessionId = session.sessionId;
+    fallbackSignals = signals;
+    fallbackFollowUps = followUps;
+    fallbackContextSummary = contextual.contextSummary;
+    fallbackSourceLinks = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
+    fallbackSnippets = supabaseFacts.snippets;
 
     if (!OPENAI_API_KEY && !GEMINI_API_KEY) {
-      const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
-      const degradedBase = buildDegradedAnswer(question, signals, followUps, supabaseFacts.snippets);
+      const source_links = fallbackSourceLinks;
+      const degradedBase = buildGuidedConversationAnswer({
+        question,
+        signals,
+        followUps,
+        contextSummary: contextual.contextSummary,
+        snippets: supabaseFacts.snippets,
+      });
       const feedbackPrefix = contextual.satisfaction === false
         ? "Merci pour le retour. Je vais corriger ma proposition et repartir sur les informations essentielles.\n\n"
         : "";
       const result: AskResult = {
         answer: `${feedbackPrefix}${degradedBase}`,
-        actions: [
-          "Confirmer destination + pays de transit.",
-          "Fournir HS code (6/8 chiffres) ou description technique.",
-          "Confirmer Incoterm + mode de paiement.",
-          "Valider si la réponse est satisfaisante (oui/non).",
-        ],
+        actions: buildActionPlan(signals),
         follow_up_questions: followUps,
         source_links,
         context_summary: contextual.contextSummary,
@@ -669,12 +716,12 @@ ${contextual.contextSummary}`);
       .join("\n\n");
 
     const system =
-      "Tu es un agent IA export senior (incoterms, douane, conformité, risques pays, paiements). " +
-      "Tu dois être précis, actionnable et pédagogique, en français clair. " +
-      "Tu dois systématiquement: 1) synthétiser le diagnostic, 2) donner 3 à 4 actions priorisées, 3) poser au plus 3 questions de clarification si nécessaire. " +
-      "Évite les généralités vagues: adapte la réponse au contexte fourni et cite les limites si une donnée manque. " +
-      "Si l'utilisateur indique que la réponse n'est pas satisfaisante, excuse-toi brièvement puis reformule avec un plan amélioré. " +
-      "Réponds strictement en JSON avec les clés: answer (string), actions (array max 4), follow_up_questions (array max 3).";
+      "Tu es MPL Export Navigator, conseiller export senior (incoterms, douane, conformite, risques pays, paiements). " +
+      "Ta mission: repondre comme dans une vraie conversation de conseil, de facon claire et concrete. " +
+      "Format attendu: 1) diagnostic adapte au cas, 2) actions prioritaires (3-4 max), 3) questions de clarification (2-3) quand des donnees manquent. " +
+      "N'ecris jamais une reponse vague ou generique. Si une information manque, dis precisement laquelle et pourquoi elle bloque la decision. " +
+      "Si l'utilisateur dit que la reponse n'aide pas, excuse-toi en une phrase puis propose une version corrigee et plus operationnelle. " +
+      "Reponds strictement en JSON avec les cles: answer (string), actions (array max 4), follow_up_questions (array max 3).";
     const user =
       `Question courante: ${question}
 ` +
@@ -704,32 +751,38 @@ ${followUps.map((q) => `- ${q}`).join("\n")}`
         ])
       : await geminiChat(`${system}\n\n${user}`);
 
-    let answer = raw;
-    let actions: string[] | undefined;
-    let follow_up_questions: string[] | undefined = followUps;
-    try {
-      const parsed = JSON.parse(raw);
-      if (typeof parsed?.answer === "string") answer = parsed.answer;
-      if (Array.isArray(parsed?.actions)) actions = parsed.actions.filter((x: any) => typeof x === "string").slice(0, 4);
-      if (Array.isArray(parsed?.follow_up_questions)) {
-        follow_up_questions = parsed.follow_up_questions.filter((x: any) => typeof x === "string").slice(0, 3);
-      }
-    } catch {
-      // keep raw text
-    }
     const normalized = normalizeModelAnswer({
       raw,
       followUps,
       contextSummary: contextual.contextSummary,
     });
 
-    const source_links = [...supabaseFacts.links, ...specializedLinks].slice(0, 8);
+    const source_links = fallbackSourceLinks;
+    const mergedFollowUps = Array.from(
+      new Set(
+        [...(normalized.follow_up_questions || []), ...followUps]
+          .map((x) => String(x || "").trim())
+          .filter(Boolean),
+      ),
+    ).slice(0, 3);
+    const shouldUseGuidedAnswer = isVagueModelAnswer(normalized.answer, OPENAI_API_KEY ? "openai" : "gemini");
+    const guidedAnswer = buildGuidedConversationAnswer({
+      question,
+      signals,
+      followUps: mergedFollowUps,
+      contextSummary: contextual.contextSummary,
+      snippets: supabaseFacts.snippets,
+    });
+    const finalAnswer = shouldUseGuidedAnswer ? guidedAnswer : normalized.answer;
+    const finalActions = (Array.isArray(normalized.actions) && normalized.actions.length)
+      ? normalized.actions
+      : buildActionPlan(signals);
 
     const apology = contextual.satisfaction === false ? "Merci pour votre retour — voici une version améliorée.\n\n" : "";
     const result: AskResult = {
-      answer: `${apology}${normalized.answer}`,
-      actions: normalized.actions,
-      follow_up_questions: normalized.follow_up_questions,
+      answer: `${apology}${finalAnswer}`,
+      actions: finalActions,
+      follow_up_questions: mergedFollowUps,
       sources: safeChunks.map((c: any) => ({
         document_id: c.document_id,
         chunk_id: c.id,
@@ -766,19 +819,32 @@ ${followUps.map((q) => `- ${q}`).join("\n")}`
     const raw = String(err?.message || "ask_failed");
     console.error("[api/ask] error", raw);
 
-    if (raw === "ai_not_configured") {
-      return json(res, 200, {
-        ok: true,
-        mode: "degraded",
-        answer: "Le moteur IA avancé n'est pas configuré sur cet environnement. Donnez destination, HS, incoterm et paiement: je peux déjà vous guider en mode structuré.",
-        actions: [
-          "Confirmer destination + transit.",
-          "Donner HS ou description technique.",
-          "Confirmer incoterm et mode de paiement.",
-        ],
-      });
-    }
+    const safeQuestion = fallbackQuestion || "Demande export";
+    const safeFollowUps = (fallbackFollowUps.length
+      ? fallbackFollowUps
+      : buildFollowUpQuestions(safeQuestion, fallbackSignals)).slice(0, 3);
+    const source_links = fallbackSourceLinks.length
+      ? fallbackSourceLinks
+      : specializedSourcesFor(safeQuestion).slice(0, 4);
+    const answer = buildGuidedConversationAnswer({
+      question: safeQuestion,
+      signals: fallbackSignals,
+      followUps: safeFollowUps,
+      contextSummary: fallbackContextSummary,
+      snippets: fallbackSnippets,
+    });
 
-    return json(res, 500, { ok: false, error: raw || "ask_failed" });
+    return json(res, 200, {
+      ok: true,
+      mode: raw === "ai_not_configured" ? "degraded_no_ai" : "degraded_error",
+      answer,
+      actions: buildActionPlan(fallbackSignals),
+      follow_up_questions: safeFollowUps,
+      source_links,
+      context_summary: fallbackContextSummary,
+      session_id: fallbackSessionId,
+      technical_status: raw || "ask_failed",
+      satisfaction_prompt: "Si vous repondez aux 2-3 questions ci-dessus, je vous fournis une reponse finale plus precise.",
+    });
   }
 });

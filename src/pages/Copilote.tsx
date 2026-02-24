@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ingestChatExchange } from "@/lib/chatIngest";
+import { buildGuidedFallback, buildResearchLinks } from "@/lib/chatGuidance";
 import { supabase } from "@/integrations/supabase/client";
 
 type ChatMessage = {
@@ -14,6 +15,7 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   links?: Array<{ title: string; url: string }>;
+  followUpQuestions?: string[];
 };
 
 type ChatResponse = {
@@ -37,37 +39,6 @@ function isUncertainAnswer(answer: string) {
   if (txt.length < 40) return true;
   if (/(pas de reponse|indisponible|erreur|vide|reessaye|reessaie)/i.test(txt)) return true;
   return false;
-}
-
-function buildResearchLinks(question: string) {
-  const q = question.trim();
-  const lower = q.toLowerCase();
-  const links: Array<{ title: string; url: string }> = [
-    {
-      title: "Recherche web ciblee",
-      url: `https://www.google.com/search?q=${encodeURIComponent(`${q} reglementation export`)}`,
-    },
-  ];
-
-  if (/(incoterm|fob|dap|ddp|cif|cip|exw|fca)/i.test(lower)) {
-    links.push({ title: "Guide ICC Incoterms", url: "https://iccwbo.org/business-solutions/incoterms-rules/" });
-  }
-
-  if (/(douane|droit|tarif|taric|hs|code hs|tva)/i.test(lower)) {
-    links.push({ title: "Douane francaise", url: "https://www.douane.gouv.fr/" });
-    links.push({
-      title: "Taric UE",
-      url: "https://ec.europa.eu/taxation_customs/dds2/taric/taric_consultation.jsp",
-    });
-  }
-
-  if (/(sanction|embargo|restriction|compliance|conformite)/i.test(lower)) {
-    links.push({ title: "EU Sanctions Map", url: "https://www.sanctionsmap.eu/" });
-  }
-
-  const deduped = new Map<string, { title: string; url: string }>();
-  for (const item of links) deduped.set(item.url, item);
-  return Array.from(deduped.values()).slice(0, 4);
 }
 
 export default function Copilote() {
@@ -95,8 +66,8 @@ export default function Copilote() {
     return () => window.cancelAnimationFrame(raf);
   }, [messages, loading]);
 
-  const send = React.useCallback(async () => {
-    const question = draft.trim();
+  const send = React.useCallback(async (preset?: string) => {
+    const question = (preset ?? draft).trim();
     if (!question || loading) return;
 
     const userMsg: ChatMessage = { id: uid(), role: "user", content: question };
@@ -137,17 +108,18 @@ export default function Copilote() {
 
       const answerRaw = String(data?.answer || data?.summary || "").trim();
       const uncertain = isUncertainAnswer(answerRaw);
+      const guided = buildGuidedFallback(question);
+      const modelFollowUps = (data?.follow_up_questions || []).filter(Boolean).slice(0, 3);
+      const followUpQuestions = modelFollowUps.length ? modelFollowUps : guided.followUpQuestions;
       const links = [
         ...(Array.isArray(data?.source_links)
           ? data.source_links
               .filter((x): x is { title: string; url: string } => Boolean(x?.title && x?.url))
               .map((x) => ({ title: x.title, url: x.url }))
           : []),
-        ...(uncertain ? buildResearchLinks(question) : []),
+        ...(uncertain ? buildResearchLinks(question).map((x) => ({ title: x.title, url: x.url })) : []),
       ].slice(0, 4);
-      const answer =
-        answerRaw ||
-        "Je n'ai pas de reponse certaine sur ce point. J'ai ajoute des liens internet fiables pour continuer rapidement.";
+      const answer = uncertain ? guided.answer : (answerRaw || guided.answer);
 
       if (data?.session_id) setSessionId(data.session_id);
       if (typeof data?.remaining === "number") setRemaining(data.remaining);
@@ -157,6 +129,7 @@ export default function Copilote() {
         role: "assistant",
         content: answer,
         links,
+        followUpQuestions,
       };
       setMessages((prev) => [...prev, assistantMsg]);
 
@@ -170,15 +143,16 @@ export default function Copilote() {
           session_id: data?.session_id || sessionId || null,
           remaining: typeof data?.remaining === "number" ? data.remaining : null,
           source_links_count: links.length,
+          follow_up_questions_count: followUpQuestions.length,
         },
       });
     } catch (err: any) {
-      const links = buildResearchLinks(question);
-      const answer =
-        "Je n'ai pas pu repondre de facon fiable maintenant. Utilisez les liens internet ci-dessous pour trouver la source officielle.";
+      const guided = buildGuidedFallback(question);
+      const links = buildResearchLinks(question).map((x) => ({ title: x.title, url: x.url }));
+      const answer = guided.answer;
 
-      setError("Reponse indisponible. Liens internet proposes.");
-      setMessages((prev) => [...prev, { id: uid(), role: "assistant", content: answer, links }]);
+      setError("Reponse serveur indisponible: je passe en mode guide pour avancer pas a pas.");
+      setMessages((prev) => [...prev, { id: uid(), role: "assistant", content: answer, links, followUpQuestions: guided.followUpQuestions }]);
 
       void ingestChatExchange({
         channel: "copilote_page",
@@ -190,12 +164,13 @@ export default function Copilote() {
           session_id: sessionId || null,
           error: String(err?.message || "api_ask_error"),
           source_links_count: links.length,
+          follow_up_questions_count: guided.followUpQuestions.length,
         },
       });
     } finally {
       setLoading(false);
     }
-  }, [draft, loading, sessionId]);
+  }, [draft, loading, messages, sessionId]);
 
   return (
     <PublicLayout>
@@ -240,6 +215,21 @@ export default function Copilote() {
                             {link.title}
                             <ExternalLink className="h-3 w-3" />
                           </a>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {m.role === "assistant" && m.followUpQuestions?.length ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/70 pt-2">
+                        {m.followUpQuestions.map((q) => (
+                          <button
+                            key={`${m.id}-${q}`}
+                            type="button"
+                            onClick={() => setDraft(q)}
+                            className="rounded-full border border-border bg-muted/40 px-2 py-1 text-[11px] text-slate-700 hover:bg-muted"
+                          >
+                            {q}
+                          </button>
                         ))}
                       </div>
                     ) : null}
