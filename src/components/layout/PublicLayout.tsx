@@ -135,11 +135,11 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   }, [location.pathname, location.search]);
 
   return (
-    <div className="public-cinematic-shell relative min-h-screen overflow-x-hidden bg-[#02060f] text-white">
+    <div className="public-cinematic-shell relative min-h-screen overflow-x-hidden bg-[hsl(var(--background))] text-foreground">
       {!isHome ? <CinematicBackdrop variant="public" className="z-0 opacity-30" /> : null}
-      {!isHome ? <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-[#020814]/88 via-[#030a15]/92 to-[#02060f]" /> : null}
+      {!isHome ? <div className="pointer-events-none absolute inset-0 -z-0 bg-gradient-to-b from-[#f8efe2]/85 via-[#f5ecde]/90 to-[#f2e6d6]" /> : null}
 
-      <header className="relative z-20 border-b border-slate-700/70 bg-[#040a15]/84 backdrop-blur-xl">
+      <header className="relative z-20 border-b border-[#d6c8b2] bg-[#eadfce]/95 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between gap-3 px-4 py-2 md:px-6">
           <BrandLogo
             href="/"
@@ -155,17 +155,17 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             className="group rounded-xl bg-white/95 px-3 py-2 shadow-lg shadow-black/20"
           />
 
-          <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-semibold text-white md:flex">
+          <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-semibold text-slate-900 md:flex">
             {navLinks.map((link) => {
               const label = navLabel(link.key, link.fallback);
               const active = isActivePath(location.pathname, link.to);
               const badge = link.to === "/copilote" ? (isFr ? "Gratuit" : "Free") : null;
               return (
-                <Link key={link.key} to={link.to} className={cx("transition-colors hover:text-white", active && "text-white")} aria-label={label}>
-                  <span className={cx("inline-flex items-center gap-1", active && "border-b-2 border-sky-300 pb-1")}>
+                <Link key={link.key} to={link.to} className={cx("transition-colors hover:text-black", active && "text-black")} aria-label={label}>
+                  <span className={cx("inline-flex items-center gap-1", active && "border-b-2 border-blue-700 pb-1")}>
                     {label}
                     {badge ? (
-                      <span className="rounded-full border border-emerald-300/40 bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-white">{badge}</span>
+                      <span className="rounded-full border border-emerald-700/30 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-900">{badge}</span>
                     ) : null}
                   </span>
                 </Link>
@@ -177,7 +177,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             <div
               role="group"
               aria-label={navLabel("header.languageAria", "Langue")}
-              className="flex items-center gap-1 rounded-full border border-slate-600/75 bg-[#09162b]/78 px-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-sm"
+              className="flex items-center gap-1 rounded-full border border-[#cdbda4] bg-[#f8efe2] px-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-sm"
             >
               {(["fr", "en"] as LanguageCode[]).map((code) => (
                 <button
@@ -186,7 +186,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                   onClick={() => setLang(code)}
                   className={cx(
                     "flex items-center gap-1 rounded-full px-2 py-1 transition",
-                    lang === code ? "bg-sky-500/35 text-white" : "text-white hover:text-white"
+                    lang === code ? "bg-blue-800 text-white" : "text-slate-900 hover:text-black"
                   )}
                 >
                   <span aria-hidden="true">{flags[code]}</span>
@@ -218,7 +218,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
               type="button"
               onClick={() => setMobileMenuOpen((v) => !v)}
               aria-label={mobileMenuOpen ? (isFr ? "Fermer le menu" : "Close menu") : (isFr ? "Ouvrir le menu" : "Open menu")}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-600/75 bg-[#09162b]/78 text-white"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#cdbda4] bg-[#f8efe2] text-slate-900"
             >
               {mobileMenuOpen ? <X className="size-4" /> : <Menu className="size-4" />}
             </button>
@@ -226,9 +226,9 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         </div>
 
         {mobileMenuOpen ? (
-          <div className="md:hidden border-t border-slate-700/70 bg-[#040a15]/95 px-4 py-3 shadow-lg shadow-black/30">
+          <div className="md:hidden border-t border-[#d6c8b2] bg-[#eadfce]/95 px-4 py-3 shadow-lg">
             <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-1 rounded-full border border-slate-600/70 bg-[#09162b]/80 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+              <div className="flex items-center gap-1 rounded-full border border-[#cdbda4] bg-[#f8efe2] px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-900">
                 {(["fr", "en"] as LanguageCode[]).map((code) => (
                   <button
                     key={`mob-${code}`}
@@ -236,7 +236,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                     onClick={() => setLang(code)}
                     className={cn(
                       "rounded-full px-2 py-1",
-                      lang === code ? "bg-sky-500/35 text-white" : "text-white"
+                      lang === code ? "bg-blue-800 text-white" : "text-slate-900"
                     )}
                   >
                     {flags[code]} {code.toUpperCase()}
@@ -249,7 +249,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                   Tour de controle
                 </Link>
               ) : (
-                <Link to={`/login?next=${authNextParam}`} className="text-xs font-semibold text-white underline">
+                <Link to={`/login?next=${authNextParam}`} className="text-xs font-semibold text-slate-900 underline">
                   {isFr ? "Connexion" : "Sign in"}
                 </Link>
               )}
@@ -266,33 +266,33 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                     to={link.to}
                     className={cn(
                       "flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-sm font-semibold",
-                      active ? "border-sky-300/60 bg-[#0f274d] text-white" : "border-slate-600/70 bg-[#071326]/78 text-white"
+                      active ? "border-blue-800 bg-blue-800 text-white" : "border-[#cdbda4] bg-[#f8efe2] text-slate-900"
                     )}
                   >
                     <span>{label}</span>
                     {badge ? (
-                      <span className="rounded-full border border-emerald-300/40 bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-white">{badge}</span>
+                      <span className="rounded-full border border-emerald-700/30 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-900">{badge}</span>
                     ) : null}
                   </Link>
                 );
               })}
 
-              <div className="rounded-xl border border-slate-600/70 bg-[#071326]/78">
+              <div className="rounded-xl border border-[#cdbda4] bg-[#f8efe2]">
                 <button
                   type="button"
                   onClick={() => setMobileResourcesOpen((prev) => !prev)}
-                  className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-sm font-semibold text-white"
+                  className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-sm font-semibold text-slate-900"
                 >
                   <span>{isFr ? "Ressources" : "Resources"}</span>
                   {mobileResourcesOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
                 </button>
                 {mobileResourcesOpen ? (
-                  <div className="grid grid-cols-1 gap-2 border-t border-slate-700/70 p-2">
+                  <div className="grid grid-cols-1 gap-2 border-t border-[#d6c8b2] p-2">
                     {resourceLinks.map((item) => (
                       <Link
                         key={`mobile-resource-${item.to}`}
                         to={item.to}
-                        className="flex min-h-11 items-center rounded-lg border border-slate-600/70 bg-[#0d223f]/68 px-3 py-2 text-sm font-medium text-white"
+                        className="flex min-h-11 items-center rounded-lg border border-[#cdbda4] bg-white px-3 py-2 text-sm font-medium text-slate-900"
                       >
                         {item.label}
                       </Link>
@@ -310,7 +310,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
       <main
         className={cn(
           "relative z-10 mx-auto w-full",
-          isHome ? "max-w-none px-0 py-0" : "max-w-[90rem] px-4 py-8 text-white sm:px-6 md:px-10 md:py-10"
+          isHome ? "max-w-none px-0 py-0" : "max-w-[90rem] px-4 py-8 text-foreground sm:px-6 md:px-10 md:py-10"
         )}
       >
         {isHome ? null : (

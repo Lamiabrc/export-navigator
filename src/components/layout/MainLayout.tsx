@@ -66,7 +66,7 @@ export function MainLayout({
   return (
     <div
       className={cn(
-        "min-h-screen bg-white text-foreground relative overflow-hidden",
+        "min-h-screen bg-[hsl(var(--background))] text-foreground relative overflow-hidden",
         wrapperClassName
       )}
     >
@@ -78,7 +78,7 @@ export function MainLayout({
         className={cn(
           "pointer-events-none absolute inset-0 -z-0",
           backdropVariant === "app"
-            ? "bg-gradient-to-br from-blue-50/70 via-white to-red-50/60"
+            ? "bg-gradient-to-br from-[#f8efe2]/70 via-[#f6edde]/80 to-[#f3e7d6]/78"
             : "bg-gradient-to-b from-white/85 via-white/90 to-white"
         )}
       />
@@ -86,7 +86,7 @@ export function MainLayout({
       {showSidebar ? <Sidebar /> : null}
 
       <main className={cn("relative z-10", showSidebar ? "pl-64" : "")}>
-        <header className="sticky top-0 z-20 border-b border-blue-100 bg-white/85 backdrop-blur">
+        <header className="sticky top-0 z-20 border-b border-[#d6c8b2] bg-[#eadfce]/92 backdrop-blur">
           <div className="flex flex-col gap-3 px-4 py-3 md:px-6">
             {/* Row 1 */}
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -131,9 +131,9 @@ export function MainLayout({
               </div>
 
               <div className="flex flex-wrap items-center gap-2 justify-start lg:justify-end">
-                <div className="flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-900 shadow-sm">
+                <div className="flex items-center gap-2 rounded-full border border-[#cdbda4] bg-[#f8efe2] px-3 py-2 text-xs font-semibold text-slate-900 shadow-sm">
                   <span className="truncate max-w-[150px]">{displayName}</span>
-                  <Badge variant="outline" className="border-blue-200 text-blue-700 text-[10px]">
+                  <Badge variant="outline" className="border-[#cdbda4] text-slate-900 text-[10px]">
                     Plan {planLabel}
                   </Badge>
                 </div>
