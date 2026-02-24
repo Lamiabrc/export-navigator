@@ -14,6 +14,12 @@ const FLAGS: Record<LanguageCode, string> = {
   en: String.fromCodePoint(0x1f1ec, 0x1f1e7),
 };
 
+function isActivePath(pathname: string, to: string) {
+  if (to === "/") return pathname === "/";
+  if (pathname === to) return true;
+  return pathname.startsWith(`${to}/`);
+}
+
 export function MarketingHeader() {
   const { lang, t, setLang } = useI18n();
   const { isAuthenticated } = useAuth();
@@ -21,209 +27,190 @@ export function MarketingHeader() {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const isEN = lang === "en";
 
+  const nextPath = `${location.pathname}${location.search}` || "/";
+  const authNext = nextPath === "/" ? "/app/control-tower" : nextPath;
+  const authNextParam = encodeURIComponent(authNext);
+
   const navLabel = (key: string, fallback: string) => {
     const candidate = t(key) as string;
     if (!candidate || candidate === key) return fallback;
     return candidate;
   };
 
-  const ctaLabel = isEN ? "Contact us" : "Nous contacter";
-  const appLabel = isEN ? "My workspace" : "Mon espace";
+  const registerLabel = isEN ? "Create free account" : "Creer un compte gratuit";
   const loginLabel = isEN ? "Sign in" : "Connexion";
+  const appLabel = isEN ? "My workspace" : "Mon espace";
+
+  React.useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname, location.search]);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[hsl(var(--mkt-blue-100))] bg-white/95 backdrop-blur-md">
-      <div className="mkt-container">
-        <div className="flex h-16 items-center justify-between gap-4 lg:h-20">
-          {/* Brand */}
-          <BrandLogo
-            href="/"
-            size="md"
-            imageClassName="h-9 w-auto lg:h-10"
-            textClassName="text-[12px] lg:text-[13px]"
-            title="MPL Export Navigator"
-            subtitle="par MPL Export Conseil"
-            location="Conseil Export"
-            className="group shrink-0"
-          />
+    <header className="sticky top-0 z-50 border-b border-[#d6c8b2] bg-[#eadfce]/95 backdrop-blur-md">
+      <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between gap-3 px-4 py-2 md:px-6">
+        <BrandLogo
+          href="/"
+          size="sm"
+          imageClassName="h-8 w-auto rounded-md bg-white p-1 md:h-9"
+          textClassName="text-[11px] md:text-[12px]"
+          titleClassName="text-black"
+          subtitleClassName="text-black/80"
+          locationClassName="text-black/70"
+          title="MPL Export Navigator"
+          subtitle="par MPL Export Conseil"
+          location="Conseil Export"
+          className="group rounded-xl bg-white/95 px-3 py-2 shadow-lg shadow-black/20"
+        />
 
-          {/* Desktop Nav */}
-          <nav className="hidden flex-1 items-center justify-center gap-1 lg:flex">
-            {navLinks.map((link) => {
-              const label = navLabel(link.key, link.fallback);
-              const isActive =
-                link.to === "/"
-                  ? location.pathname === "/"
-                  : location.pathname === link.to || location.pathname.startsWith(`${link.to}/`);
-
-              return (
-                <Link
-                  key={link.key}
-                  to={link.to}
-                  className={cn(
-                    "relative px-4 py-2 text-sm font-medium transition-colors",
-                    isActive
-                      ? "text-[hsl(var(--mkt-primary))]"
-                      : "text-[hsl(var(--mkt-ink-muted))] hover:text-[hsl(var(--mkt-ink))]"
-                  )}
-                >
+        <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-semibold text-slate-900 md:flex">
+          {navLinks.map((link) => {
+            const label = navLabel(link.key, link.fallback);
+            const active = isActivePath(location.pathname, link.to);
+            const badge = link.to === "/copilote" ? (isEN ? "Free" : "Gratuit") : null;
+            return (
+              <Link key={link.key} to={link.to} className="transition-colors hover:text-black" aria-label={label}>
+                <span className={cn("inline-flex items-center gap-1", active && "border-b-2 border-blue-700 pb-1 text-black")}>
                   {label}
-                  {isActive && (
-                    <span className="absolute bottom-0 left-4 right-4 h-0.5 rounded-full bg-[hsl(var(--mkt-primary))]" />
-                  )}
-                </Link>
-              );
-            })}
-          </nav>
+                  {badge ? (
+                    <span className="rounded-full border border-emerald-700/30 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-900">
+                      {badge}
+                    </span>
+                  ) : null}
+                </span>
+              </Link>
+            );
+          })}
+        </nav>
 
-          {/* Right side */}
-          <div className="flex items-center gap-3">
-            {/* Language toggle */}
-            <div className="hidden items-center rounded-full border border-[hsl(var(--mkt-blue-100))] bg-white p-0.5 sm:flex">
+        <div className="hidden items-center gap-3 md:flex">
+          <div className="flex items-center gap-1 rounded-full border border-[#cdbda4] bg-[#f8efe2] px-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-sm">
+            {(["fr", "en"] as LanguageCode[]).map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => setLang(code)}
+                className={cn(
+                  "flex items-center gap-1 rounded-full px-2 py-1 transition",
+                  lang === code ? "bg-blue-800 text-white" : "text-slate-900 hover:text-black"
+                )}
+              >
+                <span aria-hidden="true">{FLAGS[code]}</span>
+                <span>{code.toUpperCase()}</span>
+              </button>
+            ))}
+          </div>
+
+          {isAuthenticated ? (
+            <Link
+              to="/app/control-tower"
+              className="inline-flex rounded-full border border-slate-500/60 bg-[#0a1d3a] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#0d2a54]"
+            >
+              {appLabel}
+            </Link>
+          ) : (
+            <>
+              <Link
+                to={`/register?next=${authNextParam}`}
+                className="inline-flex rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#B0231D]"
+              >
+                {registerLabel}
+              </Link>
+              <Link
+                to={`/login?next=${authNextParam}`}
+                className="inline-flex rounded-full border border-slate-500/70 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-900 transition hover:bg-slate-50"
+              >
+                {loginLabel}
+              </Link>
+            </>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 md:hidden">
+          <button
+            type="button"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#cdbda4] bg-[#f8efe2] text-slate-900"
+            onClick={() => setMobileOpen((prev) => !prev)}
+            aria-label={mobileOpen ? (isEN ? "Close menu" : "Fermer le menu") : (isEN ? "Open menu" : "Ouvrir le menu")}
+          >
+            {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+
+      <div className="h-[2px] bg-gradient-to-r from-[#1e3a8a] via-[#8fd8ff] to-[#c81e33]" />
+
+      {mobileOpen ? (
+        <div className="border-t border-[#d6c8b2] bg-[#eadfce]/95 px-4 py-3 shadow-lg md:hidden">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1 rounded-full border border-[#cdbda4] bg-[#f8efe2] px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-900">
               {(["fr", "en"] as LanguageCode[]).map((code) => (
                 <button
-                  key={code}
+                  key={`mob-${code}`}
                   type="button"
                   onClick={() => setLang(code)}
-                  className={cn(
-                    "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition",
-                    lang === code
-                      ? "bg-[hsl(var(--mkt-primary))] text-white"
-                      : "text-[hsl(var(--mkt-ink-muted))] hover:text-[hsl(var(--mkt-ink))]"
-                  )}
-                  aria-label={`Switch to ${code.toUpperCase()}`}
+                  className={cn("rounded-full px-2 py-1", lang === code ? "bg-blue-800 text-white" : "text-slate-900")}
                 >
-                  <span aria-hidden="true">{FLAGS[code]}</span>
-                  <span>{code.toUpperCase()}</span>
+                  {FLAGS[code]} {code.toUpperCase()}
                 </button>
               ))}
             </div>
 
-            {/* CTA */}
-            <Link
-              to="/contact?offer=diagnostic"
-              className="mkt-btn mkt-btn-primary hidden text-xs sm:inline-flex"
-            >
-              {ctaLabel}
-            </Link>
-
-            {/* Login / App */}
             {isAuthenticated ? (
               <Link
                 to="/app/control-tower"
-                className="hidden text-sm font-medium text-[hsl(var(--mkt-ink-muted))] transition hover:text-[hsl(var(--mkt-ink))] lg:inline-flex"
+                onClick={() => setMobileOpen(false)}
+                className="rounded-full border border-slate-500/60 bg-[#0a1d3a] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white"
               >
                 {appLabel}
               </Link>
             ) : (
               <Link
-                to="/login"
-                className="hidden text-sm font-medium text-[hsl(var(--mkt-ink-muted))] transition hover:text-[hsl(var(--mkt-ink))] lg:inline-flex"
+                to={`/login?next=${authNextParam}`}
+                onClick={() => setMobileOpen(false)}
+                className="text-xs font-semibold text-slate-900 underline"
               >
                 {loginLabel}
               </Link>
             )}
-
-            {/* Mobile menu button */}
-            <button
-              type="button"
-              className="flex h-10 w-10 items-center justify-center rounded-lg text-[hsl(var(--mkt-ink))] transition hover:bg-[hsl(var(--mkt-surface-muted))] lg:hidden"
-              onClick={() => setMobileOpen(!mobileOpen)}
-              aria-label="Toggle menu"
-            >
-              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
           </div>
-        </div>
-      </div>
 
-      {/* Tricolor line */}
-      <div className="mkt-divider-tricolor" />
+          {!isAuthenticated ? (
+            <Link
+              to={`/register?next=${authNextParam}`}
+              onClick={() => setMobileOpen(false)}
+              className="mb-3 inline-flex rounded-full bg-[#DC2626] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white"
+            >
+              {registerLabel}
+            </Link>
+          ) : null}
 
-      {/* Mobile menu */}
-      {mobileOpen && (
-        <div className="border-t border-[hsl(var(--mkt-blue-100))] bg-white lg:hidden">
-          <nav className="mkt-container flex flex-col gap-1 py-4">
+          <nav className="grid grid-cols-1 gap-2">
             {navLinks.map((link) => {
               const label = navLabel(link.key, link.fallback);
-              const isActive =
-                link.to === "/"
-                  ? location.pathname === "/"
-                  : location.pathname === link.to || location.pathname.startsWith(`${link.to}/`);
-
+              const active = isActivePath(location.pathname, link.to);
+              const badge = link.to === "/copilote" ? (isEN ? "Free" : "Gratuit") : null;
               return (
                 <Link
                   key={`${link.key}-mobile`}
                   to={link.to}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
-                    "rounded-lg px-4 py-3 text-sm font-medium transition",
-                    isActive
-                      ? "bg-[hsl(var(--mkt-primary)/0.1)] text-[hsl(var(--mkt-primary))]"
-                      : "text-[hsl(var(--mkt-ink))] hover:bg-[hsl(var(--mkt-surface-muted))]"
+                    "flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-sm font-semibold",
+                    active ? "border-blue-800 bg-blue-800 text-white" : "border-[#cdbda4] bg-[#f8efe2] text-slate-900"
                   )}
                 >
-                  {label}
+                  <span>{label}</span>
+                  {badge ? (
+                    <span className="rounded-full border border-emerald-700/30 bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-900">
+                      {badge}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}
-
-            <div className="my-2 h-px bg-[hsl(var(--mkt-blue-100))]" />
-
-            {/* Language */}
-            <div className="flex items-center gap-2 px-4 py-2">
-              <span className="text-xs text-[hsl(var(--mkt-ink-muted))]">
-                {isEN ? "Language" : "Langue"}
-              </span>
-              <div className="flex gap-1 rounded-full border border-[hsl(var(--mkt-blue-100))] p-0.5">
-                {(["fr", "en"] as LanguageCode[]).map((code) => (
-                  <button
-                    key={`${code}-mobile`}
-                    type="button"
-                    onClick={() => setLang(code)}
-                    className={cn(
-                      "rounded-full px-3 py-1 text-xs font-semibold transition",
-                      lang === code
-                        ? "bg-[hsl(var(--mkt-primary))] text-white"
-                        : "text-[hsl(var(--mkt-ink-muted))]"
-                    )}
-                  >
-                    {code.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* CTA */}
-            <Link
-              to="/contact?offer=diagnostic"
-              onClick={() => setMobileOpen(false)}
-              className="mkt-btn mkt-btn-primary mx-4 mt-2"
-            >
-              {ctaLabel}
-            </Link>
-
-            {/* Login / App */}
-            {isAuthenticated ? (
-              <Link
-                to="/app/control-tower"
-                onClick={() => setMobileOpen(false)}
-                className="mx-4 mt-2 rounded-lg py-3 text-center text-sm font-medium text-[hsl(var(--mkt-ink-muted))]"
-              >
-                {appLabel}
-              </Link>
-            ) : (
-              <Link
-                to="/login"
-                onClick={() => setMobileOpen(false)}
-                className="mx-4 mt-2 rounded-lg py-3 text-center text-sm font-medium text-[hsl(var(--mkt-ink-muted))]"
-              >
-                {loginLabel}
-              </Link>
-            )}
           </nav>
         </div>
-      )}
+      ) : null}
     </header>
   );
 }

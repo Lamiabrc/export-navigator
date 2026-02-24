@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { HsAutocomplete } from "@/components/hs/HsAutocomplete";
 import { ingestChatExchange } from "@/lib/chatIngest";
+import { getSupabaseAiFallback } from "@/lib/supabaseAiFallback";
 import { supabase } from "@/integrations/supabase/client";
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
@@ -48,16 +49,20 @@ export default function Copilote() {
       error = exception as Error;
     }
     if (error) {
-      const answer = `Erreur: ${error.message}`;
+      const fallback = await getSupabaseAiFallback(message).catch(() => null);
+      const answer = fallback?.answer
+        ? fallback.answer
+        : "Le service IA est indisponible pour le moment. Precisez pays, produit/HS et incoterm puis reessayez.";
       setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
       void ingestChatExchange({
         channel: "copilote_page",
         source: "CopilotePage",
         question: message,
         answer,
-        mode: "chat_free_error",
+        mode: fallback?.answer ? "supabase_ai_fallback" : "chat_free_error",
         context: {
           session_id: sessionId ?? null,
+          error: error.message || null,
           countryIso2,
           hs6,
           product,

@@ -29,6 +29,12 @@ type AssistantResponse = {
   retention_days?: number;
 };
 
+type ChatFreeResponse = {
+  session_id?: string;
+  reply?: string;
+  follow_up_questions?: string[];
+};
+
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -107,6 +113,7 @@ export default function SupportChatWidget({
   const [transportMode, setTransportMode] = React.useState(defaultContext?.transport_mode || "Route");
 
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
+  const [chatFreeSessionId, setChatFreeSessionId] = React.useState<string | null>(null);
   const [draft, setDraft] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -245,6 +252,41 @@ export default function SupportChatWidget({
     [destination, incoterm, transportMode, toChatHistory]
   );
 
+  const invokeChatFreeFallback = React.useCallback(
+    async (msg: string) => {
+      if (!SUPABASE_ENV_OK) return null;
+
+      const { data, error: fnError } = await supabase.functions.invoke<ChatFreeResponse>("chat-free", {
+        body: {
+          session_id: chatFreeSessionId || undefined,
+          message: msg,
+          context: {
+            destination,
+            incoterm,
+            transport_mode: transportMode,
+          },
+        },
+      });
+
+      if (fnError) throw new Error(fnError.message || "chat_free_failed");
+
+      const reply = String(data?.reply || "").trim();
+      if (!reply) return null;
+
+      const nextSessionId = String(data?.session_id || "").trim();
+      if (nextSessionId) setChatFreeSessionId(nextSessionId);
+
+      return {
+        ok: true,
+        mode: "chat_free_fallback",
+        session_id: nextSessionId || undefined,
+        answer: reply,
+        follow_up_questions: (data?.follow_up_questions || []).slice(0, 3),
+      } satisfies AssistantResponse;
+    },
+    [chatFreeSessionId, destination, incoterm, transportMode]
+  );
+
   const send = React.useCallback(
     async (override?: string) => {
       if (loading) return;
@@ -271,7 +313,19 @@ export default function SupportChatWidget({
         }
 
         if (!data) {
-          data = await invokeApiFallback(msg, [...messages, userMsg]);
+          try {
+            data = await invokeApiFallback(msg, [...messages, userMsg]);
+          } catch (err) {
+            if (!primaryErr) primaryErr = err;
+          }
+        }
+
+        if (!data) {
+          try {
+            data = await invokeChatFreeFallback(msg);
+          } catch (err) {
+            if (!primaryErr) primaryErr = err;
+          }
         }
 
         if (!data) {
@@ -308,10 +362,11 @@ export default function SupportChatWidget({
         });
       } catch (err: any) {
         const rawErr = String(err?.message || "Assistant indisponible");
-        const msgErr =
-          rawErr === "assistant_timeout"
-            ? "L'assistant met trop de temps a repondre. Reessaie dans quelques secondes."
-            : rawErr;
+        const msgErr = rawErr === "assistant_timeout"
+          ? "L'assistant met trop de temps a repondre. Reessaie dans quelques secondes."
+          : rawErr.includes("Failed to fetch")
+            ? "Le service IA est temporairement indisponible. Reessaie dans quelques secondes."
+            : "Assistant indisponible pour le moment. Reessaie ou precise le contexte.";
 
         const fallback = await getSupabaseAiFallback(msg).catch(() => null);
         if (fallback) {
@@ -367,14 +422,14 @@ export default function SupportChatWidget({
             destination,
             incoterm,
             transport_mode: transportMode,
-            error: msgErr,
+            error: rawErr,
           },
         });
       } finally {
         setLoading(false);
       }
     },
-    [draft, loading, messages, invokeExportAssistant, invokeApiFallback, destination, incoterm, transportMode]
+    [draft, loading, messages, invokeExportAssistant, invokeApiFallback, invokeChatFreeFallback, destination, incoterm, transportMode]
   );
 
   const handleContactOpen = () => {

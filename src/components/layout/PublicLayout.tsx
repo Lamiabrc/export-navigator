@@ -108,7 +108,8 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
     return candidate;
   };
 
-  const ctaLabel = isFr ? "Demander un devis" : "Request a quote";
+  const registerLabel = isFr ? "Creer un compte gratuit" : "Create free account";
+  const loginLabel = isFr ? "Connexion" : "Sign in";
 
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
@@ -202,7 +203,13 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             ) : (
               <>
                 <Link to={`/register?next=${authNextParam}`} className="inline-flex rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#B0231D]">
-                  {ctaLabel}
+                  {registerLabel}
+                </Link>
+                <Link
+                  to={`/login?next=${authNextParam}`}
+                  className="inline-flex rounded-full border border-slate-500/70 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-900 transition hover:bg-slate-50"
+                >
+                  {loginLabel}
                 </Link>
               </>
             )}
@@ -211,7 +218,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
           <div className="flex items-center gap-2 md:hidden">
             {!isAuthenticated ? (
               <Link to={`/register?next=${authNextParam}`} className="inline-flex rounded-full bg-[#DC2626] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white">
-                {ctaLabel}
+                {registerLabel}
               </Link>
             ) : null}
             <button
@@ -250,7 +257,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
                 </Link>
               ) : (
                 <Link to={`/login?next=${authNextParam}`} className="text-xs font-semibold text-slate-900 underline">
-                  {isFr ? "Connexion" : "Sign in"}
+                  {loginLabel}
                 </Link>
               )}
             </div>

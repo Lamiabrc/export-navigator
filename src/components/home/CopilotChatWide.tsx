@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ingestChatExchange } from "@/lib/chatIngest";
+import { getSupabaseAiFallback } from "@/lib/supabaseAiFallback";
 import { supabase } from "@/integrations/supabase/client";
 
 type Props = {
@@ -83,9 +84,12 @@ export function CopilotChatWide({ isEn }: Props) {
     }
 
     if (error) {
-      const answer = isEn
-        ? "AI connection in progress. I can already guide you: share destination country, product and HS code."
-        : "Connexion IA en cours. Je peux deja vous guider: partagez pays destination, produit et code HS.";
+      const fallback = await getSupabaseAiFallback(text).catch(() => null);
+      const answer = fallback?.answer
+        ? fallback.answer
+        : isEn
+          ? "AI connection in progress. I can already guide you: share destination country, product and HS code."
+          : "Connexion IA en cours. Je peux deja vous guider: partagez pays destination, produit et code HS.";
       setMessages((prev) => [
         ...prev,
         {
@@ -98,10 +102,11 @@ export function CopilotChatWide({ isEn }: Props) {
         source: "CopilotChatWide",
         question: text,
         answer,
-        mode: "chat_free_error",
+        mode: fallback?.answer ? "supabase_ai_fallback" : "chat_free_error",
         context: {
           session_id: sessionId ?? null,
           error: error.message || null,
+          fallback_mode: fallback?.answer ? "supabase_ai_fallback" : null,
         },
       });
       setLoading(false);
