@@ -4,6 +4,7 @@ import { Mic, MicOff, Send, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { ingestChatExchange } from "@/lib/chatIngest";
 import { supabase } from "@/integrations/supabase/client";
 
 type Props = {
@@ -82,15 +83,27 @@ export function CopilotChatWide({ isEn }: Props) {
     }
 
     if (error) {
+      const answer = isEn
+        ? "AI connection in progress. I can already guide you: share destination country, product and HS code."
+        : "Connexion IA en cours. Je peux deja vous guider: partagez pays destination, produit et code HS.";
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: isEn
-            ? "AI connection in progress. I can already guide you: share destination country, product and HS code."
-            : "Connexion IA en cours. Je peux déjà vous guider: partagez pays destination, produit et code HS.",
+          content: answer,
         },
       ]);
+      void ingestChatExchange({
+        channel: "home_copilot",
+        source: "CopilotChatWide",
+        question: text,
+        answer,
+        mode: "chat_free_error",
+        context: {
+          session_id: sessionId ?? null,
+          error: error.message || null,
+        },
+      });
       setLoading(false);
       return;
     }
@@ -99,7 +112,20 @@ export function CopilotChatWide({ isEn }: Props) {
     setRemaining(typeof data?.remaining === "number" ? data.remaining : null);
     setDetectedContext(data?.detected_context || {});
     setFollowUps((data?.follow_up_questions || []).slice(0, 2));
-    setMessages((prev) => [...prev, { role: "assistant", content: data?.reply || "Réponse vide" }]);
+    const answer = data?.reply || "Reponse vide";
+    setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
+    void ingestChatExchange({
+      channel: "home_copilot",
+      source: "CopilotChatWide",
+      question: text,
+      answer,
+      mode: "chat_free",
+      context: {
+        session_id: data?.session_id || sessionId || null,
+        remaining: typeof data?.remaining === "number" ? data.remaining : null,
+        detected_context: data?.detected_context || {},
+      },
+    });
     setLoading(false);
   };
 

@@ -59,6 +59,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { error: gngError } = await admin.from("go_no_go_assessments").delete().lt("expires_at", now);
     if (gngError) console.error("[cron/purge] go_no_go", gngError);
 
+    const { error: chatEventsError } = await admin.from("chat_events").delete().lt("expires_at", now);
+    if (chatEventsError) console.error("[cron/purge] chat_events", chatEventsError);
+
     return json(res, 200, {
       ok: true,
       purged: {

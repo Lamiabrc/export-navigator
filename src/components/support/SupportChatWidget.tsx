@@ -8,17 +8,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { ingestChatExchange } from "@/lib/chatIngest";
+import { getSupabaseAiFallback } from "@/lib/supabaseAiFallback";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
 type AssistantResponse = {
   ok?: boolean;
   mode?: string;
+  session_id?: string;
   answer?: string;
   summary?: string;
   detail?: string;
   error?: string;
   citations?: Array<{ title: string; chunk_index: number; similarity?: number }>;
+  follow_up_questions?: string[];
+  source_links?: Array<{ title: string; url: string; origin?: string }>;
+  context_summary?: string;
   privacy_notice?: string;
   retention_days?: number;
 };
@@ -164,6 +170,80 @@ export default function SupportChatWidget({
   }, [messages]);
 
   const lastMode = lastAssistant?.meta?.mode;
+  const toChatHistory = React.useCallback(
+    (items: ChatMessage[]) => items.slice(-8).map((m) => ({ role: m.role, content: m.content })),
+    []
+  );
+
+  const invokeExportAssistant = React.useCallback(
+    async (msg: string) => {
+      if (!SUPABASE_ENV_OK) throw new Error("Connexion base indisponible.");
+
+      const timeoutMs = 18000;
+      let timeoutId: number | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(() => reject(new Error("assistant_timeout")), timeoutMs);
+      });
+
+      try {
+        const invokePromise = supabase.functions.invoke<AssistantResponse>("export-assistant", {
+          body: {
+            question: msg,
+            destination,
+            incoterm,
+            transport_mode: transportMode,
+          },
+        });
+
+        const { data, error: fnError } = (await Promise.race([invokePromise, timeoutPromise])) as Awaited<typeof invokePromise>;
+        if (fnError || data?.error || data?.ok === false) {
+          const msgErr = fnError?.message || data?.detail || data?.error || "Assistant indisponible";
+          throw new Error(msgErr);
+        }
+
+        return data;
+      } finally {
+        if (typeof timeoutId === "number") window.clearTimeout(timeoutId);
+      }
+    },
+    [destination, incoterm, transportMode]
+  );
+
+  const invokeApiFallback = React.useCallback(
+    async (msg: string, history: ChatMessage[]) => {
+      if (!SUPABASE_ENV_OK) return null;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) return null;
+
+      const resp = await fetch("/api/ask", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          question: msg,
+          context: {
+            destination,
+            incoterm,
+            transport_mode: transportMode,
+            chat_history: toChatHistory(history),
+          },
+        }),
+      });
+
+      const data = (await resp.json().catch(() => ({}))) as AssistantResponse;
+      if (!resp.ok || data?.error || data?.ok === false) {
+        const msgErr = data?.detail || data?.error || `ask_failed_${resp.status}`;
+        throw new Error(msgErr);
+      }
+
+      return data;
+    },
+    [destination, incoterm, transportMode, toChatHistory]
+  );
 
   const send = React.useCallback(
     async (override?: string) => {
@@ -181,20 +261,23 @@ export default function SupportChatWidget({
       setError(null);
 
       try {
-        if (!SUPABASE_ENV_OK) throw new Error("Connexion base indisponible.");
+        let data: AssistantResponse | null = null;
+        let primaryErr: unknown = null;
 
-        const { data, error: fnError } = await supabase.functions.invoke<AssistantResponse>("export-assistant", {
-          body: {
-            question: msg,
-            destination,
-            incoterm,
-            transport_mode: transportMode,
-          },
-        });
+        try {
+          data = await invokeExportAssistant(msg);
+        } catch (err) {
+          primaryErr = err;
+        }
 
-        if (fnError || data?.error || data?.ok === false) {
-          const msgErr = fnError?.message || data?.detail || data?.error || "Assistant indisponible";
-          throw new Error(msgErr);
+        if (!data) {
+          data = await invokeApiFallback(msg, [...messages, userMsg]);
+        }
+
+        if (!data) {
+          const primaryErrMessage =
+            primaryErr instanceof Error ? primaryErr.message : primaryErr ? String(primaryErr) : "Assistant indisponible";
+          throw new Error(primaryErrMessage);
         }
 
         const answer = String(data?.answer || data?.summary || "").trim();
@@ -211,23 +294,87 @@ export default function SupportChatWidget({
         };
 
         setMessages((prev) => [...prev, assistantMsg]);
+        void ingestChatExchange({
+          channel: "support_widget",
+          source: "SupportChatWidget",
+          question: msg,
+          answer: assistantMsg.content,
+          mode: data?.mode || "support_widget_primary",
+          context: {
+            destination,
+            incoterm,
+            transport_mode: transportMode,
+          },
+        });
       } catch (err: any) {
-        const msgErr = err?.message || "Assistant indisponible";
+        const rawErr = String(err?.message || "Assistant indisponible");
+        const msgErr =
+          rawErr === "assistant_timeout"
+            ? "L'assistant met trop de temps a repondre. Reessaie dans quelques secondes."
+            : rawErr;
+
+        const fallback = await getSupabaseAiFallback(msg).catch(() => null);
+        if (fallback) {
+          setError(null);
+          const assistantMsg: ChatMessage = {
+            id: uid(),
+            role: "assistant",
+            content: fallback.answer,
+            createdAt: Date.now(),
+            meta: {
+              ok: true,
+              mode: "supabase_ai_fallback",
+              answer: fallback.answer,
+              summary: fallback.summary,
+              follow_up_questions: fallback.followUpQuestions,
+              source_links: fallback.sourceLinks,
+              context_summary: fallback.contextSummary,
+            },
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
+          void ingestChatExchange({
+            channel: "support_widget",
+            source: "SupportChatWidget",
+            question: msg,
+            answer: assistantMsg.content,
+            mode: "supabase_ai_fallback",
+            context: {
+              destination,
+              incoterm,
+              transport_mode: transportMode,
+            },
+          });
+          return;
+        }
+
         setError(msgErr);
 
         const assistantMsg: ChatMessage = {
           id: uid(),
           role: "assistant",
           content:
-            "Assistant indisponible pour le moment. Tu peux reessayer, preciser le contexte, ou contacter le support.",
+            "Je n'ai pas pu recuperer de reponse IA maintenant. Reessaie ou precise pays, produit/HS, incoterm et mode de transport.",
           createdAt: Date.now(),
         };
         setMessages((prev) => [...prev, assistantMsg]);
+        void ingestChatExchange({
+          channel: "support_widget",
+          source: "SupportChatWidget",
+          question: msg,
+          answer: assistantMsg.content,
+          mode: "assistant_error",
+          context: {
+            destination,
+            incoterm,
+            transport_mode: transportMode,
+            error: msgErr,
+          },
+        });
       } finally {
         setLoading(false);
       }
     },
-    [draft, loading, destination, incoterm, transportMode]
+    [draft, loading, messages, invokeExportAssistant, invokeApiFallback, destination, incoterm, transportMode]
   );
 
   const handleContactOpen = () => {

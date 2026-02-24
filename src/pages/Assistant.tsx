@@ -7,6 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { ingestChatExchange } from "@/lib/chatIngest";
+import { getSupabaseAiFallback } from "@/lib/supabaseAiFallback";
 
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
 
@@ -188,6 +190,19 @@ export default function Assistant() {
             meta: data,
           };
           setMessages((prev) => [...prev, assistantMsg]);
+          void ingestChatExchange({
+            channel: "assistant_page",
+            source: "AssistantPage",
+            question: msg,
+            answer: assistantMsg.content,
+            mode: data?.mode || "api_ask",
+            context: {
+              destination,
+              incoterm,
+              transport_mode: transportMode,
+              session_id: nextSessionId || sessionId,
+            },
+          });
         } else {
           const nextSessionId = String(llmData?.session_id || "").trim();
           if (nextSessionId) setSessionId(nextSessionId);
@@ -199,8 +214,56 @@ export default function Assistant() {
             createdAt: Date.now(),
           };
           setMessages((prev) => [...prev, assistantMsg]);
+          void ingestChatExchange({
+            channel: "assistant_page",
+            source: "AssistantPage",
+            question: msg,
+            answer: assistantMsg.content,
+            mode: "llm_chat",
+            context: {
+              destination,
+              incoterm,
+              transport_mode: transportMode,
+              session_id: nextSessionId || sessionId,
+            },
+          });
         }
       } catch (err: any) {
+        const fallback = await getSupabaseAiFallback(msg).catch(() => null);
+        if (fallback) {
+          setError(null);
+          const assistantMsg: ChatMessage = {
+            id: uid(),
+            role: "assistant",
+            content: fallback.answer,
+            createdAt: Date.now(),
+            meta: {
+              ok: true,
+              mode: "supabase_ai_fallback",
+              answer: fallback.answer,
+              summary: fallback.summary,
+              follow_up_questions: fallback.followUpQuestions,
+              source_links: fallback.sourceLinks,
+              context_summary: fallback.contextSummary,
+            },
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
+          void ingestChatExchange({
+            channel: "assistant_page",
+            source: "AssistantPage",
+            question: msg,
+            answer: assistantMsg.content,
+            mode: "supabase_ai_fallback",
+            context: {
+              destination,
+              incoterm,
+              transport_mode: transportMode,
+              session_id: sessionId,
+            },
+          });
+          return;
+        }
+
         const msgErr = err?.message || "Assistant indisponible";
         setError(msgErr);
 
@@ -217,6 +280,20 @@ export default function Assistant() {
         };
 
         setMessages((prev) => [...prev, assistantMsg]);
+        void ingestChatExchange({
+          channel: "assistant_page",
+          source: "AssistantPage",
+          question: msg,
+          answer: assistantMsg.content,
+          mode: "assistant_error",
+          context: {
+            destination,
+            incoterm,
+            transport_mode: transportMode,
+            session_id: sessionId,
+            error: msgErr,
+          },
+        });
       } finally {
         setLoading(false);
       }

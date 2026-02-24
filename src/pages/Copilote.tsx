@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { HsAutocomplete } from "@/components/hs/HsAutocomplete";
+import { ingestChatExchange } from "@/lib/chatIngest";
 import { supabase } from "@/integrations/supabase/client";
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
@@ -47,11 +48,44 @@ export default function Copilote() {
       error = exception as Error;
     }
     if (error) {
-      setMessages((prev) => [...prev, { role: "assistant", content: `Erreur: ${error.message}` }]);
+      const answer = `Erreur: ${error.message}`;
+      setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
+      void ingestChatExchange({
+        channel: "copilote_page",
+        source: "CopilotePage",
+        question: message,
+        answer,
+        mode: "chat_free_error",
+        context: {
+          session_id: sessionId ?? null,
+          countryIso2,
+          hs6,
+          product,
+          incoterm,
+          paymentTerms,
+        },
+      });
     } else {
       setSessionId(data?.session_id);
       if (typeof data?.remaining === "number") setRemaining(data.remaining);
-      setMessages((prev) => [...prev, { role: "assistant", content: data?.reply || "Réponse vide." }]);
+      const answer = data?.reply || "Reponse vide.";
+      setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
+      void ingestChatExchange({
+        channel: "copilote_page",
+        source: "CopilotePage",
+        question: message,
+        answer,
+        mode: "chat_free",
+        context: {
+          session_id: data?.session_id || sessionId || null,
+          remaining: typeof data?.remaining === "number" ? data.remaining : null,
+          countryIso2,
+          hs6,
+          product,
+          incoterm,
+          paymentTerms,
+        },
+      });
     }
     setLoading(false);
   };
