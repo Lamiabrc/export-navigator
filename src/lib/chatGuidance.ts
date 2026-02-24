@@ -79,22 +79,19 @@ export function buildGuidedFallback(question: string): GuidedFallback {
   }
 
   const flowLabel = flow === "export" ? "export" : flow === "import" ? "import" : "operation internationale";
-  const objective = [
-    "Demande comprise:",
-    `${flowLabel} ${product || (hs ? `produit HS ${hs}` : "produit non precise")}`,
-    country ? `vers ${country}` : "(pays non precise)",
-  ].join(" ");
+  const objective = `${flowLabel} ${product || (hs ? `produit HS ${hs}` : "produit non precise")} ${country ? `vers ${country}` : ""}`.trim();
+  const firstQuestion = followUps[0];
+  const extraQuestions = followUps.slice(1, 3);
 
   const answer = [
-    objective,
-    "Je peux vous guider de facon precise, mais il manque des informations critiques pour securiser la reponse.",
-    "Plan immediat:",
-    "1) Verifier la classification douaniere (HS) et les exigences documentaires du pays cible.",
-    "2) Verifier restrictions/sanctions, regles sanitaires, et droits/taxes applicables.",
-    "3) Verrouiller Incoterm, transport, assurance et mode de paiement avant validation finale.",
-    "Pour finaliser votre dossier, repondez a ces questions:",
-    `- ${followUps.slice(0, 3).join("\n- ")}`,
-  ].join("\n");
+    `D'accord, j'ai compris votre demande: ${objective}.`,
+    `Je vois deja ${country ? `le pays (${country})` : "une partie du contexte"}, mais il manque des infos critiques (${hs ? "HS OK" : "HS manquant"}, ${incoterm ? `incoterm ${incoterm}` : "incoterm manquant"}).`,
+    `Question prioritaire: ${firstQuestion}`,
+    extraQuestions.length ? `Ensuite:\n- ${extraQuestions.join("\n- ")}` : null,
+    "Des que vous repondez, je vous donne une reponse precise et directement actionnable.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   return {
     answer,

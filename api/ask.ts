@@ -265,10 +265,22 @@ function extractSignals(question: string) {
   const incoterm = q.match(/\b(EXW|FCA|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)\b/)?.[1] ?? null;
   const hsCode = question.match(/\b\d{4,10}\b/)?.[0] ?? null;
 
-  const countryCandidates = [
-    "FRANCE", "ALLEMAGNE", "GERMANY", "ESPAGNE", "SPAIN", "ITALIE", "ITALY", "MAROC", "MOROCCO", "TURQUIE", "TURKEY", "USA", "ETATS-UNIS", "UNITED STATES", "CHINE", "CHINA", "ROYAUME-UNI", "UNITED KINGDOM", "UK",
+  const countryPatterns: Array<{ pattern: RegExp; label: string }> = [
+    { pattern: /\bFRANCE\b/, label: "France" },
+    { pattern: /\bALLEMAGNE\b|\bGERMANY\b/, label: "Allemagne" },
+    { pattern: /\bESPAGNE\b|\bSPAIN\b/, label: "Espagne" },
+    { pattern: /\bITALIE\b|\bITALY\b/, label: "Italie" },
+    { pattern: /\bMAROC\b|\bMOROCCO\b/, label: "Maroc" },
+    { pattern: /\bTURQUIE\b|\bTURKEY\b/, label: "Turquie" },
+    { pattern: /\bUSA\b|\bETATS-UNIS\b|\bUNITED STATES\b/, label: "USA" },
+    { pattern: /\bCHINE\b|\bCHINA\b/, label: "Chine" },
+    { pattern: /\bROYAUME-UNI\b|\bUNITED KINGDOM\b|\bUK\b/, label: "Royaume-Uni" },
+    { pattern: /\bJAPON\b|\bJAPAN\b/, label: "Japon" },
+    { pattern: /\bURUGUAY\b/, label: "Uruguay" },
+    { pattern: /\bCANADA\b/, label: "Canada" },
+    { pattern: /\bBELGIQUE\b|\bBELGIUM\b/, label: "Belgique" },
   ];
-  const country = countryCandidates.find((c) => q.includes(c)) ?? null;
+  const country = countryPatterns.find((c) => c.pattern.test(q))?.label ?? null;
 
   const paymentMentioned = /LC|LETTRE DE CREDIT|CREDOC|COMPTE OUVERT|OPEN ACCOUNT|ACOMPTE|VIREMENT|DP|DA/i.test(question);
   const sanctionsMentioned = /SANCTION|EMBARGO|OFAC|RESTRICTION/i.test(question);
@@ -425,11 +437,11 @@ async function fetchSupabaseFacts(question: string, signals: ReturnType<typeof e
 
 function buildFollowUpQuestions(question: string, signals: ReturnType<typeof extractSignals>) {
   const asks: string[] = [];
-  if (!signals.country) asks.push("Quel est le pays de destination exact (et éventuellement pays de transit) ?");
-  if (!signals.hsCode) asks.push("As-tu un code HS (6 ou 8 chiffres) ou une description produit plus précise ?");
-  if (!signals.incoterm) asks.push("Quel Incoterm est prévu (EXW/FCA/FOB/CIF/DAP/DDP...) ?");
+  if (!signals.country) asks.push("Quel est le pays de destination exact (et eventuellement pays de transit) ?");
+  if (!signals.hsCode) asks.push("Avez-vous deja un code HS (6 ou 8 chiffres) ou une description produit plus precise ?");
+  if (!signals.incoterm) asks.push("Quel Incoterm est prevu (EXW/FCA/FOB/CIF/DAP/DDP...) ?");
   if (!signals.paymentMentioned && /paiement|risque|client|exporter/i.test(question)) {
-    asks.push("Quel mode de paiement est envisagé (acompte, crédit documentaire, compte ouvert, virement) ?");
+    asks.push("Quel mode de paiement est envisage (acompte, credit documentaire, compte ouvert, virement) ?");
   }
   return asks.slice(0, 3);
 }
@@ -456,29 +468,47 @@ function buildGuidedConversationAnswer(params: {
   contextSummary: string;
   snippets?: string[];
 }) {
-  const known = [
-    params.signals.country ? `- Pays detecte: ${params.signals.country}` : "- Pays: a confirmer",
-    params.signals.hsCode ? `- HS detecte: ${params.signals.hsCode}` : "- HS: a confirmer",
-    params.signals.incoterm ? `- Incoterm detecte: ${params.signals.incoterm}` : "- Incoterm: a confirmer",
-  ].join("\n");
+  const known: string[] = [];
+  if (params.signals.country) known.push(`destination ${params.signals.country}`);
+  if (params.signals.hsCode) known.push(`HS ${params.signals.hsCode}`);
+  if (params.signals.incoterm) known.push(`incoterm ${params.signals.incoterm}`);
+
+  const missing: string[] = [];
+  if (!params.signals.country) missing.push("pays de destination");
+  if (!params.signals.hsCode) missing.push("code HS");
+  if (!params.signals.incoterm) missing.push("incoterm");
 
   const questions = (params.followUps.length ? params.followUps : buildFollowUpQuestions(params.question, params.signals))
     .slice(0, 3)
-    .map((q) => `- ${normalizeFollowUpQuestion(q)}`)
-    .join("\n");
+    .map((q) => normalizeFollowUpQuestion(q));
+
+  const firstQuestion = questions[0] || "Pouvez-vous confirmer le pays, le code HS et l'incoterm ?";
+  const extraQuestions = questions.slice(1);
+
+  const contextLine = known.length
+    ? `Je note deja: ${known.join(", ")}.`
+    : "Je pars de zero pour cadrer votre dossier correctement.";
+
+  const limitsLine = missing.length
+    ? `Il manque encore: ${missing.join(", ")}.`
+    : "Les informations critiques sont presentes, je peux affiner la recommandation finale.";
 
   const dataHint = params.snippets?.length
-    ? "J'ai trouve des elements dans la base export pour appuyer la suite."
-    : "Je n'ai pas encore assez de donnees fiables pour conclure sans precision complementaire.";
+    ? "J'ai aussi des elements de base pour appuyer la reponse."
+    : "Je reste prudent tant que les points manquants ne sont pas confirmes.";
 
   return [
-    `J'ai bien compris votre demande: "${params.question}".`,
-    `Diagnostic provisoire:\n${known}`,
+    `D'accord, j'ai bien compris votre demande: "${params.question}".`,
+    contextLine,
+    limitsLine,
     dataHint,
-    "Plan immediat:\n- Verifier la classification douaniere (HS)\n- Verifier droits/taxes et restrictions\n- Verrouiller Incoterm + transport + paiement",
-    `Pour vous donner une reponse finale precise, merci de confirmer:\n${questions}`,
+    `Question prioritaire: ${firstQuestion}`,
+    extraQuestions.length ? `Ensuite, j'aurai besoin de:\n- ${extraQuestions.join("\n- ")}` : null,
+    "Des que vous repondez, je vous donne une reponse operationnelle: documents, controles, couts/risques et action immediate.",
     `Contexte courant: ${params.contextSummary}`,
-  ].join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function isVagueModelAnswer(answer: string, mode?: string) {
