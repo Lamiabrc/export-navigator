@@ -1,17 +1,11 @@
 import * as React from "react";
-import { useNavigate } from "react-router-dom";
-import { Bot, Send, Loader2, MessageCircle, X, ChevronDown, ChevronUp, LifeBuoy } from "lucide-react";
+import { Bot, ExternalLink, Loader2, MessageCircle, Send, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/hooks/use-toast";
 import { ingestChatExchange } from "@/lib/chatIngest";
 import { getSupabaseAiFallback } from "@/lib/supabaseAiFallback";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 
 type AssistantResponse = {
   ok?: boolean;
@@ -21,12 +15,9 @@ type AssistantResponse = {
   summary?: string;
   detail?: string;
   error?: string;
-  citations?: Array<{ title: string; chunk_index: number; similarity?: number }>;
   follow_up_questions?: string[];
   source_links?: Array<{ title: string; url: string; origin?: string }>;
   context_summary?: string;
-  privacy_notice?: string;
-  retention_days?: number;
 };
 
 type ChatFreeResponse = {
@@ -54,14 +45,7 @@ type SupportChatWidgetProps = {
   };
 };
 
-const STORAGE_KEY = "mpl_support_widget_chat_v1";
-const QUICK_PROMPTS = [
-  "Quels documents pour un export DAP vers l'Allemagne ?",
-  "TVA et droits import USA : que prevoir ?",
-  "Incoterm CIP : assurance obligatoire ?",
-  "Restrictions / sanctions a verifier pour la Turquie ?",
-];
-
+const STORAGE_KEY = "mpl_support_widget_chat_v2";
 const uid = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
 function safeLSGet(key: string) {
@@ -82,11 +66,60 @@ function safeLSSet(key: string, value: string) {
   }
 }
 
-function buildContactDraft(message: ChatMessage | null, context: string) {
-  const lines: string[] = [];
-  if (message?.content) lines.push(`Question: ${message.content}`);
-  if (context) lines.push(`Contexte: ${context}`);
-  return lines.join("\n");
+function isUncertainAnswer(answer: string, mode?: string) {
+  const txt = answer.trim().toLowerCase();
+  if (!txt) return true;
+  if (txt.length < 40) return true;
+  if (/(pas de reponse|indisponible|reessaye|reessaie|erreur|vide)/i.test(txt)) return true;
+  if (/(fallback|error|timeout)/i.test(String(mode || ""))) return true;
+  return false;
+}
+
+function buildResearchLinks(question: string) {
+  const q = question.trim();
+  const lower = q.toLowerCase();
+  const links: Array<{ title: string; url: string; origin: "internet" }> = [
+    {
+      title: "Recherche web ciblee",
+      url: `https://www.google.com/search?q=${encodeURIComponent(`${q} reglementation export`)}`,
+      origin: "internet",
+    },
+  ];
+
+  if (/(incoterm|fob|dap|ddp|cif|cip|exw|fca)/i.test(lower)) {
+    links.push({
+      title: "Guide ICC Incoterms",
+      url: "https://iccwbo.org/business-solutions/incoterms-rules/",
+      origin: "internet",
+    });
+  }
+
+  if (/(douane|droit|tarif|taric|hs|code hs|tva)/i.test(lower)) {
+    links.push(
+      {
+        title: "Douane francaise",
+        url: "https://www.douane.gouv.fr/",
+        origin: "internet",
+      },
+      {
+        title: "Taric UE",
+        url: "https://ec.europa.eu/taxation_customs/dds2/taric/taric_consultation.jsp",
+        origin: "internet",
+      }
+    );
+  }
+
+  if (/(sanction|embargo|restriction|compliance|conformite)/i.test(lower)) {
+    links.push({
+      title: "EU Sanctions Map",
+      url: "https://www.sanctionsmap.eu/",
+      origin: "internet",
+    });
+  }
+
+  const deduped = new Map<string, { title: string; url: string; origin: "internet" }>();
+  for (const item of links) deduped.set(item.url, item);
+  return Array.from(deduped.values()).slice(0, 4);
 }
 
 export default function SupportChatWidget({
@@ -95,10 +128,6 @@ export default function SupportChatWidget({
   defaultOpen = false,
   defaultContext,
 }: SupportChatWidgetProps) {
-  const { toast } = useToast();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-
   const [internalOpen, setInternalOpen] = React.useState(Boolean(defaultOpen));
   const isControlled = typeof open === "boolean";
   const isOpen = isControlled ? Boolean(open) : internalOpen;
@@ -108,22 +137,15 @@ export default function SupportChatWidget({
     onOpenChange?.(next);
   };
 
-  const [destination, setDestination] = React.useState(defaultContext?.destination || "UE");
-  const [incoterm, setIncoterm] = React.useState(defaultContext?.incoterm || "DAP");
-  const [transportMode, setTransportMode] = React.useState(defaultContext?.transport_mode || "Route");
+  const destination = defaultContext?.destination || "UE";
+  const incoterm = defaultContext?.incoterm || "DAP";
+  const transportMode = defaultContext?.transport_mode || "Route";
 
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [chatFreeSessionId, setChatFreeSessionId] = React.useState<string | null>(null);
   const [draft, setDraft] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [showContext, setShowContext] = React.useState(false);
-  const [showContact, setShowContact] = React.useState(false);
-
-  const [contactEmail, setContactEmail] = React.useState("");
-  const [contactName, setContactName] = React.useState("");
-  const [contactMessage, setContactMessage] = React.useState("");
-  const [contactLoading, setContactLoading] = React.useState(false);
 
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -143,14 +165,14 @@ export default function SupportChatWidget({
           meta: m.meta && typeof m.meta === "object" ? m.meta : undefined,
         }))
         .filter((m) => m.content.trim().length > 0);
-      setMessages(cleaned.slice(-40));
+      setMessages(cleaned.slice(-50));
     } catch {
       // ignore
     }
   }, []);
 
   React.useEffect(() => {
-    safeLSSet(STORAGE_KEY, JSON.stringify(messages.slice(-40)));
+    safeLSSet(STORAGE_KEY, JSON.stringify(messages.slice(-50)));
   }, [messages]);
 
   React.useEffect(() => {
@@ -162,21 +184,6 @@ export default function SupportChatWidget({
     return () => window.cancelAnimationFrame(raf);
   }, [messages, loading, isOpen]);
 
-  React.useEffect(() => {
-    if (user?.email && !contactEmail) setContactEmail(user.email);
-  }, [user?.email, contactEmail]);
-
-  const lastUser = React.useMemo(() => {
-    const rev = [...messages].reverse();
-    return rev.find((m) => m.role === "user") || null;
-  }, [messages]);
-
-  const lastAssistant = React.useMemo(() => {
-    const rev = [...messages].reverse();
-    return rev.find((m) => m.role === "assistant") || null;
-  }, [messages]);
-
-  const lastMode = lastAssistant?.meta?.mode;
   const toChatHistory = React.useCallback(
     (items: ChatMessage[]) => items.slice(-8).map((m) => ({ role: m.role, content: m.content })),
     []
@@ -184,7 +191,7 @@ export default function SupportChatWidget({
 
   const invokeExportAssistant = React.useCallback(
     async (msg: string) => {
-      if (!SUPABASE_ENV_OK) throw new Error("Connexion base indisponible.");
+      if (!SUPABASE_ENV_OK) throw new Error("connexion_base_indisponible");
 
       const timeoutMs = 18000;
       let timeoutId: number | undefined;
@@ -204,7 +211,7 @@ export default function SupportChatWidget({
 
         const { data, error: fnError } = (await Promise.race([invokePromise, timeoutPromise])) as Awaited<typeof invokePromise>;
         if (fnError || data?.error || data?.ok === false) {
-          const msgErr = fnError?.message || data?.detail || data?.error || "Assistant indisponible";
+          const msgErr = fnError?.message || data?.detail || data?.error || "assistant_indisponible";
           throw new Error(msgErr);
         }
 
@@ -291,10 +298,7 @@ export default function SupportChatWidget({
     async (override?: string) => {
       if (loading) return;
       const msg = (override ?? draft).trim();
-      if (!msg) {
-        setError("Ajoute une question pour lancer l'aide IA.");
-        return;
-      }
+      if (!msg) return;
 
       const userMsg: ChatMessage = { id: uid(), role: "user", content: msg, createdAt: Date.now() };
       setMessages((prev) => [...prev, userMsg]);
@@ -330,21 +334,25 @@ export default function SupportChatWidget({
 
         if (!data) {
           const primaryErrMessage =
-            primaryErr instanceof Error ? primaryErr.message : primaryErr ? String(primaryErr) : "Assistant indisponible";
+            primaryErr instanceof Error ? primaryErr.message : primaryErr ? String(primaryErr) : "assistant_indisponible";
           throw new Error(primaryErrMessage);
         }
 
-        const answer = String(data?.answer || data?.summary || "").trim();
-        const fallback =
-          "Je n'ai pas de reponse exploitable. Tu peux preciser le HS, la destination, l'incoterm, " +
-          "ou passer en mode avance pour une analyse complete.";
+        const answerRaw = String(data?.answer || data?.summary || "").trim();
+        const uncertain = isUncertainAnswer(answerRaw, data?.mode);
+        const internetLinks = uncertain ? buildResearchLinks(msg) : [];
+        const sourceLinks = [...(data?.source_links || []), ...internetLinks].slice(0, 4);
+        const answer = answerRaw || "Je n'ai pas de reponse certaine. Voici des liens internet fiables pour verifier rapidement.";
 
         const assistantMsg: ChatMessage = {
           id: uid(),
           role: "assistant",
-          content: answer || fallback,
+          content: answer,
           createdAt: Date.now(),
-          meta: data,
+          meta: {
+            ...data,
+            source_links: sourceLinks,
+          },
         };
 
         setMessages((prev) => [...prev, assistantMsg]);
@@ -358,34 +366,34 @@ export default function SupportChatWidget({
             destination,
             incoterm,
             transport_mode: transportMode,
+            source_links_count: sourceLinks.length,
           },
         });
       } catch (err: any) {
-        const rawErr = String(err?.message || "Assistant indisponible");
-        const msgErr = rawErr === "assistant_timeout"
-          ? "L'assistant met trop de temps a repondre. Reessaie dans quelques secondes."
-          : rawErr.includes("Failed to fetch")
-            ? "Le service IA est temporairement indisponible. Reessaie dans quelques secondes."
-            : "Assistant indisponible pour le moment. Reessaie ou precise le contexte.";
-
         const fallback = await getSupabaseAiFallback(msg).catch(() => null);
         if (fallback) {
           setError(null);
+          const sourceLinks = [...(fallback.sourceLinks || []), ...buildResearchLinks(msg)].slice(0, 4);
+          const answer =
+            String(fallback.answer || "").trim() ||
+            "Je n'ai pas de reponse fiable sur ce point. Utilisez les liens ci-dessous pour trouver la source officielle.";
+
           const assistantMsg: ChatMessage = {
             id: uid(),
             role: "assistant",
-            content: fallback.answer,
+            content: answer,
             createdAt: Date.now(),
             meta: {
               ok: true,
               mode: "supabase_ai_fallback",
-              answer: fallback.answer,
+              answer,
               summary: fallback.summary,
               follow_up_questions: fallback.followUpQuestions,
-              source_links: fallback.sourceLinks,
+              source_links: sourceLinks,
               context_summary: fallback.contextSummary,
             },
           };
+
           setMessages((prev) => [...prev, assistantMsg]);
           void ingestChatExchange({
             channel: "support_widget",
@@ -397,102 +405,52 @@ export default function SupportChatWidget({
               destination,
               incoterm,
               transport_mode: transportMode,
+              source_links_count: sourceLinks.length,
             },
           });
           return;
         }
 
-        setError(msgErr);
+        const answer =
+          "Je n'ai pas pu produire une reponse fiable maintenant. J'ai ajoute des liens internet pour continuer la recherche.";
+        const sourceLinks = buildResearchLinks(msg);
+
+        setError("Reponse indisponible. Liens de secours proposes.");
 
         const assistantMsg: ChatMessage = {
           id: uid(),
           role: "assistant",
-          content:
-            "Je n'ai pas pu recuperer de reponse IA maintenant. Reessaie ou precise pays, produit/HS, incoterm et mode de transport.",
+          content: answer,
           createdAt: Date.now(),
+          meta: {
+            ok: false,
+            mode: "assistant_error_with_links",
+            answer,
+            source_links: sourceLinks,
+          },
         };
+
         setMessages((prev) => [...prev, assistantMsg]);
         void ingestChatExchange({
           channel: "support_widget",
           source: "SupportChatWidget",
           question: msg,
-          answer: assistantMsg.content,
-          mode: "assistant_error",
+          answer,
+          mode: "assistant_error_with_links",
           context: {
             destination,
             incoterm,
             transport_mode: transportMode,
-            error: rawErr,
+            error: String(err?.message || "assistant_error"),
+            source_links_count: sourceLinks.length,
           },
         });
       } finally {
         setLoading(false);
       }
     },
-    [draft, loading, messages, invokeExportAssistant, invokeApiFallback, invokeChatFreeFallback, destination, incoterm, transportMode]
+    [draft, loading, invokeApiFallback, invokeChatFreeFallback, invokeExportAssistant, messages, destination, incoterm, transportMode]
   );
-
-  const handleContactOpen = () => {
-    const contextLine = `destination=${destination} | incoterm=${incoterm} | transport=${transportMode}`;
-    if (!contactMessage) {
-      setContactMessage(buildContactDraft(lastUser, contextLine));
-    }
-    setShowContact(true);
-  };
-
-  const sendSupport = async () => {
-    if (contactLoading) return;
-    const email = (user?.email || contactEmail || "").trim().toLowerCase();
-    if (!email) {
-      toast({ title: "Email requis", description: "Ajoute un email pour contacter le support." });
-      return;
-    }
-    if (!contactMessage.trim()) {
-      toast({ title: "Message requis", description: "Ajoute un message pour le support." });
-      return;
-    }
-
-    const context = {
-      destination,
-      incoterm,
-      transport_mode: transportMode,
-      last_mode: lastMode || null,
-      last_question: lastUser?.content || null,
-      page_url: typeof window !== "undefined" ? window.location.href : null,
-    };
-
-    const payload = {
-      firstName: contactName.trim() || "Support widget",
-      email,
-      topic: "support-message",
-      subject: "Demande support depuis le widget",
-      source: "support-widget",
-      message: `${contactMessage.trim()}\n\nContexte:\n${JSON.stringify(context, null, 2)}`,
-      scenarioSummary: JSON.stringify(context),
-    };
-
-    try {
-      setContactLoading(true);
-      const resp = await fetch("/api/contact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await resp.json().catch(() => ({} as { ok?: boolean; error?: string }));
-
-      if (!resp.ok || data?.ok === false) {
-        throw new Error(data?.error || `contact_failed_${resp.status}`);
-      }
-
-      toast({ title: "Message envoye", description: "Le support revient vers toi sous 24-48h." });
-      setContactMessage("");
-      setShowContact(false);
-    } catch (err: any) {
-      toast({ title: "Erreur support", description: err?.message || "Envoi impossible" });
-    } finally {
-      setContactLoading(false);
-    }
-  };
 
   return (
     <div className="fixed bottom-6 right-6 z-[90] flex flex-col items-end gap-3">
@@ -501,18 +459,18 @@ export default function SupportChatWidget({
           type="button"
           onClick={() => setOpen(true)}
           className="group inline-flex items-center gap-2 rounded-full bg-[#0B1220] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-[#16233a]"
-          aria-label="Ouvrir ton conseiller export"
+          aria-label="Ouvrir le chatbot export"
           aria-expanded="false"
         >
           <MessageCircle className="h-4 w-4" />
-          Ton conseiller export
+          Chatbot export
         </button>
       ) : (
         <div
-          className="w-[92vw] max-w-[380px] overflow-hidden rounded-2xl border border-border bg-white shadow-2xl"
+          className="w-[94vw] max-w-[420px] overflow-hidden rounded-2xl border border-border bg-white shadow-2xl"
           role="dialog"
           aria-modal="false"
-          aria-label="Ton conseiller export"
+          aria-label="Chatbot export"
         >
           <div className="flex items-start justify-between gap-2 border-b border-border bg-slate-900 px-4 py-3 text-white">
             <div className="flex items-center gap-2">
@@ -520,30 +478,25 @@ export default function SupportChatWidget({
                 <Bot className="h-4 w-4" />
               </div>
               <div>
-                <div className="text-sm font-semibold">Ton conseiller export</div>
-                <div className="text-[11px] text-white/70">
-                  Conseils rapides export/import
-                </div>
+                <div className="text-sm font-semibold">MPL Export Expert</div>
+                <div className="text-[11px] text-white/70">Posez une question, recevez une reponse claire.</div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {lastMode ? <Badge variant="secondary">Mode: {lastMode}</Badge> : null}
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 hover:bg-white/20"
-                aria-label="Fermer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 hover:bg-white/20"
+              aria-label="Fermer"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
           <div className="flex flex-col">
-            <div ref={scrollRef} className="max-h-[320px] overflow-auto px-4 py-4">
+            <div ref={scrollRef} className="max-h-[360px] overflow-auto px-4 py-4">
               {messages.length === 0 ? (
                 <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-                  Exemples: documents DAP UE, droits/TVA import, assurance CIP, sanctions pays.
+                  Exemple: "Quels documents pour un export DAP vers l'Allemagne ?"
                 </div>
               ) : null}
 
@@ -556,133 +509,70 @@ export default function SupportChatWidget({
                       </div>
                     ) : null}
                     <div
-                      className={`max-w-[80%] rounded-xl border px-3 py-2 text-xs ${
+                      className={`max-w-[82%] rounded-xl border px-3 py-2 text-xs ${
                         m.role === "user" ? "bg-primary text-primary-foreground" : "bg-background"
                       }`}
                     >
-                      {m.content}
+                      <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
+
+                      {m.role === "assistant" && m.meta?.source_links?.length ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/70 pt-2">
+                          {m.meta.source_links.slice(0, 4).map((src) => (
+                            <a
+                              key={`${m.id}-${src.url}`}
+                              href={src.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-1 text-[11px] text-slate-700 hover:bg-muted"
+                            >
+                              {src.title}
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}
+
+                {loading ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Analyse en cours...
+                  </div>
+                ) : null}
               </div>
             </div>
 
-            <div className="border-t border-border px-4 py-3 space-y-3">
-              <div className="flex flex-wrap gap-2">
-                {QUICK_PROMPTS.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => void send(p)}
-                    disabled={loading}
-                    className="rounded-full border border-border bg-muted/40 px-3 py-1 text-[11px] text-muted-foreground hover:bg-muted"
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
+            <div className="border-t border-border px-4 py-3">
+              {error ? <div className="mb-2 text-xs text-rose-600">{error}</div> : null}
 
-              {error ? <div className="text-xs text-rose-600">{error}</div> : null}
-
-              <Textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="Pose ta question..."
-                rows={2}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void send();
-                  }
-                }}
-              />
-
-              <div className="flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setShowContext((s) => !s)}
-                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  {showContext ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                  Contexte
-                </button>
-
+              <div className="flex items-end gap-2">
+                <Textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="Ecrivez votre question ici..."
+                  rows={3}
+                  className="min-h-[88px] flex-1 resize-none"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      void send();
+                    }
+                  }}
+                />
                 <Button onClick={() => void send()} disabled={loading} className="gap-2">
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   Envoyer
                 </Button>
               </div>
 
-              {showContext ? (
-                <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs space-y-2">
-                  <div className="grid gap-2">
-                    <div>
-                      <label className="text-[11px] text-muted-foreground">Destination</label>
-                      <Input value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="UE" />
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-muted-foreground">Incoterm</label>
-                      <Input value={incoterm} onChange={(e) => setIncoterm(e.target.value)} placeholder="DAP" />
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-muted-foreground">Transport</label>
-                      <Input value={transportMode} onChange={(e) => setTransportMode(e.target.value)} placeholder="Route" />
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              <Separator />
-
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800">
-                Données confidentielles : vos questions sont stockées de façon sécurisée dans la base de données et
-                supprimées automatiquement après la période de rétention.
+              <div className="mt-2 text-[11px] text-muted-foreground">
+                Entree = envoyer, Shift+Entree = nouvelle ligne.
               </div>
-
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => navigate("/assistant")}>
-                  Mode avance
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleContactOpen} className="gap-1">
-                  <LifeBuoy className="h-4 w-4" />
-                  Nous contacter
-                </Button>
-              </div>
-
-              {showContact ? (
-                <div className="rounded-lg border border-border bg-background p-3 space-y-2">
-                  <div className="text-xs font-semibold">Support humain</div>
-                  {!user?.email ? (
-                    <div className="space-y-1">
-                      <label className="text-[11px] text-muted-foreground">Email</label>
-                      <Input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="vous@entreprise.com" />
-                    </div>
-                  ) : (
-                    <div className="text-[11px] text-muted-foreground">
-                      Email du compte: <span className="font-medium">{user.email}</span>
-                    </div>
-                  )}
-                  <div className="space-y-1">
-                    <label className="text-[11px] text-muted-foreground">Nom (optionnel)</label>
-                    <Input value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Nom / Societe" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] text-muted-foreground">Message</label>
-                    <Textarea value={contactMessage} onChange={(e) => setContactMessage(e.target.value)} rows={3} />
-                  </div>
-                  <div className="flex justify-end">
-                    <Button size="sm" onClick={sendSupport} disabled={contactLoading} className="gap-2">
-                      {contactLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                      Envoyer
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
 
               {!SUPABASE_ENV_OK ? (
-                <div className="text-[11px] text-rose-600">
-                  Connexion Supabase indisponible: mode IA limite.
-                </div>
+                <div className="mt-1 text-[11px] text-rose-600">Connexion Supabase indisponible: mode limite.</div>
               ) : null}
             </div>
           </div>

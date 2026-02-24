@@ -1,165 +1,273 @@
 import * as React from "react";
-import { Mic, MicOff, Send, Volume2, Loader2 } from "lucide-react";
+import { Bot, ExternalLink, Loader2, Send } from "lucide-react";
 
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { HsAutocomplete } from "@/components/hs/HsAutocomplete";
+import { Badge } from "@/components/ui/badge";
 import { ingestChatExchange } from "@/lib/chatIngest";
 import { getSupabaseAiFallback } from "@/lib/supabaseAiFallback";
 import { supabase } from "@/integrations/supabase/client";
 
-type ChatMsg = { role: "user" | "assistant"; content: string };
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  links?: Array<{ title: string; url: string }>;
+};
 
-type ChatResponse = { session_id?: string; reply?: string; remaining?: number; sources?: Array<{ document_title?: string; chunk_id?: string }> };
+type ChatResponse = {
+  session_id?: string;
+  reply?: string;
+  remaining?: number;
+};
+
+const uid = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+function isUncertainAnswer(answer: string) {
+  const txt = answer.trim().toLowerCase();
+  if (!txt) return true;
+  if (txt.length < 40) return true;
+  if (/(pas de reponse|indisponible|erreur|vide|reessaye|reessaie)/i.test(txt)) return true;
+  return false;
+}
+
+function buildResearchLinks(question: string) {
+  const q = question.trim();
+  const lower = q.toLowerCase();
+  const links: Array<{ title: string; url: string }> = [
+    {
+      title: "Recherche web ciblee",
+      url: `https://www.google.com/search?q=${encodeURIComponent(`${q} reglementation export`)}`,
+    },
+  ];
+
+  if (/(incoterm|fob|dap|ddp|cif|cip|exw|fca)/i.test(lower)) {
+    links.push({ title: "Guide ICC Incoterms", url: "https://iccwbo.org/business-solutions/incoterms-rules/" });
+  }
+
+  if (/(douane|droit|tarif|taric|hs|code hs|tva)/i.test(lower)) {
+    links.push({ title: "Douane francaise", url: "https://www.douane.gouv.fr/" });
+    links.push({
+      title: "Taric UE",
+      url: "https://ec.europa.eu/taxation_customs/dds2/taric/taric_consultation.jsp",
+    });
+  }
+
+  if (/(sanction|embargo|restriction|compliance|conformite)/i.test(lower)) {
+    links.push({ title: "EU Sanctions Map", url: "https://www.sanctionsmap.eu/" });
+  }
+
+  const deduped = new Map<string, { title: string; url: string }>();
+  for (const item of links) deduped.set(item.url, item);
+  return Array.from(deduped.values()).slice(0, 4);
+}
 
 export default function Copilote() {
-  const [messages, setMessages] = React.useState<ChatMsg[]>([]);
+  const [messages, setMessages] = React.useState<ChatMessage[]>([
+    {
+      id: uid(),
+      role: "assistant",
+      content: "Bonjour. Posez votre question export en une phrase. Je reponds de facon simple et actionnable.",
+    },
+  ]);
   const [sessionId, setSessionId] = React.useState<string | undefined>();
   const [draft, setDraft] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [remaining, setRemaining] = React.useState<number | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const [countryIso2, setCountryIso2] = React.useState("FR");
-  const [product, setProduct] = React.useState("Machines agricoles");
-  const [hs6, setHs6] = React.useState("100101");
-  const [incoterm, setIncoterm] = React.useState("FCA");
-  const [paymentTerms, setPaymentTerms] = React.useState("30% acompte, 70% BL");
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
 
-  const [listening, setListening] = React.useState(false);
-  const recognitionRef = React.useRef<any>(null);
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const raf = window.requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [messages, loading]);
 
-  const send = async () => {
-    const message = draft.trim();
-    if (!message || loading) return;
-    setMessages((prev) => [...prev, { role: "user", content: message }]);
+  const send = React.useCallback(async () => {
+    const question = draft.trim();
+    if (!question || loading) return;
+
+    const userMsg: ChatMessage = { id: uid(), role: "user", content: question };
+    setMessages((prev) => [...prev, userMsg]);
     setDraft("");
     setLoading(true);
-    let data: ChatResponse | null = null;
-    let error: Error | null = null;
+    setError(null);
+
     try {
       const response = await supabase.functions.invoke<ChatResponse>("chat-free", {
-        body: { session_id: sessionId, message, context: { countryIso2, hs6, product, incoterm, paymentTerms } },
+        body: { session_id: sessionId, message: question },
       });
-      data = response.data ?? null;
-      error = response.error as Error | null;
-    } catch (exception) {
-      error = exception as Error;
-    }
-    if (error) {
-      const fallback = await getSupabaseAiFallback(message).catch(() => null);
-      const answer = fallback?.answer
-        ? fallback.answer
-        : "Le service IA est indisponible pour le moment. Precisez pays, produit/HS et incoterm puis reessayez.";
-      setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
-      void ingestChatExchange({
-        channel: "copilote_page",
-        source: "CopilotePage",
-        question: message,
-        answer,
-        mode: fallback?.answer ? "supabase_ai_fallback" : "chat_free_error",
-        context: {
-          session_id: sessionId ?? null,
-          error: error.message || null,
-          countryIso2,
-          hs6,
-          product,
-          incoterm,
-          paymentTerms,
-        },
-      });
-    } else {
-      setSessionId(data?.session_id);
+
+      if (response.error) throw response.error;
+
+      const data = response.data ?? null;
+      const answerRaw = String(data?.reply || "").trim();
+      const uncertain = isUncertainAnswer(answerRaw);
+      const links = uncertain ? buildResearchLinks(question) : [];
+      const answer =
+        answerRaw ||
+        "Je n'ai pas de reponse certaine sur ce point. J'ai ajoute des liens internet fiables pour continuer rapidement.";
+
+      if (data?.session_id) setSessionId(data.session_id);
       if (typeof data?.remaining === "number") setRemaining(data.remaining);
-      const answer = data?.reply || "Reponse vide.";
-      setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
+
+      const assistantMsg: ChatMessage = {
+        id: uid(),
+        role: "assistant",
+        content: answer,
+        links,
+      };
+      setMessages((prev) => [...prev, assistantMsg]);
+
       void ingestChatExchange({
         channel: "copilote_page",
         source: "CopilotePage",
-        question: message,
+        question,
         answer,
-        mode: "chat_free",
+        mode: uncertain ? "chat_free_with_links" : "chat_free",
         context: {
           session_id: data?.session_id || sessionId || null,
           remaining: typeof data?.remaining === "number" ? data.remaining : null,
-          countryIso2,
-          hs6,
-          product,
-          incoterm,
-          paymentTerms,
+          source_links_count: links.length,
         },
       });
+    } catch (err: any) {
+      const fallback = await getSupabaseAiFallback(question).catch(() => null);
+      if (fallback?.answer) {
+        const links = [...(fallback.sourceLinks || []), ...buildResearchLinks(question)]
+          .map((item) => ({ title: item.title, url: item.url }))
+          .slice(0, 4);
+        const answer = String(fallback.answer || "").trim();
+
+        setMessages((prev) => [...prev, { id: uid(), role: "assistant", content: answer, links }]);
+        void ingestChatExchange({
+          channel: "copilote_page",
+          source: "CopilotePage",
+          question,
+          answer,
+          mode: "supabase_ai_fallback",
+          context: {
+            session_id: sessionId || null,
+            source_links_count: links.length,
+          },
+        });
+        setLoading(false);
+        return;
+      }
+
+      const links = buildResearchLinks(question);
+      const answer =
+        "Je n'ai pas pu repondre de facon fiable maintenant. Utilisez les liens internet ci-dessous pour trouver la source officielle.";
+
+      setError("Reponse indisponible. Liens internet proposes.");
+      setMessages((prev) => [...prev, { id: uid(), role: "assistant", content: answer, links }]);
+
+      void ingestChatExchange({
+        channel: "copilote_page",
+        source: "CopilotePage",
+        question,
+        answer,
+        mode: "assistant_error_with_links",
+        context: {
+          session_id: sessionId || null,
+          error: String(err?.message || "chat_free_error"),
+          source_links_count: links.length,
+        },
+      });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
-
-  const startDictation = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-    const rec = new SpeechRecognition();
-    rec.lang = "fr-FR";
-    rec.interimResults = false;
-    rec.onresult = (ev: any) => setDraft((prev) => `${prev} ${ev.results?.[0]?.[0]?.transcript || ""}`.trim());
-    rec.onend = () => setListening(false);
-    rec.start();
-    recognitionRef.current = rec;
-    setListening(true);
-  };
-
-  const stopDictation = () => {
-    recognitionRef.current?.stop?.();
-    setListening(false);
-  };
-
-  const speakLast = () => {
-    const last = [...messages].reverse().find((m) => m.role === "assistant");
-    if (!last) return;
-    speechSynthesis.cancel();
-    speechSynthesis.speak(new SpeechSynthesisUtterance(last.content));
-  };
+  }, [draft, loading, sessionId]);
 
   return (
     <PublicLayout>
       <main className="mx-auto w-full max-w-[96rem] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.32fr)_minmax(0,0.68fr)]">
-          <Card className="order-2 lg:order-1">
-            <CardHeader><CardTitle>Contexte export</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <Input value={countryIso2} onChange={(e) => setCountryIso2(e.target.value.toUpperCase())} placeholder="Pays ISO2" />
-              <Input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="Produit" />
-              <HsAutocomplete value={hs6} onChange={setHs6} productContext={product} />
-              <Input value={incoterm} onChange={(e) => setIncoterm(e.target.value)} placeholder="Incoterm" />
-              <Input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Paiement" />
-              <p className="text-xs text-slate-500">Quota gratuit restant: {remaining ?? "--"} / 30</p>
-            </CardContent>
-          </Card>
+        <Card className="mx-auto w-full max-w-4xl">
+          <CardHeader className="space-y-2">
+            <div className="flex items-center gap-2">
+              <CardTitle>Copilote IA export</CardTitle>
+              <Badge variant="secondary">Gratuit</Badge>
+            </div>
+            <p className="text-sm text-slate-600">Une seule zone de saisie. Reponses claires. Liens internet proposes si besoin.</p>
+            <p className="text-xs text-slate-500">Quota restant: {remaining ?? "--"} / 30</p>
+          </CardHeader>
 
-          <Card className="order-1 lg:order-2">
-            <CardHeader><CardTitle>Copilote IA (texte + vocal)</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div className="max-h-[58vh] space-y-2 overflow-auto rounded-lg border p-3">
-                {messages.map((m, idx) => (
-                  <div key={`${m.role}-${idx}`} className={`rounded-lg p-2 text-sm ${m.role === "user" ? "bg-primary/10" : "bg-slate-100"}`}>
-                    <p className="mb-1 text-[11px] uppercase text-slate-500">{m.role}</p>
-                    <p className="whitespace-pre-wrap">{m.content}</p>
+          <CardContent className="space-y-3">
+            <div ref={scrollRef} className="max-h-[56vh] min-h-[360px] space-y-3 overflow-auto rounded-xl border bg-slate-50 p-3">
+              {messages.map((m) => (
+                <div key={m.id} className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {m.role === "assistant" ? (
+                    <div className="mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Bot className="h-3 w-3" />
+                    </div>
+                  ) : null}
+
+                  <div
+                    className={`max-w-[82%] rounded-xl border px-3 py-2 text-sm ${
+                      m.role === "user" ? "bg-primary text-primary-foreground" : "bg-white"
+                    }`}
+                  >
+                    <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
+
+                    {m.role === "assistant" && m.links?.length ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/70 pt-2">
+                        {m.links.map((link) => (
+                          <a
+                            key={`${m.id}-${link.url}`}
+                            href={link.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-1 text-[11px] text-slate-700 hover:bg-muted"
+                          >
+                            {link.title}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
-                ))}
-                {loading ? <p className="text-sm text-slate-500"><Loader2 className="mr-1 inline size-4 animate-spin" /> Réponse en cours...</p> : null}
-              </div>
-
-              <div className="space-y-2">
-                <Textarea value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Posez votre question export..." className="min-h-24" />
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button className="w-full" onClick={send} disabled={loading}><Send className="mr-2 size-4" />Envoyer</Button>
-                  <Button type="button" variant="outline" className="w-full" onClick={listening ? stopDictation : startDictation}>{listening ? <MicOff className="mr-2 size-4" /> : <Mic className="mr-2 size-4" />}{listening ? "Arrêter" : "Dictée"}</Button>
-                  <Button type="button" variant="outline" className="w-full" onClick={speakLast}><Volume2 className="mr-2 size-4" />Écouter</Button>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              ))}
+
+              {loading ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Analyse en cours...
+                </div>
+              ) : null}
+            </div>
+
+            {error ? <div className="text-xs text-rose-600">{error}</div> : null}
+
+            <div className="flex items-end gap-2">
+              <Textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Ecrivez votre question export ici..."
+                className="min-h-[96px] flex-1 resize-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void send();
+                  }
+                }}
+              />
+
+              <Button onClick={() => void send()} disabled={loading} className="gap-2">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Envoyer
+              </Button>
+            </div>
+
+            <p className="text-[11px] text-slate-500">Entree = envoyer, Shift+Entree = nouvelle ligne.</p>
+          </CardContent>
+        </Card>
       </main>
     </PublicLayout>
   );
