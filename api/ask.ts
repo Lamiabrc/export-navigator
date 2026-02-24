@@ -308,10 +308,13 @@ function normalizeHistory(context: Record<string, any> | null | undefined): Conv
   const raw = Array.isArray(context?.chat_history) ? context?.chat_history : [];
   return raw
     .filter((m: any) => m && typeof m === "object")
-    .map((m: any) => ({
-      role: m?.role === "assistant" ? "assistant" : "user",
-      content: typeof m?.content === "string" ? m.content.trim() : "",
-    }))
+    .map((m: any): ConversationMessage => {
+      const role: ConversationMessage["role"] = m?.role === "assistant" ? "assistant" : "user";
+      return {
+        role,
+        content: typeof m?.content === "string" ? m.content.trim() : "",
+      };
+    })
     .filter((m: ConversationMessage) => m.content.length > 0)
     .slice(-12);
 }

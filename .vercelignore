@@ -8,5 +8,7 @@ api/pdf.ts
 api/prefs.ts
 api/export/brief.ts
 api/ingest/feeds.ts
+api/rss-proxy.ts
+api/kb/ingest.ts
 
 api/cron/purge.ts
