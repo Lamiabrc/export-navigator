@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/contexts/LanguageContext";
 import { getFeaturedGuides, getGuideBySlug, GUIDES as guides } from "@/data/guides";
 import { cn } from "@/lib/utils";
+import { countryFunnel, exportAnswer, hsFunnel } from "@/services/supabaseAI";
+import type { CountrySuggestion, ExportAnswerResult, HsSuggestion } from "@/types/supabaseAI";
 
 export default function Guide() {
   const params = useParams();
@@ -30,6 +32,13 @@ function GuideListing() {
   const { lang } = useI18n();
   const isFr = lang === "fr";
   const [search, setSearch] = useState("");
+  const [countryQuery, setCountryQuery] = useState("");
+  const [productQuery, setProductQuery] = useState("");
+  const [loadingGuide, setLoadingGuide] = useState(false);
+  const [guideError, setGuideError] = useState<string | null>(null);
+  const [guideCountry, setGuideCountry] = useState<CountrySuggestion | null>(null);
+  const [guideHs, setGuideHs] = useState<HsSuggestion | null>(null);
+  const [guideAnswer, setGuideAnswer] = useState<ExportAnswerResult | null>(null);
 
   const filteredGuides = guides.filter((guide) => {
     if (!search.trim()) return true;
@@ -39,6 +48,33 @@ function GuideListing() {
       guide.intro.toLowerCase().includes(q)
     );
   });
+
+  const runTargetedGuide = async () => {
+    if (!countryQuery.trim() || !productQuery.trim()) return;
+    setLoadingGuide(true);
+    setGuideError(null);
+    try {
+      const [countryRes, hsRes] = await Promise.all([countryFunnel(countryQuery, lang, false), hsFunnel(productQuery, lang)]);
+      const country = countryRes.suggestions[0] || null;
+      const hs = hsRes.suggestions[0] || null;
+
+      if (!country || !hs) {
+        setGuideError(isFr ? "Pays ou produit non detecte. Precisez votre saisie." : "Country or product not detected. Please refine.");
+        setGuideAnswer(null);
+        return;
+      }
+
+      const answer = await exportAnswer(country.iso2, hs.hs_code, lang);
+      setGuideCountry(country);
+      setGuideHs(hs);
+      setGuideAnswer(answer);
+    } catch (err: any) {
+      setGuideError(String(err?.message || (isFr ? "Guide indisponible." : "Guide unavailable.")));
+      setGuideAnswer(null);
+    } finally {
+      setLoadingGuide(false);
+    }
+  };
 
   return (
     <PremiumMarketingLayout>
@@ -66,6 +102,101 @@ function GuideListing() {
         eyebrow={isFr ? "Tous les guides" : "All guides"}
         title={isFr ? "Explorez nos ressources" : "Explore our resources"}
       >
+        <div className="mb-8 rounded-3xl border border-[hsl(var(--mkt-primary)/0.2)] bg-[hsl(var(--mkt-primary)/0.05)] p-6">
+          <p className="text-xs font-semibold tracking-[0.2em] text-[hsl(var(--mkt-primary))]">
+            {isFr ? "Guide export cible" : "Targeted export guide"}
+          </p>
+          <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">
+            {isFr
+              ? "Saisissez un pays et un produit. Le guide vous donne points de vigilance, regles et recommandations."
+              : "Enter a country and a product. The guide returns watch points, rules and recommendations."}
+          </p>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+            <Input
+              type="text"
+              placeholder={isFr ? "Pays destination (ex: Chili)" : "Destination country (e.g. Chile)"}
+              value={countryQuery}
+              onChange={(e) => setCountryQuery(e.target.value)}
+            />
+            <Input
+              type="text"
+              placeholder={isFr ? "Produit / HS (ex: fraises)" : "Product / HS (e.g. strawberries)"}
+              value={productQuery}
+              onChange={(e) => setProductQuery(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => void runTargetedGuide()}
+              disabled={loadingGuide}
+              className={cn(
+                "rounded-xl px-4 py-2 text-sm font-medium text-white",
+                "bg-[hsl(var(--mkt-primary))] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60",
+              )}
+            >
+              {loadingGuide ? (isFr ? "Analyse..." : "Analyzing...") : isFr ? "Generer" : "Generate"}
+            </button>
+          </div>
+
+          {guideError ? <p className="mt-3 text-sm text-rose-700">{guideError}</p> : null}
+
+          {guideAnswer ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-white/60 bg-white p-4">
+                <p className="text-xs font-semibold tracking-[0.2em] text-[hsl(var(--mkt-primary))]">
+                  {isFr ? "Cadrage" : "Scope"}
+                </p>
+                <p className="mt-2 text-sm text-[hsl(var(--mkt-ink))]">
+                  {isFr ? "Destination" : "Destination"}: {guideCountry?.label} ({guideCountry?.iso2})
+                </p>
+                <p className="text-sm text-[hsl(var(--mkt-ink))]">
+                  HS: {guideHs?.hs_code} - {guideHs?.label}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/60 bg-white p-4">
+                <p className="text-xs font-semibold tracking-[0.2em] text-[hsl(var(--mkt-primary))]">
+                  {isFr ? "Points de vigilance" : "Watch points"}
+                </p>
+                <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-[hsl(var(--mkt-ink))]">
+                  {Array.isArray(guideAnswer.product_rules) && guideAnswer.product_rules.length ? (
+                    guideAnswer.product_rules.slice(0, 4).map((rule, idx) => (
+                      <li key={String(rule.id || idx)}>{String(rule.summary || rule.title || rule.name || "Rule")}</li>
+                    ))
+                  ) : (
+                    <li>
+                      {isFr
+                        ? "Completer incoterm, paiement et transport dans l'assistant pour un dossier complet."
+                        : "Complete incoterm, payment and transport in the assistant for a full brief."}
+                    </li>
+                  )}
+                </ul>
+
+                {Array.isArray(guideAnswer.update_sources) && guideAnswer.update_sources.length ? (
+                  <div className="mt-3">
+                    <p className="text-xs font-semibold tracking-[0.2em] text-[hsl(var(--mkt-primary))]">
+                      {isFr ? "Sources et traites a verifier" : "Sources and treaties to verify"}
+                    </p>
+                    <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-[hsl(var(--mkt-ink-muted))]">
+                      {guideAnswer.update_sources.slice(0, 4).map((src, idx) => (
+                        <li key={`${src.url || src.label || idx}`}>
+                          {src.url ? (
+                            <a href={src.url} target="_blank" rel="noreferrer" className="underline">
+                              {src.label || src.source_key || src.url}
+                            </a>
+                          ) : (
+                            src.label || src.source_key || "Source"
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
         {/* Search */}
         <div className="mb-8 max-w-md">
           <div className="relative">

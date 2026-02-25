@@ -99,6 +99,7 @@ export default function App() {
                         <Route path="/tool" element={<Navigate to="/verifier-facture" replace />} />
 
                         <Route path="/services" element={<ServicesPage />} />
+                        <Route path="/conseil-audit-export" element={<Navigate to="/services" replace />} />
 
                         {/* ✅ EN/legacy marketing (Watch supprimée => redirect) */}
                         <Route path="/watch" element={<Navigate to="/veille" replace />} />

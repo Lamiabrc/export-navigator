@@ -1,4 +1,4 @@
-import * as React from "react";
+﻿import * as React from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,15 +51,15 @@ function getIssues(lines: Line[], incoterm: string, destination: string) {
   const invalidQty = lines.filter((l) => !Number.isFinite(l.qty) || l.qty <= 0).length;
   const invalidPrice = lines.filter((l) => !Number.isFinite(l.price) || l.price < 0).length;
 
-  if (!String(destination || "").trim()) issues.push("Marché / destination manquant(e)");
+  if (!String(destination || "").trim()) issues.push("MarchÃ© / destination manquant(e)");
   if (!String(incoterm || "").trim()) issues.push("Incoterm manquant");
 
   if (missingDesc) issues.push("Description manquante sur certaines lignes");
-  if (invalidQty) issues.push("Quantité invalide sur certaines lignes (qty > 0)");
-  if (invalidPrice) issues.push("Prix invalide sur certaines lignes (prix ≥ 0)");
+  if (invalidQty) issues.push("QuantitÃ© invalide sur certaines lignes (qty > 0)");
+  if (invalidPrice) issues.push("Prix invalide sur certaines lignes (prix â‰¥ 0)");
   if (missingHs) issues.push("HS incomplet sur certaines lignes (min. 4 chiffres)");
 
-  if (issues.length === 0) issues.push("Aucun risque majeur détecté (contrôle de cohérence OK).");
+  if (issues.length === 0) issues.push("Aucun risque majeur dÃ©tectÃ© (contrÃ´le de cohÃ©rence OK).");
   return issues;
 }
 
@@ -79,6 +79,38 @@ function formatPct(value: number | null | undefined) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "n/a";
   return `${n.toFixed(2)}%`;
+}
+
+function buildInvoiceRecommendations(params: {
+  destination: string;
+  incoterm: string;
+  issues: string[];
+  comparison: any | null;
+}) {
+  const recommendations: string[] = [];
+  const { destination, incoterm, issues, comparison } = params;
+
+  if (!String(destination || "").trim()) {
+    recommendations.push("Renseigner le pays de destination pour finaliser la conformitÃ© douaniÃ¨re et fiscale.");
+  }
+  if (!String(incoterm || "").trim()) {
+    recommendations.push("DÃ©finir l'Incoterm contractuel pour clarifier les responsabilitÃ©s, coÃ»ts et risques.");
+  }
+  if (issues.some((issue) => /hs/i.test(issue))) {
+    recommendations.push("ComplÃ©ter les codes HS manquants ou incomplets (6 chiffres) avant Ã©mission finale.");
+  }
+  if (comparison?.coverage?.unmatched > 0) {
+    recommendations.push("VÃ©rifier les lignes non matchÃ©es avec le rÃ©fÃ©rentiel destination (droits/OM/OMR).");
+  }
+  if (comparison?.coverage?.matched > 0) {
+    recommendations.push("Valider les taux dÃ©tectÃ©s (OM/OMR/taxes) et documenter la source rÃ©glementaire.");
+  }
+
+  if (!recommendations.length) {
+    recommendations.push("ContrÃ´le cohÃ©rent. Lancer une revue finale documentaire avant expÃ©dition.");
+  }
+
+  return recommendations.slice(0, 6);
 }
 
 export default function InvoiceCheck() {
@@ -109,6 +141,7 @@ export default function InvoiceCheck() {
   const [importSummary, setImportSummary] = React.useState<any | null>(null);
   const [importFileName, setImportFileName] = React.useState<string | null>(null);
   const [comparison, setComparison] = React.useState<any | null>(null);
+  const [analysisSource, setAnalysisSource] = React.useState<"edge" | "local_pdf" | null>(null);
 
   const prefillRef = React.useRef(false);
 
@@ -190,6 +223,7 @@ export default function InvoiceCheck() {
     setImportError(null);
     setImportSummary(null);
     setComparison(null);
+    setAnalysisSource(null);
     setImportFileName(file.name);
 
     try {
@@ -215,20 +249,62 @@ export default function InvoiceCheck() {
         activityLabel,
       };
 
-      const { data, error } = await supabase.functions.invoke("invoice-import", { body: payload });
-      if (error) throw error;
+      try {
+        const { data, error } = await supabase.functions.invoke("invoice-import", { body: payload });
+        if (error) throw error;
 
-      const normalized = normalizeSummary(data?.parsed);
-      if (normalized) {
+        const normalized = normalizeSummary(data?.parsed);
+        if (normalized) {
+          setImportSummary(normalized);
+          setLines(mapLinesFromParsed(normalized));
+          if (!destination && normalized.billingCountry) setDestination(normalized.billingCountry);
+        }
+        const cmp = data?.comparison || data?.parsed?.comparison;
+        if (cmp) setComparison(cmp);
+        setAnalysisSource("edge");
+
+        toast({ title: "Facture importee", description: "Le fichier est stocke et la synthese est disponible." });
+        setTimeout(scrollToResults, 120);
+      } catch (edgeErr: any) {
+        const isPdf = file.type.toLowerCase().includes("pdf") || file.name.toLowerCase().endsWith(".pdf");
+        if (!isPdf) throw edgeErr;
+
+        const { extractInvoiceFromPdf } = await import("@/lib/pdf/extractInvoice");
+        const parsedLocal = await extractInvoiceFromPdf(file);
+        const normalized = normalizeSummary(parsedLocal);
+        if (!normalized) throw edgeErr;
+
         setImportSummary(normalized);
         setLines(mapLinesFromParsed(normalized));
         if (!destination && normalized.billingCountry) setDestination(normalized.billingCountry);
-      }
-      const cmp = data?.comparison || data?.parsed?.comparison;
-      if (cmp) setComparison(cmp);
 
-      toast({ title: "Facture importée", description: "Le fichier est stocké et la synthèse est disponible." });
-      setTimeout(scrollToResults, 120);
+        const lineItems = Array.isArray(normalized.lineItems) ? normalized.lineItems : [];
+        const withHs = lineItems.filter(
+          (line: any) => String(line?.hsCode || line?.hs || "").replace(/[^0-9]/g, "").length >= 4,
+        ).length;
+        const missingHs = Math.max(0, lineItems.length - withHs);
+
+        setComparison({
+          destination: destination || normalized.billingCountry || null,
+          inputDestination: destination || null,
+          coverage: {
+            total: lineItems.length,
+            withHs,
+            matched: 0,
+            missingHs,
+            unmatched: 0,
+          },
+          lines: [],
+          issues: ["Analyse locale PDF utilisee (referentiel distant indisponible temporairement)."],
+        });
+        setAnalysisSource("local_pdf");
+
+        toast({
+          title: "Facture analysee (mode local)",
+          description: "Extraction PDF locale effectuee. Verifiez ensuite les taux/referentiels.",
+        });
+        setTimeout(scrollToResults, 120);
+      }
     } catch (err: any) {
       setImportError(err?.message || "Import impossible.");
       toast({ title: "Erreur import", description: err?.message || "Import impossible." });
@@ -236,13 +312,12 @@ export default function InvoiceCheck() {
       setImporting(false);
     }
   };
-
   const generateReport = async () => {
     try {
       setReporting(true);
 
       const pdfBlob = await postPdf({
-        title: "Rapport de contrôle facture (import/export)",
+        title: "Rapport de contrÃ´le facture (import/export)",
         destination,
         incoterm,
         currency,
@@ -259,9 +334,9 @@ export default function InvoiceCheck() {
       link.click();
       URL.revokeObjectURL(url);
 
-      toast({ title: "Rapport généré", description: "Le PDF a été téléchargé." });
+      toast({ title: "Rapport gÃ©nÃ©rÃ©", description: "Le PDF a Ã©tÃ© tÃ©lÃ©chargÃ©." });
     } catch (err: any) {
-      toast({ title: "Erreur PDF", description: err?.message || "Impossible de générer le PDF." });
+      toast({ title: "Erreur PDF", description: err?.message || "Impossible de gÃ©nÃ©rer le PDF." });
     } finally {
       setReporting(false);
     }
@@ -299,7 +374,7 @@ export default function InvoiceCheck() {
         throw new Error(txt || "Impossible d'envoyer la demande.");
       }
 
-      toast({ title: "Demande envoyée", description: "Nous revenons vers vous rapidement." });
+      toast({ title: "Demande envoyÃ©e", description: "Nous revenons vers vous rapidement." });
       setContactOpen(false);
     } catch (err: any) {
       toast({ title: "Erreur", description: err?.message || "Impossible d'envoyer la demande." });
@@ -310,15 +385,15 @@ export default function InvoiceCheck() {
     <AppLayout>
       <div className="space-y-8">
         <div>
-          <p className="text-sm text-muted-foreground">Contrôle facture</p>
-          <h1 className="text-3xl font-semibold font-display">Vérifier une facture import / export</h1>
+          <p className="text-sm text-muted-foreground">ContrÃ´le facture</p>
+          <h1 className="text-3xl font-semibold font-display">VÃ©rifier une facture import / export</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Saisie rapide pour repérer les incohérences, les zones à risque et générer un rapport PDF.
+            Saisie rapide pour repÃ©rer les incohÃ©rences, les zones Ã  risque et gÃ©nÃ©rer un rapport PDF.
           </p>
 
           <div className="mt-3 flex flex-wrap gap-2">
-            <Badge variant="secondary">Marché : {destination || "à définir"}</Badge>
-            <Badge variant="outline">Incoterm : {incoterm || "à définir"}</Badge>
+            <Badge variant="secondary">MarchÃ© : {destination || "Ã  dÃ©finir"}</Badge>
+            <Badge variant="outline">Incoterm : {incoterm || "Ã  dÃ©finir"}</Badge>
             <Badge variant="outline">Devise : {currency}</Badge>
           </div>
         </div>
@@ -341,23 +416,23 @@ export default function InvoiceCheck() {
         <Card>
           <CardHeader>
             <CardTitle>Contexte facture</CardTitle>
-            <CardDescription>Indiquez l'intitulé exact de l'activité et les paramètres de base.</CardDescription>
+            <CardDescription>Indiquez l'intitulÃ© exact de l'activitÃ© et les paramÃ¨tres de base.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-4">
             <div className="space-y-2 md:col-span-2">
-              <Label>Activité exacte</Label>
+              <Label>ActivitÃ© exacte</Label>
               <Input
                 value={activityLabel}
                 onChange={(e) => setActivityLabel(e.target.value)}
-                placeholder="Ex : Fabrication de dispositifs médicaux"
+                placeholder="Ex : Fabrication de dispositifs mÃ©dicaux"
               />
             </div>
             <div className="space-y-2">
-              <Label>Marché / destination</Label>
+              <Label>MarchÃ© / destination</Label>
               <Input
                 value={destination}
                 onChange={(e) => setDestination(e.target.value)}
-                placeholder="Ex : États-Unis / Allemagne / Suisse"
+                placeholder="Ex : Ã‰tats-Unis / Allemagne / Suisse"
               />
             </div>
           </CardContent>
@@ -366,7 +441,7 @@ export default function InvoiceCheck() {
         <Card>
           <CardHeader>
             <CardTitle>Saisie manuelle / lignes facture</CardTitle>
-            <CardDescription>Renseignez les lignes ou ajustez les données importées.</CardDescription>
+            <CardDescription>Renseignez les lignes ou ajustez les donnÃ©es importÃ©es.</CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-4">
@@ -374,7 +449,7 @@ export default function InvoiceCheck() {
 
               <div className="space-y-2">
                 <Label>Incoterm</Label>
-                <Input value={incoterm} onChange={(e) => setIncoterm(e.target.value)} placeholder="Ex : EXW, FCA, CPT, DAP, DDP…" />
+                <Input value={incoterm} onChange={(e) => setIncoterm(e.target.value)} placeholder="Ex : EXW, FCA, CPT, DAP, DDPâ€¦" />
               </div>
 
               <div className="space-y-2">
@@ -421,7 +496,7 @@ export default function InvoiceCheck() {
 
                     <div className="space-y-2">
                       <Label>HS code</Label>
-                      <Input value={line.hs} onChange={(e) => updateLine(idx, { hs: e.target.value })} placeholder="Ex : 6109, 610910…" />
+                      <Input value={line.hs} onChange={(e) => updateLine(idx, { hs: e.target.value })} placeholder="Ex : 6109, 610910â€¦" />
                     </div>
 
                     <Button variant="ghost" onClick={() => removeLine(idx)} disabled={lines.length === 1}>
@@ -434,7 +509,7 @@ export default function InvoiceCheck() {
 
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" onClick={scrollToResults}>
-                Voir la synthèse
+                Voir la synthÃ¨se
               </Button>
             </div>
 
@@ -446,13 +521,13 @@ export default function InvoiceCheck() {
               </div>
 
               <div>
-                <div className="text-xs text-muted-foreground">Score de cohérence</div>
+                <div className="text-xs text-muted-foreground">Score de cohÃ©rence</div>
                 <div className="text-2xl font-semibold">{score}/100</div>
               </div>
 
               <div className="flex items-center gap-3">
                 <Button onClick={generateReport} disabled={reporting}>
-                  {reporting ? "Génération…" : "Générer le rapport PDF"}
+                  {reporting ? "GÃ©nÃ©rationâ€¦" : "GÃ©nÃ©rer le rapport PDF"}
                 </Button>
                 <Button variant="outline" onClick={openAudit}>
                   Demander une revue experte
@@ -471,7 +546,7 @@ export default function InvoiceCheck() {
                 ))}
               </div>
               <div className="mt-3 text-xs text-muted-foreground">
-                NB : ce contrôle est un repérage rapide (MVP). Pour des cas sensibles, une revue experte est recommandée.
+                NB : ce contrÃ´le est un repÃ©rage rapide (MVP). Pour des cas sensibles, une revue experte est recommandÃ©e.
               </div>
             </div>
             </div>
@@ -480,8 +555,8 @@ export default function InvoiceCheck() {
         {entryMode === "import" ? (
 <Card>
           <CardHeader>
-            <CardTitle>Importer une facture (PDF analysé automatiquement)</CardTitle>
-            <CardDescription>Extraction auto des lignes, HS, totaux et pays si détectés.</CardDescription>
+            <CardTitle>Importer une facture (PDF analysÃ© automatiquement)</CardTitle>
+            <CardDescription>Extraction auto des lignes, HS, totaux et pays si dÃ©tectÃ©s.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Input
@@ -515,7 +590,7 @@ export default function InvoiceCheck() {
 
             {importSummary ? (
               <div className="rounded-xl border border-border bg-white p-4 space-y-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Synthèse importée</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">SynthÃ¨se importÃ©e</div>
                 <div className="grid gap-3 md:grid-cols-3">
                   <div>
                     <div className="text-xs text-muted-foreground">Total HT</div>
@@ -539,6 +614,8 @@ export default function InvoiceCheck() {
                 <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                   {importSummary.invoiceNumber ? <Badge variant="outline">Facture: {importSummary.invoiceNumber}</Badge> : null}
                   {importSummary.billingCountry ? <Badge variant="outline">Pays: {importSummary.billingCountry}</Badge> : null}
+                  {analysisSource === "edge" ? <Badge variant="outline">Analyse: moteur serveur</Badge> : null}
+                  {analysisSource === "local_pdf" ? <Badge variant="secondary">Analyse: fallback PDF local</Badge> : null}
                   {importSummary.transitFees != null ? (
                     <Badge variant="outline">Transit: {formatMoney(Number(importSummary.transitFees || 0), currency)}</Badge>
                   ) : null}
@@ -602,9 +679,20 @@ export default function InvoiceCheck() {
               </div>
             ) : null}
 
+            {importSummary || comparison ? (
+              <div className="rounded-xl border border-border bg-white p-4 space-y-2">
+                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Recommandations automatiques</div>
+                <ul className="list-disc pl-5 text-sm text-slate-700 space-y-1">
+                  {buildInvoiceRecommendations({ destination, incoterm, issues, comparison }).map((rec) => (
+                    <li key={rec}>{rec}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             <p className="text-xs text-muted-foreground">
-              Formats acceptés : PDF, Excel (XLSX/XLS) ou CSV. Le fichier est stocké dans Supabase et la synthèse
-              est appliquée aux lignes ci-dessus.
+              Formats acceptÃ©s : PDF, Excel (XLSX/XLS) ou CSV. Le fichier est stockÃ© dans Supabase et la synthÃ¨se
+              est appliquÃ©e aux lignes ci-dessus.
             </p>
           </CardContent>
         </Card>
@@ -620,7 +708,7 @@ export default function InvoiceCheck() {
           <div className="space-y-3">
             <div className="space-y-2">
               <Label>Entreprise</Label>
-              <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Nom de l’entreprise" />
+              <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Nom de lâ€™entreprise" />
             </div>
 
             <div className="space-y-2">
@@ -633,7 +721,7 @@ export default function InvoiceCheck() {
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Contexte, urgence, point bloquant, type de marchandise…"
+                placeholder="Contexte, urgence, point bloquant, type de marchandiseâ€¦"
               />
             </div>
           </div>
@@ -649,3 +737,4 @@ export default function InvoiceCheck() {
     </AppLayout>
   );
 }
+

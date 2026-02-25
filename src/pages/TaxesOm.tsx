@@ -1,4 +1,4 @@
-import * as React from "react";
+﻿import * as React from "react";
 import { Link } from "react-router-dom";
 
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -40,7 +40,7 @@ function normalizeText(value: string) {
   return value
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -201,7 +201,7 @@ export default function TaxesOm() {
           om_rate: 0,
           omr_rate: 0,
           taxes_rate: 0,
-          note: err instanceof Error ? err.message : "Détection impossible",
+          note: err instanceof Error ? err.message : "DÃ©tection impossible",
         },
       }));
     } finally {
@@ -276,10 +276,13 @@ export default function TaxesOm() {
             <p className="text-sm text-muted-foreground">Taxes produit</p>
             <h1 className="text-2xl font-bold">Taxes produit: HS, taxes & OM par destination</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Saisissez un produit libre: on détecte le HS, les taxes et OM/OMR selon la destination (sans format tableau imposé).
+              Simulez un prix rendu destination a partir d'une base EXW, puis comparez selon Incoterm, transport, douane, OM et taxes locales.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={() => setIncoterm("EXW")}>
+              Partir d'un EXW
+            </Button>
             <Button asChild variant="secondary">
               <Link to="/app/assistant">Poser une question IA</Link>
             </Button>
@@ -291,7 +294,7 @@ export default function TaxesOm() {
 
         {ratesError ? (
           <Alert>
-            <AlertTitle>Données de référence indisponibles</AlertTitle>
+            <AlertTitle>DonnÃ©es de rÃ©fÃ©rence indisponibles</AlertTitle>
             <AlertDescription>{ratesError}</AlertDescription>
           </Alert>
         ) : null}
@@ -301,9 +304,9 @@ export default function TaxesOm() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calculator className="h-5 w-5 text-blue-600" />
-                Saisie & paramètres
+                Base EXW & parametres
               </CardTitle>
-              <CardDescription>Valeur marchandise = produits + conditionnement (HT).</CardDescription>
+              <CardDescription>Valeur marchandise EXW = produits + conditionnement (HT), puis ajout transport, assurance, douane et taxes.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-3 md:grid-cols-2">
@@ -405,7 +408,7 @@ export default function TaxesOm() {
                           <Input
                             value={line.description}
                             onChange={(e) => updateLine(line.id, { description: e.target.value })}
-                            placeholder="Produit / référence"
+                            placeholder="Produit / rÃ©fÃ©rence"
                           />
                         </div>
                         <div className="space-y-1">
@@ -417,7 +420,7 @@ export default function TaxesOm() {
                           />
                         </div>
                         <div className="space-y-1">
-                          <div className="text-xs text-muted-foreground">Qté</div>
+                          <div className="text-xs text-muted-foreground">QtÃ©</div>
                           <Input
                             type="number"
                             min={0}
@@ -441,7 +444,7 @@ export default function TaxesOm() {
                             min={0}
                             value={line.packaging}
                             onChange={(e) => updateLine(line.id, { packaging: Number(e.target.value) || 0 })}
-                            placeholder="/ unité"
+                            placeholder="/ unitÃ©"
                           />
                         </div>
                         <Button
@@ -449,7 +452,7 @@ export default function TaxesOm() {
                           onClick={() => void detectProductTaxes(line)}
                           disabled={lookupLoadingByLine[line.id]}
                         >
-                          {lookupLoadingByLine[line.id] ? "Détection..." : "Détecter HS/taxes"}
+                          {lookupLoadingByLine[line.id] ? "DÃ©tection..." : "DÃ©tecter HS/taxes"}
                         </Button>
                         <Button variant="ghost" onClick={() => removeLine(line.id)}>
                           Retirer
@@ -457,11 +460,11 @@ export default function TaxesOm() {
                       </div>
                       {lookupByLine[line.id] ? (
                         <div className="md:col-span-7 rounded-lg border bg-muted/30 p-2 text-xs text-muted-foreground">
-                          HS détecté: <span className="font-medium text-foreground">{lookupByLine[line.id].hs_code || "n/a"}</span>
-                          {" · "}Taxes: <span className="font-medium text-foreground">{formatPct(lookupByLine[line.id].taxes_rate)}</span>
-                          {" · "}OM: <span className="font-medium text-foreground">{formatPct(lookupByLine[line.id].om_rate)}</span>
-                          {" · "}OMR: <span className="font-medium text-foreground">{formatPct(lookupByLine[line.id].omr_rate)}</span>
-                          {lookupByLine[line.id].openai_enabled ? " · IA active" : " · IA indisponible"}
+                          HS dÃ©tectÃ©: <span className="font-medium text-foreground">{lookupByLine[line.id].hs_code || "n/a"}</span>
+                          {" Â· "}Taxes: <span className="font-medium text-foreground">{formatPct(lookupByLine[line.id].taxes_rate)}</span>
+                          {" Â· "}OM: <span className="font-medium text-foreground">{formatPct(lookupByLine[line.id].om_rate)}</span>
+                          {" Â· "}OMR: <span className="font-medium text-foreground">{formatPct(lookupByLine[line.id].omr_rate)}</span>
+                          {lookupByLine[line.id].openai_enabled ? " Â· IA active" : " Â· IA indisponible"}
                           {lookupByLine[line.id].note ? <div className="mt-1">Note: {lookupByLine[line.id].note}</div> : null}
                         </div>
                       ) : null}
@@ -536,13 +539,13 @@ export default function TaxesOm() {
 
               {insuranceRequired ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  Assurance obligatoire pour {incoterm}. Renseignez un pourcentage minimum adapté au contrat.
+                  Assurance obligatoire pour {incoterm}. Renseignez un pourcentage minimum adaptÃ© au contrat.
                 </div>
               ) : null}
 
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={scrollToResults}>
-                  Voir le résultat
+                  Voir le rÃ©sultat
                 </Button>
               </div>
             </CardContent>
@@ -552,7 +555,7 @@ export default function TaxesOm() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BadgePercent className="h-5 w-5 text-blue-600" />
-                Résultat
+                RÃ©sultat
               </CardTitle>
               <CardDescription>Taxes locales, base douane et total rendu.</CardDescription>
             </CardHeader>
@@ -582,14 +585,14 @@ export default function TaxesOm() {
                 </div>
                 <div className="mt-1 text-2xl font-bold text-blue-900">{formatMoney(totalDdp, currency)}</div>
                 {landed.unitCost ? (
-                  <div className="mt-1 text-xs text-blue-700">Coût unitaire: {formatMoney(landed.unitCost, currency)}</div>
+                  <div className="mt-1 text-xs text-blue-700">CoÃ»t unitaire: {formatMoney(landed.unitCost, currency)}</div>
                 ) : null}
               </div>
 
               <Collapsible open={showDetails} onOpenChange={setShowDetails}>
                 <CollapsibleTrigger asChild>
                   <Button variant="outline" className="w-full justify-between">
-                    Détails et alertes
+                    DÃ©tails et alertes
                     {showDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </CollapsibleTrigger>
@@ -619,7 +622,7 @@ export default function TaxesOm() {
                 <ShieldCheck className="h-4 w-4 text-blue-600" />
                 Qui paie quoi
               </CardTitle>
-              <CardDescription>Lecture rapide des responsabilités Incoterm.</CardDescription>
+              <CardDescription>Lecture rapide des responsabilitÃ©s Incoterm.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               {incotermRule ? (
@@ -643,7 +646,7 @@ export default function TaxesOm() {
                 </>
               ) : (
                 <div className="text-sm text-muted-foreground">
-                  Règles non configurées pour {incoterm}. Vérifiez la fiche Incoterm.
+                  RÃ¨gles non configurÃ©es pour {incoterm}. VÃ©rifiez la fiche Incoterm.
                 </div>
               )}
             </CardContent>
@@ -653,7 +656,7 @@ export default function TaxesOm() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Globe className="h-4 w-4 text-blue-600" />
-                Repère destination
+                RepÃ¨re destination
               </CardTitle>
               <CardDescription>Informations pratiques (TVA, taxes possibles, docs).</CardDescription>
             </CardHeader>
@@ -665,7 +668,7 @@ export default function TaxesOm() {
                     <Badge variant="outline">{destinationInfo.zone}</Badge>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Régime TVA</span>
+                    <span>RÃ©gime TVA</span>
                     <span className="text-xs text-muted-foreground">{destinationInfo.tvaRegime}</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -685,7 +688,7 @@ export default function TaxesOm() {
                 </>
               ) : (
                 <div className="text-sm text-muted-foreground">
-                  Aucun repère pour cette destination. Utilisez les liens officiels ci-dessous.
+                  Aucun repÃ¨re pour cette destination. Utilisez les liens officiels ci-dessous.
                 </div>
               )}
             </CardContent>
@@ -729,16 +732,16 @@ export default function TaxesOm() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Info className="h-4 w-4 text-blue-600" />
-                Ce qu'il faut vérifier
+                Ce qu'il faut vÃ©rifier
               </CardTitle>
               <CardDescription>Checklist rapide avant devis DAP/DDP.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <div>1. HS code exact (préfixe HS4/HS6 si besoin).</div>
+              <div>1. HS code exact (prÃ©fixe HS4/HS6 si besoin).</div>
               <div>2. Base douane = marchandise + conditionnement + transport + assurance + frais.</div>
               <div>3. Droits import + TVA import selon incoterm.</div>
               <div>4. Documents obligatoires (facture, origine, packing list).</div>
-              <div>5. Si DDP: vérifier capacité locale (douane + TVA).</div>
+              <div>5. Si DDP: vÃ©rifier capacitÃ© locale (douane + TVA).</div>
             </CardContent>
           </Card>
 
@@ -746,9 +749,9 @@ export default function TaxesOm() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <CircleCheck className="h-4 w-4 text-blue-600" />
-                Données de référence
+                DonnÃ©es de rÃ©fÃ©rence
               </CardTitle>
-              <CardDescription>État des tables taxes dans Supabase.</CardDescription>
+              <CardDescription>Ã‰tat des tables taxes dans Supabase.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
@@ -774,7 +777,7 @@ export default function TaxesOm() {
         <Card className="border-muted">
           <CardHeader>
             <CardTitle className="text-base">Ressources utiles</CardTitle>
-            <CardDescription>Sources officielles pour vérifier les taux.</CardDescription>
+            <CardDescription>Sources officielles pour vÃ©rifier les taux.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             <Badge variant="secondary">Access2Markets (UE)</Badge>
@@ -787,3 +790,4 @@ export default function TaxesOm() {
     </AppLayout>
   );
 }
+

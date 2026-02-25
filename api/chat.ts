@@ -31,6 +31,14 @@ type DetectResponse = {
   keywords_found?: string[];
 };
 
+type AssistantMode = "needs_input" | "brief_ready";
+
+type AssistantBuildResult = {
+  message: string;
+  mode: AssistantMode;
+  questions: string[];
+};
+
 const INCOTERMS = ["EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF"] as const;
 const PAYMENT_PATTERNS: Array<{ code: string; pattern: RegExp }> = [
   { code: "LC", pattern: /\b(lc|l\/c|letter of credit|credit documentaire|credoc)\b/i },
@@ -237,6 +245,76 @@ function outOfScopeMessage(lang: Lang) {
   ].join("\n");
 }
 
+function listMissingSlots(entities: DetectedEntities) {
+  const missing: Array<keyof DetectedEntities> = [];
+  if (!entities.destination) missing.push("destination");
+  if (!entities.hs6) missing.push("hs6");
+  if (!entities.incoterm) missing.push("incoterm");
+  if (!entities.payment) missing.push("payment");
+  if (!entities.transport) missing.push("transport");
+  if (!entities.origin) missing.push("origin");
+  if (!entities.currency) missing.push("currency");
+  if (!entities.contract_type) missing.push("contract_type");
+  return missing;
+}
+
+function defaultQuestionBySlot(lang: Lang, slot: keyof DetectedEntities) {
+  if (lang === "en") {
+    switch (slot) {
+      case "destination":
+        return "What is your destination country (ISO2 or country name)?";
+      case "hs6":
+        return "What is the product or HS code (6 digits)?";
+      case "incoterm":
+        return "Which Incoterm do you target (EXW, FCA, CIF, DDP...)?";
+      case "payment":
+        return "Which payment method do you plan to use (LC, CAD, OA, TT)?";
+      case "transport":
+        return "Which transport mode do you plan to use (air, sea, road, rail, courier)?";
+      case "origin":
+        return "What is your origin country?";
+      case "currency":
+        return "What is your invoicing currency?";
+      case "contract_type":
+        return "Which contract type do you need (sales, distribution, agency, franchise, licensing, OEM)?";
+      default:
+        return "What is the missing information?";
+    }
+  }
+
+  switch (slot) {
+    case "destination":
+      return "Quel est le pays de destination (code ISO2 ou nom du pays) ?";
+    case "hs6":
+      return "Quel est le produit ou le code HS (6 chiffres) ?";
+    case "incoterm":
+      return "Quel Incoterm ciblez-vous (EXW, FCA, CIF, DDP...) ?";
+    case "payment":
+      return "Quel mode de paiement prévoyez-vous (LC, CAD, OA, TT) ?";
+    case "transport":
+      return "Quel mode de transport prévoyez-vous (air, sea, road, rail, courier) ?";
+    case "origin":
+      return "Quel est le pays d'origine ?";
+    case "currency":
+      return "Quelle est la devise de facturation ?";
+    case "contract_type":
+      return "Quel type de contrat visez-vous (vente, distribution, agence, franchise, licence, OEM) ?";
+    default:
+      return "Quelle information manque ?";
+  }
+}
+
+function buildGuidedQuestions(lang: Lang, dossier: any, entities: DetectedEntities) {
+  const fromDossier = Array.isArray(dossier?.questions_missing)
+    ? dossier.questions_missing.map((q: unknown) => String(q || "").trim()).filter(Boolean)
+    : [];
+
+  const fallback = listMissingSlots(entities).map((slot) => defaultQuestionBySlot(lang, slot));
+  const merged = [...fromDossier, ...fallback];
+
+  return Array.from(new Set(merged)).slice(0, 3);
+}
+
 function lineItems(items: unknown, limit: number, formatter: (item: any) => string) {
   if (!Array.isArray(items)) return [] as string[];
   return items
@@ -245,7 +323,12 @@ function lineItems(items: unknown, limit: number, formatter: (item: any) => stri
     .filter((line) => Boolean(line));
 }
 
-function buildAssistantMessage(lang: Lang, dossier: any, entities: DetectedEntities) {
+function buildAssistantMessage(
+  lang: Lang,
+  dossier: any,
+  entities: DetectedEntities,
+  options: { isFirstExchange: boolean }
+): AssistantBuildResult {
   const summary = dossier?.summary || {};
   const destinationName = summary?.destination?.name || summary?.destination?.iso2 || entities.destination || "?";
   const hsLabel = summary?.hs?.hs6 || entities.hs6 || "?";
@@ -271,54 +354,109 @@ function buildAssistantMessage(lang: Lang, dossier: any, entities: DetectedEntit
     return text ? `- ${text}` : "";
   });
 
-  const missing = lineItems(dossier?.questions_missing, 3, (q) => {
-    const text = String(q || "").trim();
-    return text ? `- ${text}` : "";
-  });
+  const questions = buildGuidedQuestions(lang, dossier, entities);
 
-  if (lang === "en") {
-    return [
-      `Here is your export brief for destination ${destinationName} (HS: ${hsLabel}).`,
-      "",
-      "Documents:",
-      ...(docs.length ? docs : ["- No specific document rule found yet."]),
-      "",
-      "Compliance & sanctions:",
-      ...(restrictions.length ? restrictions : ["- No specific restriction found with current inputs."]),
-      "",
-      "Contract structure:",
-      ...(clauses.length ? clauses : ["- No clause playbook matched yet. Base clauses are still available."]),
-      "",
-      "Tax & customs:",
-      `- VAT rule loaded: ${dossier?.tax_and_customs?.vat && Object.keys(dossier.tax_and_customs.vat).length ? "yes" : "not yet"}`,
-      `- Duty/tax concepts loaded: ${Array.isArray(dossier?.tax_and_customs?.duties_concept) ? dossier.tax_and_customs.duties_concept.length : 0}`,
-      "",
-      "Next actions:",
-      ...(nextActions.length ? nextActions : ["- Finalize assumptions and validate with legal/tax advisor."]),
-      ...(missing.length ? ["", "I still need:", ...missing] : []),
-    ].join("\n");
+  if (questions.length) {
+    if (lang === "en") {
+      return {
+        mode: "needs_input",
+        questions,
+        message: [
+          options.isFirstExchange
+            ? "Welcome. I am your structured Export Expert assistant."
+            : "Thanks. We will complete your case step by step.",
+          "",
+          "Current understanding:",
+          `- Destination: ${entities.destination || "not provided"}`,
+          `- HS/product: ${entities.hs6 || "not provided"}`,
+          `- Incoterm: ${entities.incoterm || "not provided"}`,
+          `- Payment: ${entities.payment || "not provided"}`,
+          `- Transport: ${entities.transport || "not provided"}`,
+          "",
+          "Please answer these short questions:",
+          ...questions.map((q, idx) => `${idx + 1}. ${q}`),
+          "",
+          "Once answered, I will produce your operational export brief.",
+        ].join("\n"),
+      };
+    }
+
+    return {
+      mode: "needs_input",
+      questions,
+      message: [
+        options.isFirstExchange
+          ? "Bienvenue. Je suis votre assistant Export Expert guide."
+          : "Merci. On complete votre dossier pas a pas.",
+        "",
+        "Ce que j'ai compris pour l'instant :",
+        `- Destination : ${entities.destination || "non renseignee"}`,
+        `- HS/produit : ${entities.hs6 || "non renseigne"}`,
+        `- Incoterm : ${entities.incoterm || "non renseigne"}`,
+        `- Paiement : ${entities.payment || "non renseigne"}`,
+        `- Transport : ${entities.transport || "non renseigne"}`,
+        "",
+        "Merci de repondre a ces questions simples :",
+        ...questions.map((q, idx) => `${idx + 1}. ${q}`),
+        "",
+        "Des que vous repondez, je genere le dossier export operationnel.",
+      ].join("\n"),
+    };
   }
 
-  return [
-    `Voici le dossier export cadre pour destination ${destinationName} (HS : ${hsLabel}).`,
-    "",
-    "Documents :",
-    ...(docs.length ? docs : ["- Aucune regle documentaire specifique trouvee pour l'instant."]),
-    "",
-    "Compliance & sanctions :",
-    ...(restrictions.length ? restrictions : ["- Pas de restriction specifique detectee avec les infos actuelles."]),
-    "",
-    "Contrat :",
-    ...(clauses.length ? clauses : ["- Aucun playbook clause correspondant pour l'instant. Clauses de base disponibles."]),
-    "",
-    "Fiscalite & douane :",
-    `- Regle TVA chargee : ${dossier?.tax_and_customs?.vat && Object.keys(dossier.tax_and_customs.vat).length ? "oui" : "non"}`,
-    `- Concepts droits/taxes charges : ${Array.isArray(dossier?.tax_and_customs?.duties_concept) ? dossier.tax_and_customs.duties_concept.length : 0}`,
-    "",
-    "Actions suivantes :",
-    ...(nextActions.length ? nextActions : ["- Finaliser les hypotheses puis valider avec conseil juridique/fiscal."]),
-    ...(missing.length ? ["", "Il me manque :", ...missing] : []),
-  ].join("\n");
+  if (lang === "en") {
+    return {
+      mode: "brief_ready",
+      questions: [],
+      message: [
+        `Export brief ready for ${destinationName} (HS: ${hsLabel}).`,
+        "",
+        "Documents:",
+        ...(docs.length ? docs : ["- No specific document rule found yet."]),
+        "",
+        "Compliance & sanctions:",
+        ...(restrictions.length ? restrictions : ["- No specific restriction found with current inputs."]),
+        "",
+        "Contract structure:",
+        ...(clauses.length ? clauses : ["- No clause playbook matched yet."]),
+        "",
+        "Tax & customs:",
+        `- VAT rule loaded: ${dossier?.tax_and_customs?.vat && Object.keys(dossier.tax_and_customs.vat).length ? "yes" : "not yet"}`,
+        `- Duty/tax concepts loaded: ${Array.isArray(dossier?.tax_and_customs?.duties_concept) ? dossier.tax_and_customs.duties_concept.length : 0}`,
+        "",
+        "Next actions:",
+        ...(nextActions.length ? nextActions : ["- Finalize assumptions and validate with legal/tax advisor."]),
+        "",
+        "Thank you. Was this answer relevant for your need? Tell me your next need and I continue.",
+      ].join("\n"),
+    };
+  }
+
+  return {
+    mode: "brief_ready",
+    questions: [],
+    message: [
+      `Dossier export pret pour ${destinationName} (HS : ${hsLabel}).`,
+      "",
+      "Documents :",
+      ...(docs.length ? docs : ["- Aucune regle documentaire specifique trouvee pour l'instant."]),
+      "",
+      "Compliance & sanctions :",
+      ...(restrictions.length ? restrictions : ["- Pas de restriction specifique detectee avec les infos actuelles."]),
+      "",
+      "Contrat :",
+      ...(clauses.length ? clauses : ["- Aucun playbook clause correspondant pour l'instant."]),
+      "",
+      "Fiscalite & douane :",
+      `- Regle TVA chargee : ${dossier?.tax_and_customs?.vat && Object.keys(dossier.tax_and_customs.vat).length ? "oui" : "non"}`,
+      `- Concepts droits/taxes charges : ${Array.isArray(dossier?.tax_and_customs?.duties_concept) ? dossier.tax_and_customs.duties_concept.length : 0}`,
+      "",
+      "Actions suivantes :",
+      ...(nextActions.length ? nextActions : ["- Finaliser les hypotheses puis valider avec conseil juridique/fiscal."]),
+      "",
+      "Merci. Cette reponse est-elle pertinente pour votre besoin ? Dites-moi votre prochain besoin et je continue.",
+    ].join("\n"),
+  };
 }
 
 async function ensureThread(
@@ -431,6 +569,7 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     }
 
     const historyRows = Array.isArray(historyRowsRaw) ? historyRowsRaw : [];
+    const isFirstExchange = historyRows.filter((row: any) => row?.role === "user").length === 0;
     const previousEntities = readLatestEntities(historyRows as Array<Record<string, any>>);
 
     const { data: detectRaw, error: detectError } = await userScoped.rpc("rpc_detect_entities", {
@@ -523,6 +662,8 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
         in_scope: false,
         intent: detect.intent || "out_of_scope",
         assistant_message: assistantMessage,
+        assistant_mode: "needs_input",
+        follow_up_questions: [],
         entities,
         dossier: {},
       });
@@ -549,7 +690,8 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     }
 
     const dossier = asObject(dossierRaw);
-    const assistantMessage = buildAssistantMessage(lang, dossier, entities);
+    const assistant = buildAssistantMessage(lang, dossier, entities, { isFirstExchange });
+    const assistantMessage = assistant.message;
 
     const { error: saveError } = await userScoped.from("chat_messages").insert([
       {
@@ -582,6 +724,8 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       in_scope: true,
       intent: detect.intent || "general_export",
       assistant_message: assistantMessage,
+      assistant_mode: assistant.mode,
+      follow_up_questions: assistant.questions,
       entities,
       dossier,
     });

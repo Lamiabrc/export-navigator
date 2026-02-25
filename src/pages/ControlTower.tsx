@@ -78,6 +78,7 @@ type ClientRegionRow = {
   id: string;
   region: string;
   sector: string;
+  channel: string;
   product: string;
   clients: number;
   sales: number;
@@ -299,6 +300,7 @@ function extractClientRowsFromFreeText(text: string): ClientRegionRow[] {
     const countryLabel = pick(c, /(?:pays|country|destination|dest)\s*[:=-]\s*([^,;\n]+)/i);
     const product = pick(c, /(?:produit|product|article|sku|designation|description)\s*[:=-]\s*([^,;\n]+)/i);
     const clientName = pick(c, /(?:client|customer|societe|company)\s*[:=-]\s*([^,;\n]+)/i);
+    const channel = pick(c, /(?:canal|channel|distribution_channel|distribution)\s*[:=-]\s*([^,;\n]+)/i);
 
     let region = normalizeCountryCode(countryLabel);
     if (!region) {
@@ -330,6 +332,7 @@ function extractClientRowsFromFreeText(text: string): ClientRegionRow[] {
       id: uid(),
       region: region || "OTHER",
       sector: clientName || "",
+      channel: channel || "",
       product: product || "",
       clients: Math.max(0, Number(clients) || 0),
       sales: Math.max(0, Number(sales) || 0),
@@ -487,6 +490,31 @@ function parseCsvText(text: string): CsvState {
   return { headers, rows, delimiter };
 }
 
+async function readTabularFile(file: File): Promise<CsvState> {
+  const lower = file.name.toLowerCase();
+  const isExcel =
+    lower.endsWith(".xlsx") ||
+    lower.endsWith(".xls") ||
+    file.type.includes("spreadsheet") ||
+    file.type.includes("excel");
+
+  if (!isExcel) {
+    const text = await file.text();
+    return parseCsvText(text);
+  }
+
+  const xlsx = await import("xlsx");
+  const arrayBuffer = await file.arrayBuffer();
+  const workbook = xlsx.read(arrayBuffer, { type: "array" });
+  const firstSheet = workbook.SheetNames[0];
+  if (!firstSheet || !workbook.Sheets[firstSheet]) {
+    return { headers: [], rows: [], delimiter: ";" };
+  }
+
+  const csv = xlsx.utils.sheet_to_csv(workbook.Sheets[firstSheet], { FS: ";", RS: "\n" });
+  return parseCsvText(csv);
+}
+
 function readUserHsPrefs() {
   try {
     if (typeof window === "undefined") return [];
@@ -624,7 +652,7 @@ export default function ControlTower() {
   const [planCtaError, setPlanCtaError] = React.useState<string | null>(null);
 
   const [clientRows, setClientRows] = React.useState<ClientRegionRow[]>([
-    { id: uid(), region: "", sector: "", product: "", clients: 0, sales: 0 },
+    { id: uid(), region: "", sector: "", channel: "", product: "", clients: 0, sales: 0 },
   ]);
   const [clientCsvName, setClientCsvName] = React.useState<string | null>(null);
   const [clientCsvError, setClientCsvError] = React.useState<string | null>(null);
@@ -886,10 +914,9 @@ const assistantExamples = [
     setObjectiveUploading(true);
 
     try {
-      const text = await file.text();
-      const parsed = parseCsvText(text);
+      const parsed = await readTabularFile(file);
       if (!parsed.headers.length) {
-        setObjectiveError("CSV vide ou illisible.");
+        setObjectiveError("Fichier CSV/Excel vide ou illisible.");
         setObjectiveCsv(null);
         setObjectiveName(null);
         setObjectiveUploading(false);
@@ -952,7 +979,7 @@ const assistantExamples = [
   };
 
   const addClientRow = () => {
-    setClientRows((prev) => [...prev, { id: uid(), region: "", sector: "", product: "", clients: 0, sales: 0 }]);
+    setClientRows((prev) => [...prev, { id: uid(), region: "", sector: "", channel: "", product: "", clients: 0, sales: 0 }]);
   };
 
   const removeClientRow = (id: string) => {
@@ -964,9 +991,9 @@ const assistantExamples = [
     setClientCsvName(file.name);
 
     try {
-      const text = await file.text();
-      const parsed = parseCsvText(text);
+      const parsed = await readTabularFile(file);
       if (!parsed.headers.length) {
+        const text = file.type.includes("spreadsheet") || file.type.includes("excel") ? "" : await file.text();
         const extracted = extractClientRowsFromFreeText(text);
         if (!extracted.length) {
           setClientCsvError("Fichier illisible: aucun pays/produit/client détecté.");
@@ -994,12 +1021,14 @@ const assistantExamples = [
       const idx = {
         region: pickIndex(["region", "zone", "market_zone", "pays", "country", "region_code"]),
         sector: pickIndex(["sector", "secteur", "industry"]),
+        channel: pickIndex(["channel", "canal", "distribution_channel", "canal_distribution"]),
         product: pickIndex(["product", "produit", "product_label", "hs_code"]),
         clients: pickIndex(["clients", "nb_clients", "count_clients", "client_count"]),
         sales: pickIndex(["sales", "revenue", "ca", "total_sales"]),
       };
 
       if (idx.region === null || idx.clients === null) {
+        const text = file.type.includes("spreadsheet") || file.type.includes("excel") ? "" : await file.text();
         const extracted = extractClientRowsFromFreeText(text);
         if (!extracted.length) {
           setClientCsvError("Colonnes manquantes et aucun pays/produit/client détecté en texte libre.");
@@ -1021,13 +1050,14 @@ const assistantExamples = [
         const region = String(getValue(cells, idx.region)).trim();
         if (!region) return;
         const sector = String(getValue(cells, idx.sector)).trim();
+        const channel = String(getValue(cells, idx.channel)).trim();
         const product = String(getValue(cells, idx.product)).trim();
         const clients = parseNumber(getValue(cells, idx.clients)) ?? 0;
         const sales = parseNumber(getValue(cells, idx.sales)) ?? 0;
-        rows.push({ id: uid(), region, sector, product, clients, sales });
+        rows.push({ id: uid(), region, sector, channel, product, clients, sales });
       });
 
-      setClientRows(rows.length ? rows : [{ id: uid(), region: "", sector: "", product: "", clients: 0, sales: 0 }]);
+      setClientRows(rows.length ? rows : [{ id: uid(), region: "", sector: "", channel: "", product: "", clients: 0, sales: 0 }]);
     } catch (err: any) {
       setClientCsvError(err?.message || "Impossible de lire le CSV.");
     }
@@ -1123,10 +1153,9 @@ const assistantExamples = [
   const handleCsvUpload = async (file: File) => {
     setCsvError(null);
     try {
-      const text = await file.text();
-      const parsed = parseCsvText(text);
+      const parsed = await readTabularFile(file);
       if (!parsed.headers.length) {
-        setCsvError("CSV vide ou illisible.");
+        setCsvError("Fichier CSV/Excel vide ou illisible.");
         setCsvState(null);
         setCsvName(null);
         return;
@@ -1375,6 +1404,17 @@ const assistantExamples = [
       .sort((a, b) => b.sales - a.sales);
   }, [clientRows]);
 
+  const salesByChannel = React.useMemo(() => {
+    const map = new Map<string, number>();
+    clientRows.forEach((row) => {
+      if (!row.channel) return;
+      map.set(row.channel, (map.get(row.channel) || 0) + (Number(row.sales) || 0));
+    });
+    return Array.from(map.entries())
+      .map(([channel, sales]) => ({ channel, sales }))
+      .sort((a, b) => b.sales - a.sales);
+  }, [clientRows]);
+
   const productAgg = React.useMemo(() => {
     const map = new Map<string, Agg & { label: string | null }>();
     filteredRows.forEach((row) => {
@@ -1404,7 +1444,7 @@ const assistantExamples = [
   const improvementSuggestions = React.useMemo(() => {
     const suggestions: string[] = [];
     if (!rowsAll.length) {
-      suggestions.push("Importer un CSV de ventes pour analyser marges et produits.");
+      suggestions.push("Importer un fichier CSV/Excel de ventes pour analyser marges et produits.");
     }
     if (totals.revenue && totals.margin / totals.revenue < 0.15) {
       suggestions.push("Marge moyenne faible : revaloriser les prix ou réduire les coûts logistiques.");
@@ -1445,6 +1485,22 @@ const assistantExamples = [
     });
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
   }, [filteredRows]);
+
+  const profitableCountries = React.useMemo(() => {
+    return destinationAgg
+      .filter((entry) => entry.revenue > 0)
+      .map((entry) => ({
+        ...entry,
+        marginPct: entry.revenue > 0 ? entry.margin / entry.revenue : null,
+        costRatio: entry.revenue > 0 ? entry.costs / entry.revenue : null,
+      }))
+      .sort((a, b) => {
+        const marginDiff = (b.marginPct ?? -1) - (a.marginPct ?? -1);
+        if (Math.abs(marginDiff) > 0.0001) return marginDiff;
+        return (a.costRatio ?? Number.POSITIVE_INFINITY) - (b.costRatio ?? Number.POSITIVE_INFINITY);
+      })
+      .slice(0, 6);
+  }, [destinationAgg]);
 
   const destinationAggAll = React.useMemo(() => {
     const map = new Map<string, Agg>();
@@ -2259,7 +2315,7 @@ const assistantExamples = [
             <CardContent className="space-y-4">
               <input
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) void handleObjectiveUpload(file);
@@ -2340,7 +2396,7 @@ const assistantExamples = [
               <div className="space-y-3">
                 <input
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) void handleClientUpload(file);
@@ -2362,7 +2418,7 @@ const assistantExamples = [
 
                 <div className="space-y-2">
                   {clientRows.map((row) => (
-                    <div key={row.id} className="grid gap-2 md:grid-cols-[1.2fr_1fr_1fr_0.6fr_0.8fr_auto] items-end">
+                    <div key={row.id} className="grid gap-2 md:grid-cols-[1.1fr_1fr_1fr_1fr_0.6fr_0.8fr_auto] items-end">
                       <div className="space-y-1">
                         <div className="text-xs text-muted-foreground">Région</div>
                         <Input value={row.region} onChange={(e) => updateClientRow(row.id, { region: e.target.value })} placeholder="Ex : UE" />
@@ -2374,6 +2430,10 @@ const assistantExamples = [
                       <div className="space-y-1">
                         <div className="text-xs text-muted-foreground">Produit</div>
                         <Input value={row.product} onChange={(e) => updateClientRow(row.id, { product: e.target.value })} placeholder="HS / produit" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Canal</div>
+                        <Input value={row.channel} onChange={(e) => updateClientRow(row.id, { channel: e.target.value })} placeholder="Ex : distributeur" />
                       </div>
                       <div className="space-y-1">
                         <div className="text-xs text-muted-foreground">Clients</div>
@@ -2429,6 +2489,20 @@ const assistantExamples = [
                         <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} />
                         <Tooltip />
                         <Bar dataKey="sales" fill="hsl(var(--secondary))" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : null}
+
+                {salesByChannel.length ? (
+                  <div className="h-56 rounded-xl border border-slate-200 bg-white p-3">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={salesByChannel.slice(0, 6)}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis dataKey="channel" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} />
+                        <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} />
+                        <Tooltip />
+                        <Bar dataKey="sales" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2769,12 +2843,48 @@ const assistantExamples = [
                 </CardTitle>
                 <CardDescription>Priorités issues de vos données.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-slate-700">
+              <CardContent className="space-y-4 text-sm text-slate-700">
                 <ul className="list-disc space-y-1 pl-4">
                   {improvementSuggestions.map((item) => (
                     <li key={item}>{item}</li>
                   ))}
                 </ul>
+
+                {profitableCountries.length ? (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
+                      Pays les plus rentables
+                    </div>
+                    <div className="mt-2 space-y-1">
+                      {profitableCountries.map((country) => (
+                        <div key={country.code} className="flex items-center justify-between text-xs">
+                          <span>
+                            {country.name} ({country.code})
+                          </span>
+                          <span className="font-semibold">
+                            {formatPercent(country.marginPct)} | couts {formatPercent(country.costRatio)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {salesByChannel.length ? (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">
+                      Canaux de distribution les plus actifs
+                    </div>
+                    <div className="mt-2 space-y-1">
+                      {salesByChannel.slice(0, 5).map((channel) => (
+                        <div key={channel.channel} className="flex items-center justify-between text-xs">
+                          <span>{channel.channel}</span>
+                          <span className="font-semibold">{formatMoney(channel.sales, displayCurrency)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </div>
@@ -2819,19 +2929,19 @@ const assistantExamples = [
         <section ref={resultsRef} className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileSpreadsheet className="h-4 w-4 text-blue-600" />
-                Import CSV
-              </CardTitle>
-              <CardDescription>
-                HS code obligatoire. Prix (unit_price ou total_price) + quantité requis. Les frais peuvent être fournis
-                ou complétés par les valeurs manuelles.
-              </CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <FileSpreadsheet className="h-4 w-4 text-blue-600" />
+                  Import CSV / Excel
+                </CardTitle>
+                <CardDescription>
+                  HS code obligatoire. Prix (unit_price ou total_price) + quantité requis. Les frais peuvent être
+                  fournis ou complétés par les valeurs manuelles.
+                </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <input
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) void handleCsvUpload(file);
@@ -2872,9 +2982,9 @@ const assistantExamples = [
                 </div>
               ) : null}
 
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                Séparateurs acceptés : <b>;</b> ou <b>,</b>. Décimales : virgule ou point.
-              </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  Séparateurs acceptés : <b>;</b> ou <b>,</b>. Décimales : virgule ou point.
+                </div>
 
               <div className="flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={scrollToResults}>

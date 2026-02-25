@@ -27,6 +27,8 @@ type ExpertResponse = {
   ok?: boolean;
   thread_id?: string;
   assistant_message?: string;
+  assistant_mode?: "needs_input" | "brief_ready";
+  follow_up_questions?: string[];
   entities?: Record<string, unknown>;
   dossier?: Record<string, unknown>;
   error?: string;
@@ -70,6 +72,8 @@ export default function Assistant() {
   const [error, setError] = React.useState<string | null>(null);
   const [entities, setEntities] = React.useState<Record<string, unknown>>({});
   const [dossier, setDossier] = React.useState<Record<string, unknown>>({});
+  const [assistantMode, setAssistantMode] = React.useState<"needs_input" | "brief_ready">("needs_input");
+  const [followUpQuestions, setFollowUpQuestions] = React.useState<string[]>([]);
 
   const [showCorrections, setShowCorrections] = React.useState(false);
   const [countryQuery, setCountryQuery] = React.useState("");
@@ -85,12 +89,12 @@ export default function Assistant() {
       title: lang === "en" ? "Export Expert" : "Export Expert",
       subtitle:
         lang === "en"
-          ? "Deterministic import/export assistant built from database references"
-          : "Assistant import/export deterministe base sur les referentiels en base",
+          ? "Guided import/export assistant based on database references"
+          : "Assistant import/export guide base sur les referentiels en base",
       placeholder:
         lang === "en"
-          ? "Describe your case: origin, destination, product/HS, Incoterm, payment, transport..."
-          : "Decrivez votre cas : origine, destination, produit/HS, Incoterm, paiement, transport...",
+          ? "Answer the current question in one short sentence..."
+          : "Repondez a la question en cours en une phrase courte...",
       send: lang === "en" ? "Send" : "Envoyer",
       update: lang === "en" ? "Apply corrections" : "Appliquer les corrections",
       corrections: lang === "en" ? "Correct" : "Corriger",
@@ -103,7 +107,26 @@ export default function Assistant() {
       transport: lang === "en" ? "Transport" : "Transport",
       payment: lang === "en" ? "Payment" : "Paiement",
       noData: lang === "en" ? "No data yet." : "Pas encore de donnees.",
+      startGuided: lang === "en" ? "Start guided intake" : "Demarrer le guidage",
+      starters: lang === "en" ? "Quick start examples" : "Exemples de demarrage",
+      pendingQuestions: lang === "en" ? "Pending questions" : "Questions en attente",
     }),
+    [lang],
+  );
+
+  const starterCases = React.useMemo(
+    () =>
+      lang === "en"
+        ? [
+            "I want to export strawberries to Chile.",
+            "I need HS and documents for frozen berries to Germany.",
+            "I need DDP vs FCA comparison for Morocco with LC payment.",
+          ]
+        : [
+            "Je veux exporter des fraises vers le Chili.",
+            "Je veux le HS et les documents pour des fruits surgeles vers l'Allemagne.",
+            "Je veux comparer DDP vs FCA vers le Maroc avec paiement LC.",
+          ],
     [lang],
   );
 
@@ -142,7 +165,13 @@ export default function Assistant() {
 
     for (let i = mapped.length - 1; i >= 0; i -= 1) {
       if (Object.keys(asObject(mapped[i].dossier)).length) {
-        setDossier(asObject(mapped[i].dossier));
+        const nextDossier = asObject(mapped[i].dossier);
+        setDossier(nextDossier);
+        const pending = Array.isArray(nextDossier.questions_missing)
+          ? nextDossier.questions_missing.map((q: unknown) => String(q || "").trim()).filter(Boolean).slice(0, 3)
+          : [];
+        setFollowUpQuestions(pending);
+        setAssistantMode(pending.length ? "needs_input" : "brief_ready");
         break;
       }
     }
@@ -304,6 +333,12 @@ export default function Assistant() {
         setMessages((prev) => [...prev, assistantMessage]);
         setEntities(asObject(data.entities));
         setDossier(asObject(data.dossier));
+        setAssistantMode(data.assistant_mode || "needs_input");
+        setFollowUpQuestions(
+          Array.isArray(data.follow_up_questions)
+            ? data.follow_up_questions.map((q) => String(q || "").trim()).filter(Boolean).slice(0, 3)
+            : [],
+        );
       } catch (err: any) {
         const msgErr = String(err?.message || "chat_failed");
         setError(msgErr);
@@ -344,8 +379,18 @@ export default function Assistant() {
     setEntities({});
     setDossier({});
     setOverrides({});
+    setAssistantMode("needs_input");
+    setFollowUpQuestions([]);
     localStorage.removeItem(THREAD_KEY);
   }, []);
+
+  const startGuidedIntake = React.useCallback(async () => {
+    await sendMessage(
+      lang === "en"
+        ? "I want to start a guided export intake."
+        : "Je veux demarrer un dossier export guide.",
+    );
+  }, [lang, sendMessage]);
 
   const chips = [
     ["destination", entities.destination],
@@ -448,8 +493,48 @@ export default function Assistant() {
 
         <Card>
           <CardHeader>
+            <CardTitle className="text-base">{labels.startGuided}</CardTitle>
+            <CardDescription>
+              {lang === "en"
+                ? "The assistant asks targeted questions (max 3 at a time), then builds your export brief."
+                : "L'assistant pose des questions ciblees (max 3), puis construit votre dossier export."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => void startGuidedIntake()} disabled={loading}>
+                {labels.startGuided}
+              </Button>
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">{labels.starters}</p>
+              <div className="flex flex-wrap gap-2">
+                {starterCases.map((example) => (
+                  <Button key={example} variant="outline" size="sm" onClick={() => void sendMessage(example)} disabled={loading}>
+                    {example}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            {followUpQuestions.length ? (
+              <div className="rounded-xl border bg-muted/20 p-3">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">{labels.pendingQuestions}</p>
+                <div className="space-y-1 text-sm">
+                  {followUpQuestions.map((q) => (
+                    <div key={q}>{q}</div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg"><Bot className="h-5 w-5 text-primary" />Chat</CardTitle>
-            <CardDescription>{threadId ? `thread: ${threadId}` : labels.noData}</CardDescription>
+            <CardDescription>
+              {threadId ? `thread: ${threadId}` : labels.noData} | mode: {assistantMode}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div ref={scrollRef} className="max-h-[55vh] overflow-auto rounded-xl border bg-muted/20 p-3">
@@ -460,8 +545,8 @@ export default function Assistant() {
               {!bootLoading && messages.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
                   {lang === "en"
-                    ? "Example: Export strawberries to Chile under CIF with LC payment."
-                    : "Exemple : Export de fraises vers le Chili en CIF avec paiement LC."}
+                    ? "Click \"Start guided intake\" to begin. You can also choose a quick example above."
+                    : "Cliquez sur \"Demarrer le guidage\" pour commencer. Vous pouvez aussi choisir un exemple ci-dessus."}
                 </div>
               ) : null}
 
