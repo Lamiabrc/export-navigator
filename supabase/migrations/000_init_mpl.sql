@@ -62,6 +62,25 @@ create table if not exists simulations (
   created_at timestamptz default now()
 );
 
+-- Drift guard for environments where legacy tables already exist
+-- with missing columns required by this baseline migration.
+alter table if exists products
+  add column if not exists hs_code text;
+
+alter table if exists alerts
+  add column if not exists country_iso2 text;
+
+alter table if exists regulatory_feeds
+  add column if not exists category text,
+  add column if not exists zone text,
+  add column if not exists enabled boolean default true;
+
+alter table if exists regulatory_items
+  add column if not exists published_at timestamptz,
+  add column if not exists category text,
+  add column if not exists zone text,
+  add column if not exists severity text;
+
 create index if not exists idx_products_hs_code on products (hs_code);
 create index if not exists idx_regulatory_items_published_at on regulatory_items (published_at);
 create index if not exists idx_regulatory_items_zone on regulatory_items (zone);
