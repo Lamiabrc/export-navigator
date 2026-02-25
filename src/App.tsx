@@ -318,6 +318,14 @@ export default function App() {
                             </ProtectedRoute>
                           }
                         />
+                        <Route
+                          path="/app/expert"
+                          element={
+                            <ProtectedRoute>
+                              <Assistant />
+                            </ProtectedRoute>
+                          }
+                        />
 
                         <Route
                           path="/app/invoice-check"
@@ -416,6 +424,7 @@ export default function App() {
                         <Route path="/products" element={<Navigate to="/app/produits" replace />} />
                         <Route path="/invoice-check" element={<Navigate to="/app/invoice-check" replace />} />
                         <Route path="/assistant" element={<Navigate to="/app/assistant" replace />} />
+                        <Route path="/expert" element={<Navigate to="/app/expert" replace />} />
                         <Route path="/admin" element={<Navigate to="/app/admin" replace />} />
                         <Route path="/app/centre-conformite" element={<Navigate to="/app/audit-interne" replace />} />
                         <Route path="/app/controls" element={<Navigate to="/app/audit-interne" replace />} />

@@ -121,6 +121,47 @@ src/
 
 ---
 
+## Export Expert Chatbot (FR/EN)
+
+### Variables d'environnement (serveur)
+
+Necessaires pour `api/chat.ts` et scripts seed :
+
+```bash
+SUPABASE_URL=...
+SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+```
+
+### Migration et seed minimal
+
+```bash
+# appliquer les migrations Supabase (inclut export_expert_v1)
+supabase db push
+
+# seed minimal referentiels/playbooks/documents
+node scripts/seed-export-expert.mjs
+```
+
+### Endpoint backend
+
+- `POST /api/chat`
+- body: `{ message, thread_id?, lang?, overrides? }`
+- response: `{ assistant_message, entities, dossier, thread_id }`
+
+### Tests d'acceptation rapides
+
+1. Hors sujet: `recette de cuisine`
+   - attendu: recadrage + liste de capacites import/export.
+2. Cas simple: `export fraises chili`
+   - attendu: questions manquantes simples + docs + risques + contrat + fiscalite.
+3. EN: `export strawberries to chile`
+   - attendu: meme logique en anglais.
+4. RLS:
+   - un utilisateur A ne voit pas les `chat_threads/chat_messages` de B.
+
+---
+
 ## Avertissement legal
 
 **Export Navigator** est un outil d'aide a la decision et de controle de coherence. Il ne remplace en aucun cas :
