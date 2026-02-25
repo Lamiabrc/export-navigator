@@ -13,6 +13,46 @@ as $$
   select extensions.unaccent($1);
 $$;
 
+-- Avoid "cannot change return type of existing function" on environments
+-- that already have legacy funnel RPCs with a different TABLE shape.
+do $$
+declare
+  v_result text;
+begin
+  select pg_get_function_result('public.rpc_country_funnel(text,text,integer,boolean)'::regprocedure)
+    into v_result;
+
+  if v_result is not null
+     and v_result <> 'TABLE(iso2 text, label text, zone text, confidence numeric)' then
+    execute format(
+      'alter function public.rpc_country_funnel(text, text, integer, boolean) rename to %I',
+      'rpc_country_funnel_legacy_' || to_char(clock_timestamp(), 'YYYYMMDDHH24MISSMS')
+    );
+  end if;
+exception
+  when undefined_function then
+    null;
+end $$;
+
+do $$
+declare
+  v_result text;
+begin
+  select pg_get_function_result('public.rpc_hs_funnel(text,text,integer)'::regprocedure)
+    into v_result;
+
+  if v_result is not null
+     and v_result <> 'TABLE(hs_code text, label text, chapter text, confidence numeric)' then
+    execute format(
+      'alter function public.rpc_hs_funnel(text, text, integer) rename to %I',
+      'rpc_hs_funnel_legacy_' || to_char(clock_timestamp(), 'YYYYMMDDHH24MISSMS')
+    );
+  end if;
+exception
+  when undefined_function then
+    null;
+end $$;
+
 create or replace function public.rpc_country_funnel(
   q text,
   lang text default 'fr',
