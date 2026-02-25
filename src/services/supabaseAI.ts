@@ -139,7 +139,12 @@ export async function confirmCountry(term: string, lang: string, code_iso2: stri
 }
 
 export async function hsFunnel(q: string, lang: string): Promise<HsFunnelResult> {
-  const raw = await callRpcFallback<unknown>(["rpc_hs_funnel", "hs_funnel"], { q, lang, lim: 8 });
+  let raw: unknown;
+  try {
+    raw = await callRpc<unknown>("rpc_hs_funnel", { q, lang, lim: 8 });
+  } catch {
+    raw = await callRpcFallback<unknown>(["rpc_suggest_hs_bi", "hs_funnel"], { q, lang, lim: 8 });
+  }
   const suggestions = mapHsSuggestions(raw);
   return { suggestions, needsClarification: suggestions.length > 1, raw };
 }

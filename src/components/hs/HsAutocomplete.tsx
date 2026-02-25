@@ -24,6 +24,12 @@ export function HsAutocomplete({ value, onChange, productContext }: Props) {
   React.useEffect(() => {
     const q = query.trim();
     const t = setTimeout(async () => {
+      if (q.length < 2) {
+        setItems([]);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
         const { data, error } = await supabase.functions.invoke<{ items?: HsItem[] }>("hs-suggest", {
@@ -32,7 +38,17 @@ export function HsAutocomplete({ value, onChange, productContext }: Props) {
         if (error) throw error;
         setItems(data?.items || []);
       } catch {
-        const { data: rpcRows } = await supabase.rpc("rpc_hs_funnel", { q, lang: "fr", lim: 8 });
+        const rpcCandidates = ["rpc_hs_funnel", "rpc_suggest_hs_bi", "hs_funnel"] as const;
+        let rpcRows: unknown[] = [];
+
+        for (const rpcName of rpcCandidates) {
+          const { data, error } = await supabase.rpc(rpcName, { q, lang: "fr", lim: 8 });
+          if (!error && Array.isArray(data)) {
+            rpcRows = data;
+            break;
+          }
+        }
+
         const fallback = Array.isArray(rpcRows)
           ? rpcRows.map((row: any) => ({ hs6: String(row.hs6 ?? row.hs_code ?? ""), label_fr: String(row.label_fr ?? row.label ?? ""), score: Number(row.score ?? 0) }))
           : [];
