@@ -707,7 +707,7 @@ begin
 
   select coalesce(array_agg(distinct kw), array[]::text[])
   into v_keywords_found
-  from unnest(regexp_split_to_array(lower(unaccent(v_q)), '[^a-z0-9]+')) kw
+  from unnest(regexp_split_to_array(lower(public.unaccent(v_q)), '[^a-z0-9]+')) kw
   where kw <> ''
     and kw = any(v_scope_keywords);
 

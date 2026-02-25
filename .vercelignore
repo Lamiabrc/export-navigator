@@ -12,3 +12,4 @@ api/kb/ingest.ts
 api/cron/purge.ts
 api/delete-data.ts
 api/stripe/portal.ts
+api/chat-ingest.ts
