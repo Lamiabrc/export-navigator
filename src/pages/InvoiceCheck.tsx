@@ -1,7 +1,18 @@
 ﻿import * as React from "react";
-import { FileUp, Loader2, ShieldAlert, ShieldCheck, TriangleAlert } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  FileUp,
+  Info,
+  Link as LinkIcon,
+  Plus,
+  RefreshCcw,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,623 +20,1337 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { runImportWorkflow } from "@/lib/workflows/importWorkflow";
+import { COUNTRIES, CURRENCIES, INCOTERMS, OFFICIAL_LINKS } from "@/lib/constants";
 import {
-  COUNTRIES,
-  CURRENCIES,
-  INCOTERMS,
-  OPERATION_TYPES,
-  PAYMENT_TERMS,
-  PRODUCTS,
-  getCountryLabel,
-  getLocalizedLabel,
-} from "@/lib/constants";
-import { sanitizeOptionalComment, toFriendlyErrorMessage } from "@/lib/textSanitizer";
-import { useI18n } from "@/contexts/LanguageContext";
+  assessInvoice,
+  isEuIso2,
+  isValidIsoCurrency,
+  type CheckStatus,
+  type CheckerItem,
+  type CheckerTab,
+  type InvoiceData,
+  type InvoiceLineInput,
+  type TransactionContext,
+} from "@/lib/invoice";
 
-type CheckLevel = "ok" | "warning" | "risk";
+const TAB_ORDER: CheckerTab[] = ["mentions", "vat", "customs", "fx", "calculs", "risks"];
 
-type InvoiceCheckItem = {
-  level: CheckLevel;
-  label: string;
-  detail: string;
+const TAB_LABELS: Record<CheckerTab, string> = {
+  mentions: "Mentions facture",
+  vat: "TVA",
+  customs: "Douane",
+  fx: "Devise",
+  calculs: "Calculs",
+  risks: "Risques",
 };
 
-type InvoiceAnalysisResult = {
-  ok: boolean;
-  analysis_source: string;
-  status: "ok" | "review" | "risk";
-  extracted: {
-    invoice_number: string | null;
-    date: string | null;
-    seller: string | null;
-    buyer: string | null;
-    destination: string | null;
-    incoterm: string | null;
-    currency: string | null;
-    total_ht: number | null;
-    total_ttc: number | null;
-    line_count: number | null;
-  };
-  checks: InvoiceCheckItem[];
-  recommendations: string[];
-  checklist: string[];
+type FormIssue = {
+  id: string;
+  level: "KO" | "WARN";
+  message: string;
 };
 
-type EditableInvoiceContext = {
-  operationType: string;
-  destination: string;
-  incoterm: string;
-  currency: string;
-  paymentTerm: string;
-  productCode: string;
-  optionalComment: string;
-};
+function round2(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
 
-const INITIAL_CONTEXT: EditableInvoiceContext = {
-  operationType: "export",
-  destination: "",
-  incoterm: "",
-  currency: "EUR",
-  paymentTerm: "",
-  productCode: "",
-  optionalComment: "",
-};
+function parseNumberInput(value: string) {
+  const parsed = Number(String(value || "").replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseNullableNumberInput(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const parsed = Number(raw.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeIso2(value: string) {
+  return String(value || "").trim().toUpperCase().slice(0, 2);
+}
+
+function normalizeHs6(value: string) {
+  return String(value || "").replace(/[^0-9]/g, "").slice(0, 6);
+}
 
 function formatMoney(value: number | null | undefined, currency: string) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+  const amount = Number(value ?? 0);
+  if (!Number.isFinite(amount)) return "-";
   try {
     return new Intl.NumberFormat("fr-FR", {
       style: "currency",
       currency: currency || "EUR",
       maximumFractionDigits: 2,
-    }).format(Number(value));
+    }).format(amount);
   } catch {
-    return `${Number(value).toFixed(2)} ${currency || "EUR"}`;
+    return `${amount.toFixed(2)} ${currency || "EUR"}`;
   }
 }
 
-function resolveStatusFromChecks(checks: InvoiceCheckItem[]): "ok" | "review" | "risk" {
-  if (checks.some((item) => item.level === "risk")) return "risk";
-  if (checks.some((item) => item.level === "warning")) return "review";
-  return "ok";
+function countryLabel(iso2: string) {
+  const code = normalizeIso2(iso2);
+  const found = COUNTRIES.find((country) => country.iso2 === code);
+  return found ? `${found.label_fr} (${found.iso2})` : code || "-";
 }
 
-function buildLocalChecks(ctx: EditableInvoiceContext, parsed: InvoiceAnalysisResult | null) {
-  const checks: InvoiceCheckItem[] = [];
-
-  if (!ctx.destination) {
-    checks.push({
-      level: "warning",
-      label: "Destination",
-      detail: "Le pays de destination doit etre confirme pour la partie douane et sanctions.",
-    });
-  } else {
-    checks.push({
-      level: "ok",
-      label: "Destination",
-      detail: `Destination selectionnee: ${getCountryLabel(ctx.destination, "fr")}.`,
-    });
-  }
-
-  if (!ctx.incoterm) {
-    checks.push({
-      level: "risk",
-      label: "Incoterm",
-      detail: "Incoterm manquant: impossible de fixer clairement la repartition des risques et couts.",
-    });
-  } else {
-    checks.push({
-      level: "ok",
-      label: "Incoterm",
-      detail: `Incoterm confirme: ${ctx.incoterm}.`,
-    });
-  }
-
-  if (!ctx.paymentTerm) {
-    checks.push({
-      level: "warning",
-      label: "Paiement",
-      detail: "Mode de paiement non precise. Ajoutez-le pour reduire le risque contractuel.",
-    });
-  } else {
-    checks.push({
-      level: "ok",
-      label: "Paiement",
-      detail: `Mode de paiement: ${ctx.paymentTerm}.`,
-    });
-  }
-
-  if (parsed?.extracted.total_ht != null && parsed?.extracted.total_ttc != null && parsed.extracted.total_ttc < parsed.extracted.total_ht) {
-    checks.push({
-      level: "risk",
-      label: "Totaux HT/TTC",
-      detail: "Incoherence detectee: le total TTC est inferieur au total HT.",
-    });
-  }
-
-  if ((parsed?.extracted.line_count || 0) <= 0) {
-    checks.push({
-      level: "warning",
-      label: "Lignes facture",
-      detail: "Aucune ligne produit detectee automatiquement. Controle manuel recommande.",
-    });
-  }
-
-  return checks;
+function computeLineValue(line: Pick<InvoiceLineInput, "qty" | "unitPrice" | "discountPct">) {
+  const qty = Number.isFinite(line.qty) ? line.qty : 0;
+  const unitPrice = Number.isFinite(line.unitPrice) ? line.unitPrice : 0;
+  const discountPct = Number.isFinite(line.discountPct) ? line.discountPct : 0;
+  return round2(qty * unitPrice * (1 - discountPct / 100));
 }
 
-async function fileToBase64(file: File) {
-  const buffer = await file.arrayBuffer();
-  return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+function createLine(position: number): InvoiceLineInput {
+  return {
+    id: `line_${Date.now()}_${position}`,
+    description: "",
+    hs6: "",
+    originCountry: "",
+    qty: 1,
+    unit: "pcs",
+    unitPrice: 0,
+    discountPct: 0,
+    lineValue: 0,
+  };
 }
 
-function statusBadge(status: "ok" | "review" | "risk") {
-  if (status === "ok") {
+function createInitialContext(): TransactionContext {
+  return {
+    goodsOrServices: "goods",
+    flowDirection: "auto",
+    sellerCountry: "FR",
+    buyerCountry: "",
+    buyerIsTaxable: true,
+    sellerVat: "",
+    buyerVat: "",
+    currency: "EUR",
+    exchangeRate: null,
+    incoterm: "",
+    incotermPlace: "",
+    proofOfTransport: false,
+  };
+}
+
+function createInitialInvoice(): InvoiceData {
+  return {
+    invoiceNumber: "",
+    issueDate: "",
+    poReference: "",
+    contractReference: "",
+    seller: {
+      name: "",
+      address: "",
+      identifier: "",
+    },
+    buyer: {
+      name: "",
+      address: "",
+      identifier: "",
+    },
+    lines: [createLine(1)],
+    totals: {
+      totalHt: 0,
+      vatAmount: 0,
+      totalTtc: 0,
+    },
+    netWeight: 0,
+    grossWeight: 0,
+    packageCount: 0,
+    marksNumbers: "",
+    payment: {
+      dueDate: "",
+      iban: "",
+      bic: "",
+      swift: "",
+    },
+    charges: {
+      freight: 0,
+      insurance: 0,
+      other: 0,
+    },
+    documents: {
+      awb: "",
+      bl: "",
+      packingList: "",
+    },
+  };
+}
+function buildContextIssues(context: TransactionContext): FormIssue[] {
+  const issues: FormIssue[] = [];
+  const seller = normalizeIso2(context.sellerCountry);
+  const buyer = normalizeIso2(context.buyerCountry);
+  const isInternational = Boolean(seller && buyer && seller !== buyer);
+  const isIntraEuGoods = context.goodsOrServices === "goods" && isEuIso2(seller) && isEuIso2(buyer) && seller !== buyer;
+
+  if (!seller) {
+    issues.push({
+      id: "ctx_seller",
+      level: "KO",
+      message: "Pays vendeur obligatoire.",
+    });
+  }
+
+  if (!buyer) {
+    issues.push({
+      id: "ctx_buyer",
+      level: "KO",
+      message: "Pays acheteur obligatoire.",
+    });
+  }
+
+  if (!isValidIsoCurrency(context.currency)) {
+    issues.push({
+      id: "ctx_currency",
+      level: "KO",
+      message: "Devise invalide: utilisez un code ISO 4217 (EUR, USD, GBP, ...).",
+    });
+  }
+
+  if (context.currency.toUpperCase() !== "EUR" && (!context.exchangeRate || context.exchangeRate <= 0)) {
+    issues.push({
+      id: "ctx_fx",
+      level: "KO",
+      message: "Taux de change obligatoire si la devise est differente de EUR.",
+    });
+  }
+
+  if (isInternational && (!context.incoterm.trim() || !context.incotermPlace.trim())) {
+    issues.push({
+      id: "ctx_incoterm",
+      level: "WARN",
+      message: "Incoterm + lieu recommandes en international (warning si absent).",
+    });
+  }
+
+  if (isIntraEuGoods && !context.proofOfTransport) {
+    issues.push({
+      id: "ctx_transport_proof",
+      level: "WARN",
+      message: "Preuve de transport intra-UE non cochee: condition d'exoneration TVA potentiellement manquante.",
+    });
+  }
+
+  return issues;
+}
+
+function statusBadge(status: "OK" | "WARNING" | "BLOCKING") {
+  if (status === "OK") {
     return (
       <Badge className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
-        <ShieldCheck className="h-3.5 w-3.5" /> OK
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        OK
       </Badge>
     );
   }
-  if (status === "review") {
+  if (status === "WARNING") {
     return (
       <Badge className="gap-1 bg-amber-100 text-amber-800 hover:bg-amber-100">
-        <TriangleAlert className="h-3.5 w-3.5" /> Points a corriger
+        <AlertTriangle className="h-3.5 w-3.5" />
+        WARNING
       </Badge>
     );
   }
   return (
     <Badge className="gap-1 bg-rose-100 text-rose-800 hover:bg-rose-100">
-      <ShieldAlert className="h-3.5 w-3.5" /> Risques
+      <XCircle className="h-3.5 w-3.5" />
+      BLOCKING
     </Badge>
   );
 }
 
-function checkColor(level: CheckLevel) {
-  if (level === "ok") return "text-emerald-700";
-  if (level === "warning") return "text-amber-700";
-  return "text-rose-700";
+function checkStatusBadge(status: CheckStatus) {
+  if (status === "OK") {
+    return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">OK</Badge>;
+  }
+  if (status === "WARN") {
+    return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">WARN</Badge>;
+  }
+  return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100">KO</Badge>;
+}
+
+function toResultSummary(assessmentChecks: CheckerItem[]) {
+  const ko = assessmentChecks.filter((check) => check.status === "KO").length;
+  const warn = assessmentChecks.filter((check) => check.status === "WARN").length;
+  const ok = assessmentChecks.filter((check) => check.status === "OK").length;
+  return { ko, warn, ok };
 }
 
 export default function InvoiceCheck() {
-  const { lang } = useI18n();
   const { toast } = useToast();
-  const isEn = lang === "en";
 
-  const [context, setContext] = React.useState<EditableInvoiceContext>(INITIAL_CONTEXT);
-  const [pdfFileName, setPdfFileName] = React.useState<string>("");
-  const [isDragging, setIsDragging] = React.useState(false);
-  const [loading, setLoading] = React.useState(false);
-  const [analysis, setAnalysis] = React.useState<InvoiceAnalysisResult | null>(null);
-  const [localChecks, setLocalChecks] = React.useState<InvoiceCheckItem[]>([]);
-  const [errorText, setErrorText] = React.useState<string>("");
+  const [context, setContext] = React.useState<TransactionContext>(() => createInitialContext());
+  const [invoice, setInvoice] = React.useState<InvoiceData>(() => createInitialInvoice());
+  const [activeTab, setActiveTab] = React.useState<CheckerTab>("mentions");
+  const [pdfFileName, setPdfFileName] = React.useState("");
 
-  const mergedChecks = React.useMemo(() => {
-    const serverChecks = Array.isArray(analysis?.checks) ? analysis?.checks : [];
-    const all = [...serverChecks, ...localChecks];
-    return all;
-  }, [analysis?.checks, localChecks]);
-
-  const finalStatus = React.useMemo(() => {
-    if (analysis?.status) {
-      const localStatus = resolveStatusFromChecks(localChecks);
-      if (analysis.status === "risk" || localStatus === "risk") return "risk";
-      if (analysis.status === "review" || localStatus === "review") return "review";
-      return "ok";
-    }
-    return resolveStatusFromChecks(localChecks);
-  }, [analysis?.status, localChecks]);
-
-  const importWorkflow = React.useMemo(
-    () =>
-      runImportWorkflow({
-        origin: context.operationType === "import" ? "WORLD" : "FR",
-        destination: context.destination || analysis?.extracted.destination || "FR",
-        hs6: context.productCode || "000000",
-        incoterm: context.incoterm || analysis?.extracted.incoterm || "DAP",
-        value: Number(analysis?.extracted.total_ht || analysis?.extracted.total_ttc || 0),
-        currency: context.currency || analysis?.extracted.currency || "EUR",
-        transport: "road",
-        payment: context.paymentTerm || "tt",
-      }),
-    [
-      analysis?.extracted.currency,
-      analysis?.extracted.destination,
-      analysis?.extracted.incoterm,
-      analysis?.extracted.total_ht,
-      analysis?.extracted.total_ttc,
-      context.currency,
-      context.destination,
-      context.incoterm,
-      context.operationType,
-      context.paymentTerm,
-      context.productCode,
-    ],
+  const isInternational = React.useMemo(
+    () => Boolean(context.sellerCountry && context.buyerCountry && context.sellerCountry !== context.buyerCountry),
+    [context.buyerCountry, context.sellerCountry],
   );
 
-  const onContextChange = (patch: Partial<EditableInvoiceContext>) => {
-    setContext((prev) => ({ ...prev, ...patch }));
-  };
+  const contextIssues = React.useMemo(() => buildContextIssues(context), [context]);
+  const assessment = React.useMemo(() => assessInvoice(context, invoice), [context, invoice]);
 
-  const applyExtractedToContext = React.useCallback((result: InvoiceAnalysisResult) => {
-    setContext((prev) => ({
+  const allChecks = React.useMemo(
+    () => TAB_ORDER.flatMap((tab) => assessment.checks_by_tab[tab]),
+    [assessment],
+  );
+  const checkSummary = React.useMemo(() => toResultSummary(allChecks), [allChecks]);
+
+  const lineTotal = React.useMemo(
+    () => round2(invoice.lines.reduce((sum, line) => sum + Number(line.lineValue || 0), 0)),
+    [invoice.lines],
+  );
+
+  const updateContext = React.useCallback((patch: Partial<TransactionContext>) => {
+    setContext((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const updateInvoice = React.useCallback(<K extends keyof InvoiceData>(key: K, value: InvoiceData[K]) => {
+    setInvoice((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const updateLine = React.useCallback((lineId: string, patch: Partial<InvoiceLineInput>) => {
+    setInvoice((prev) => ({
       ...prev,
-      destination: result.extracted.destination || prev.destination,
-      incoterm: result.extracted.incoterm || prev.incoterm,
-      currency: result.extracted.currency || prev.currency || "EUR",
+      lines: prev.lines.map((line) => {
+        if (line.id !== lineId) return line;
+        const next = { ...line, ...patch };
+        const lineValueExplicit = "lineValue" in patch;
+        const shouldAutoCompute = "qty" in patch || "unitPrice" in patch || "discountPct" in patch;
+        if (!lineValueExplicit && shouldAutoCompute) {
+          next.lineValue = computeLineValue(next);
+        }
+        return next;
+      }),
     }));
   }, []);
 
-  const runChecks = React.useCallback((result: InvoiceAnalysisResult | null, currentContext: EditableInvoiceContext) => {
-    const checks = buildLocalChecks(currentContext, result);
-    setLocalChecks(checks);
+  const addLine = React.useCallback(() => {
+    setInvoice((prev) => ({
+      ...prev,
+      lines: [...prev.lines, createLine(prev.lines.length + 1)],
+    }));
   }, []);
 
-  const analyzeInvoice = React.useCallback(
-    async (file: File) => {
+  const removeLine = React.useCallback((lineId: string) => {
+    setInvoice((prev) => {
+      if (prev.lines.length <= 1) return prev;
+      return {
+        ...prev,
+        lines: prev.lines.filter((line) => line.id !== lineId),
+      };
+    });
+  }, []);
+
+  const recomputeTotals = React.useCallback(() => {
+    setInvoice((prev) => {
+      const recomputedHt = round2(prev.lines.reduce((sum, line) => sum + Number(line.lineValue || 0), 0));
+      return {
+        ...prev,
+        totals: {
+          ...prev.totals,
+          totalHt: recomputedHt,
+          totalTtc: round2(recomputedHt + Number(prev.totals.vatAmount || 0)),
+        },
+      };
+    });
+    toast({
+      title: "Totaux recalcules",
+      description: "HT aligne sur la somme des lignes, TTC = HT + TVA.",
+    });
+  }, [toast]);
+
+  const resetForm = React.useCallback(() => {
+    setContext(createInitialContext());
+    setInvoice(createInitialInvoice());
+    setActiveTab("mentions");
+    setPdfFileName("");
+  }, []);
+
+  const handlePdfUpload = React.useCallback(
+    (file: File | null | undefined) => {
+      if (!file) return;
       if (!file.type.includes("pdf") && !file.name.toLowerCase().endsWith(".pdf")) {
         toast({
-          title: isEn ? "Unsupported file" : "Fichier non supporte",
-          description: isEn ? "Please upload a PDF invoice." : "Merci d'importer une facture au format PDF.",
+          title: "Format non supporte",
+          description: "Importez un PDF. L'extraction OCR reste optionnelle et non bloquante.",
         });
         return;
       }
-
-      setLoading(true);
-      setErrorText("");
       setPdfFileName(file.name);
-
-      try {
-        const payload = {
-          file_name: file.name,
-          file_base64: await fileToBase64(file),
-          operation_type: context.operationType,
-          destination: context.destination,
-          incoterm: context.incoterm,
-          currency: context.currency,
-          payment_term: context.paymentTerm,
-          product_code: context.productCode,
-          optional_comment: sanitizeOptionalComment(context.optionalComment),
-        };
-
-        const response = await fetch("/api/invoice/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        const json = (await response.json().catch(() => ({}))) as InvoiceAnalysisResult & { error?: string };
-
-        if (!response.ok || !json.ok) {
-          throw new Error(json?.error || `invoice_analyze_failed_${response.status}`);
-        }
-
-        setAnalysis(json);
-        applyExtractedToContext(json);
-
-        const nextContext: EditableInvoiceContext = {
-          ...context,
-          destination: json.extracted.destination || context.destination,
-          incoterm: json.extracted.incoterm || context.incoterm,
-          currency: json.extracted.currency || context.currency,
-        };
-        runChecks(json, nextContext);
-
-        toast({
-          title: isEn ? "Invoice analyzed" : "Facture analysee",
-          description: isEn
-            ? "Extraction completed. Please review and adjust the controlled fields."
-            : "Extraction terminee. Merci de verifier les champs controles ci-dessous.",
-        });
-      } catch (error) {
-        const friendly = toFriendlyErrorMessage(error, lang);
-        setErrorText(friendly);
-        toast({
-          title: isEn ? "Analysis unavailable" : "Analyse indisponible",
-          description: friendly,
-        });
-      } finally {
-        setLoading(false);
-      }
+      toast({
+        title: "PDF charge",
+        description: "La verification s'appuie prioritairement sur la saisie guidee.",
+      });
     },
-    [applyExtractedToContext, context, isEn, lang, runChecks, toast],
+    [toast],
   );
 
-  React.useEffect(() => {
-    runChecks(analysis, context);
-  }, [analysis, context, runChecks]);
+  const alertVariant = contextIssues.some((issue) => issue.level === "KO") ? "destructive" : "warning";
+  const currencyUpper = context.currency.toUpperCase();
+  const requiresFxRate = currencyUpper !== "EUR";
 
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <p className="text-sm text-muted-foreground">MPL Export Navigator</p>
-          <h1 className="text-2xl font-semibold">
-            {isEn ? "Invoice verification" : "Verification facture export/import"}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {isEn
-              ? "Upload a PDF, extract key fields, validate consistency, and get an action checklist."
-              : "Importez un PDF, detectez les champs cles, validez la coherence et obtenez une checklist actionnable."}
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">Mode guide: facture import/export</p>
+            <h1 className="text-xl font-semibold text-slate-900">Verification de facture operationnelle</h1>
+            <p className="text-sm text-muted-foreground">
+              Flux en 3 blocs: contexte, donnees facture, resultat expert TVA/douane/devise.
+            </p>
+          </div>
+          <Button variant="outline" onClick={resetForm}>
+            Reinitialiser
+          </Button>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{isEn ? "Context (controlled fields)" : "Contexte (champs controles)"}</CardTitle>
-            <CardDescription>
-              {isEn
-                ? "Only dropdowns are allowed, plus one optional comment."
-                : "Utilisation exclusive de menus deroulants, avec un seul commentaire optionnel."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-3">
-            <div className="space-y-1">
-              <Label>{isEn ? "Operation" : "Operation"}</Label>
-              <Select value={context.operationType} onValueChange={(value) => onContextChange({ operationType: value })}>
-                <SelectTrigger><SelectValue placeholder="-" /></SelectTrigger>
-                <SelectContent>
-                  {OPERATION_TYPES.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>{getLocalizedLabel(item, lang)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label>{isEn ? "Destination country" : "Pays destination"}</Label>
-              <Select value={context.destination} onValueChange={(value) => onContextChange({ destination: value })}>
-                <SelectTrigger><SelectValue placeholder={isEn ? "Select country" : "Choisir un pays"} /></SelectTrigger>
-                <SelectContent>
-                  {COUNTRIES.map((country) => (
-                    <SelectItem key={country.iso2} value={country.iso2}>
-                      {lang === "en" ? country.label_en : country.label_fr}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label>Incoterm</Label>
-              <Select value={context.incoterm} onValueChange={(value) => onContextChange({ incoterm: value })}>
-                <SelectTrigger><SelectValue placeholder="EXW/FCA/..." /></SelectTrigger>
-                <SelectContent>
-                  {INCOTERMS.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>{item.value}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label>{isEn ? "Currency" : "Devise"}</Label>
-              <Select value={context.currency} onValueChange={(value) => onContextChange({ currency: value })}>
-                <SelectTrigger><SelectValue placeholder="EUR/USD/..." /></SelectTrigger>
-                <SelectContent>
-                  {CURRENCIES.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>{item.value}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label>{isEn ? "Payment method" : "Mode de paiement"}</Label>
-              <Select value={context.paymentTerm} onValueChange={(value) => onContextChange({ paymentTerm: value })}>
-                <SelectTrigger><SelectValue placeholder="LC/CAD/..." /></SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_TERMS.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>{getLocalizedLabel(item, lang)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label>{isEn ? "Product" : "Produit"}</Label>
-              <Select value={context.productCode} onValueChange={(value) => onContextChange({ productCode: value })}>
-                <SelectTrigger><SelectValue placeholder={isEn ? "Select product" : "Choisir un produit"} /></SelectTrigger>
-                <SelectContent>
-                  {PRODUCTS.map((product) => (
-                    <SelectItem key={product.code} value={product.code}>
-                      {lang === "en" ? product.label_en : product.label_fr}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1 md:col-span-3">
-              <Label>{isEn ? "Optional precision" : "Precision optionnelle"}</Label>
-              <Textarea
-                rows={2}
-                value={context.optionalComment}
-                onChange={(event) => onContextChange({ optionalComment: event.target.value })}
-                placeholder={isEn ? "Optional details" : "Details optionnels"}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        {contextIssues.length > 0 ? (
+          <Alert variant={alertVariant}>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Points de saisie a corriger</AlertTitle>
+            <AlertDescription className="space-y-1">
+              {contextIssues.map((issue) => (
+                <p key={issue.id}>- {issue.message}</p>
+              ))}
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <Alert>
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertTitle>Contexte minimum complet</AlertTitle>
+            <AlertDescription>
+              Les champs critiques sont renseignes. Vous pouvez fiabiliser les calculs et les checks detailes.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Card>
           <CardHeader>
-            <CardTitle>{isEn ? "Upload invoice PDF" : "Importer la facture PDF"}</CardTitle>
+            <CardTitle>A) Contexte transaction</CardTitle>
             <CardDescription>
-              {isEn
-                ? "File is analyzed without mandatory storage."
-                : "Le fichier est analyse sans stockage obligatoire."}
+              Obligatoire pour determiner TVA, logique import/export, devise et exigences documentaires.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div
-              className={`rounded-xl border-2 border-dashed p-6 text-center transition ${
-                isDragging ? "border-primary bg-primary/5" : "border-border"
-              }`}
-              onDragOver={(event) => {
-                event.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragLeave={(event) => {
-                event.preventDefault();
-                setIsDragging(false);
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                setIsDragging(false);
-                const file = event.dataTransfer.files?.[0];
-                if (file) {
-                  void analyzeInvoice(file);
-                }
-              }}
-            >
-              <FileUp className="mx-auto h-8 w-8 text-muted-foreground" />
-              <p className="mt-2 text-sm">
-                {isEn ? "Drop your PDF here or choose a file" : "Glissez votre PDF ici ou choisissez un fichier"}
-              </p>
-              <div className="mt-3">
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-1">
+                <Label>Biens / Services</Label>
+                <Select
+                  value={context.goodsOrServices}
+                  onValueChange={(value: "goods" | "services") => updateContext({ goodsOrServices: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="goods">Biens</SelectItem>
+                    <SelectItem value="services">Services</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Flux</Label>
+                <Select
+                  value={context.flowDirection}
+                  onValueChange={(value: "auto" | "import" | "export") => updateContext({ flowDirection: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Auto via pays</SelectItem>
+                    <SelectItem value="import">Import</SelectItem>
+                    <SelectItem value="export">Export</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Pays vendeur</Label>
+                <Select
+                  value={context.sellerCountry || undefined}
+                  onValueChange={(value) => updateContext({ sellerCountry: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choisir" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[320px]">
+                    {COUNTRIES.map((country) => (
+                      <SelectItem key={`seller-${country.iso2}`} value={country.iso2}>
+                        {country.label_fr} ({country.iso2})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Pays acheteur</Label>
+                <Select
+                  value={context.buyerCountry || undefined}
+                  onValueChange={(value) => updateContext({ buyerCountry: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choisir" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[320px]">
+                    {COUNTRIES.map((country) => (
+                      <SelectItem key={`buyer-${country.iso2}`} value={country.iso2}>
+                        {country.label_fr} ({country.iso2})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Acheteur assujetti TVA ?</Label>
+                <Select
+                  value={context.buyerIsTaxable ? "yes" : "no"}
+                  onValueChange={(value) => updateContext({ buyerIsTaxable: value === "yes" })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes">Oui</SelectItem>
+                    <SelectItem value="no">Non</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label>N TVA vendeur</Label>
                 <Input
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  disabled={loading}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) {
-                      void analyzeInvoice(file);
-                    }
-                    event.currentTarget.value = "";
-                  }}
+                  value={context.sellerVat}
+                  onChange={(event) =>
+                    updateContext({
+                      sellerVat: event.target.value.toUpperCase().replace(/\s+/g, ""),
+                    })
+                  }
+                  placeholder="FR12345678901"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label>N TVA acheteur</Label>
+                <Input
+                  value={context.buyerVat}
+                  onChange={(event) =>
+                    updateContext({
+                      buyerVat: event.target.value.toUpperCase().replace(/\s+/g, ""),
+                    })
+                  }
+                  placeholder="IT12345678901"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label>Preuve transport UE ?</Label>
+                <Select
+                  value={context.proofOfTransport ? "yes" : "no"}
+                  onValueChange={(value) => updateContext({ proofOfTransport: value === "yes" })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes">Oui</SelectItem>
+                    <SelectItem value="no">Non</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Devise (ISO 4217)</Label>
+                <Input
+                  value={context.currency}
+                  onChange={(event) =>
+                    updateContext({
+                      currency: event.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3),
+                    })
+                  }
+                  placeholder="EUR"
+                />
+                <p className="text-xs text-muted-foreground">Codes frequents: {CURRENCIES.map((currency) => currency.value).join(", ")}</p>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Taux de change ({currencyUpper} vers EUR)</Label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  value={context.exchangeRate == null ? "" : String(context.exchangeRate)}
+                  onChange={(event) => updateContext({ exchangeRate: parseNullableNumberInput(event.target.value) })}
+                  placeholder={requiresFxRate ? "Obligatoire si devise != EUR" : "Non requis en EUR"}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label>Incoterm</Label>
+                <Select value={context.incoterm || undefined} onValueChange={(value) => updateContext({ incoterm: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="EXW / FCA / DDP..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INCOTERMS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.value}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <Label>Lieu Incoterm</Label>
+                <Input
+                  value={context.incotermPlace}
+                  onChange={(event) => updateContext({ incotermPlace: event.target.value })}
+                  placeholder="FCA Lyon / DAP Milan"
                 />
               </div>
             </div>
 
-            {loading ? (
-              <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-sm">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {isEn ? "Analyzing invoice..." : "Analyse de la facture en cours..."}
+            {isInternational && (!context.incoterm || !context.incotermPlace) ? (
+              <Alert variant="warning">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>International sans Incoterm complet</AlertTitle>
+                <AlertDescription>
+                  Le moteur continue, mais ce point reste en warning. Ajoutez le code Incoterm et le lieu.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            <p className="text-xs text-muted-foreground">
+              Verification VIES:{" "}
+              <a className="underline" href="https://ec.europa.eu/taxation_customs/vies/" target="_blank" rel="noreferrer">
+                https://ec.europa.eu/taxation_customs/vies/
+              </a>
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <CardTitle>B) Donnees facture</CardTitle>
+                <CardDescription>
+                  Saisie guidee complete: identites, lignes, totaux, devise, poids, paiement et frais douaniers.
+                </CardDescription>
               </div>
-            ) : null}
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={addLine}>
+                  <Plus className="h-4 w-4" />
+                  Ajouter ligne
+                </Button>
+                <Button variant="outline" size="sm" onClick={recomputeTotals}>
+                  <RefreshCcw className="h-4 w-4" />
+                  Recalculer HT/TTC
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-1">
+                <Label>Numero unique facture</Label>
+                <Input
+                  value={invoice.invoiceNumber}
+                  onChange={(event) => updateInvoice("invoiceNumber", event.target.value)}
+                  placeholder="FAC-2026-001"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Date emission</Label>
+                <Input
+                  type="date"
+                  value={invoice.issueDate}
+                  onChange={(event) => updateInvoice("issueDate", event.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Reference PO</Label>
+                <Input
+                  value={invoice.poReference}
+                  onChange={(event) => updateInvoice("poReference", event.target.value)}
+                  placeholder="PO-8842"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Reference contrat</Label>
+                <Input
+                  value={invoice.contractReference}
+                  onChange={(event) => updateInvoice("contractReference", event.target.value)}
+                  placeholder="CTR-2026-18"
+                />
+              </div>
+            </div>
 
-            {pdfFileName ? (
-              <p className="text-xs text-muted-foreground">{isEn ? "Last file" : "Dernier fichier"}: {pdfFileName}</p>
-            ) : null}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-3 rounded-lg border p-4">
+                <p className="text-sm font-semibold">Vendeur</p>
+                <div className="space-y-1">
+                  <Label>Nom</Label>
+                  <Input
+                    value={invoice.seller.name}
+                    onChange={(event) =>
+                      updateInvoice("seller", {
+                        ...invoice.seller,
+                        name: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Adresse</Label>
+                  <Input
+                    value={invoice.seller.address}
+                    onChange={(event) =>
+                      updateInvoice("seller", {
+                        ...invoice.seller,
+                        address: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>ID (SIREN / VAT / Registre)</Label>
+                  <Input
+                    value={invoice.seller.identifier}
+                    onChange={(event) =>
+                      updateInvoice("seller", {
+                        ...invoice.seller,
+                        identifier: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
 
-            {errorText ? <p className="text-sm text-rose-700">{errorText}</p> : null}
+              <div className="space-y-3 rounded-lg border p-4">
+                <p className="text-sm font-semibold">Acheteur</p>
+                <div className="space-y-1">
+                  <Label>Nom</Label>
+                  <Input
+                    value={invoice.buyer.name}
+                    onChange={(event) =>
+                      updateInvoice("buyer", {
+                        ...invoice.buyer,
+                        name: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Adresse</Label>
+                  <Input
+                    value={invoice.buyer.address}
+                    onChange={(event) =>
+                      updateInvoice("buyer", {
+                        ...invoice.buyer,
+                        address: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>ID (VAT / Registre)</Label>
+                  <Input
+                    value={invoice.buyer.identifier}
+                    onChange={(event) =>
+                      updateInvoice("buyer", {
+                        ...invoice.buyer,
+                        identifier: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Lignes facture</p>
+                <p className="text-xs text-muted-foreground">Chaque ligne: description, HS6, qty, PU, remise, valeur</p>
+              </div>
+
+              {invoice.lines.map((line, index) => {
+                const autoValue = computeLineValue(line);
+                return (
+                  <div key={line.id} className="space-y-3 rounded-lg border p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold">Ligne {index + 1}</p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeLine(line.id)}
+                        disabled={invoice.lines.length <= 1}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Supprimer
+                      </Button>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                      <div className="space-y-1 md:col-span-2">
+                        <Label>Description</Label>
+                        <Input
+                          value={line.description}
+                          onChange={(event) => updateLine(line.id, { description: event.target.value })}
+                          placeholder="Description produit/service"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>HS6 (si connu)</Label>
+                        <Input
+                          value={line.hs6}
+                          onChange={(event) => updateLine(line.id, { hs6: normalizeHs6(event.target.value) })}
+                          placeholder="850760"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Pays origine</Label>
+                        <Input
+                          value={line.originCountry}
+                          onChange={(event) => updateLine(line.id, { originCountry: normalizeIso2(event.target.value) })}
+                          placeholder="FR"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Quantite</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          value={String(line.qty)}
+                          onChange={(event) => updateLine(line.id, { qty: parseNumberInput(event.target.value) })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Unite</Label>
+                        <Input
+                          value={line.unit}
+                          onChange={(event) => updateLine(line.id, { unit: event.target.value })}
+                          placeholder="pcs/kg/litre"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Prix unitaire</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={String(line.unitPrice)}
+                          onChange={(event) => updateLine(line.id, { unitPrice: parseNumberInput(event.target.value) })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Remise %</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={String(line.discountPct)}
+                          onChange={(event) => updateLine(line.id, { discountPct: parseNumberInput(event.target.value) })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Valeur ligne</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={String(line.lineValue)}
+                          onChange={(event) => updateLine(line.id, { lineValue: parseNumberInput(event.target.value) })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>Valeur auto calculee: {autoValue.toFixed(2)}</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => updateLine(line.id, { lineValue: autoValue })}
+                      >
+                        Utiliser valeur auto
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <Separator />
+
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-1">
+                <Label>Total HT</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={String(invoice.totals.totalHt)}
+                  onChange={(event) =>
+                    updateInvoice("totals", {
+                      ...invoice.totals,
+                      totalHt: parseNumberInput(event.target.value),
+                    })
+                  }
+                />
+                <p className="text-xs text-muted-foreground">Somme lignes actuelle: {lineTotal.toFixed(2)}</p>
+              </div>
+              <div className="space-y-1">
+                <Label>Montant TVA</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={String(invoice.totals.vatAmount)}
+                  onChange={(event) =>
+                    updateInvoice("totals", {
+                      ...invoice.totals,
+                      vatAmount: parseNumberInput(event.target.value),
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Total TTC</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={String(invoice.totals.totalTtc)}
+                  onChange={(event) =>
+                    updateInvoice("totals", {
+                      ...invoice.totals,
+                      totalTtc: parseNumberInput(event.target.value),
+                    })
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Nombre colis</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={String(invoice.packageCount)}
+                  onChange={(event) => updateInvoice("packageCount", parseNumberInput(event.target.value))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Poids net</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  value={String(invoice.netWeight)}
+                  onChange={(event) => updateInvoice("netWeight", parseNumberInput(event.target.value))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Poids brut</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  value={String(invoice.grossWeight)}
+                  onChange={(event) => updateInvoice("grossWeight", parseNumberInput(event.target.value))}
+                />
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <Label>Marques / numeros colis</Label>
+                <Input
+                  value={invoice.marksNumbers}
+                  onChange={(event) => updateInvoice("marksNumbers", event.target.value)}
+                  placeholder="ABX/001-012"
+                />
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-3 rounded-lg border p-4">
+                <p className="text-sm font-semibold">Paiement</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>Echeance</Label>
+                    <Input
+                      type="date"
+                      value={invoice.payment.dueDate}
+                      onChange={(event) =>
+                        updateInvoice("payment", {
+                          ...invoice.payment,
+                          dueDate: event.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>IBAN (optionnel)</Label>
+                    <Input
+                      value={invoice.payment.iban}
+                      onChange={(event) =>
+                        updateInvoice("payment", {
+                          ...invoice.payment,
+                          iban: event.target.value.toUpperCase().replace(/\s+/g, ""),
+                        })
+                      }
+                      placeholder="FR76..."
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>BIC (optionnel)</Label>
+                    <Input
+                      value={invoice.payment.bic}
+                      onChange={(event) =>
+                        updateInvoice("payment", {
+                          ...invoice.payment,
+                          bic: event.target.value.toUpperCase().replace(/\s+/g, ""),
+                        })
+                      }
+                      placeholder="BNPAFRPP"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>SWIFT (optionnel)</Label>
+                    <Input
+                      value={invoice.payment.swift}
+                      onChange={(event) =>
+                        updateInvoice("payment", {
+                          ...invoice.payment,
+                          swift: event.target.value.toUpperCase().replace(/\s+/g, ""),
+                        })
+                      }
+                      placeholder="DEUTDEFF"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 rounded-lg border p-4">
+                <p className="text-sm font-semibold">Frais pour valeur en douane</p>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1">
+                    <Label>Freight</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={String(invoice.charges.freight)}
+                      onChange={(event) =>
+                        updateInvoice("charges", {
+                          ...invoice.charges,
+                          freight: parseNumberInput(event.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Insurance</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={String(invoice.charges.insurance)}
+                      onChange={(event) =>
+                        updateInvoice("charges", {
+                          ...invoice.charges,
+                          insurance: parseNumberInput(event.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Autres</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={String(invoice.charges.other)}
+                      onChange={(event) =>
+                        updateInvoice("charges", {
+                          ...invoice.charges,
+                          other: parseNumberInput(event.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1">
+                <Label>AWB (optionnel)</Label>
+                <Input
+                  value={invoice.documents.awb}
+                  onChange={(event) =>
+                    updateInvoice("documents", {
+                      ...invoice.documents,
+                      awb: event.target.value,
+                    })
+                  }
+                  placeholder="020-12345675"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>B/L (optionnel)</Label>
+                <Input
+                  value={invoice.documents.bl}
+                  onChange={(event) =>
+                    updateInvoice("documents", {
+                      ...invoice.documents,
+                      bl: event.target.value,
+                    })
+                  }
+                  placeholder="MSCU1234567"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Packing list (optionnel)</Label>
+                <Input
+                  value={invoice.documents.packingList}
+                  onChange={(event) =>
+                    updateInvoice("documents", {
+                      ...invoice.documents,
+                      packingList: event.target.value,
+                    })
+                  }
+                  placeholder="PL-2026-001"
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        {analysis ? (
-          <>
-            <Card>
-              <CardHeader>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <CardTitle>{isEn ? "Analysis result" : "Resultat de l'analyse"}</CardTitle>
-                  {statusBadge(finalStatus)}
-                </div>
-                <CardDescription>
-                  {isEn ? "Detected values are editable in the controlled context above." : "Les valeurs detectees restent modifiables dans le contexte controle ci-dessus."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border p-3">
-                  <div className="text-xs text-muted-foreground">{isEn ? "Invoice number" : "Numero facture"}</div>
-                  <div className="text-sm font-medium">{analysis.extracted.invoice_number || "-"}</div>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <div className="text-xs text-muted-foreground">Date</div>
-                  <div className="text-sm font-medium">{analysis.extracted.date || "-"}</div>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <div className="text-xs text-muted-foreground">{isEn ? "Detected destination" : "Destination detectee"}</div>
-                  <div className="text-sm font-medium">{analysis.extracted.destination ? getCountryLabel(analysis.extracted.destination, lang) : "-"}</div>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <div className="text-xs text-muted-foreground">HT</div>
-                  <div className="text-sm font-medium">{formatMoney(analysis.extracted.total_ht, context.currency)}</div>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <div className="text-xs text-muted-foreground">TTC</div>
-                  <div className="text-sm font-medium">{formatMoney(analysis.extracted.total_ttc, context.currency)}</div>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <div className="text-xs text-muted-foreground">{isEn ? "Detected lines" : "Lignes detectees"}</div>
-                  <div className="text-sm font-medium">{analysis.extracted.line_count ?? "-"}</div>
-                </div>
-              </CardContent>
-            </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>OCR / PDF (optionnel)</CardTitle>
+            <CardDescription>
+              L'extraction PDF/OCR n'est pas bloquante. La saisie guidee reste la source principale de validation.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="rounded-xl border-2 border-dashed p-5">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <FileUp className="h-4 w-4" />
+                Import PDF (optionnel)
+              </div>
+              <div className="mt-3">
+                <Input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  onChange={(event) => {
+                    handlePdfUpload(event.target.files?.[0]);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </div>
+              {pdfFileName ? (
+                <p className="mt-2 text-xs text-muted-foreground">Dernier fichier charge: {pdfFileName}</p>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>C) Resultat</CardTitle>
+            <CardDescription>Score global, statut et checks detailles par onglet.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Score global</p>
+                <p className="mt-1 text-2xl font-semibold">{assessment.score}/100</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Statut</p>
+                <div className="mt-2">{statusBadge(assessment.status)}</div>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Decision TVA</p>
+                <p className="mt-1 text-sm font-semibold">{assessment.vat_result.status}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Checks</p>
+                <p className="mt-1 text-sm font-semibold">
+                  {checkSummary.ko} KO / {checkSummary.warn} WARN / {checkSummary.ok} OK
+                </p>
+              </div>
+            </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEn ? "Checks and risks" : "Controles et risques"}</CardTitle>
-                <CardDescription>
-                  {isEn ? "No technical errors are exposed. Use this checklist to correct the invoice." : "Aucune erreur technique n'est exposee. Utilisez cette checklist pour corriger la facture."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {mergedChecks.map((check, index) => (
-                  <div key={`${check.label}-${index}`} className="rounded-lg border bg-card px-3 py-2">
-                    <p className={`text-sm font-medium ${checkColor(check.level)}`}>{check.label}</p>
-                    <p className="text-xs text-muted-foreground">{check.detail}</p>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="rounded-lg border p-3">
+                <p className="text-sm font-semibold">TVA - raison</p>
+                <p className="mt-1 text-sm text-muted-foreground">{assessment.vat_result.reason}</p>
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs font-semibold text-muted-foreground">Mentions facture attendues</p>
+                  {assessment.vat_result.required_invoice_mentions.length > 0 ? (
+                    assessment.vat_result.required_invoice_mentions.map((mention) => (
+                      <p key={mention} className="text-xs">
+                        - {mention}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Aucune mention specifique retournee.</p>
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  VIES:{" "}
+                  <a
+                    className="underline"
+                    href={assessment.vat_result.vies_validation.vies_link}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    verifier les numeros TVA
+                  </a>
+                </p>
+              </div>
+
+              <div className="rounded-lg border p-3">
+                <p className="text-sm font-semibold">Douane / Devise</p>
+                <div className="mt-2 space-y-1">
+                  {assessment.customs_usage.map((item) => (
+                    <p key={item} className="text-xs text-muted-foreground">
+                      - {item}
+                    </p>
+                  ))}
+                </div>
+                {assessment.fx_result.converted ? (
+                  <div className="mt-3 rounded-md bg-muted/40 p-2 text-xs">
+                    <p>Contre-valeur EUR HT: {formatMoney(assessment.fx_result.converted.totalHtEur, "EUR")}</p>
+                    <p>Contre-valeur EUR TVA: {formatMoney(assessment.fx_result.converted.vatAmountEur, "EUR")}</p>
+                    <p>Contre-valeur EUR TTC: {formatMoney(assessment.fx_result.converted.totalTtcEur, "EUR")}</p>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
+                ) : null}
+                {assessment.fx_result.recommendations.length > 0 ? (
+                  <div className="mt-3 space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground">Recommandations devise</p>
+                    {assessment.fx_result.recommendations.map((item) => (
+                      <p key={item} className="text-xs text-muted-foreground">
+                        - {item}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEn ? "Action checklist" : "Checklist actionnable"}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                  {(analysis.checklist || []).map((item) => (
-                    <li key={`checklist-${item}`}>{item}</li>
+            {assessment.vat_result.missing_questions.length > 0 ? (
+              <Alert variant="warning">
+                <Info className="h-4 w-4" />
+                <AlertTitle>Questions manquantes a trancher</AlertTitle>
+                <AlertDescription>
+                  {assessment.vat_result.missing_questions.map((question) => (
+                    <p key={question}>- {question}</p>
                   ))}
-                </ul>
-                <Separator />
-                <p className="text-sm font-medium">{isEn ? "Recommendations" : "Recommandations"}</p>
-                <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                  {(analysis.recommendations || []).map((item) => (
-                    <li key={`reco-${item}`}>{item}</li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
-            <Card>
-              <CardHeader>
-                <CardTitle>{isEn ? "Unified workflow" : "Workflow unifie"}</CardTitle>
-                <CardDescription>
-                  {isEn
-                    ? "Estimated duties/taxes with source traceability (eu/mock/fallback)."
-                    : "Estimation droits/taxes avec tracabilite de source (eu/mock/fallback)."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span>{importWorkflow.amounts.duty_estimate.label}</span>
-                  <span className="font-medium">
-                    {formatMoney(importWorkflow.amounts.duty_estimate.value, importWorkflow.amounts.duty_estimate.currency)} ({importWorkflow.amounts.duty_estimate.source})
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>{importWorkflow.amounts.tax_estimate.label}</span>
-                  <span className="font-medium">
-                    {formatMoney(importWorkflow.amounts.tax_estimate.value, importWorkflow.amounts.tax_estimate.currency)} ({importWorkflow.amounts.tax_estimate.source})
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>{importWorkflow.amounts.total_import_estimate.label}</span>
-                  <span className="font-semibold">
-                    {formatMoney(importWorkflow.amounts.total_import_estimate.value, importWorkflow.amounts.total_import_estimate.currency)} ({importWorkflow.amounts.total_import_estimate.source})
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        ) : null}
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as CheckerTab)} className="space-y-3">
+              <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-6">
+                {TAB_ORDER.map((tab) => {
+                  const tabChecks = assessment.checks_by_tab[tab];
+                  const issuesCount = tabChecks.filter((check) => check.status !== "OK").length;
+                  return (
+                    <TabsTrigger key={tab} value={tab} className="text-xs sm:text-sm">
+                      {TAB_LABELS[tab]}
+                      {issuesCount > 0 ? ` (${issuesCount})` : ""}
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+
+              {TAB_ORDER.map((tab) => {
+                const checks = assessment.checks_by_tab[tab];
+                return (
+                  <TabsContent key={tab} value={tab}>
+                    {checks.length === 0 ? (
+                      <div className="rounded-lg border p-3 text-sm text-muted-foreground">Aucun check pour cet onglet.</div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>ID</TableHead>
+                            <TableHead>Check</TableHead>
+                            <TableHead>Statut</TableHead>
+                            <TableHead>Explication</TableHead>
+                            <TableHead>Quoi corriger</TableHead>
+                            <TableHead>Exemple</TableHead>
+                            <TableHead>Source</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {checks.map((check) => (
+                            <TableRow key={`${tab}_${check.id}`}>
+                              <TableCell className="font-mono text-xs">{check.id}</TableCell>
+                              <TableCell className="font-medium">{check.label}</TableCell>
+                              <TableCell>{checkStatusBadge(check.status)}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{check.explanation}</TableCell>
+                              <TableCell className="text-sm">{check.what_to_fix}</TableCell>
+                              <TableCell className="text-sm text-muted-foreground">{check.example}</TableCell>
+                              <TableCell>
+                                {check.source_link ? (
+                                  <a
+                                    href={check.source_link}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs underline"
+                                  >
+                                    <LinkIcon className="h-3 w-3" />
+                                    Ouvrir
+                                  </a>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
+
+            <p className="text-xs text-muted-foreground">
+              Sources officielles:{" "}
+              <a className="underline" href={OFFICIAL_LINKS.douane_fr} target="_blank" rel="noreferrer">
+                Douane FR
+              </a>{" "}
+              |{" "}
+              <a className="underline" href={OFFICIAL_LINKS.incoterms_icc} target="_blank" rel="noreferrer">
+                ICC Incoterms
+              </a>{" "}
+              |{" "}
+              <a className="underline" href="https://www.impots.gouv.fr/" target="_blank" rel="noreferrer">
+                impots.gouv.fr
+              </a>
+            </p>
+          </CardContent>
+        </Card>
+
+        <p className="text-xs text-muted-foreground">
+          Coherence docs simplifiee: AWB/B-L/Packing list controles seulement si saisis.
+        </p>
       </div>
     </AppLayout>
   );
