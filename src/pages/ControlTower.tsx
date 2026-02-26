@@ -758,7 +758,16 @@ export default function ControlTower() {
               onCountrySelect={(iso) => setSelectedCountry((prev) => (prev === iso ? null : iso))}
               onReset={() => setSelectedCountry(null)}
             />
-            <RssFooter />
+            <RssFooter
+              territory={selectedCountry || "WORLD"}
+              territoryLabel={
+                selectedCountry
+                  ? getCountryLabel(selectedCountry, lang)
+                  : isEn
+                  ? "World"
+                  : "Monde"
+              }
+            />
           </CardContent>
         </Card>
 

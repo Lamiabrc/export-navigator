@@ -20,16 +20,52 @@ type FeedItem = {
   imageUrl?: string | null;
 };
 
-const FALLBACK_SOURCES: Array<{ name: string; url: string }> = [
-  { name: "Economie.gouv.fr", url: "https://www.economie.gouv.fr/rss/toutesactualites" },
-  { name: "Service-Public Pro", url: "https://www.service-public.gouv.fr/abonnements/rss/actu-actu-pro.rss" },
+type RssSource = { name: string; url: string };
+
+const PERMANENT_SOURCES: RssSource[] = [
+  { name: "Le Moci", url: "https://www.lemoci.com/feed/" },
+  { name: "WHO News", url: "https://www.who.int/rss-feeds/news-english.xml" },
+  { name: "Douane francaise", url: "https://www.douane.gouv.fr/meteo/prodouane/pages/rss" },
   { name: "UE DG Trade", url: "https://policy.trade.ec.europa.eu/node/2/rss_en" },
+];
+
+const WORLD_SOURCES: RssSource[] = [
   { name: "OMC (WTO)", url: "https://www.wto.org/library/rss/latest_news_e.xml" },
 ];
+
+const COUNTRY_SOURCES: Record<string, RssSource[]> = {
+  FR: [
+    { name: "Economie.gouv.fr", url: "https://www.economie.gouv.fr/rss/toutesactualites" },
+    { name: "Service-Public Pro", url: "https://www.service-public.gouv.fr/abonnements/rss/actu-actu-pro.rss" },
+    { name: "France Diplomatie", url: "https://www.diplomatie.gouv.fr/en/backend-fd.php3" },
+  ],
+  DE: [{ name: "BMWK", url: "https://www.bmwk.de/SiteGlobals/Functions/RSSFeed/RSSFeed-Pressemitteilung.xml" }],
+  BE: [{ name: "Belgium News", url: "https://news.belgium.be/en/feeds/all" }],
+  NL: [{ name: "Government.nl", url: "https://feeds.government.nl/news.rss" }],
+  CH: [
+    { name: "FINMA sanctions", url: "https://www.finma.ch/en/rss/rss-internationale-sanktionen.xml" },
+    { name: "FINMA news", url: "https://www.finma.ch/en/rss/rss-finma-news.xml" },
+  ],
+  US: [
+    { name: "USTR press releases", url: "https://ustr.gov/archive/Meta_Content/RSS/ustr_press_releases_10475.xml" },
+    { name: "USTR recent news", url: "https://ustr.gov/archive/Meta_Content/RSS/ustr_recent_news_10495.xml" },
+  ],
+  CA: [
+    {
+      name: "Global Affairs Canada",
+      url: "https://api.io.canada.ca/io-server/gc/news/en/v2?atomtitle=Global+Affairs+Canada+news+releases&dept=departmentofforeignaffairstradeanddevelopment&format=atom&orderBy=desc&pick=1000&publishedDate%3E=2015-01-01&sort=publishedDate&type=newsreleases",
+    },
+  ],
+};
 
 const PROXY_ALLOWED_HOSTS = new Set([
   "news.google.com",
   "www.lemoci.com",
+  "lemoci.com",
+  "www.who.int",
+  "who.int",
+  "www.douane.gouv.fr",
+  "douane.gouv.fr",
   "www.tresor.economie.gouv.fr",
   "finance.ec.europa.eu",
   "ofsi.blog.gov.uk",
@@ -112,6 +148,59 @@ function toIsoDate(value: any): string | null {
   } catch {
     return null;
   }
+}
+
+function normalizeTerritory(value: string) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw || raw === "WORLD" || raw === "GLOBAL" || raw === "ALL" || raw === "MONDE" || raw === "EU") {
+    return "WORLD";
+  }
+  if (/^[A-Z]{2}$/.test(raw)) return raw;
+  return "WORLD";
+}
+
+function territoryLabel(code: string) {
+  if (code === "WORLD") return "Monde";
+  try {
+    const dn = new Intl.DisplayNames(["fr"], { type: "region" });
+    return dn.of(code) || code;
+  } catch {
+    return code;
+  }
+}
+
+function dedupeSources(sources: RssSource[]) {
+  const map = new Map<string, RssSource>();
+  for (const source of sources) {
+    if (!source?.url) continue;
+    const key = source.url.trim();
+    if (!key) continue;
+    if (!map.has(key)) map.set(key, source);
+  }
+  return Array.from(map.values());
+}
+
+function countryNewsSource(territory: string): RssSource | null {
+  if (!territory || territory === "WORLD") return null;
+  const label = territoryLabel(territory);
+  const query = `${label} export douane commerce international`;
+  return {
+    name: `Google News ${label}`,
+    url: `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=fr&gl=FR&ceid=FR:fr`,
+  };
+}
+
+function buildSourcesForTerritory(territory: string) {
+  const countrySource = countryNewsSource(territory);
+  const countrySpecific = territory === "WORLD" ? [] : (COUNTRY_SOURCES[territory] || []);
+  const worldExtras = territory === "WORLD" ? WORLD_SOURCES : [];
+  const combined = [
+    ...PERMANENT_SOURCES,
+    ...(countrySource ? [countrySource] : []),
+    ...countrySpecific,
+    ...worldExtras,
+  ];
+  return dedupeSources(combined);
 }
 
 function toUtcDate(value?: string | null) {
@@ -235,13 +324,22 @@ function parseAtomItems(xml: string) {
   return items;
 }
 
-async function fetchFallbackItems(limit: number) {
+function sortByPublishedDesc(items: ApiItem[]) {
+  items.sort((a, b) => {
+    const ad = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+    const bd = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+    return bd - ad;
+  });
+  return items;
+}
+
+async function fetchExternalItems(sources: RssSource[], limit: number, territory: string) {
   const controller = createAbortController();
   const timeout = setTimeout(() => controller?.abort?.(), 12_000);
 
   try {
     const fetched = await Promise.all(
-      FALLBACK_SOURCES.map(async (src) => {
+      sources.map(async (src) => {
         try {
           const res = await fetch(src.url, {
             method: "GET",
@@ -254,36 +352,35 @@ async function fetchFallbackItems(limit: number) {
             redirect: "follow",
           });
           const text = await res.text();
-          if (!res.ok || !text) return [] as ApiItem[];
+          if (!res.ok || !text) return { items: [] as ApiItem[], failed: true };
           const parsed = isAtom(text) ? parseAtomItems(text) : parseRssItems(text);
-          return parsed.map((it) => ({
-            title: it.title,
-            link: it.link,
-            summary: it.description ?? null,
-            publishedAt: it.pubDate ?? null,
-            source: src.name,
-            zone: null,
-            category: null,
-            imageUrl: it.imageUrl ?? null,
-          })) as ApiItem[];
+          const zoneValue = territory === "WORLD" ? null : territory;
+          return {
+            failed: false,
+            items: parsed.map((it) => ({
+              title: it.title,
+              link: it.link,
+              summary: it.description ?? null,
+              publishedAt: it.pubDate ?? null,
+              source: src.name,
+              zone: zoneValue,
+              category: null,
+              imageUrl: it.imageUrl ?? null,
+            })) as ApiItem[],
+          };
         } catch {
-          return [] as ApiItem[];
+          return { items: [] as ApiItem[], failed: true };
         }
       })
     );
 
-    const flat = fetched.flat();
+    const flat = fetched.flatMap((result) => result.items);
     const dedup = new Map<string, ApiItem>();
     for (const it of flat) if (!dedup.has(it.link)) dedup.set(it.link, it);
 
-    const items = Array.from(dedup.values());
-    items.sort((a, b) => {
-      const ad = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-      const bd = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
-      return bd - ad;
-    });
-
-    return items.slice(0, limit);
+    const items = sortByPublishedDesc(Array.from(dedup.values())).slice(0, limit);
+    const failedCount = fetched.reduce((acc, result) => acc + (result.failed ? 1 : 0), 0);
+    return { items, failedCount };
   } finally {
     clearTimeout(timeout);
   }
@@ -403,12 +500,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const wantsXml = format === "xml" || accept.includes("application/rss+xml") || accept.includes("application/xml");
 
     const limit = parseLimit(req);
-    const queryLimit = Math.min(limit * 2, 60);
+    const queryLimit = Math.min(limit * 3, 60);
 
     // filtres (optionnels)
     const categoryQ = String(req.query?.category || "").trim();
-    const zoneQ = String(req.query?.zone || req.query?.territory || "").trim(); // compat
+    const territoryQ = normalizeTerritory(String(req.query?.zone || req.query?.territory || "").trim());
+    const sourcePlan = buildSourcesForTerritory(territoryQ);
 
+    let dbItems: ApiItem[] = [];
     let items: ApiItem[] = [];
     let updatedAt: string | null = null;
     let degraded = false;
@@ -425,7 +524,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .limit(queryLimit);
 
       if (categoryQ) q = q.eq("category", categoryQ);
-      if (zoneQ) q = q.eq("territory", zoneQ);
+      if (territoryQ !== "WORLD") q = q.eq("territory", territoryQ);
 
       const { data, error } = await q;
 
@@ -438,21 +537,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const dedup = new Map<string, ApiItem>();
       for (const it of mapped) if (!dedup.has(it.link)) dedup.set(it.link, it);
 
-      items = Array.from(dedup.values()).slice(0, limit);
-      updatedAt = items[0]?.publishedAt || null;
+      dbItems = sortByPublishedDesc(Array.from(dedup.values())).slice(0, queryLimit);
     } catch (err: any) {
       degraded = true;
       console.error("[api/rss] supabase init error:", err?.message || String(err));
     }
 
-    if (!items.length) {
-      const fallback = await fetchFallbackItems(limit);
-      if (fallback.length) {
-        items = fallback;
-        updatedAt = items[0]?.publishedAt || null;
+    let external = await fetchExternalItems(sourcePlan, queryLimit, territoryQ);
+    if (!external.items.length && territoryQ !== "WORLD") {
+      const worldFallback = await fetchExternalItems(buildSourcesForTerritory("WORLD"), queryLimit, "WORLD");
+      if (worldFallback.items.length) {
+        external = worldFallback;
         degraded = true;
       }
     }
+
+    if (external.failedCount > 0) {
+      degraded = true;
+    }
+
+    const merged = new Map<string, ApiItem>();
+    for (const it of dbItems) {
+      if (!merged.has(it.link)) merged.set(it.link, it);
+    }
+    for (const it of external.items) {
+      if (!merged.has(it.link)) merged.set(it.link, it);
+    }
+
+    items = sortByPublishedDesc(Array.from(merged.values())).slice(0, limit);
+    updatedAt = items[0]?.publishedAt || null;
 
     res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
 
@@ -477,7 +590,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.status(200).json({ ok: true, degraded, updatedAt, items });
+    res.status(200).json({
+      ok: true,
+      degraded,
+      territory: territoryQ,
+      updatedAt,
+      items,
+      sources: sourcePlan.map((source) => source.name),
+      pinned: PERMANENT_SOURCES.map((source) => source.name),
+    });
   } catch (err: any) {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");

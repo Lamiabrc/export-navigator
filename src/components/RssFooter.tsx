@@ -19,12 +19,27 @@ type RssMeta = {
 };
 
 type RssApiJsonResponse = {
-  data?: { items?: RssFooterItem[] };
-  items?: RssFooterItem[];
+  data?: { items?: Array<Record<string, unknown>> };
+  items?: Array<Record<string, unknown>>;
   meta?: RssMeta;
+  sources?: string[];
+  pinned?: string[];
+  territory?: string;
   error?: string;
   message?: string;
 };
+
+type RssFooterProps = {
+  territory?: string | null;
+  territoryLabel?: string | null;
+};
+
+const PINNED_SOURCE_LABELS = [
+  "Le Moci",
+  "WHO News",
+  "Douane francaise",
+  "UE DG Trade",
+];
 
 function safeExternalUrl(url?: string) {
   if (!url) return null;
@@ -46,12 +61,47 @@ function safeDateTimeLabel(pubDate?: string) {
   return d.toLocaleString("fr-FR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+function normalizeTerritory(value?: string | null) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw || raw === "WORLD" || raw === "GLOBAL" || raw === "ALL" || raw === "MONDE" || raw === "EU") {
+    return "WORLD";
+  }
+  return /^[A-Z]{2}$/.test(raw) ? raw : "WORLD";
+}
+
+function toStringOrUndefined(value: unknown) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text || undefined;
+}
+
 function pickItemsJson(payload: RssApiJsonResponse | null): RssFooterItem[] {
   const a = payload?.data?.items;
   const b = payload?.items;
-  const items = (Array.isArray(a) ? a : Array.isArray(b) ? b : []) as RssFooterItem[];
-  return items
-    .filter((it) => (it?.title || "").trim() || (it?.link || "").trim())
+  const items = (Array.isArray(a) ? a : Array.isArray(b) ? b : []) as Array<Record<string, unknown>>;
+  return (items
+    .map((it, idx) => {
+      const title = toStringOrUndefined(it.title) || "Article";
+      const link = toStringOrUndefined(it.link) || toStringOrUndefined(it.url);
+      const sourceName =
+        toStringOrUndefined(it.sourceName) ||
+        toStringOrUndefined(it.source) ||
+        toStringOrUndefined(it.feed) ||
+        toStringOrUndefined(it.siteName);
+      const pubDate =
+        toStringOrUndefined(it.pubDate) ||
+        toStringOrUndefined(it.publishedAt) ||
+        toStringOrUndefined(it.published_at);
+
+      if (!link) return null;
+      return {
+        id: toStringOrUndefined(it.id) || `${link}-${idx}`,
+        title,
+        link,
+        sourceName,
+        pubDate,
+      } satisfies RssFooterItem;
+    })
+    .filter((it) => it !== null) as RssFooterItem[])
     .slice(0, 6);
 }
 
@@ -110,9 +160,12 @@ async function fetchRaw(url: string, signal: AbortSignal) {
   return { raw, contentType: res.headers.get("content-type") || "" };
 }
 
-export function RssFooter() {
+export function RssFooter({ territory, territoryLabel }: RssFooterProps) {
+  const effectiveTerritory = React.useMemo(() => normalizeTerritory(territory), [territory]);
   const [items, setItems] = React.useState<RssFooterItem[]>([]);
   const [meta, setMeta] = React.useState<RssMeta>({});
+  const [sourceLabels, setSourceLabels] = React.useState<string[]>([]);
+  const [pinnedLabels, setPinnedLabels] = React.useState<string[]>(PINNED_SOURCE_LABELS);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [refreshTick, setRefreshTick] = React.useState(0);
@@ -125,9 +178,8 @@ export function RssFooter() {
       setLoading(true);
       setError(null);
 
-      // Endpoint configurable : par défaut ton RSS XML sur exportfrancefacile
-      const envEndpoint = (import.meta as any)?.env?.VITE_RSS_ENDPOINT as string | undefined;
-      const endpoint = (envEndpoint && envEndpoint.trim()) ? envEndpoint.trim() : "https://www.exportfrancefacile.com/api/rss";
+      // Flux dynamique lie au territoire selectionne (map -> RSS).
+      const endpoint = `/api/rss?limit=18&territory=${encodeURIComponent(effectiveTerritory)}`;
 
       try {
         const { raw, contentType } = await fetchRaw(endpoint, controller.signal);
@@ -140,6 +192,8 @@ export function RssFooter() {
           const parsed = parseRssXml(raw);
           setMeta(parsed.meta);
           setItems(parsed.items);
+          setSourceLabels([]);
+          setPinnedLabels(PINNED_SOURCE_LABELS);
           setError(null);
         } else if (looksJson) {
           let payload: RssApiJsonResponse | null = null;
@@ -148,14 +202,30 @@ export function RssFooter() {
           } catch {
             payload = null;
           }
-          setMeta(payload?.meta || {});
+          const territoryText = territoryLabel || (effectiveTerritory === "WORLD" ? "Monde" : effectiveTerritory);
+          setMeta({
+            title: payload?.meta?.title || `Veille export - ${territoryText}`,
+            description:
+              payload?.meta?.description ||
+              `Flux dynamique relie a la carte (territoire: ${territoryText}).`,
+            link: payload?.meta?.link || "/veille",
+            lastBuildDate: payload?.meta?.lastBuildDate,
+          });
           setItems(pickItemsJson(payload));
+          setSourceLabels(Array.isArray(payload?.sources) ? payload.sources.slice(0, 8) : []);
+          setPinnedLabels(
+            Array.isArray(payload?.pinned) && payload.pinned.length
+              ? payload.pinned
+              : PINNED_SOURCE_LABELS
+          );
           if (payload?.error) setError(payload.error);
           else setError(null);
         } else {
           // format inattendu
           setMeta({});
           setItems([]);
+          setSourceLabels([]);
+          setPinnedLabels(PINNED_SOURCE_LABELS);
           setError("Format de veille non reconnu.");
         }
       } catch (err) {
@@ -164,6 +234,8 @@ export function RssFooter() {
         if (anyErr?.name === "AbortError") return;
         setMeta({});
         setItems([]);
+        setSourceLabels([]);
+        setPinnedLabels(PINNED_SOURCE_LABELS);
         setError(anyErr?.message || "Veille indisponible pour le moment. Réessayez dans quelques minutes.");
       } finally {
         if (mounted) setLoading(false);
@@ -175,10 +247,11 @@ export function RssFooter() {
       mounted = false;
       controller.abort();
     };
-  }, [refreshTick]);
+  }, [effectiveTerritory, refreshTick, territoryLabel]);
 
   const hasItems = items.length > 0;
   const lastBuild = safeDateTimeLabel(meta.lastBuildDate);
+  const selectedLabel = territoryLabel || (effectiveTerritory === "WORLD" ? "Monde" : effectiveTerritory);
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -200,6 +273,16 @@ export function RssFooter() {
             {meta.description ? meta.description : "Signaux faibles, conformité et points de vigilance."}
             {lastBuild ? <span className="ml-2">· Dernière mise à jour : <b>{lastBuild}</b></span> : null}
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Badge variant="secondary">Pays/zone: {selectedLabel}</Badge>
+          {pinnedLabels.map((label) => (
+            <Badge key={`pinned-${label}`} variant="outline">
+              {label}
+            </Badge>
+          ))}
+          {sourceLabels.length ? <Badge variant="outline">+{sourceLabels.length} source(s) pays</Badge> : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

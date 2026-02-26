@@ -3,6 +3,12 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 const ALLOWED_HOSTS = new Set([
   "policy.trade.ec.europa.eu",
   "www.wto.org",
+  "www.lemoci.com",
+  "lemoci.com",
+  "www.who.int",
+  "who.int",
+  "www.douane.gouv.fr",
+  "douane.gouv.fr",
   "www.economie.gouv.fr",
   "www.service-public.gouv.fr",
   "www.diplomatie.gouv.fr",
