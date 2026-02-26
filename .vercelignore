@@ -5,3 +5,36 @@ coverage
 .github
 .vscode
 *.log
+
+# Keep Hobby plan under 12 Serverless Functions:
+# deployed endpoints are:
+# - api/chat.ts
+# - api/ask.ts
+# - api/chat-ingest.ts
+# - api/hs/quota.ts
+# - api/hs/search.ts
+# - api/rss.ts
+# - api/ingest/feeds.ts
+# - api/lead-magnet.ts
+# - api/taxes-product.ts
+# - api/contact.ts
+# - api/link-preview.ts
+# - api/kb/ingest.ts
+
+# Legacy wrappers replaced by /api/lead-magnet rewrites
+api/alerts.ts
+api/lead.ts
+api/pdf.ts
+api/prefs.ts
+api/export/brief.ts
+
+# Not in core Hobby deployment
+api/delete-data.ts
+api/go-no-go.ts
+api/rss-proxy.ts
+api/cron/**
+api/stripe/**
+
+# Internal/legacy helpers (not public functions)
+api/_supabase.ts
+api/_lib/**
