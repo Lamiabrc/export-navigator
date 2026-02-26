@@ -1,4 +1,4 @@
-import * as React from "react";
+﻿import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRight, ExternalLink, RefreshCw, Rss, ShieldCheck } from "lucide-react";
@@ -106,7 +106,7 @@ function pickItemsJson(payload: RssApiJsonResponse | null): RssFooterItem[] {
 }
 
 function parseRssXml(xml: string): { meta: RssMeta; items: RssFooterItem[] } {
-  // DOMParser dispo côté navigateur
+  // DOMParser dispo cÃ´tÃ© navigateur
   if (typeof window === "undefined") return { meta: {}, items: [] };
 
   try {
@@ -153,8 +153,8 @@ async function fetchRaw(url: string, signal: AbortSignal) {
   const raw = await res.text();
 
   if (!res.ok) {
-    // certains backends renvoient HTML en erreur → on renvoie un message générique
-    throw new Error("Veille indisponible pour le moment. Réessayez dans quelques minutes.");
+    // certains backends renvoient HTML en erreur â†’ on renvoie un message gÃ©nÃ©rique
+    throw new Error("Veille indisponible pour le moment. RÃ©essayez dans quelques minutes.");
   }
 
   return { raw, contentType: res.headers.get("content-type") || "" };
@@ -236,7 +236,7 @@ export function RssFooter({ territory, territoryLabel }: RssFooterProps) {
         setItems([]);
         setSourceLabels([]);
         setPinnedLabels(PINNED_SOURCE_LABELS);
-        setError(anyErr?.message || "Veille indisponible pour le moment. Réessayez dans quelques minutes.");
+        setError(anyErr?.message || "Veille indisponible pour le moment. RÃ©essayez dans quelques minutes.");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -265,13 +265,13 @@ export function RssFooter({ territory, territoryLabel }: RssFooterProps) {
             <div>
               <div className="text-xs uppercase tracking-[0.35em] text-muted-foreground">Veille export</div>
               <div className="text-sm font-semibold text-foreground">
-                {meta.title ? meta.title : "Alertes récentes"}
+                {meta.title ? meta.title : "Alertes rÃ©centes"}
               </div>
             </div>
           </div>
           <div className="text-xs text-muted-foreground">
-            {meta.description ? meta.description : "Signaux faibles, conformité et points de vigilance."}
-            {lastBuild ? <span className="ml-2">· Dernière mise à jour : <b>{lastBuild}</b></span> : null}
+            {meta.description ? meta.description : "Signaux faibles, conformitÃ© et points de vigilance."}
+            {lastBuild ? <span className="ml-2">Â· DerniÃ¨re mise Ã  jour : <b>{lastBuild}</b></span> : null}
           </div>
         </div>
 
@@ -298,7 +298,7 @@ export function RssFooter({ territory, territoryLabel }: RssFooterProps) {
             Actualiser
           </Button>
 
-          {/* /watch redirige déjà vers /veille chez toi */}
+          {/* /watch redirige dÃ©jÃ  vers /veille chez toi */}
           <a href="/veille" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
             Centre de veille <ArrowRight className="h-4 w-4" />
           </a>
@@ -321,10 +321,10 @@ export function RssFooter({ territory, territoryLabel }: RssFooterProps) {
             </div>
           ) : !hasItems ? (
             <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-              <div className="font-medium text-foreground">Aucune actualité disponible pour le moment.</div>
+              <div className="font-medium text-foreground">Aucune actualitÃ© disponible pour le moment.</div>
               <div className="mt-1 text-xs">
-                Ton RSS est valide mais il ne contient aucun <code>&lt;item&gt;</code>. Dès que le flux est alimenté,
-                les alertes apparaîtront ici automatiquement.
+                Ton RSS est valide mais il ne contient aucun <code>&lt;item&gt;</code>. DÃ¨s que le flux est alimentÃ©,
+                les alertes apparaÃ®tront ici automatiquement.
               </div>
             </div>
           ) : (
@@ -383,9 +383,9 @@ export function RssFooter({ territory, territoryLabel }: RssFooterProps) {
               <ShieldCheck className="h-4 w-4" />
             </div>
             <div className="space-y-1">
-              <div className="text-sm font-semibold text-foreground">Débloquez le suivi et l’historique</div>
+              <div className="text-sm font-semibold text-foreground">DÃ©bloquez le suivi et lâ€™historique</div>
               <div className="text-xs text-muted-foreground">
-                Compte gratuit : sauvegarde de vos contrôles + accès aux vues avancées.
+                Compte gratuit : sauvegarde de vos contrÃ´les + accÃ¨s aux vues avancÃ©es.
               </div>
             </div>
           </div>
@@ -393,22 +393,22 @@ export function RssFooter({ territory, territoryLabel }: RssFooterProps) {
           <ul className="mt-3 space-y-2 text-sm text-foreground/90">
             <li className="flex items-start gap-2">
               <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-              <span>Historique des vérifications & export des résultats</span>
+              <span>Historique des vÃ©rifications & export des rÃ©sultats</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-              <span>Veille plus ciblée (pays/secteur) dans l’app</span>
+              <span>Veille plus ciblÃ©e (pays/secteur) dans lâ€™app</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-              <span>Accès aux outils : Control Tower, simulateur, conformité</span>
+              <span>AccÃ¨s aux outils : Control Tower, simulateur, conformitÃ©</span>
             </li>
           </ul>
 
           <div className="mt-4 flex flex-wrap gap-2">
             <a href="/register?next=%2Fapp%2Finvoice-check" className="w-full">
               <Button className="w-full gap-2">
-                Créer un compte gratuit <ArrowRight className="h-4 w-4" />
+                CrÃ©er un compte gratuit <ArrowRight className="h-4 w-4" />
               </Button>
             </a>
             <a href="/login" className="w-full">
@@ -431,3 +431,4 @@ export function RssFooter({ territory, territoryLabel }: RssFooterProps) {
     </div>
   );
 }
+

@@ -1,22 +1,54 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+﻿import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
-import { supabaseAdmin } from "../../src/server/supabaseAdmin.js";
 
-// Manual test (replace placeholders):
-// curl -X POST "<BASE_URL>/api/ingest/feeds" -H "x-cron-secret: <CRON_SECRET>"
+import { supabaseAdmin } from "../../src/server/supabaseAdmin.js";
 
 type ParsedItem = {
   title: string;
   link: string;
   summary: string | null;
-  publishedAt: string | null; // ISO
+  publishedAt: string | null;
   imageUrl: string | null;
+};
+
+type FeedRow = {
+  id: string;
+  name: string | null;
+  source_name: string | null;
+  source_url: string | null;
+  kind: string | null;
+  enabled: boolean | null;
+  is_public: boolean | null;
+  logo_url: string | null;
+  category: string | null;
+  territory: string | null;
+  tags: string[] | null;
+};
+
+type FeedResult = {
+  feedId: string;
+  name: string;
+  status: "ok" | "skipped" | "failed";
+  httpStatus: number | null;
+  fetched: number;
+  inserted: number;
+  deduped: number;
+  error?: string;
+};
+
+const TOPIC_SYNONYMS: Record<string, string[]> = {
+  sanctions: ["sanction", "embargo", "ofac", "restricted"],
+  douane: ["douane", "customs", "tariff", "duty"],
+  taxes: ["tax", "vat", "tva", "cbam"],
+  documents: ["document", "certificate", "invoice", "packing list", "origin"],
+  logistics: ["transport", "shipping", "maritime", "freight", "logistics"],
+  health: ["who", "health", "pandemic"],
 };
 
 function toIso(value?: string | null) {
   if (!value) return null;
   const dt = new Date(value);
-  if (isNaN(dt.getTime())) return null;
+  if (Number.isNaN(dt.getTime())) return null;
   return dt.toISOString();
 }
 
@@ -44,7 +76,7 @@ function decodeEntities(text: string) {
 function truncate(s: string, n: number) {
   const t = (s || "").trim();
   if (t.length <= n) return t;
-  return t.slice(0, n - 1).trimEnd() + "…";
+  return `${t.slice(0, n - 1).trimEnd()}...`;
 }
 
 function extractTag(block: string, tag: string) {
@@ -54,7 +86,7 @@ function extractTag(block: string, tag: string) {
 }
 
 function extractAttr(block: string, tag: string, attr: string) {
-  const re = new RegExp(`<${tag}[^>]*\\s${attr}="([^"]+)"[^>]*\\/?>(?:<\\/${tag}>)?`, "i");
+  const re = new RegExp(`<${tag}[^>]*\\s${attr}="([^"]+)"[^>]*\\/?>`, "i");
   const m = block.match(re);
   return m?.[1]?.trim() || "";
 }
@@ -70,28 +102,67 @@ function normalizeLink(link: string) {
   return l.replace(/\s+/g, "");
 }
 
-function normalizeTags(value: any): string[] | null {
-  if (!value) return null;
+function normalizeTag(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function normalizeTags(value: unknown): string[] {
+  if (!value) return [];
   if (Array.isArray(value)) {
-    const items = value.map((v) => String(v || "").trim()).filter(Boolean);
-    return items.length ? items : null;
+    return value.map((v) => normalizeTag(String(v || ""))).filter(Boolean);
   }
-  const s = String(value || "").trim();
-  return s ? [s] : null;
+  const one = normalizeTag(String(value || ""));
+  return one ? [one] : [];
+}
+
+function inferTopicTags(item: ParsedItem) {
+  const haystack = `${item.title} ${item.summary || ""}`.toLowerCase();
+  const topics: string[] = [];
+
+  for (const [topic, synonyms] of Object.entries(TOPIC_SYNONYMS)) {
+    if (synonyms.some((synonym) => haystack.includes(synonym))) {
+      topics.push(normalizeTag(topic));
+    }
+  }
+
+  return Array.from(new Set(topics));
+}
+
+function inferTerritoryFromText(item: ParsedItem, fallbackTerritory: string | null) {
+  if (fallbackTerritory) return fallbackTerritory;
+  const haystack = `${item.title} ${item.summary || ""}`.toLowerCase();
+  const known = ["FR", "DE", "ES", "IT", "BE", "NL", "US", "CA", "GB", "CH", "CN", "JP"];
+  for (const code of known) {
+    if (new RegExp(`\\b${code.toLowerCase()}\\b`, "i").test(haystack)) return code;
+  }
+  return "WORLD";
+}
+
+function itemFingerprint(item: ParsedItem) {
+  const key = `${item.link}|${item.title}|${item.publishedAt ? item.publishedAt.slice(0, 10) : ""}`;
+  return crypto.createHash("md5").update(key).digest("hex");
 }
 
 async function fetchTextWithTimeout(url: string, ms: number) {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
+  const timeout = setTimeout(() => ctrl.abort(), ms);
   try {
     const res = await fetch(url, {
       signal: ctrl.signal,
-      headers: { "user-agent": "exportfrancefacile-ingest/1.0" },
+      headers: {
+        "user-agent": "export-navigator-ingest/1.0",
+        Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+      },
     });
-    const txt = await res.text();
-    return { ok: res.ok, status: res.status, text: txt };
+    const text = await res.text();
+    return { ok: res.ok, status: res.status, text };
   } finally {
-    clearTimeout(t);
+    clearTimeout(timeout);
   }
 }
 
@@ -99,24 +170,22 @@ function parseRssItems(xml: string): ParsedItem[] {
   const items: ParsedItem[] = [];
   const blocks = xml.match(/<item[\s\S]*?<\/item>/gi) || [];
 
-  for (const b of blocks.slice(0, 50)) {
-    const titleRaw = extractTag(b, "title");
-    const linkRaw = extractTag(b, "link") || extractTag(b, "guid");
-    const descRaw = extractTag(b, "description") || extractTag(b, "content:encoded");
-    const pubRaw = extractTag(b, "pubDate") || extractTag(b, "dc:date");
+  for (const block of blocks.slice(0, 80)) {
+    const titleRaw = extractTag(block, "title");
+    const linkRaw = extractTag(block, "link") || extractTag(block, "guid");
+    const descRaw = extractTag(block, "description") || extractTag(block, "content:encoded");
+    const pubRaw = extractTag(block, "pubDate") || extractTag(block, "dc:date");
 
     const mediaImg =
-      extractAttr(b, "media:content", "url") ||
-      extractAttr(b, "media:thumbnail", "url") ||
-      extractAttr(b, "enclosure", "url");
-
-    const imgFromDesc = extractFirstImgSrc(descRaw);
+      extractAttr(block, "media:content", "url") ||
+      extractAttr(block, "media:thumbnail", "url") ||
+      extractAttr(block, "enclosure", "url");
 
     const title = decodeEntities(stripHtml(titleRaw)) || "Sans titre";
-    const link = normalizeLink(stripHtml(linkRaw)) || "";
+    const link = normalizeLink(stripHtml(linkRaw));
     if (!link) continue;
 
-    const summary = descRaw ? truncate(decodeEntities(stripHtml(descRaw)), 400) : null;
+    const summary = descRaw ? truncate(decodeEntities(stripHtml(descRaw)), 500) : null;
     const publishedAt = toIso(decodeEntities(stripHtml(pubRaw))) || null;
 
     items.push({
@@ -124,7 +193,7 @@ function parseRssItems(xml: string): ParsedItem[] {
       link,
       summary,
       publishedAt,
-      imageUrl: mediaImg || imgFromDesc || null,
+      imageUrl: mediaImg || extractFirstImgSrc(descRaw) || null,
     });
   }
 
@@ -135,24 +204,21 @@ function parseAtomItems(xml: string): ParsedItem[] {
   const items: ParsedItem[] = [];
   const blocks = xml.match(/<entry[\s\S]*?<\/entry>/gi) || [];
 
-  for (const b of blocks.slice(0, 50)) {
-    const titleRaw = extractTag(b, "title");
-    const summaryRaw = extractTag(b, "summary") || extractTag(b, "content");
-    const pubRaw = extractTag(b, "updated") || extractTag(b, "published");
+  for (const block of blocks.slice(0, 80)) {
+    const titleRaw = extractTag(block, "title");
+    const summaryRaw = extractTag(block, "summary") || extractTag(block, "content");
+    const pubRaw = extractTag(block, "updated") || extractTag(block, "published");
 
-    const linkHref = extractAttr(b, "link", "href");
-    const link = normalizeLink(linkHref) || "";
+    const link = normalizeLink(extractAttr(block, "link", "href"));
     if (!link) continue;
 
     const mediaImg =
-      extractAttr(b, "media:content", "url") ||
-      extractAttr(b, "media:thumbnail", "url") ||
-      extractAttr(b, "enclosure", "url");
-
-    const imgFromSummary = extractFirstImgSrc(summaryRaw);
+      extractAttr(block, "media:content", "url") ||
+      extractAttr(block, "media:thumbnail", "url") ||
+      extractAttr(block, "enclosure", "url");
 
     const title = decodeEntities(stripHtml(titleRaw)) || "Sans titre";
-    const summary = summaryRaw ? truncate(decodeEntities(stripHtml(summaryRaw)), 400) : null;
+    const summary = summaryRaw ? truncate(decodeEntities(stripHtml(summaryRaw)), 500) : null;
     const publishedAt = toIso(decodeEntities(stripHtml(pubRaw))) || null;
 
     items.push({
@@ -160,7 +226,7 @@ function parseAtomItems(xml: string): ParsedItem[] {
       link,
       summary,
       publishedAt,
-      imageUrl: mediaImg || imgFromSummary || null,
+      imageUrl: mediaImg || extractFirstImgSrc(summaryRaw) || null,
     });
   }
 
@@ -171,135 +237,292 @@ function isAtom(xml: string) {
   return /<feed[\s>]/i.test(xml) && /xmlns=["']http:\/\/www\.w3\.org\/2005\/Atom["']/i.test(xml);
 }
 
+async function createFetchLog(admin: ReturnType<typeof supabaseAdmin>, feedId: string, territory: string | null) {
+  try {
+    const { data } = await admin
+      .from("feed_fetch_logs")
+      .insert({ feed_id: feedId, status: "started", territory })
+      .select("id")
+      .single();
+    return String(data?.id || "") || null;
+  } catch {
+    return null;
+  }
+}
+
+async function finalizeFetchLog(
+  admin: ReturnType<typeof supabaseAdmin>,
+  logId: string | null,
+  payload: {
+    status: "ok" | "failed" | "skipped";
+    httpStatus: number | null;
+    fetched: number;
+    inserted: number;
+    deduped: number;
+    error: string | null;
+  },
+) {
+  if (!logId) return;
+  try {
+    await admin
+      .from("feed_fetch_logs")
+      .update({
+        finished_at: new Date().toISOString(),
+        status: payload.status,
+        http_status: payload.httpStatus,
+        fetched_count: payload.fetched,
+        inserted_count: payload.inserted,
+        deduped_count: payload.deduped,
+        error: payload.error,
+      })
+      .eq("id", logId);
+  } catch {
+    // no-op
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method !== "POST") {
-      res.status(405).json({ ok: false, error: "Method not allowed" });
+      res.status(405).json({ ok: false, error: "method_not_allowed" });
       return;
     }
 
-    const expected = process.env.CRON_SECRET;
+    const expected = String(process.env.CRON_SECRET || "").trim();
     if (!expected) {
       res.status(500).json({ ok: false, error: "missing_env", missing: ["CRON_SECRET"] });
       return;
     }
 
-    const providedHeader = String(req.headers["x-cron-secret"] || "");
-    const providedQuery = String(req.query?.key || "");
-    const provided = (providedHeader || providedQuery || "").trim();
-
+    const provided = String(req.headers["x-cron-secret"] || req.query?.key || "").trim();
     if (!provided || provided !== expected) {
       res.status(401).json({ ok: false, error: "unauthorized" });
       return;
     }
 
     const admin = supabaseAdmin();
-
-    // ✅ On ne sélectionne que les champs standardisés (no schema guessing)
     const { data: feeds, error: feedError } = await admin
       .from("regulatory_feeds")
-      .select("id, name, source_name, source_url, kind, enabled, logo_url, category, territory, tags")
-      .eq("enabled", true);
+      .select("id,name,source_name,source_url,kind,enabled,is_public,logo_url,category,territory,tags")
+      .eq("enabled", true)
+      .neq("is_public", false)
+      .order("created_at", { ascending: true });
 
     if (feedError) {
-      res.status(500).json({ ok: false, error: "supabase_error", detail: feedError.message });
+      res.status(500).json({ ok: false, error: "feeds_select_failed", detail: feedError.message });
       return;
     }
 
-    const enabledFeeds = feeds || [];
-    const results: Array<{
-      feedId: string;
-      name: string;
-      status: "ok" | "skipped" | "failed";
-      httpStatus: number | null;
-      inserted: number;
-      error?: string;
-    }> = [];
+    const enabledFeeds = (feeds || []) as FeedRow[];
+    const results: FeedResult[] = [];
 
     for (const feed of enabledFeeds) {
-      const feedId = String(feed.id);
-      const feedName = String(feed.name || feed.source_name || feedId);
+      const feedId = String(feed.id || "");
+      const feedName = String(feed.source_name || feed.name || feedId);
       const feedUrl = String(feed.source_url || "").trim();
-      const kindRaw = String(feed.kind || "rss").toLowerCase();
-      const kind = kindRaw.includes("atom") ? "atom" : kindRaw.includes("rss") ? "rss" : kindRaw.includes("api") ? "api" : "web";
-      const feedLogo = feed.logo_url || null;
-      const feedCategory = feed.category ? String(feed.category) : null;
-      const feedTerritory = feed.territory ? String(feed.territory) : null;
+      const kind = String(feed.kind || "rss").toLowerCase();
+      const feedTerritory = String(feed.territory || "").trim().toUpperCase() || null;
       const feedTags = normalizeTags(feed.tags);
+      const logId = await createFetchLog(admin, feedId, feedTerritory);
 
       if (!feedUrl) {
-        results.push({ feedId, name: feedName, status: "skipped", httpStatus: null, inserted: 0, error: "missing_source_url" });
+        const result: FeedResult = {
+          feedId,
+          name: feedName,
+          status: "skipped",
+          httpStatus: null,
+          fetched: 0,
+          inserted: 0,
+          deduped: 0,
+          error: "missing_source_url",
+        };
+        results.push(result);
+        await finalizeFetchLog(admin, logId, {
+          status: "skipped",
+          httpStatus: null,
+          fetched: 0,
+          inserted: 0,
+          deduped: 0,
+          error: result.error || null,
+        });
         continue;
       }
 
-      if (kind === "web" || kind === "api") {
-        results.push({ feedId, name: feedName, status: "skipped", httpStatus: null, inserted: 0, error: `kind_${kind}_not_supported` });
+      if (!(kind.includes("rss") || kind.includes("atom"))) {
+        const result: FeedResult = {
+          feedId,
+          name: feedName,
+          status: "skipped",
+          httpStatus: null,
+          fetched: 0,
+          inserted: 0,
+          deduped: 0,
+          error: `kind_${kind}_not_supported`,
+        };
+        results.push(result);
+        await finalizeFetchLog(admin, logId, {
+          status: "skipped",
+          httpStatus: null,
+          fetched: 0,
+          inserted: 0,
+          deduped: 0,
+          error: result.error || null,
+        });
         continue;
       }
 
       try {
-        const r = await fetchTextWithTimeout(feedUrl, 12000);
-        const httpStatus = r.status;
-        if (!r.ok || !r.text) {
-          results.push({ feedId, name: feedName, status: "failed", httpStatus, inserted: 0, error: `fetch_${r.status}` });
-          console.error(`[ingest] ${feedName} failed status=${httpStatus}`);
+        const response = await fetchTextWithTimeout(feedUrl, 15000);
+        if (!response.ok || !response.text) {
+          const result: FeedResult = {
+            feedId,
+            name: feedName,
+            status: "failed",
+            httpStatus: response.status,
+            fetched: 0,
+            inserted: 0,
+            deduped: 0,
+            error: `fetch_${response.status}`,
+          };
+          results.push(result);
+          await finalizeFetchLog(admin, logId, {
+            status: "failed",
+            httpStatus: result.httpStatus,
+            fetched: 0,
+            inserted: 0,
+            deduped: 0,
+            error: result.error || null,
+          });
           continue;
         }
 
-        const parsed = isAtom(r.text) ? parseAtomItems(r.text) : parseRssItems(r.text);
+        const parsed = isAtom(response.text) ? parseAtomItems(response.text) : parseRssItems(response.text);
         if (!parsed.length) {
           await admin.from("regulatory_feeds").update({ last_fetched_at: new Date().toISOString() }).eq("id", feedId);
-          results.push({ feedId, name: feedName, status: "ok", httpStatus, inserted: 0 });
-          console.log(`[ingest] ${feedName} ok status=${httpStatus} inserted=0`);
+          const result: FeedResult = {
+            feedId,
+            name: feedName,
+            status: "ok",
+            httpStatus: response.status,
+            fetched: 0,
+            inserted: 0,
+            deduped: 0,
+          };
+          results.push(result);
+          await finalizeFetchLog(admin, logId, {
+            status: "ok",
+            httpStatus: response.status,
+            fetched: 0,
+            inserted: 0,
+            deduped: 0,
+            error: null,
+          });
           continue;
         }
 
-        // ✅ Schéma standard regulatory_items
-        const rows = parsed.map((it) => {
-          const fingerprint = crypto.createHash("md5").update(`${it.link}|${it.title}`).digest("hex");
+        const dedupInput = new Map<string, ParsedItem>();
+        for (const item of parsed) {
+          const fp = itemFingerprint(item);
+          if (!dedupInput.has(fp)) dedupInput.set(fp, item);
+        }
+        const uniqueItems = Array.from(dedupInput.values());
+
+        const rows = uniqueItems.map((item) => {
+          const inferredTags = inferTopicTags(item);
+          const tags = Array.from(new Set([...feedTags, ...inferredTags])).slice(0, 12);
           return {
             source_id: feedId,
-            title: it.title,
-            link: it.link,
-            summary: it.summary,
-            published_at: it.publishedAt,
-            category: feedCategory,
-            territory: feedTerritory,
-            tags: feedTags,
-            image_url: it.imageUrl || feedLogo,
-            fingerprint,
+            title: item.title,
+            link: item.link,
+            summary: item.summary,
+            published_at: item.publishedAt,
+            category: feed.category,
+            territory: inferTerritoryFromText(item, feedTerritory),
+            tags,
+            image_url: item.imageUrl || feed.logo_url || null,
+            fingerprint: itemFingerprint(item),
           };
         });
 
-        // ✅ nécessite contrainte unique (source_id, fingerprint)
         const { data: insertedRows, error: upsertError } = await admin
           .from("regulatory_items")
           .upsert(rows, { onConflict: "source_id,fingerprint", ignoreDuplicates: true })
           .select("id");
 
         if (upsertError) {
-          results.push({ feedId, name: feedName, status: "failed", httpStatus, inserted: 0, error: upsertError.message });
-          console.error(`[ingest] ${feedName} failed status=${httpStatus} error=${upsertError.message}`);
+          const result: FeedResult = {
+            feedId,
+            name: feedName,
+            status: "failed",
+            httpStatus: response.status,
+            fetched: uniqueItems.length,
+            inserted: 0,
+            deduped: uniqueItems.length,
+            error: upsertError.message,
+          };
+          results.push(result);
+          await finalizeFetchLog(admin, logId, {
+            status: "failed",
+            httpStatus: response.status,
+            fetched: result.fetched,
+            inserted: 0,
+            deduped: result.deduped,
+            error: result.error || null,
+          });
           continue;
         }
 
-        // Update last_fetched_at si la colonne existe (si tu l’as dans le SQL)
+        const insertedCount = Array.isArray(insertedRows) ? insertedRows.length : 0;
+        const dedupedCount = Math.max(0, uniqueItems.length - insertedCount);
+
         await admin.from("regulatory_feeds").update({ last_fetched_at: new Date().toISOString() }).eq("id", feedId);
 
-        const insertedCount = Array.isArray(insertedRows) ? insertedRows.length : 0;
-        results.push({ feedId, name: feedName, status: "ok", httpStatus, inserted: insertedCount });
-        console.log(`[ingest] ${feedName} ok status=${httpStatus} inserted=${insertedCount}`);
+        const result: FeedResult = {
+          feedId,
+          name: feedName,
+          status: "ok",
+          httpStatus: response.status,
+          fetched: uniqueItems.length,
+          inserted: insertedCount,
+          deduped: dedupedCount,
+        };
+
+        results.push(result);
+        await finalizeFetchLog(admin, logId, {
+          status: "ok",
+          httpStatus: result.httpStatus,
+          fetched: result.fetched,
+          inserted: result.inserted,
+          deduped: result.deduped,
+          error: null,
+        });
       } catch (err: any) {
-        results.push({ feedId, name: feedName, status: "failed", httpStatus: null, inserted: 0, error: err?.message || String(err) });
-        console.error(`[ingest] ${feedName} failed error=${err?.message || String(err)}`);
+        const result: FeedResult = {
+          feedId,
+          name: feedName,
+          status: "failed",
+          httpStatus: null,
+          fetched: 0,
+          inserted: 0,
+          deduped: 0,
+          error: String(err?.message || "ingest_failed"),
+        };
+        results.push(result);
+        await finalizeFetchLog(admin, logId, {
+          status: "failed",
+          httpStatus: null,
+          fetched: 0,
+          inserted: 0,
+          deduped: 0,
+          error: result.error || null,
+        });
       }
     }
 
     res.status(200).json({ ok: true, feeds: enabledFeeds.length, results });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: "server_error", detail: err?.message || String(err) });
+    res.status(500).json({ ok: false, error: "server_error", detail: String(err?.message || err) });
   }
 }
 
-// ✅ Node runtime (crypto + fetch)
 export const config = { runtime: "nodejs" };

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { MarketingHeader } from "./MarketingHeader";
-import { MarketingFooter } from "./MarketingFooter";
+
+import { PublicLayout } from "@/components/layout/PublicLayout";
 import "@/styles/marketing.css";
 
 type PremiumMarketingLayoutProps = {
@@ -15,10 +15,10 @@ export function PremiumMarketingLayout({
   hideFooter = false,
 }: PremiumMarketingLayoutProps) {
   return (
-    <div className="mkt-shell min-h-screen flex flex-col">
-      {!hideHeader && <MarketingHeader />}
-      <main className="flex-1">{children}</main>
-      {!hideFooter && <MarketingFooter />}
-    </div>
+    <PublicLayout hideBanner={!hideHeader} hideFooter={hideFooter}>
+      <div className="mkt-shell min-h-[40vh] flex flex-col">
+        <main className="flex-1">{children}</main>
+      </div>
+    </PublicLayout>
   );
 }

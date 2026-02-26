@@ -10,9 +10,15 @@ import { TricolorBanner } from "@/components/layout/TricolorBanner";
 import { useI18n } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { LanguageCode } from "@/i18n/translations";
-import { navLinks } from "@/config/navLinks";
+import { footerNav, isPathActive, publicNav } from "@/config/navigation";
 import { getBannerContent } from "@/config/bannerContent";
 import SupportChatWidget from "@/components/support/SupportChatWidget";
+
+type PublicLayoutProps = {
+  children?: React.ReactNode;
+  hideBanner?: boolean;
+  hideFooter?: boolean;
+};
 
 const flags: Record<LanguageCode, string> = {
   fr: String.fromCodePoint(0x1f1eb, 0x1f1f7),
@@ -21,12 +27,6 @@ const flags: Record<LanguageCode, string> = {
 
 function cx(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
-}
-
-function isActivePath(pathname: string, to: string) {
-  if (to === "/") return pathname === "/";
-  if (pathname === to) return true;
-  return pathname.startsWith(`${to}/`);
 }
 
 function FooterSocial() {
@@ -72,7 +72,7 @@ function FooterSocial() {
   );
 }
 
-export function PublicLayout({ children }: { children?: React.ReactNode }) {
+export function PublicLayout({ children, hideBanner = false, hideFooter = false }: PublicLayoutProps) {
   const location = useLocation();
   const { t, lang, setLang } = useI18n();
   const { isAuthenticated } = useAuth();
@@ -89,6 +89,9 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [mobileResourcesOpen, setMobileResourcesOpen] = React.useState(false);
 
+  const mainFooterLinks = React.useMemo(() => footerNav.filter((item) => !item.legal), []);
+  const legalFooterLinks = React.useMemo(() => footerNav.filter((item) => item.legal), []);
+
   const resourceLinks = React.useMemo(
     () => [
       { to: "/guides/incoterms", label: isFr ? "Incoterms" : "Incoterms" },
@@ -102,18 +105,27 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
     [isFr]
   );
 
-  const navLabel = (key: string, fallback: string) => {
-    const candidate = (t(key) as string) ?? "";
-    if (!candidate || candidate === key) return fallback;
-    return candidate;
-  };
-
   const registerLabel = isFr ? "Creer un compte gratuit" : "Create free account";
   const loginLabel = isFr ? "Connexion" : "Sign in";
+  const appLabel = isFr ? "Tour de controle" : "Control Tower";
 
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
   const emailMain = "contact@exportfrancefacile.com";
+
+  const resolvePublicLabel = React.useCallback(
+    (item: (typeof publicNav)[number]) => {
+      const translated = item.tKey ? String((t(item.tKey) as string) || "").trim() : "";
+      if (translated && translated !== item.tKey) return translated;
+      return item.labels[lang];
+    },
+    [lang, t]
+  );
+
+  const resolveFooterLabel = React.useCallback(
+    (item: (typeof footerNav)[number]) => item.labels[lang],
+    [lang]
+  );
 
   React.useEffect(() => {
     const handler = () => {
@@ -157,12 +169,12 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
           />
 
           <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-semibold text-slate-900 md:flex">
-            {navLinks.map((link) => {
-              const label = navLabel(link.key, link.fallback);
-              const active = isActivePath(location.pathname, link.to);
-              const badge = link.to === "/copilote" ? (isFr ? "Gratuit" : "Free") : null;
+            {publicNav.map((link) => {
+              const label = resolvePublicLabel(link);
+              const active = isPathActive(location.pathname, link.to);
+              const badge = link.badge?.[lang];
               return (
-                <Link key={link.key} to={link.to} className={cx("transition-colors hover:text-black", active && "text-black")} aria-label={label}>
+                <Link key={link.id} to={link.to} className={cx("transition-colors hover:text-black", active && "text-black")} aria-label={label}>
                   <span className={cx("inline-flex items-center gap-1", active && "border-b-2 border-blue-700 pb-1")}>
                     {label}
                     {badge ? (
@@ -177,7 +189,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
           <div className="hidden items-center gap-3 md:flex">
             <div
               role="group"
-              aria-label={navLabel("header.languageAria", "Langue")}
+              aria-label={(t("header.languageAria") as string) || "Langue"}
               className="flex items-center gap-1 rounded-full border border-[#cdbda4] bg-[#f8efe2] px-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-900 shadow-sm"
             >
               {(["fr", "en"] as LanguageCode[]).map((code) => (
@@ -198,7 +210,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
             {isAuthenticated ? (
               <Link to="/app/control-tower" className="inline-flex rounded-full border border-slate-500/60 bg-[#0a1d3a] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#0d2a54]">
-                Tour de controle
+                {appLabel}
               </Link>
             ) : (
               <>
@@ -253,7 +265,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 
               {isAuthenticated ? (
                 <Link to="/app/control-tower" className="rounded-full border border-slate-500/60 bg-[#0a1d3a] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white">
-                  Tour de controle
+                  {appLabel}
                 </Link>
               ) : (
                 <Link to={`/login?next=${authNextParam}`} className="text-xs font-semibold text-slate-900 underline">
@@ -263,13 +275,13 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
             </div>
 
             <nav className="grid grid-cols-1 gap-2">
-              {navLinks.map((link) => {
-                const active = isActivePath(location.pathname, link.to);
-                const label = navLabel(link.key, link.fallback);
-                const badge = link.to === "/copilote" ? (isFr ? "Gratuit" : "Free") : null;
+              {publicNav.map((link) => {
+                const active = isPathActive(location.pathname, link.to);
+                const label = resolvePublicLabel(link);
+                const badge = link.badge?.[lang];
                 return (
                   <Link
-                    key={`${link.key}-drawer`}
+                    key={`${link.id}-drawer`}
                     to={link.to}
                     className={cn(
                       "flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-sm font-semibold",
@@ -320,7 +332,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
           isHome ? "max-w-none px-0 py-0" : "max-w-[90rem] px-4 py-8 text-foreground sm:px-6 md:px-10 md:py-10"
         )}
       >
-        {isHome ? null : (
+        {isHome || hideBanner ? null : (
           <div className="mb-6">
             <TricolorBanner title={banner.title} question={banner.question} />
           </div>
@@ -333,42 +345,52 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
           to="/app/control-tower"
           className="fixed bottom-6 left-4 z-[80] inline-flex items-center rounded-full border border-slate-500/70 bg-[#0a1d3a] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white shadow-lg shadow-black/25 hover:bg-[#0d2a54] md:left-6"
         >
-          Retour tour de controle
+          {isFr ? "Retour tour de controle" : "Back to Control Tower"}
         </Link>
       ) : null}
 
-      <footer className="relative z-10 border-t border-slate-700/70 bg-[#040a15]/90">
-        <div className="mx-auto grid w-full max-w-[90rem] gap-6 px-4 py-8 sm:px-6 md:px-10 md:py-10 lg:grid-cols-[1fr_0.95fr]">
-          <div className="space-y-3">
-            <div className="text-sm font-semibold text-white">MPL Export Navigator</div>
-            <div className="text-sm text-white">
-              Outil d'aide a la decision export - par MPL Export Conseil (audit, conformite, veille personnalisee).
+      {hideFooter ? null : (
+        <footer className="relative z-10 border-t border-slate-700/70 bg-[#040a15]/90">
+          <div className="mx-auto grid w-full max-w-[90rem] gap-6 px-4 py-8 sm:px-6 md:px-10 md:py-10 lg:grid-cols-[1fr_0.95fr]">
+            <div className="space-y-3">
+              <div className="text-sm font-semibold text-white">MPL Export Navigator</div>
+              <div className="text-sm text-white">
+                Outil d'aide a la decision export - par MPL Export Conseil (audit, conformite, veille personnalisee).
+              </div>
+
+              <div className="flex flex-wrap gap-4 text-sm text-white">
+                {mainFooterLinks.map((item) => (
+                  <Link key={item.id} to={item.to} className="hover:text-white hover:underline">
+                    {resolveFooterLabel(item)}
+                  </Link>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap gap-4 text-sm text-white">
+                <a href={`tel:${phoneRaw}`} className="hover:text-white hover:underline">{phonePretty}</a>
+                <a href={`mailto:${emailMain}`} className="hover:text-white hover:underline">{emailMain}</a>
+              </div>
+
+              <div className="flex flex-wrap gap-4 text-xs text-white/90">
+                {legalFooterLinks.map((item) => (
+                  <Link key={item.id} to={item.to} className="hover:text-white hover:underline">
+                    {resolveFooterLabel(item)}
+                  </Link>
+                ))}
+              </div>
+
+              <div className="text-xs text-white">(c) {new Date().getFullYear()} MPL Export Conseil - outil d'aide a la decision.</div>
+              <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-white md:mt-2">
+                {siteDisclaimers.map((text, index) => (
+                  <span key={`foot-disclaimer-${index}`} className="leading-snug">{text}</span>
+                ))}
+              </div>
             </div>
 
-            <div className="flex flex-wrap gap-4 text-sm text-white">
-              <Link to="/methodologie" className="hover:text-white hover:underline">Methodologie</Link>
-              <Link to="/about" className="hover:text-white hover:underline">A propos</Link>
-              <Link to="/guides" className="hover:text-white hover:underline">Guides</Link>
-              <Link to="/veille" className="hover:text-white hover:underline">Veille</Link>
-              <Link to="/contact" className="hover:text-white hover:underline">Contact</Link>
-            </div>
-
-            <div className="flex flex-wrap gap-4 text-sm text-white">
-              <a href={`tel:${phoneRaw}`} className="hover:text-white hover:underline">{phonePretty}</a>
-              <a href={`mailto:${emailMain}`} className="hover:text-white hover:underline">{emailMain}</a>
-            </div>
-
-            <div className="text-xs text-white">(c) {new Date().getFullYear()} MPL Export Conseil - outil d'aide a la decision.</div>
-            <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-white md:mt-2">
-              {siteDisclaimers.map((text, index) => (
-                <span key={`foot-disclaimer-${index}`} className="leading-snug">{text}</span>
-              ))}
-            </div>
+            <FooterSocial />
           </div>
-
-          <FooterSocial />
-        </div>
-      </footer>
+        </footer>
+      )}
 
       {supportReady ? (
         <SupportChatWidget open={supportOpen} onOpenChange={setSupportOpen} />

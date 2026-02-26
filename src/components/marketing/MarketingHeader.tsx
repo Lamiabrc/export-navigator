@@ -6,40 +6,34 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { useI18n } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import type { LanguageCode } from "@/i18n/translations";
-import { navLinks } from "@/config/navLinks";
 import { cn } from "@/lib/utils";
+import { isPathActive, publicNav } from "@/config/navigation";
 
 const FLAGS: Record<LanguageCode, string> = {
   fr: String.fromCodePoint(0x1f1eb, 0x1f1f7),
   en: String.fromCodePoint(0x1f1ec, 0x1f1e7),
 };
 
-function isActivePath(pathname: string, to: string) {
-  if (to === "/") return pathname === "/";
-  if (pathname === to) return true;
-  return pathname.startsWith(`${to}/`);
-}
-
 export function MarketingHeader() {
   const { lang, t, setLang } = useI18n();
   const { isAuthenticated } = useAuth();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = React.useState(false);
-  const isEN = lang === "en";
 
   const nextPath = `${location.pathname}${location.search}` || "/";
   const authNext = nextPath === "/" ? "/app/control-tower" : nextPath;
   const authNextParam = encodeURIComponent(authNext);
 
-  const navLabel = (key: string, fallback: string) => {
-    const candidate = t(key) as string;
-    if (!candidate || candidate === key) return fallback;
-    return candidate;
-  };
-
+  const isEN = lang === "en";
   const registerLabel = isEN ? "Create free account" : "Creer un compte gratuit";
   const loginLabel = isEN ? "Sign in" : "Connexion";
   const appLabel = isEN ? "My workspace" : "Mon espace";
+
+  const navLabel = (item: (typeof publicNav)[number]) => {
+    const translated = item.tKey ? String((t(item.tKey) as string) || "").trim() : "";
+    if (translated && translated !== item.tKey) return translated;
+    return item.labels[lang];
+  };
 
   React.useEffect(() => {
     setMobileOpen(false);
@@ -63,12 +57,12 @@ export function MarketingHeader() {
         />
 
         <nav className="hidden flex-1 items-center justify-center gap-4 text-sm font-semibold text-slate-900 md:flex">
-          {navLinks.map((link) => {
-            const label = navLabel(link.key, link.fallback);
-            const active = isActivePath(location.pathname, link.to);
-            const badge = link.to === "/copilote" ? (isEN ? "Free" : "Gratuit") : null;
+          {publicNav.map((item) => {
+            const label = navLabel(item);
+            const active = isPathActive(location.pathname, item.to);
+            const badge = item.badge?.[lang];
             return (
-              <Link key={link.key} to={link.to} className="transition-colors hover:text-black" aria-label={label}>
+              <Link key={item.id} to={item.to} className="transition-colors hover:text-black" aria-label={label}>
                 <span className={cn("inline-flex items-center gap-1", active && "border-b-2 border-blue-700 pb-1 text-black")}>
                   {label}
                   {badge ? (
@@ -185,14 +179,14 @@ export function MarketingHeader() {
           ) : null}
 
           <nav className="grid grid-cols-1 gap-2">
-            {navLinks.map((link) => {
-              const label = navLabel(link.key, link.fallback);
-              const active = isActivePath(location.pathname, link.to);
-              const badge = link.to === "/copilote" ? (isEN ? "Free" : "Gratuit") : null;
+            {publicNav.map((item) => {
+              const label = navLabel(item);
+              const active = isPathActive(location.pathname, item.to);
+              const badge = item.badge?.[lang];
               return (
                 <Link
-                  key={`${link.key}-mobile`}
-                  to={link.to}
+                  key={`${item.id}-mobile`}
+                  to={item.to}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     "flex min-h-11 items-center justify-between rounded-xl border px-3 py-2 text-sm font-semibold",

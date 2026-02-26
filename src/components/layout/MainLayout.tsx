@@ -1,4 +1,4 @@
-import * as React from "react";
+﻿import * as React from "react";
 import { Sidebar } from "./Sidebar";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Search, FileCheck2, Bot, LogOut, Newspaper, Calculator } from "lucide-react";
@@ -13,6 +13,9 @@ import { CinematicBackdrop } from "@/components/cinematic/CinematicBackdrop";
 import { TricolorBanner } from "@/components/layout/TricolorBanner";
 import { getBannerContent } from "@/config/bannerContent";
 import SupportChatWidget from "@/components/support/SupportChatWidget";
+import { matchAppNavItem } from "@/config/navigation";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { useI18n } from "@/contexts/LanguageContext";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -30,14 +33,17 @@ export function MainLayout({
   backdropVariant = "public",
 }: MainLayoutProps) {
   const { signOut, user } = useAuth();
+  const { lang } = useI18n();
   const { plan } = usePlan();
   const navigate = useNavigate();
   const location = useLocation();
   const banner = getBannerContent(location.pathname);
+  const activeNavItem = matchAppNavItem(location.pathname);
+  const showAutoPageHeader = variant !== "bare" && location.pathname.startsWith("/app/") && Boolean(activeNavItem);
   const [supportReady, setSupportReady] = React.useState(false);
   const [supportOpen, setSupportOpen] = React.useState(false);
 
-  // Search UX: tu pourras le brancher à un contexte global plus tard (GlobalFiltersContext)
+  // Search UX: tu pourras le brancher a un contexte global plus tard (GlobalFiltersContext)
   const [q, setQ] = React.useState("");
 
   const showSidebar = variant !== "bare";
@@ -119,12 +125,12 @@ export function MainLayout({
                     onChange={(e) => setQ(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
-                        // simple: on redirige vers l’analyse avec la query
-                        // adapte si tu as déjà une page /search
+                        // simple: on redirige vers l'analyse avec la query
+                        // adapte si tu as deja une page /search
                         navigate(`/app/simulator?q=${encodeURIComponent(q.trim())}`);
                       }
                     }}
-                    placeholder="Rechercher client, facture, HS code, pays…"
+                    placeholder="Rechercher client, facture, HS code, pays..."
                     className="pl-9 bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground rounded-xl shadow-inner"
                   />
                 </div>
@@ -145,7 +151,7 @@ export function MainLayout({
               <Link
                 to="/app/centre-veille/reglementation"
                 className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-muted transition shrink-0"
-                title="Veille réglementaire et marchés (RSS & sources)"
+                title="Veille reglementaire et marches (RSS & sources)"
               >
                 <Newspaper className="h-4 w-4" />
                 Veille
@@ -154,16 +160,16 @@ export function MainLayout({
               <Link
                 to="/app/simulator"
                 className="inline-flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-sm font-semibold text-secondary-foreground border border-border hover:shadow-md hover:-translate-y-0.5 transition shrink-0"
-                title="Calcul du prix de revient & aide à la décision"
+                title="Calcul du prix de revient et aide a la decision"
               >
                 <Calculator className="h-4 w-4" />
-                Analyse coûts
+                Analyse couts
               </Link>
 
               <Link
                 to="/app/assistant"
                 className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-muted transition shrink-0"
-                title="Assistant IA export (conformité, docs, incoterms)"
+                title="Assistant IA export (conformite, docs, incoterms)"
               >
                 <Bot className="h-4 w-4" />
                 IA Export
@@ -172,10 +178,10 @@ export function MainLayout({
               <Link
                 to="/app/invoice-check"
                 className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/25 border border-primary/40 hover:shadow-primary/40 hover:-translate-y-0.5 transition shrink-0"
-                title="Contrôle cohérence facture (Incoterm, TVA, OM si applicable, etc.)"
+                title="Controle coherence facture (Incoterm, TVA, OM si applicable, etc.)"
               >
                 <FileCheck2 className="h-4 w-4" />
-                Contrôler une facture
+                Controler une facture
               </Link>
 
               {isAdmin ? (
@@ -194,10 +200,10 @@ export function MainLayout({
                   navigate("/login");
                 }}
                 className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-muted transition shrink-0"
-                title="Se déconnecter"
+                title="Se deconnecter"
               >
                 <LogOut className="h-4 w-4" />
-                Déconnexion
+                Deconnexion
               </button>
             </div>
           </div>
@@ -209,6 +215,13 @@ export function MainLayout({
           <div className="mb-4">
             <TricolorBanner title={banner.title} question={banner.question} />
           </div>
+          {showAutoPageHeader && activeNavItem ? (
+            <PageHeader
+              className="mb-4"
+              title={activeNavItem.labels[lang]}
+              subtitle={activeNavItem.descriptions?.[lang]}
+            />
+          ) : null}
           {variant === "bare" ? (
             <div className="space-y-4">{children}</div>
           ) : (
@@ -237,3 +250,4 @@ export function MainLayout({
     </div>
   );
 }
+

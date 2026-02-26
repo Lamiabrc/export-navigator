@@ -1,347 +1,347 @@
-import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, Globe, ListChecks, Rss, ShieldCheck, Target, Zap } from "lucide-react";
+﻿import * as React from "react";
+import { ExternalLink, Filter, RefreshCw, Rss } from "lucide-react";
+
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PanoramicControlTowerMap } from "@/components/controlTower/PanoramicControlTowerMap";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase, DEMO_MODE, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
-import { isMissingTableError } from "@/domain/calc/validators";
-import { EmptyState } from "@/components/EmptyState";
+import { Switch } from "@/components/ui/switch";
 import { formatDateTimeFr } from "@/lib/formatters";
-import { demoRegulatoryFeeds, demoRegulatoryItems } from "@/lib/demoData";
 
-type Feed = {
-  id: string;
-  name: string | null;
-  source_url: string | null;
-  category: string | null;
-  zone: string | null;
-  enabled: boolean | null;
-};
-
-type Item = {
-  id: string;
-  title: string | null;
+type RssItem = {
+  title: string;
+  link: string;
   summary: string | null;
-  url: string | null;
-  published_at: string | null;
-  category: string | null;
+  publishedAt: string | null;
+  source: string | null;
   zone: string | null;
-  severity: string | null;
-  feed_id: string | null;
+  territory?: string | null;
+  category: string | null;
+  tags?: string[];
+  official?: boolean;
+  importance?: number;
+  imageUrl: string | null;
 };
 
-type RssApiItem = {
-  title?: string;
-  summary?: string;
-  link?: string;
-  publishedAt?: string;
-  category?: string;
-  zone?: string;
+type RssPayload = {
+  ok?: boolean;
+  degraded?: boolean;
+  territory?: string;
+  topic?: string | null;
+  from?: string | null;
+  to?: string | null;
+  official_only?: boolean;
+  updatedAt?: string | null;
+  items?: RssItem[];
+  sources?: string[];
+  pinned?: string[];
+  error?: string;
 };
 
-const CATEGORIES = [
+const TOPICS = [
+  { value: "all", label: "Tous" },
   { value: "sanctions", label: "Sanctions" },
-  { value: "taxes", label: "Taxes" },
-  { value: "docs", label: "Documents" },
-  { value: "regulation", label: "Réglementation" },
   { value: "douane", label: "Douane" },
-  { value: "maritime", label: "Maritime" },
+  { value: "taxes", label: "Taxes" },
+  { value: "documents", label: "Documents" },
+  { value: "logistics", label: "Logistique" },
+  { value: "trade", label: "Commerce" },
+  { value: "health", label: "Sante" },
 ];
 
-const ZONES = ["EU", "US", "UK", "CHINA", "MEA", "AFRICA", "APAC", "LATAM", "GLOBAL"];
+function normalizeTerritory(value: string | null | undefined) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw || raw === "WORLD" || raw === "GLOBAL" || raw === "ALL" || raw === "MONDE") return "WORLD";
+  return /^[A-Z]{2}$/.test(raw) ? raw : "WORLD";
+}
+
+function territoryLabel(iso: string) {
+  if (iso === "WORLD") return "Monde";
+  try {
+    const dn = new Intl.DisplayNames(["fr"], { type: "region" });
+    return dn.of(iso) || iso;
+  } catch {
+    return iso;
+  }
+}
+
+function importanceVariant(score: number) {
+  if (score >= 75) return "destructive" as const;
+  if (score >= 45) return "secondary" as const;
+  return "outline" as const;
+}
 
 export default function WatchRegulatory() {
+  const [territory, setTerritory] = React.useState("WORLD");
+  const [topic, setTopic] = React.useState("all");
+  const [fromDate, setFromDate] = React.useState("");
+  const [toDate, setToDate] = React.useState("");
+  const [officialOnly, setOfficialOnly] = React.useState(true);
   const [search, setSearch] = React.useState("");
-  const [category, setCategory] = React.useState<string>("all");
-  const [zone, setZone] = React.useState<string>("all");
-  const [watchCountry, setWatchCountry] = React.useState<string>("all");
-  const [launchingWatch, setLaunchingWatch] = React.useState(false);
-  const [watchItems, setWatchItems] = React.useState<Item[]>([]);
 
-  const feedsQuery = useQuery({
-    queryKey: ["reg-feeds"],
-    enabled: !DEMO_MODE && SUPABASE_ENV_OK,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("regulatory_feeds")
-        .select("id,name,source_url,category,zone,enabled")
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (error) {
-        if (isMissingTableError(error)) return { data: [], missingTables: true };
-        throw error;
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [payload, setPayload] = React.useState<RssPayload>({});
+
+  const refreshKey = React.useRef(0);
+  const [refreshTick, setRefreshTick] = React.useState(0);
+
+  React.useEffect(() => {
+    let active = true;
+
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+
+      const params = new URLSearchParams();
+      params.set("limit", "60");
+      params.set("territory", territory);
+      params.set("official", officialOnly ? "1" : "0");
+      if (topic !== "all") params.set("topic", topic);
+      if (fromDate) params.set("from", fromDate);
+      if (toDate) params.set("to", toDate);
+
+      try {
+        const res = await fetch(`/api/rss?${params.toString()}`);
+        const json = (await res.json().catch(() => ({}))) as RssPayload;
+        if (!res.ok || json?.ok === false) {
+          throw new Error(json?.error || `rss_failed_${res.status}`);
+        }
+
+        if (!active) return;
+        setPayload(json);
+      } catch (e: any) {
+        if (!active) return;
+        setPayload({ items: [], pinned: [], sources: [] });
+        setError(String(e?.message || "rss_unavailable"));
+      } finally {
+        if (active) setLoading(false);
       }
-      return { data: (data as Feed[]) || [], missingTables: false };
-    },
-  });
+    };
 
-  const itemsQuery = useQuery({
-    queryKey: ["reg-items"],
-    enabled: !DEMO_MODE && SUPABASE_ENV_OK,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("regulatory_items")
-        .select("id,title,summary,url,published_at,category,zone,severity,feed_id")
-        .order("published_at", { ascending: false })
-        .limit(200);
-      if (error) {
-        if (isMissingTableError(error)) return { data: [], missingTables: true };
-        throw error;
-      }
-      return { data: (data as Item[]) || [], missingTables: false };
-    },
-  });
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [territory, topic, fromDate, toDate, officialOnly, refreshTick]);
 
-  const missingTables = Boolean(feedsQuery.data?.missingTables || itemsQuery.data?.missingTables);
-  const feeds = DEMO_MODE ? demoRegulatoryFeeds : feedsQuery.data?.data || [];
-  const items = DEMO_MODE ? demoRegulatoryItems : itemsQuery.data?.data || [];
+  const items = React.useMemo(() => (Array.isArray(payload.items) ? payload.items : []), [payload.items]);
 
-  const filtered = React.useMemo(() => {
+  const filteredItems = React.useMemo(() => {
     const q = search.trim().toLowerCase();
-    return items.filter((it) => {
-      if (category !== "all" && (it.category || "sanctions") !== category) return false;
-      if (zone !== "all" && (it.zone || "").toLowerCase() !== zone.toLowerCase()) return false;
-      if (!q) return true;
-      const hay = [it.title, it.summary, it.url, it.category, it.zone].join(" ").toLowerCase();
-      return hay.includes(q);
+    if (!q) return items;
+    return items.filter((item) => {
+      const haystack = [
+        item.title,
+        item.summary || "",
+        item.source || "",
+        item.category || "",
+        ...(item.tags || []),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
     });
-  }, [items, category, zone, search]);
+  }, [items, search]);
 
-  const availableCountries = React.useMemo(() => {
-    const fromItems = items.map((it) => (it.zone || "").toUpperCase()).filter(Boolean);
-    const fromFeeds = feeds.map((f) => (f.zone || "").toUpperCase()).filter(Boolean);
-    return Array.from(new Set([...fromItems, ...fromFeeds, ...ZONES])).sort();
-  }, [items, feeds]);
+  const countryStats = React.useMemo(() => {
+    const stats: Record<string, { label?: string; alerts: number; updates: number; total: number }> = {};
 
-  const launchWatch = async () => {
-    setLaunchingWatch(true);
-    try {
-      const zoneParam = watchCountry !== "all" ? `&zone=${encodeURIComponent(watchCountry)}` : "";
-      const resp = await fetch(`/api/rss?limit=30${zoneParam}`);
-      const payload = await resp.json().catch(() => ({} as { items?: RssApiItem[] }));
-      const rssItems = Array.isArray(payload?.items) ? payload.items : [];
-
-      const normalized: Item[] = rssItems.map((it, idx) => ({
-        id: `rss_${idx}_${it.link || "x"}`,
-        title: it.title || "Alerte",
-        summary: it.summary || null,
-        url: it.link || null,
-        published_at: it.publishedAt || null,
-        category: it.category || null,
-        zone: it.zone || watchCountry || null,
-        severity: null,
-        feed_id: null,
-      }));
-
-      setWatchItems(normalized);
-      setZone(watchCountry);
-    } catch {
-      setWatchItems([]);
-    } finally {
-      setLaunchingWatch(false);
+    for (const item of items) {
+      const iso = normalizeTerritory(item.territory || item.zone || payload.territory || "WORLD");
+      if (iso === "WORLD") continue;
+      const current = stats[iso] || {
+        label: territoryLabel(iso),
+        alerts: 0,
+        updates: 0,
+        total: 0,
+      };
+      const importance = Number(item.importance || 0);
+      if (importance >= 70) current.alerts += 1;
+      else current.updates += 1;
+      current.total += 1;
+      stats[iso] = current;
     }
-  };
 
-  const displayItems = watchItems.length ? watchItems : filtered;
+    return stats;
+  }, [items, payload.territory]);
+
+  const selectedStats = React.useMemo(() => {
+    if (territory !== "WORLD" && countryStats[territory]) return countryStats[territory];
+    return Object.values(countryStats).reduce(
+      (acc, curr) => ({ alerts: acc.alerts + curr.alerts, updates: acc.updates + curr.updates, total: acc.total + curr.total }),
+      { alerts: 0, updates: 0, total: 0 },
+    );
+  }, [countryStats, territory]);
 
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">Centre veille réglementaire</p>
-            <h1 className="text-2xl font-bold">Audit - Réglementation - Export mondial</h1>
-            <p className="text-sm text-muted-foreground">
-              Flux et alertes issus de sources officielles. Filtres par categorie, zone et recherche.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Select value={watchCountry} onValueChange={setWatchCountry}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Choisir un pays" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tous les pays</SelectItem>
-                {availableCountries.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button size="sm" onClick={launchWatch} disabled={launchingWatch}>
-              {launchingWatch ? "Chargement..." : "Lancer ma veille"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                feedsQuery.refetch();
-                itemsQuery.refetch();
-              }}
-            >
-              Rafraichir
-            </Button>
-          </div>
-        </div>
+        <section className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Centre veille reglementaire</p>
+              <h1 className="mt-1 text-2xl font-semibold">Flux RSS officiels et signaux export</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Filtres pays, topic, date et mode officiel. Les sources permanentes restent actives.
+              </p>
+            </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
-          <div className="space-y-2 md:col-span-2">
-            <Input placeholder="Recherche (titre, resume, source...)" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger>
-                <SelectValue placeholder="Categorie" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes categories</SelectItem>
-                {CATEGORIES.map((c) => (
-                  <SelectItem key={c.value} value={c.value}>
-                    {c.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Select value={zone} onValueChange={setZone}>
-              <SelectTrigger>
-                <SelectValue placeholder="Zone" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Toutes zones</SelectItem>
-                {ZONES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {missingTables ? (
-          <EmptyState
-            title="Connexion des sources requise"
-            description="Initialise la base pour charger les flux réglementaires, puis lance un seed de demo pour alimenter les alertes."
-            primaryAction={{ label: "Initialiser la base", to: "/resources" }}
-            secondaryAction={{ label: "Voir la documentation", to: "/resources" }}
-          />
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Card className="lg:col-span-2">
-              <CardHeader className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Dernières alertes</CardTitle>
-                  <CardDescription>Triees par date de publication</CardDescription>
-                </div>
-                <Badge variant="outline">{filtered.length}</Badge>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                  {itemsQuery.isLoading ? (
-                    <div className="text-sm text-muted-foreground">Chargement...</div>
-                  ) : displayItems.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">Aucune alerte correspondant aux filtres.</div>
-                  ) : (
-                    displayItems.slice(0, 30).map((it) => (
-                    <div key={it.id} className="rounded-lg border p-3 bg-card/50 space-y-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <div className="text-sm font-semibold">{it.title || "Alerte"}</div>
-                          <div className="text-xs text-muted-foreground">{formatDateTimeFr(it.published_at)}</div>
-                        </div>
-                        <div className="flex flex-wrap gap-1 justify-end">
-                          <Badge variant="secondary">{it.category || "sanctions"}</Badge>
-                          {it.zone ? (
-                            <Badge variant="outline" className="text-[11px]">
-                              {it.zone}
-                            </Badge>
-                          ) : null}
-                          {it.severity ? (
-                            <Badge variant="outline" className="text-[11px]">
-                              {it.severity}
-                            </Badge>
-                          ) : null}
-                        </div>
-                      </div>
-                      {it.summary ? <p className="text-sm text-muted-foreground">{it.summary}</p> : null}
-                      {it.url ? (
-                        <a href={it.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
-                          Ouvrir la source
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : null}
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
-            <div className="space-y-3">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Rss className="h-4 w-4" />
-                    Flux surveilles
-                  </CardTitle>
-                  <CardDescription>Sources connectees</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {feedsQuery.isLoading ? (
-                    <p className="text-sm text-muted-foreground">Chargement...</p>
-                  ) : feeds.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Aucun flux. Ajoute des sources officielles.</p>
-                  ) : (
-                    feeds.slice(0, 20).map((f) => (
-                      <div key={f.id} className="rounded-lg border p-2">
-                        <div className="text-sm font-semibold">{f.name || "Flux"}</div>
-                        <div className="text-[11px] text-muted-foreground break-all">{f.source_url}</div>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {f.category ? <Badge variant="secondary" className="text-[11px]">{f.category}</Badge> : null}
-                          {f.zone ? <Badge variant="outline" className="text-[11px]">{f.zone}</Badge> : null}
-                          {f.enabled ? <Badge variant="outline" className="text-[11px]">Actif</Badge> : null}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <ListChecks className="h-4 w-4" />
-                    Connexion des sources
-                  </CardTitle>
-                  <CardDescription>Checklist d'activation</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm text-muted-foreground">
-                  <div className="flex items-start gap-2">
-                    <ShieldCheck className="h-4 w-4 text-primary mt-0.5" />
-                    <span>Creer les tables regulatory_feeds et regulatory_items.</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Globe className="h-4 w-4 text-primary mt-0.5" />
-                    <span>Connecter les sources officielles (UE, OFAC, ONU).</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Target className="h-4 w-4 text-primary mt-0.5" />
-                    <span>Tagger par categorie et zone pour prioriser les alertes.</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Zap className="h-4 w-4 text-primary mt-0.5" />
-                    <span>Activer les severites pour remonter les urgences.</span>
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => {
+                  refreshKey.current += 1;
+                  setRefreshTick(refreshKey.current);
+                }}
+                disabled={loading}
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                Actualiser
+              </Button>
             </div>
           </div>
-        )}
+
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+            {(payload.pinned || []).map((name) => (
+              <Badge key={`pinned-${name}`} variant="secondary">{name}</Badge>
+            ))}
+            {(payload.sources || []).slice(0, 8).map((name) => (
+              <Badge key={`src-${name}`} variant="outline">{name}</Badge>
+            ))}
+            {payload.degraded ? <Badge variant="outline">Mode degrade</Badge> : null}
+          </div>
+        </section>
+
+        <PanoramicControlTowerMap
+          selectedCountry={territory === "WORLD" ? null : territory}
+          selectedLabel={territoryLabel(territory)}
+          stats={selectedStats}
+          countryStats={countryStats}
+          onCountrySelect={(iso) => setTerritory(iso)}
+          onReset={() => setTerritory("WORLD")}
+        />
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              Filtres
+            </CardTitle>
+            <CardDescription>Par defaut, seuls les liens officiels sont actifs.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-6">
+            <div className="space-y-1 md:col-span-2">
+              <Label>Recherche</Label>
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Titre, source, tag..." />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Topic</Label>
+              <Select value={topic} onValueChange={setTopic}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Tous" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TOPICS.map((it) => (
+                    <SelectItem key={it.value} value={it.value}>{it.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Du</Label>
+              <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Au</Label>
+              <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Mode officiel</Label>
+              <div className="flex items-center gap-2 rounded-lg border px-3 py-2">
+                <Switch checked={officialOnly} onCheckedChange={setOfficialOnly} />
+                <span className="text-xs text-muted-foreground">Liens officiels</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Rss className="h-4 w-4" />
+                Flux filtre ({filteredItems.length})
+              </CardTitle>
+              <CardDescription>
+                Territoire: {territoryLabel(territory)}
+                {payload.updatedAt ? ` - Mise a jour: ${formatDateTimeFr(payload.updatedAt)}` : ""}
+              </CardDescription>
+            </div>
+          </CardHeader>
+
+          <CardContent>
+            {error ? (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>
+            ) : loading ? (
+              <p className="text-sm text-muted-foreground">Chargement des flux...</p>
+            ) : filteredItems.length === 0 ? (
+              <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">Aucun item pour ces filtres.</div>
+            ) : (
+              <div className="space-y-3">
+                {filteredItems.map((item) => {
+                  const importance = Number(item.importance || 0);
+                  const dateLabel = item.publishedAt ? formatDateTimeFr(item.publishedAt) : "Date inconnue";
+                  return (
+                    <div key={item.link} className="rounded-xl border p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="text-sm font-semibold">{item.title}</div>
+                          <div className="text-xs text-muted-foreground">{dateLabel}</div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1">
+                          <Badge variant={importanceVariant(importance)}>Impact {importance}/100</Badge>
+                          {item.category ? <Badge variant="outline">{item.category}</Badge> : null}
+                          {item.official ? <Badge variant="secondary">Officiel</Badge> : null}
+                        </div>
+                      </div>
+
+                      {item.summary ? <p className="mt-2 text-sm text-muted-foreground">{item.summary}</p> : null}
+
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {item.source ? <Badge variant="outline">{item.source}</Badge> : null}
+                        {(item.tags || []).slice(0, 5).map((tag) => (
+                          <Badge key={`${item.link}-${tag}`} variant="outline">#{tag}</Badge>
+                        ))}
+                        <span>{territoryLabel(normalizeTerritory(item.territory || item.zone || territory))}</span>
+                      </div>
+
+                      <a
+                        href={item.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                      >
+                        Ouvrir la source
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   );

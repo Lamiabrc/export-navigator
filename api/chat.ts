@@ -1,5 +1,7 @@
-﻿import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+﻿import crypto from "crypto";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { z } from "zod";
+
 import { allowCors, json, readJson, supabaseAdmin } from "../src/server/supabaseAdmin.js";
 
 type Lang = "fr" | "en";
@@ -22,22 +24,27 @@ type DetectedEntities = {
   contract_type: string | null;
 };
 
-type DetectResponse = {
-  lang?: string;
-  countries?: Array<{ iso2?: string; name?: string; score?: number }>;
-  hs?: Array<{ hs6?: string; desc?: string; score?: number }>;
-  intent?: string;
-  in_scope?: boolean;
-  keywords_found?: string[];
-};
-
-type AssistantMode = "needs_input" | "brief_ready";
-
-type AssistantBuildResult = {
-  message: string;
-  mode: AssistantMode;
-  questions: string[];
-};
+const COUNTRY_ALIASES: Array<{ iso2: string; patterns: RegExp[] }> = [
+  { iso2: "FR", patterns: [/\bfrance\b/i] },
+  { iso2: "DE", patterns: [/\ballemagne\b/i, /\bgermany\b/i] },
+  { iso2: "ES", patterns: [/\bespagne\b/i, /\bspain\b/i] },
+  { iso2: "IT", patterns: [/\bitalie\b/i, /\bitaly\b/i] },
+  { iso2: "PT", patterns: [/\bportugal\b/i] },
+  { iso2: "BE", patterns: [/\bbelgique\b/i, /\bbelgium\b/i] },
+  { iso2: "NL", patterns: [/\bpays[\s-]?bas\b/i, /\bnetherlands\b/i, /\bhollande\b/i] },
+  { iso2: "GB", patterns: [/\broyaume[\s-]?uni\b/i, /\buk\b/i, /\bunited kingdom\b/i] },
+  { iso2: "US", patterns: [/\busa\b/i, /\betats?[\s-]?unis\b/i, /\bunited states\b/i] },
+  { iso2: "CA", patterns: [/\bcanada\b/i] },
+  { iso2: "CN", patterns: [/\bchine\b/i, /\bchina\b/i] },
+  { iso2: "JP", patterns: [/\bjapon\b/i, /\bjapan\b/i] },
+  { iso2: "MA", patterns: [/\bmaroc\b/i, /\bmorocco\b/i] },
+  { iso2: "TR", patterns: [/\bturquie\b/i, /\bturkey\b/i] },
+  { iso2: "CH", patterns: [/\bsuisse\b/i, /\bswitzerland\b/i] },
+  { iso2: "BR", patterns: [/\bbresil\b/i, /\bbrazil\b/i] },
+  { iso2: "MX", patterns: [/\bmexique\b/i, /\bmexico\b/i] },
+  { iso2: "IN", patterns: [/\binde\b/i, /\bindia\b/i] },
+  { iso2: "AE", patterns: [/\bemirats\b/i, /\buae\b/i, /\bunited arab emirates\b/i] },
+];
 
 const INCOTERMS = ["EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF"] as const;
 const PAYMENT_PATTERNS: Array<{ code: string; pattern: RegExp }> = [
@@ -62,58 +69,65 @@ const CONTRACT_PATTERNS: Array<{ code: string; pattern: RegExp }> = [
   { code: "oem", pattern: /\b(oem|sous[- ]traitance|subcontract|manufacturing agreement)\b/i },
 ];
 const CURRENCY_PATTERNS: Array<{ code: string; pattern: RegExp }> = [
-  { code: "EUR", pattern: /\b(eur|€|euro)\b/i },
+  { code: "EUR", pattern: /\b(eur|euro)\b/i },
   { code: "USD", pattern: /\b(usd|\$|dollar)\b/i },
-  { code: "GBP", pattern: /\b(gbp|£|pound)\b/i },
+  { code: "GBP", pattern: /\b(gbp|pound)\b/i },
   { code: "CHF", pattern: /\b(chf|franc suisse)\b/i },
   { code: "CNY", pattern: /\b(cny|rmb|yuan)\b/i },
   { code: "JPY", pattern: /\b(jpy|yen)\b/i },
   { code: "CAD", pattern: /\b(cad|canadian dollar)\b/i },
 ];
 
-function env(key: string) {
-  return String(process.env[key] || "").trim();
+const ChatResponseSchema = z.object({
+  ok: z.literal(true),
+  lang: z.enum(["fr", "en"]),
+  entities: z.object({
+    origin: z.string().nullable(),
+    destination: z.string().nullable(),
+    hs6: z.string().nullable(),
+    incoterm: z.string().nullable(),
+    payment: z.string().nullable(),
+    transport: z.string().nullable(),
+    currency: z.string().nullable(),
+    contract_type: z.string().nullable(),
+  }),
+  missing_questions: z.array(z.string()),
+  dossier: z.object({
+    summary: z.string(),
+    documents: z.array(
+      z.object({
+        name: z.string(),
+        required: z.boolean(),
+        source_url: z.string().nullable(),
+      })
+    ),
+    restrictions: z.array(z.string()),
+    sanctions: z.array(z.string()),
+    taxes: z.array(z.string()),
+    logistics: z.array(z.string()),
+    contract: z.object({
+      clauses: z.array(z.string()),
+    }),
+    next_actions: z.array(z.string()),
+  }),
+  answer_markdown: z.string(),
+  source_links: z.array(z.object({ title: z.string(), url: z.string() })),
+  follow_up_questions: z.array(z.string()),
+});
+
+function asObject(value: unknown): Record<string, any> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, any>) : {};
 }
 
 function normalizeLang(input: unknown): Lang {
   const value = String(input || "").trim().toLowerCase();
-  return value === "en" ? "en" : "fr";
+  if (value === "en") return "en";
+  return "fr";
 }
 
-function getBearerToken(req: VercelRequest) {
-  const header = String(req.headers.authorization || "");
-  const match = header.match(/^Bearer\s+(.+)$/i);
-  return match?.[1]?.trim() || null;
-}
-
-function requireSupabasePublicEnv() {
-  const url = env("SUPABASE_URL") || env("VITE_SUPABASE_URL") || env("NEXT_PUBLIC_SUPABASE_URL");
-  const anonKey =
-    env("SUPABASE_ANON_KEY") ||
-    env("VITE_SUPABASE_ANON_KEY") ||
-    env("NEXT_PUBLIC_SUPABASE_ANON_KEY") ||
-    env("SUPABASE_PUBLISHABLE_KEY") ||
-    env("VITE_SUPABASE_PUBLISHABLE_KEY");
-  if (!url || !anonKey) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY for user-scoped operations");
-  }
-  return { url, anonKey };
-}
-
-function createUserScopedClient(token: string) {
-  const { url, anonKey } = requireSupabasePublicEnv();
-  return createClient(url, anonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-    global: {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  });
+function inferLangFromMessage(message: string): Lang {
+  if (/\b(the|what|which|export|import|invoice|incoterm|payment)\b/i.test(message)) return "en";
+  return "fr";
 }
 
 function cleanMessage(message: unknown) {
@@ -146,35 +160,19 @@ function detectByPatterns(message: string, patterns: Array<{ code: string; patte
   return null;
 }
 
-function pickCountrySlots(message: string, candidates: string[], previous: DetectedEntities) {
-  const unique = Array.from(new Set(candidates)).filter(Boolean);
-  let origin = previous.origin;
-  let destination = previous.destination;
-
-  const hasFromTo = /\b(from|de|origine)\b[\s\S]{0,80}\b(to|vers|destination)\b/i.test(message);
-
-  if (hasFromTo && unique.length >= 2) {
-    origin = unique[0];
-    destination = unique[1];
-    return { origin, destination };
-  }
-
-  if (unique.length >= 2) {
-    if (!destination) destination = unique[0];
-    if (!origin) origin = unique[1];
-    return { origin, destination };
-  }
-
-  if (unique.length === 1) {
-    const c = unique[0];
-    if (/\b(from|de|origine)\b/i.test(message) && !origin) {
-      origin = c;
-    } else if (!destination) {
-      destination = c;
+function detectCountries(message: string) {
+  const detected: string[] = [];
+  for (const entry of COUNTRY_ALIASES) {
+    if (entry.patterns.some((pattern) => pattern.test(message))) {
+      detected.push(entry.iso2);
     }
   }
+  return Array.from(new Set(detected));
+}
 
-  return { origin, destination };
+function isValidUrl(url: string | null | undefined) {
+  const value = String(url || "").trim();
+  return /^https?:\/\//i.test(value);
 }
 
 function defaultEntities(): DetectedEntities {
@@ -201,61 +199,6 @@ function mergeEntities(base: DetectedEntities, updates: Partial<DetectedEntities
     currency: updates.currency ?? base.currency ?? null,
     contract_type: updates.contract_type ?? base.contract_type ?? null,
   };
-}
-
-function outOfScopeMessage(lang: Lang) {
-  if (lang === "en") {
-    return [
-      "I focus on international trade operations only.",
-      "",
-      "I can help with:",
-      "- import/export planning",
-      "- HS code framing and customs documentation",
-      "- Incoterms and transfer of risk",
-      "- payment terms and documentary risk",
-      "- logistics and transport mode choices",
-      "- sanctions/compliance checks",
-      "- tax and customs concepts (VAT, duties, withholding concepts)",
-      "- contract structures and essential clauses",
-      "",
-      "Try examples:",
-      "- Export strawberries to Chile",
-      "- Which HS code for frozen berries?",
-      "- DDP vs FCA for Germany with LC payment",
-    ].join("\n");
-  }
-
-  return [
-    "Je suis specialise sur les operations import/export internationales.",
-    "",
-    "Je peux aider sur :",
-    "- cadrage import/export",
-    "- code HS et documents douaniers",
-    "- Incoterms et transfert des risques",
-    "- modes de paiement et risques documentaires",
-    "- logistique et transport",
-    "- sanctions et conformite",
-    "- fiscalite/douane (TVA, droits, retenues en concept)",
-    "- types de contrats et clauses essentielles",
-    "",
-    "Exemples :",
-    "- Exporter des fraises vers le Chili",
-    "- Quel code HS pour des fruits surgeles ?",
-    "- DDP vs FCA vers l'Allemagne avec paiement LC",
-  ].join("\n");
-}
-
-function listMissingSlots(entities: DetectedEntities) {
-  const missing: Array<keyof DetectedEntities> = [];
-  if (!entities.destination) missing.push("destination");
-  if (!entities.hs6) missing.push("hs6");
-  if (!entities.incoterm) missing.push("incoterm");
-  if (!entities.payment) missing.push("payment");
-  if (!entities.transport) missing.push("transport");
-  if (!entities.origin) missing.push("origin");
-  if (!entities.currency) missing.push("currency");
-  if (!entities.contract_type) missing.push("contract_type");
-  return missing;
 }
 
 function defaultQuestionBySlot(lang: Lang, slot: keyof DetectedEntities) {
@@ -290,9 +233,9 @@ function defaultQuestionBySlot(lang: Lang, slot: keyof DetectedEntities) {
     case "incoterm":
       return "Quel Incoterm ciblez-vous (EXW, FCA, CIF, DDP...) ?";
     case "payment":
-      return "Quel mode de paiement prévoyez-vous (LC, CAD, OA, TT) ?";
+      return "Quel mode de paiement prevoyez-vous (LC, CAD, OA, TT) ?";
     case "transport":
-      return "Quel mode de transport prévoyez-vous (air, sea, road, rail, courier) ?";
+      return "Quel mode de transport prevoyez-vous (air, sea, road, rail, courier) ?";
     case "origin":
       return "Quel est le pays d'origine ?";
     case "currency":
@@ -304,230 +247,261 @@ function defaultQuestionBySlot(lang: Lang, slot: keyof DetectedEntities) {
   }
 }
 
-function buildGuidedQuestions(lang: Lang, dossier: any, entities: DetectedEntities) {
-  const fromDossier = Array.isArray(dossier?.questions_missing)
-    ? dossier.questions_missing.map((q: unknown) => String(q || "").trim()).filter(Boolean)
-    : [];
-
-  const fallback = listMissingSlots(entities).map((slot) => defaultQuestionBySlot(lang, slot));
-  const merged = [...fromDossier, ...fallback];
-
-  return Array.from(new Set(merged)).slice(0, 3);
+function missingSlots(entities: DetectedEntities) {
+  const missing: Array<keyof DetectedEntities> = [];
+  if (!entities.destination) missing.push("destination");
+  if (!entities.hs6) missing.push("hs6");
+  if (!entities.incoterm) missing.push("incoterm");
+  if (!entities.payment) missing.push("payment");
+  if (!entities.transport) missing.push("transport");
+  if (!entities.origin) missing.push("origin");
+  if (!entities.currency) missing.push("currency");
+  if (!entities.contract_type) missing.push("contract_type");
+  return missing;
 }
 
-function lineItems(items: unknown, limit: number, formatter: (item: any) => string) {
-  if (!Array.isArray(items)) return [] as string[];
-  return items
-    .slice(0, limit)
-    .map((item) => formatter(item))
-    .filter((line) => Boolean(line));
+function buildSummaryLines(entities: DetectedEntities) {
+  return [
+    `Destination: ${entities.destination || "-"}`,
+    `HS6: ${entities.hs6 || "-"}`,
+    `Incoterm: ${entities.incoterm || "-"}`,
+  ];
 }
 
-function buildAssistantMessage(
-  lang: Lang,
-  dossier: any,
-  entities: DetectedEntities,
-  options: { isFirstExchange: boolean }
-): AssistantBuildResult {
-  const summary = dossier?.summary || {};
-  const destinationName = summary?.destination?.name || summary?.destination?.iso2 || entities.destination || "?";
-  const hsLabel = summary?.hs?.hs6 || entities.hs6 || "?";
+function normalizeDossier(dossierRaw: Record<string, any>, entities: DetectedEntities, lang: Lang) {
+  const docsRaw = Array.isArray(dossierRaw.documents) ? dossierRaw.documents : [];
+  const restrictionsRaw = Array.isArray(dossierRaw.restrictions) ? dossierRaw.restrictions : [];
+  const contractClausesRaw = Array.isArray(dossierRaw?.contracts?.clauses) ? dossierRaw.contracts.clauses : [];
+  const nextActionsRaw = Array.isArray(dossierRaw.next_actions) ? dossierRaw.next_actions : [];
 
-  const docs = lineItems(dossier?.documents, 6, (d) => {
-    const name = String(d?.name || d?.code || "").trim();
-    const mandatory = d?.required === false ? "" : lang === "en" ? " (required)" : " (obligatoire)";
-    return name ? `- ${name}${mandatory}` : "";
-  });
+  const documents = docsRaw
+    .map((item: any) => ({
+      name: String(item?.name || item?.code || "Document").trim(),
+      required: item?.required !== false,
+      source_url: isValidUrl(item?.source_url || item?.source || item?.legal_ref)
+        ? String(item.source_url || item.source || item.legal_ref)
+        : null,
+    }))
+    .filter((item: { name: string }) => Boolean(item.name));
 
-  const restrictions = lineItems(dossier?.restrictions, 4, (r) => {
-    const text = String(r?.summary || r?.notes || "").trim();
-    return text ? `- ${text}` : "";
-  });
+  const restrictions = restrictionsRaw
+    .map((item: any) => String(item?.summary || item?.notes || item?.legal_ref || "").trim())
+    .filter(Boolean)
+    .slice(0, 8);
 
-  const clauses = lineItems(dossier?.contracts?.clauses, 5, (c) => {
-    const title = String(c?.title || c?.code || "").trim();
-    return title ? `- ${title}` : "";
-  });
+  const sanctionsLists = asObject(dossierRaw.sanctions).lists;
+  const sanctionsEntities = asObject(dossierRaw.sanctions).entities_hint;
+  const sanctions = [
+    ...(Array.isArray(sanctionsLists)
+      ? sanctionsLists
+          .map((item: any) => String(item?.list_name || item?.authority || "").trim())
+          .filter(Boolean)
+      : []),
+    ...(Array.isArray(sanctionsEntities)
+      ? sanctionsEntities
+          .map((item: any) => String(item?.name || "").trim())
+          .filter(Boolean)
+      : []),
+  ].slice(0, 8);
 
-  const nextActions = lineItems(dossier?.next_actions, 6, (a) => {
-    const text = String(a || "").trim();
-    return text ? `- ${text}` : "";
-  });
+  const taxAndCustoms = asObject(dossierRaw.tax_and_customs);
+  const vat = asObject(taxAndCustoms.vat);
+  const duties = Array.isArray(taxAndCustoms.duties_concept) ? taxAndCustoms.duties_concept : [];
+  const procedures = Array.isArray(taxAndCustoms.procedures) ? taxAndCustoms.procedures : [];
 
-  const questions = buildGuidedQuestions(lang, dossier, entities);
+  const taxes = [
+    vat.standard_rate != null
+      ? lang === "en"
+        ? `Standard VAT rate: ${vat.standard_rate}`
+        : `Taux de TVA standard: ${vat.standard_rate}`
+      : null,
+    ...duties
+      .map((item: any) => String(item?.name || item?.code || "").trim())
+      .filter(Boolean)
+      .slice(0, 4),
+    ...procedures
+      .map((item: any) => String(item?.name || item?.code || "").trim())
+      .filter(Boolean)
+      .slice(0, 4),
+  ].filter(Boolean) as string[];
 
-  if (questions.length) {
-    if (lang === "en") {
-      return {
-        mode: "needs_input",
-        questions,
-        message: [
-          options.isFirstExchange
-            ? "Welcome. I am your structured Export Expert assistant."
-            : "Thanks. We will complete your case step by step.",
-          "",
-          "Current understanding:",
-          `- Destination: ${entities.destination || "not provided"}`,
-          `- HS/product: ${entities.hs6 || "not provided"}`,
-          `- Incoterm: ${entities.incoterm || "not provided"}`,
-          `- Payment: ${entities.payment || "not provided"}`,
-          `- Transport: ${entities.transport || "not provided"}`,
-          "",
-          "Please answer these short questions:",
-          ...questions.map((q, idx) => `${idx + 1}. ${q}`),
-          "",
-          "Once answered, I will produce your operational export brief.",
-        ].join("\n"),
-      };
-    }
+  const logistics = [
+    entities.incoterm ? `Incoterm: ${entities.incoterm}` : null,
+    entities.transport ? `Transport: ${entities.transport}` : null,
+    entities.payment ? `Payment: ${entities.payment}` : null,
+    entities.currency ? `Currency: ${entities.currency}` : null,
+  ].filter(Boolean) as string[];
 
-    return {
-      mode: "needs_input",
-      questions,
-      message: [
-        options.isFirstExchange
-          ? "Bienvenue. Je suis votre assistant Export Expert guide."
-          : "Merci. On complete votre dossier pas a pas.",
-        "",
-        "Ce que j'ai compris pour l'instant :",
-        `- Destination : ${entities.destination || "non renseignee"}`,
-        `- HS/produit : ${entities.hs6 || "non renseigne"}`,
-        `- Incoterm : ${entities.incoterm || "non renseigne"}`,
-        `- Paiement : ${entities.payment || "non renseigne"}`,
-        `- Transport : ${entities.transport || "non renseigne"}`,
-        "",
-        "Merci de repondre a ces questions simples :",
-        ...questions.map((q, idx) => `${idx + 1}. ${q}`),
-        "",
-        "Des que vous repondez, je genere le dossier export operationnel.",
-      ].join("\n"),
-    };
+  const contractClauses = contractClausesRaw
+    .map((item: any) => String(item?.title || item?.code || "").trim())
+    .filter(Boolean)
+    .slice(0, 8);
+
+  const nextActions = nextActionsRaw.map((item: any) => String(item || "").trim()).filter(Boolean).slice(0, 8);
+  if (!nextActions.length) {
+    nextActions.push(
+      lang === "en"
+        ? "Validate assumptions with legal/tax advisor before execution."
+        : "Valider les hypotheses avec un conseil juridique/fiscal avant execution."
+    );
   }
 
-  if (lang === "en") {
-    return {
-      mode: "brief_ready",
-      questions: [],
-      message: [
-        `Export brief ready for ${destinationName} (HS: ${hsLabel}).`,
-        "",
-        "Documents:",
-        ...(docs.length ? docs : ["- No specific document rule found yet."]),
-        "",
-        "Compliance & sanctions:",
-        ...(restrictions.length ? restrictions : ["- No specific restriction found with current inputs."]),
-        "",
-        "Contract structure:",
-        ...(clauses.length ? clauses : ["- No clause playbook matched yet."]),
-        "",
-        "Tax & customs:",
-        `- VAT rule loaded: ${dossier?.tax_and_customs?.vat && Object.keys(dossier.tax_and_customs.vat).length ? "yes" : "not yet"}`,
-        `- Duty/tax concepts loaded: ${Array.isArray(dossier?.tax_and_customs?.duties_concept) ? dossier.tax_and_customs.duties_concept.length : 0}`,
-        "",
-        "Next actions:",
-        ...(nextActions.length ? nextActions : ["- Finalize assumptions and validate with legal/tax advisor."]),
-        "",
-        "Thank you. Was this answer relevant for your need? Tell me your next need and I continue.",
-      ].join("\n"),
-    };
-  }
+  const summary = buildSummaryLines(entities).join("\n");
 
   return {
-    mode: "brief_ready",
-    questions: [],
-    message: [
-      `Dossier export pret pour ${destinationName} (HS : ${hsLabel}).`,
-      "",
-      "Documents :",
-      ...(docs.length ? docs : ["- Aucune regle documentaire specifique trouvee pour l'instant."]),
-      "",
-      "Compliance & sanctions :",
-      ...(restrictions.length ? restrictions : ["- Pas de restriction specifique detectee avec les infos actuelles."]),
-      "",
-      "Contrat :",
-      ...(clauses.length ? clauses : ["- Aucun playbook clause correspondant pour l'instant."]),
-      "",
-      "Fiscalite & douane :",
-      `- Regle TVA chargee : ${dossier?.tax_and_customs?.vat && Object.keys(dossier.tax_and_customs.vat).length ? "oui" : "non"}`,
-      `- Concepts droits/taxes charges : ${Array.isArray(dossier?.tax_and_customs?.duties_concept) ? dossier.tax_and_customs.duties_concept.length : 0}`,
-      "",
-      "Actions suivantes :",
-      ...(nextActions.length ? nextActions : ["- Finaliser les hypotheses puis valider avec conseil juridique/fiscal."]),
-      "",
-      "Merci. Cette reponse est-elle pertinente pour votre besoin ? Dites-moi votre prochain besoin et je continue.",
-    ].join("\n"),
+    summary,
+    documents,
+    restrictions,
+    sanctions,
+    taxes,
+    logistics,
+    contract: { clauses: contractClauses },
+    next_actions: nextActions,
   };
 }
 
-async function ensureThread(
-  client: SupabaseClient,
-  userId: string,
-  requestedThreadId: string | null,
-  lang: Lang,
-  titleSeed: string
-) {
-  const reqId = String(requestedThreadId || "").trim();
+function buildSourceLinks(dossier: ReturnType<typeof normalizeDossier>) {
+  const links = new Map<string, { title: string; url: string }>();
+  for (const doc of dossier.documents) {
+    if (doc.source_url && isValidUrl(doc.source_url)) {
+      links.set(doc.source_url, { title: doc.name, url: doc.source_url });
+    }
+  }
+  return Array.from(links.values()).slice(0, 8);
+}
 
-  if (reqId) {
-    const { data: existing } = await client
+function buildAnswerMarkdown(params: {
+  lang: Lang;
+  dossier: ReturnType<typeof normalizeDossier>;
+  missingQuestions: string[];
+  sourceLinks: Array<{ title: string; url: string }>;
+}) {
+  const { lang, dossier, missingQuestions, sourceLinks } = params;
+  const summaryLines = dossier.summary.split("\n").filter(Boolean).slice(0, 3);
+
+  const checklist = dossier.documents.length
+    ? dossier.documents.map((item) => `- ${item.required ? "[x]" : "[ ]"} ${item.name}`)
+    : [lang === "en" ? "- [ ] No specific document matched yet." : "- [ ] Aucun document specifique detecte pour le moment."];
+
+  const risks = dossier.restrictions.length
+    ? dossier.restrictions.map((item) => `- ${item}`)
+    : [lang === "en" ? "- No explicit restriction detected with current inputs." : "- Aucune restriction explicite detectee avec les informations actuelles."];
+
+  const docs = dossier.documents.length
+    ? dossier.documents.map((item) => `- ${item.name}${item.source_url ? ` (${item.source_url})` : ""}`)
+    : [lang === "en" ? "- Document list will be refined after missing fields are filled." : "- La liste documentaire sera precisee apres completion des champs manquants."];
+
+  const actions = dossier.next_actions.map((item) => `- ${item}`);
+  const links = sourceLinks.length
+    ? sourceLinks.map((item) => `- [${item.title}](${item.url})`)
+    : [lang === "en" ? "- No official link available yet." : "- Aucun lien officiel disponible pour le moment."];
+
+  const questionsBlock = missingQuestions.length
+    ? `\n## ${lang === "en" ? "Missing questions" : "Questions manquantes"}\n${missingQuestions
+        .slice(0, 3)
+        .map((question) => `- ${question}`)
+        .join("\n")}\n`
+    : "";
+
+  return [
+    `## ${lang === "en" ? "Summary" : "Resume"}`,
+    ...summaryLines.map((line) => `- ${line}`),
+    "",
+    `## ${lang === "en" ? "Checklist" : "Checklist"}`,
+    ...checklist,
+    "",
+    `## ${lang === "en" ? "Risks" : "Risques"}`,
+    ...risks,
+    "",
+    `## ${lang === "en" ? "Documents" : "Documents"}`,
+    ...docs,
+    "",
+    `## ${lang === "en" ? "Next actions" : "Actions"}`,
+    ...actions,
+    "",
+    `## ${lang === "en" ? "Sources" : "Liens"}`,
+    ...links,
+    questionsBlock,
+  ]
+    .flat()
+    .join("\n")
+    .trim();
+}
+
+function getBearerToken(req: VercelRequest) {
+  const header = String(req.headers.authorization || "");
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
+async function resolveUserIdFromToken(token: string | null) {
+  if (!token) return null;
+  const admin = supabaseAdmin();
+  const { data, error } = await admin.auth.getUser(token);
+  if (error || !data?.user?.id) return null;
+  return String(data.user.id);
+}
+
+async function ensureThreadId(userId: string | null, requestedThreadId: string | null, message: string) {
+  if (!userId) return requestedThreadId || null;
+
+  const admin = supabaseAdmin();
+  const requested = String(requestedThreadId || "").trim();
+  if (requested) {
+    const { data } = await admin
       .from("chat_sessions")
       .select("id")
-      .eq("id", reqId)
+      .eq("id", requested)
       .eq("user_id", userId)
       .maybeSingle();
-
-    if (existing?.id) {
-      await client
-        .from("chat_threads")
-        .upsert({ id: reqId, user_id: userId, lang }, { onConflict: "id" });
-      return reqId;
-    }
+    if (data?.id) return String(data.id);
   }
 
-  const { data: created, error } = await client
+  const { data: created } = await admin
     .from("chat_sessions")
-    .insert({
-      user_id: userId,
-      title: titleSeed.slice(0, 120),
-    })
+    .insert({ user_id: userId, title: message.slice(0, 120) })
     .select("id")
     .single();
-
-  if (error || !created?.id) {
-    throw new Error(`thread_create_failed:${error?.message || "unknown"}`);
-  }
-
-  await client
-    .from("chat_threads")
-    .upsert({ id: created.id, user_id: userId, lang }, { onConflict: "id" });
-
-  return String(created.id);
+  return String(created?.id || "") || crypto.randomUUID();
 }
 
-function asObject(value: unknown): Record<string, any> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, any>) : {};
+async function persistExchange(params: {
+  userId: string | null;
+  threadId: string | null;
+  message: string;
+  answer: string;
+  entities: DetectedEntities;
+  dossier: ReturnType<typeof normalizeDossier>;
+}) {
+  if (!params.userId || !params.threadId) return;
+
+  const admin = supabaseAdmin();
+  await admin
+    .from("chat_messages")
+    .insert([
+      {
+        session_id: params.threadId,
+        thread_id: params.threadId,
+        user_id: params.userId,
+        role: "user",
+        content: params.message,
+        entities: params.entities,
+        dossier: {},
+      },
+      {
+        session_id: params.threadId,
+        thread_id: params.threadId,
+        user_id: params.userId,
+        role: "assistant",
+        content: params.answer,
+        entities: params.entities,
+        dossier: params.dossier,
+      },
+    ])
+    .throwOnError();
 }
 
-function readLatestEntities(historyRows: Array<Record<string, any>>): DetectedEntities {
-  for (let i = historyRows.length - 1; i >= 0; i -= 1) {
-    const candidate = asObject(historyRows[i]?.entities);
-    if (Object.keys(candidate).length > 0) {
-      return mergeEntities(defaultEntities(), {
-        origin: normalizeIso2(candidate.origin),
-        destination: normalizeIso2(candidate.destination),
-        hs6: normalizeHs6(candidate.hs6),
-        incoterm: String(candidate.incoterm || "").toUpperCase() || null,
-        payment: String(candidate.payment || "").toUpperCase() || null,
-        transport: String(candidate.transport || "").toLowerCase() || null,
-        currency: String(candidate.currency || "").toUpperCase() || null,
-        contract_type: String(candidate.contract_type || "").toLowerCase() || null,
-      });
-    }
-  }
-  return defaultEntities();
-}
-
-export default allowCors(async function handler(req: VercelRequest, res: VercelResponse) {
+export async function chatHandler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
   }
@@ -539,69 +513,43 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       return json(res, 400, { ok: false, error: "message_required" });
     }
 
+    const preferredLang = normalizeLang(body?.lang) || inferLangFromMessage(message);
     const token = getBearerToken(req);
-    if (!token) {
-      return json(res, 401, { ok: false, error: "missing_bearer_token" });
-    }
+    const userId = await resolveUserIdFromToken(token);
+    const threadId = await ensureThreadId(userId, body?.thread_id || null, message);
 
     const admin = supabaseAdmin();
-    const userScoped = createUserScopedClient(token);
 
-    const { data: userData, error: userError } = await admin.auth.getUser(token);
-    const userId = userData?.user?.id;
-    if (userError || !userId) {
-      return json(res, 401, { ok: false, error: "invalid_token" });
+    let detectRpc: Record<string, any> = {};
+    try {
+      const { data } = await admin.rpc("rpc_detect_entities", {
+        q: message,
+        ui_lang: preferredLang,
+      });
+      detectRpc = asObject(data);
+    } catch {
+      detectRpc = {};
     }
 
-    const preferredLang = normalizeLang(body?.lang);
-
-    const threadId = await ensureThread(userScoped, userId, body?.thread_id || null, preferredLang, message);
-
-    const { data: historyRowsRaw, error: historyError } = await userScoped
-      .from("chat_messages")
-      .select("role, content, entities, dossier, created_at")
-      .eq("session_id", threadId)
-      .order("created_at", { ascending: true })
-      .limit(40);
-
-    if (historyError) {
-      throw new Error(`thread_history_failed:${historyError.message}`);
-    }
-
-    const historyRows = Array.isArray(historyRowsRaw) ? historyRowsRaw : [];
-    const isFirstExchange = historyRows.filter((row: any) => row?.role === "user").length === 0;
-    const previousEntities = readLatestEntities(historyRows as Array<Record<string, any>>);
-
-    const { data: detectRaw, error: detectError } = await userScoped.rpc("rpc_detect_entities", {
-      q: message,
-      ui_lang: preferredLang,
-    });
-
-    if (detectError) {
-      throw new Error(`rpc_detect_entities_failed:${detectError.message}`);
-    }
-
-    const detect = asObject(detectRaw) as DetectResponse;
-    const lang: Lang = normalizeLang(detect.lang || preferredLang);
-
-    const countriesDetected = Array.isArray(detect.countries)
-      ? detect.countries
-          .map((c) => normalizeIso2(c?.iso2))
-          .filter((x): x is string => Boolean(x))
+    const rpcCountries = Array.isArray(detectRpc.countries)
+      ? detectRpc.countries
+          .map((item: any) => normalizeIso2(item?.iso2))
+          .filter((item: string | null): item is string => Boolean(item))
       : [];
 
-    const hsDetected = Array.isArray(detect.hs)
-      ? detect.hs
-          .map((h) => normalizeHs6(h?.hs6))
-          .filter((x): x is string => Boolean(x))
-      : [];
+    const countryFromText = detectCountries(message);
+    const combinedCountries = Array.from(new Set([...rpcCountries, ...countryFromText]));
 
-    const countriesSlots = pickCountrySlots(message, countriesDetected, previousEntities);
+    const rpcHs = Array.isArray(detectRpc.hs)
+      ? detectRpc.hs
+          .map((item: any) => normalizeHs6(item?.hs6))
+          .filter((item: string | null): item is string => Boolean(item))
+      : [];
 
     const detectedFromMessage: Partial<DetectedEntities> = {
-      origin: countriesSlots.origin,
-      destination: countriesSlots.destination,
-      hs6: hsDetected[0] || normalizeHs6(message),
+      destination: combinedCountries[0] || null,
+      origin: combinedCountries[1] || null,
+      hs6: rpcHs[0] || normalizeHs6(message),
       incoterm: detectIncoterm(message),
       payment: detectByPatterns(message, PAYMENT_PATTERNS),
       transport: detectByPatterns(message, TRANSPORT_PATTERNS),
@@ -609,125 +557,92 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       contract_type: detectByPatterns(message, CONTRACT_PATTERNS),
     };
 
-    const override = asObject(body?.overrides);
+    const overrides = asObject(body?.overrides);
     const overrideEntities: Partial<DetectedEntities> = {
-      origin: normalizeIso2(override.origin),
-      destination: normalizeIso2(override.destination),
-      hs6: normalizeHs6(override.hs6),
-      incoterm: String(override.incoterm || "").toUpperCase() || null,
-      payment: String(override.payment || "").toUpperCase() || null,
-      transport: String(override.transport || "").toLowerCase() || null,
-      currency: String(override.currency || "").toUpperCase() || null,
-      contract_type: String(override.contract_type || "").toLowerCase() || null,
+      origin: normalizeIso2(overrides.origin),
+      destination: normalizeIso2(overrides.destination),
+      hs6: normalizeHs6(overrides.hs6),
+      incoterm: String(overrides.incoterm || "").toUpperCase() || null,
+      payment: String(overrides.payment || "").toUpperCase() || null,
+      transport: String(overrides.transport || "").toLowerCase() || null,
+      currency: String(overrides.currency || "").toUpperCase() || null,
+      contract_type: String(overrides.contract_type || "").toLowerCase() || null,
     };
 
-    const entities = mergeEntities(
-      mergeEntities(previousEntities, detectedFromMessage),
-      overrideEntities,
-    );
+    const entities = mergeEntities(mergeEntities(defaultEntities(), detectedFromMessage), overrideEntities);
 
-    const inScope = Boolean(detect.in_scope);
+    const inScope = typeof detectRpc.in_scope === "boolean"
+      ? Boolean(detectRpc.in_scope)
+      : /\b(export|import|incoterm|douane|customs|hs|sanction|logistique|transport|facture|invoice|tva|vat)\b/i.test(message);
 
-    if (!inScope) {
-      const assistantMessage = outOfScopeMessage(lang);
-
-      const { error: insertError } = await userScoped.from("chat_messages").insert([
-        {
-          session_id: threadId,
-          thread_id: threadId,
-          user_id: userId,
-          role: "user",
-          content: message,
-          entities,
-          dossier: {},
-        },
-        {
-          session_id: threadId,
-          thread_id: threadId,
-          user_id: userId,
-          role: "assistant",
-          content: assistantMessage,
-          entities,
-          dossier: {},
-        },
-      ]);
-
-      if (insertError) {
-        throw new Error(`chat_insert_failed:${insertError.message}`);
+    let dossierRaw: Record<string, any> = {};
+    if (inScope) {
+      try {
+        const { data } = await admin.rpc("rpc_build_export_dossier", {
+          input: {
+            lang: preferredLang,
+            origin: entities.origin,
+            destination: entities.destination,
+            hs6: entities.hs6,
+            incoterm: entities.incoterm,
+            payment: entities.payment,
+            transport: entities.transport,
+            currency: entities.currency,
+            contract_type: entities.contract_type,
+          },
+        });
+        dossierRaw = asObject(data);
+      } catch {
+        dossierRaw = {};
       }
-
-      return json(res, 200, {
-        ok: true,
-        thread_id: threadId,
-        in_scope: false,
-        intent: detect.intent || "out_of_scope",
-        assistant_message: assistantMessage,
-        assistant_mode: "needs_input",
-        follow_up_questions: [],
-        entities,
-        dossier: {},
-      });
     }
 
-    const dossierInput = {
-      lang,
-      origin: entities.origin,
-      destination: entities.destination,
-      hs6: entities.hs6,
-      incoterm: entities.incoterm,
-      payment: entities.payment,
-      transport: entities.transport,
-      currency: entities.currency,
-      contract_type: entities.contract_type,
-    };
+    const dossier = normalizeDossier(dossierRaw, entities, preferredLang);
+    const missingQuestions = inScope ? missingSlots(entities).map((slot) => defaultQuestionBySlot(preferredLang, slot)) : [];
+    const followUpQuestions = missingQuestions.slice(0, 3);
+    const sourceLinks = buildSourceLinks(dossier);
 
-    const { data: dossierRaw, error: dossierError } = await userScoped.rpc("rpc_build_export_dossier", {
-      input: dossierInput,
+    const answerMarkdown = inScope
+      ? buildAnswerMarkdown({
+          lang: preferredLang,
+          dossier,
+          missingQuestions,
+          sourceLinks,
+        })
+      : preferredLang === "en"
+      ? "I focus on import/export operations. Please ask an international trade question."
+      : "Je suis specialise sur les operations import/export. Posez une question de commerce international.";
+
+    const payload = ChatResponseSchema.parse({
+      ok: true,
+      lang: preferredLang,
+      entities,
+      missing_questions: missingQuestions,
+      dossier,
+      answer_markdown: answerMarkdown,
+      source_links: sourceLinks,
+      follow_up_questions: followUpQuestions,
     });
 
-    if (dossierError) {
-      throw new Error(`rpc_build_export_dossier_failed:${dossierError.message}`);
-    }
-
-    const dossier = asObject(dossierRaw);
-    const assistant = buildAssistantMessage(lang, dossier, entities, { isFirstExchange });
-    const assistantMessage = assistant.message;
-
-    const { error: saveError } = await userScoped.from("chat_messages").insert([
-      {
-        session_id: threadId,
-        thread_id: threadId,
-        user_id: userId,
-        role: "user",
-        content: message,
-        entities,
-        dossier: {},
-      },
-      {
-        session_id: threadId,
-        thread_id: threadId,
-        user_id: userId,
-        role: "assistant",
-        content: assistantMessage,
-        entities,
-        dossier,
-      },
-    ]);
-
-    if (saveError) {
-      throw new Error(`chat_insert_failed:${saveError.message}`);
-    }
-
-    return json(res, 200, {
-      ok: true,
-      thread_id: threadId,
-      in_scope: true,
-      intent: detect.intent || "general_export",
-      assistant_message: assistantMessage,
-      assistant_mode: assistant.mode,
-      follow_up_questions: assistant.questions,
+    await persistExchange({
+      userId,
+      threadId,
+      message,
+      answer: payload.answer_markdown,
       entities,
       dossier,
+    }).catch(() => undefined);
+
+    return json(res, 200, {
+      ...payload,
+      thread_id: threadId,
+      session_id: threadId,
+      answer: payload.answer_markdown,
+      mode: payload.missing_questions.length ? "needs_input" : "brief_ready",
+      in_scope: inScope,
+      intent: String(detectRpc.intent || "export_expert"),
+      assistant_message: payload.answer_markdown,
+      assistant_mode: payload.missing_questions.length ? "needs_input" : "brief_ready",
     });
   } catch (err: any) {
     return json(res, 500, {
@@ -735,5 +650,8 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       error: String(err?.message || "chat_failed"),
     });
   }
-});
+}
+
+export default allowCors(chatHandler);
+
 

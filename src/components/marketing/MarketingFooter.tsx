@@ -1,11 +1,8 @@
-﻿import { Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Mail, Phone } from "lucide-react";
-import { useI18n } from "@/contexts/LanguageContext";
 
-type FooterLink = {
-  label: string;
-  to: string;
-};
+import { useI18n } from "@/contexts/LanguageContext";
+import { footerNav } from "@/config/navigation";
 
 type FooterProps = {
   className?: string;
@@ -15,39 +12,9 @@ export function MarketingFooter({ className = "" }: FooterProps) {
   const { lang } = useI18n();
   const isFr = lang === "fr";
 
-  const navLinks: FooterLink[] = isFr
-    ? [
-        { label: "Accueil", to: "/" },
-        { label: "Cockpit", to: "/tool" },
-        { label: "Analyse", to: "/analyse" },
-        { label: "Veille", to: "/veille" },
-        { label: "Guides", to: "/guides" },
-        { label: "Tarifs", to: "/pricing" },
-        { label: "Prospection", to: "/prospection" },
-        { label: "Contact", to: "/contact" },
-      ]
-    : [
-        { label: "Home", to: "/" },
-        { label: "Cockpit", to: "/tool" },
-        { label: "Analysis", to: "/analyse" },
-        { label: "Watch", to: "/veille" },
-        { label: "Guides", to: "/guides" },
-        { label: "Pricing", to: "/pricing" },
-        { label: "Prospecting", to: "/prospection" },
-        { label: "Contact", to: "/contact" },
-      ];
+  const navLinks = footerNav.filter((item) => !item.legal);
+  const legalLinks = footerNav.filter((item) => item.legal);
 
-  const legalLinks: FooterLink[] = isFr
-    ? [
-        { label: "Mentions légales", to: "/mentions-legales" },
-        { label: "Confidentialité", to: "/confidentialite" },
-        { label: "Cookies", to: "/cookies" },
-      ]
-    : [
-        { label: "Legal notice", to: "/mentions-legales" },
-        { label: "Privacy", to: "/confidentialite" },
-        { label: "Cookies", to: "/cookies" },
-      ];
   const socialLinks = [
     {
       label: "Facebook",
@@ -70,7 +37,6 @@ export function MarketingFooter({ className = "" }: FooterProps) {
     <footer className={`border-t border-[hsl(var(--mkt-blue-100))] bg-white ${className}`}>
       <div className="mkt-container py-16">
         <div className="grid gap-12 lg:grid-cols-4">
-          {/* Brand */}
           <div className="lg:col-span-2">
             <Link to="/" className="inline-block">
               <h3 className="mkt-display text-xl font-semibold text-[hsl(var(--mkt-ink))]">
@@ -79,11 +45,10 @@ export function MarketingFooter({ className = "" }: FooterProps) {
             </Link>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-[hsl(var(--mkt-ink-muted))]">
               {isFr
-                ? "Cockpit export pour PME. Coûts rendus, documents, risques et veille réglementaire dans un outil unifié."
+                ? "Cockpit export pour PME. Couts rendus, documents, risques et veille reglementaire dans un outil unifie."
                 : "Export cockpit for SMEs. Landed cost, documents, risks, and regulatory watch in a unified tool."}
             </p>
 
-            {/* Contact info */}
             <div className="mt-6 space-y-3">
               <a
                 href="mailto:contact@exportfrancefacile.com"
@@ -102,41 +67,39 @@ export function MarketingFooter({ className = "" }: FooterProps) {
             </div>
           </div>
 
-          {/* Navigation */}
           <div>
             <h4 className="mkt-label mb-4">{isFr ? "Navigation" : "Navigation"}</h4>
             <ul className="space-y-2">
               {navLinks.map((link) => (
-                <li key={link.to}>
+                <li key={link.id}>
                   <Link
                     to={link.to}
                     className="text-sm text-[hsl(var(--mkt-ink-muted))] transition hover:text-[hsl(var(--mkt-ink))]"
                   >
-                    {link.label}
+                    {link.labels[lang]}
                   </Link>
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* Legal */}
           <div>
-            <h4 className="mkt-label mb-4">{isFr ? "Légal" : "Legal"}</h4>
+            <h4 className="mkt-label mb-4">{isFr ? "Legal" : "Legal"}</h4>
             <ul className="space-y-2">
               {legalLinks.map((link) => (
-                <li key={link.to}>
+                <li key={link.id}>
                   <Link
                     to={link.to}
                     className="text-sm text-[hsl(var(--mkt-ink-muted))] transition hover:text-[hsl(var(--mkt-ink))]"
                   >
-                    {link.label}
+                    {link.labels[lang]}
                   </Link>
                 </li>
               ))}
             </ul>
 
             <div className="mt-8">
-              <h4 className="mkt-label mb-4">{isFr ? "Réseaux" : "Social"}</h4>
+              <h4 className="mkt-label mb-4">{isFr ? "Reseaux" : "Social"}</h4>
               <ul className="space-y-2">
                 {socialLinks.map((link) => (
                   <li key={link.href}>
@@ -157,16 +120,14 @@ export function MarketingFooter({ className = "" }: FooterProps) {
         </div>
       </div>
 
-      {/* Bottom bar */}
       <div className="border-t border-[hsl(var(--mkt-blue-100))]">
         <div className="mkt-container flex flex-col items-center justify-between gap-4 py-6 sm:flex-row">
           <p className="text-xs text-[hsl(var(--mkt-ink-muted))]">
-            © {new Date().getFullYear()} MPL Export Conseil.{" "}
-            {isFr ? "Tous droits réservés." : "All rights reserved."}
+            � {new Date().getFullYear()} MPL Export Conseil. {isFr ? "Tous droits reserves." : "All rights reserved."}
           </p>
           <p className="text-xs text-[hsl(var(--mkt-ink-muted))]">
             {isFr
-              ? "Cet outil aide à structurer vos décisions export. Il ne remplace pas un conseil réglementaire."
+              ? "Cet outil aide a structurer vos decisions export. Il ne remplace pas un conseil reglementaire."
               : "This tool helps structure your export decisions. It does not replace regulatory advice."}
           </p>
         </div>
@@ -174,5 +135,3 @@ export function MarketingFooter({ className = "" }: FooterProps) {
     </footer>
   );
 }
-
-

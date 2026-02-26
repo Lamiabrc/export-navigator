@@ -1,20 +1,13 @@
 import type { ElementType } from "react";
 import * as React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { LogOut } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useI18n } from "@/contexts/LanguageContext";
 import { isAdminUser } from "@/lib/authz";
-import {
-  Activity,
-  BookOpen,
-  Bot,
-  Calculator,
-  FileCheck2,
-  LogOut,
-  Scale,
-  Settings,
-  ShieldCheck,
-} from "lucide-react";
+import { appNav, isPathActive, type AppNavItem } from "@/config/navigation";
 
 type NavItem = {
   name: string;
@@ -31,86 +24,6 @@ type NavSection = {
   items: NavItem[];
 };
 
-const navigation: NavSection[] = [
-  {
-    title: "Accueil",
-    items: [
-      {
-        name: "Tour de contrôle",
-        href: "/app/control-tower",
-        icon: Activity,
-        badge: "Live",
-        featured: true,
-        aliases: ["/dashboard", "/command-center", "/hub", "/app", "/app/command-center", "/app/control-tower"],
-      },
-    ],
-  },
-
-  {
-    title: "Décider vite",
-    items: [
-      {
-        name: "Analyse coûts (simulateur)",
-        href: "/app/simulator",
-        icon: Calculator,
-        aliases: ["/analyse", "/app/analyse", "/app/export/costing"],
-      },
-      {
-        name: "Contrôle facture",
-        href: "/app/invoice-check",
-        icon: FileCheck2,
-        aliases: ["/app/import/check-invoice"],
-      },
-      {
-        name: "Taxes & OM",
-        href: "/app/taxes-om",
-        icon: Scale,
-        aliases: ["/app/taxes", "/app/om", "/app/octroi-mer"],
-      },
-    ],
-  },
-
-  {
-    title: "Conformité & Audit",
-    items: [
-      {
-        name: "Audit interne",
-        href: "/app/audit-interne",
-        icon: ShieldCheck,
-        aliases: ["/app/audit-interne", "/app/compliance", "/app/centre-conformite", "/app/controls", "/app/sanctions"],
-      },
-      {
-        name: "Guides export (Incoterms, géopolitique…)",
-        href: "/guides/incoterms-ddp",
-        icon: BookOpen,
-        aliases: ["/guides", "/guides/incoterms", "/guides/tva", "/methodologie"],
-      },
-    ],
-  },
-
-  {
-    title: "Veille",
-    items: [
-      {
-        name: "Veille réglementaire",
-        href: "/app/centre-veille/reglementation",
-        icon: BookOpen,
-        aliases: ["/veille", "/watch", "/app/centre-veille"],
-      },
-    ],
-  },
-
-  {
-    title: "IA & Assistance",
-    items: [{ name: "MPL Export Expert", href: "/app/assistant", icon: Bot, aliases: ["/assistant"] }],
-  },
-
-  {
-    title: "Admin",
-    items: [{ name: "Admin", href: "/app/admin", icon: Settings, adminOnly: true }],
-  },
-];
-
 export type SidebarProps = {
   onNavigate?: () => void;
   className?: string;
@@ -120,6 +33,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { lang } = useI18n();
 
   const safeName = (user?.email || "Utilisateur").split("@")[0];
 
@@ -129,18 +43,29 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
     return (initials || "??").slice(0, 2);
   };
 
+  const isAdmin = isAdminUser(user);
+
+  const navigation: NavSection[] = React.useMemo(
+    () =>
+      appNav.map((section) => ({
+        title: section.labels[lang],
+        items: section.items.map((item: AppNavItem) => ({
+          name: item.labels[lang],
+          href: item.to,
+          icon: item.icon,
+          badge: item.badge,
+          featured: item.featured,
+          aliases: item.aliases,
+          adminOnly: item.adminOnly,
+        })),
+      })),
+    [lang]
+  );
+
   const isItemActive = (item: NavItem) => {
     const path = location.pathname;
-
-    const matchesAlias = item.aliases?.some(
-      (alias) => path === alias || path.startsWith(`${alias}/`)
-    );
-
-    return (
-      matchesAlias ||
-      path === item.href ||
-      path.startsWith(`${item.href}/`)
-    );
+    const matchesAlias = item.aliases?.some((alias) => path === alias || path.startsWith(`${alias}/`));
+    return matchesAlias || isPathActive(path, item.href);
   };
 
   const handleLogout = async () => {
@@ -151,8 +76,6 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
       navigate("/login");
     }
   };
-
-  const isAdmin = isAdminUser(user);
 
   const renderLink = (item: NavItem) => {
     if (item.adminOnly && !isAdmin) return null;
@@ -193,7 +116,7 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
         "bg-card/95 backdrop-blur-xl border-r border-border shadow-xl",
         className
       )}
-      aria-label="Navigation principale"
+      aria-label={lang === "en" ? "Main navigation" : "Navigation principale"}
     >
       <nav className="flex-1 space-y-4 px-3 py-4 overflow-y-auto">
         {navigation.map((section) => {
@@ -219,25 +142,18 @@ export function Sidebar({ onNavigate, className }: SidebarProps) {
 
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate">{safeName}</p>
-            <p className="text-xs text-muted-foreground truncate">
-              {isAdmin ? "Admin" : "Utilisateur"}
-            </p>
+            <p className="text-xs text-muted-foreground truncate">{isAdmin ? "Admin" : lang === "en" ? "User" : "Utilisateur"}</p>
           </div>
 
           <button
             type="button"
             onClick={handleLogout}
             className="p-2 rounded-lg hover:bg-muted transition focus:outline-none focus:ring-2 focus:ring-primary/30"
-            aria-label="Déconnexion"
-            title="Déconnexion"
+            aria-label={lang === "en" ? "Sign out" : "Deconnexion"}
+            title={lang === "en" ? "Sign out" : "Deconnexion"}
           >
             <LogOut className="h-4 w-4 text-muted-foreground" />
           </button>
-        </div>
-
-        <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
-          <Bot className="h-4 w-4" />
-          MPL Export Expert — traitements côté serveur uniquement
         </div>
       </div>
     </aside>

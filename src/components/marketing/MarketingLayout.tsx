@@ -1,11 +1,10 @@
-import { useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 
+import { PublicLayout } from "@/components/layout/PublicLayout";
 import { useI18n } from "@/contexts/LanguageContext";
 import { GdprGuarantee } from "@/components/GdprGuarantee";
-import { TricolorBanner } from "@/components/layout/TricolorBanner";
 import { getBannerContent } from "@/config/bannerContent";
-import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 
 type MarketingLayoutProps = {
   children: ReactNode;
@@ -26,20 +25,11 @@ export const MarketingLayout = ({
   const globalDisclaimers = (t("disclaimers") as string[]) ?? [];
 
   return (
-    <div className="flex min-h-screen flex-col bg-white text-slate-900">
-      <MarketingHeader />
+    <PublicLayout hideBanner={hideBanner} hideFooter={hideFooter}>
+      <div className="flex min-h-[40vh] flex-col bg-white text-slate-900">
+        <main className="flex-1">{children}</main>
 
-      <main className="flex-1">
-        {!hideBanner ? (
-          <div className="mx-auto w-full max-w-[90rem] px-4 pt-6 sm:px-6 md:px-10">
-            <TricolorBanner title={banner.title} question={banner.question} />
-          </div>
-        ) : null}
-        {children}
-      </main>
-
-      {!hideFooter ? (
-        <>
+        {!hideFooter ? (
           <div className="border-t border-blue-100 bg-white/85 px-6 py-8">
             <div className="mx-auto max-w-6xl">
               <GdprGuarantee />
@@ -49,7 +39,7 @@ export const MarketingLayout = ({
                   {[...heroDisclaimers, ...globalDisclaimers]
                     .filter(Boolean)
                     .map((text, index) => (
-                      <p key={`${text}-${index}`} className="text-xs text-slate-500">
+                      <p key={`${banner.title}-${index}`} className="text-xs text-slate-500">
                         {text}
                       </p>
                     ))}
@@ -57,11 +47,8 @@ export const MarketingLayout = ({
               ) : null}
             </div>
           </div>
-          <footer className="border-t border-blue-100 bg-white/85 py-8 text-center text-xs font-medium text-slate-500">
-            {t("footer.copy")}
-          </footer>
-        </>
-      ) : null}
-    </div>
+        ) : null}
+      </div>
+    </PublicLayout>
   );
 };

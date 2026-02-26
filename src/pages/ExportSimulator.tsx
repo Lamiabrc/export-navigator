@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { computeLandedCost, type Currency, type Incoterm } from "@/lib/exportSimulator";
+import { runExportWorkflow } from "@/lib/workflows/exportWorkflow";
 import { CostBreakdownBar, CostSharePie } from "@/components/charts/CostCharts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +50,20 @@ export default function ExportSimulator() {
   });
 
   const result = React.useMemo(() => computeLandedCost(form), [form]);
+  const workflow = React.useMemo(
+    () =>
+      runExportWorkflow({
+        origin: "FR",
+        destination: "WORLD",
+        hs6: "000000",
+        incoterm: form.incoterm,
+        value: result.customsValueEur,
+        currency: "EUR",
+        transport: "road",
+        payment: "tt",
+      }),
+    [form.incoterm, result.customsValueEur]
+  );
   const resultsRef = React.useRef<HTMLDivElement | null>(null);
   const scrollToResults = () => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -375,6 +390,38 @@ export default function ExportSimulator() {
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">TVA (base {eur(result.vatBaseEur)})</span>
                   <span className="font-medium">{eur(result.vatEur)}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Workflow unifié (shipment)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{workflow.amounts.duty_estimate.label}</span>
+                  <span className="font-medium">
+                    {eur(workflow.amounts.duty_estimate.value)} ({workflow.amounts.duty_estimate.source})
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{workflow.amounts.tax_estimate.label}</span>
+                  <span className="font-medium">
+                    {eur(workflow.amounts.tax_estimate.value)} ({workflow.amounts.tax_estimate.source})
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{workflow.amounts.logistics_estimate.label}</span>
+                  <span className="font-medium">
+                    {eur(workflow.amounts.logistics_estimate.value)} ({workflow.amounts.logistics_estimate.source})
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{workflow.amounts.total_estimate.label}</span>
+                  <span className="font-semibold">
+                    {eur(workflow.amounts.total_estimate.value)} ({workflow.amounts.total_estimate.source})
+                  </span>
                 </div>
               </CardContent>
             </Card>

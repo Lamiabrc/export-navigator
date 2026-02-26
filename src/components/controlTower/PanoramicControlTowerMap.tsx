@@ -1,4 +1,4 @@
-import * as React from "react";
+﻿import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -21,25 +21,25 @@ type SvgCountry = {
 type Props = {
   /** ISO2 (ex: "FR") */
   selectedCountry?: string | null;
-  /** Libellé affiché dans le badge (si tu veux forcer un nom) */
+  /** LibellÃ© affichÃ© dans le badge (si tu veux forcer un nom) */
   selectedLabel?: string;
 
   /**
-   * Stats agrégées pour la sélection courante (optionnel).
-   * Si tu filtres déjà côté parent, tu peux continuer à passer ce props.
+   * Stats agrÃ©gÃ©es pour la sÃ©lection courante (optionnel).
+   * Si tu filtres dÃ©jÃ  cÃ´tÃ© parent, tu peux continuer Ã  passer ce props.
    */
   stats?: MapStats;
 
   /**
    * Stats par pays (optionnel) :
-   * - active un rendu "choroplèthe" (intensité)
+   * - active un rendu "choroplÃ¨the" (intensitÃ©)
    * - enrichit le tooltip (alertes / updates / total)
    */
   countryStats?: Record<string, CountryStats>;
 
   /**
-   * URL du SVG à charger.
-   * ⚠️ Place `world-map.svg` dans `/public/world-map.svg` pour garder la valeur par défaut.
+   * URL du SVG Ã  charger.
+   * âš ï¸ Place `world-map.svg` dans `/public/world-map.svg` pour garder la valeur par dÃ©faut.
    */
   svgUrl?: string;
 
@@ -129,14 +129,14 @@ export function PanoramicControlTowerMap({
           })
           .filter((c) => c.iso && c.d && isIso2(c.iso));
 
-        // petit tri pour stabilité (utile au diff / rendu)
+        // petit tri pour stabilitÃ© (utile au diff / rendu)
         parsed.sort((a, b) => a.iso.localeCompare(b.iso));
 
         setCountries(parsed);
       } catch (e) {
         if (cancelled) return;
         setError(
-          `Impossible de charger la carte (${svgUrl}). Vérifie que world-map.svg est bien dans /public (ou passe svgUrl).`
+          `Impossible de charger la carte (${svgUrl}). VÃ©rifie que world-map.svg est bien dans /public (ou passe svgUrl).`
         );
         setCountries([]);
         setViewBox("0 0 1000 360");
@@ -180,7 +180,7 @@ export function PanoramicControlTowerMap({
 
   const getFill = React.useCallback(
     (iso: string, active: boolean, hovered: boolean) => {
-      // Priorité : actif > hover > intensité > défaut
+      // PrioritÃ© : actif > hover > intensitÃ© > dÃ©faut
       if (active) return "rgba(56,189,248,0.85)"; // sky
       if (hovered) return "rgba(56,189,248,0.55)";
 
@@ -188,7 +188,7 @@ export function PanoramicControlTowerMap({
         const v = statValue(countryStats[iso]);
         if (v <= 0) return "rgba(148,163,184,0.28)";
 
-        // alpha entre 0.28 et 0.72 selon l'intensité
+        // alpha entre 0.28 et 0.72 selon l'intensitÃ©
         const t = Math.min(1, Math.max(0, v / maxValue));
         const alpha = 0.28 + t * 0.44;
         return `rgba(56,189,248,${alpha.toFixed(3)})`;
@@ -246,19 +246,19 @@ export function PanoramicControlTowerMap({
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Carte export</h2>
           <p className="text-sm text-slate-600">
-            Survolez pour voir le détail, cliquez un pays pour filtrer la veille.
+            Survolez pour voir le dÃ©tail, cliquez un pays pour filtrer la veille.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Badge variant="outline">Pays sélectionné : {resolvedLabel}</Badge>
+          <Badge variant="outline">Pays sÃ©lectionnÃ© : {resolvedLabel}</Badge>
           <Badge variant="secondary">Alertes : {alerts}</Badge>
-          <Badge variant="secondary">Mises à jour : {updates}</Badge>
+          <Badge variant="secondary">Mises Ã  jour : {updates}</Badge>
           <Badge variant="secondary">Total : {total}</Badge>
 
           {onReset ? (
             <Button size="sm" variant="outline" onClick={onReset}>
-              Réinitialiser filtre
+              RÃ©initialiser filtre
             </Button>
           ) : null}
         </div>
@@ -273,7 +273,7 @@ export function PanoramicControlTowerMap({
           {loading ? (
             <div className="absolute inset-0 z-10 grid place-items-center bg-white/40 backdrop-blur-sm">
               <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow">
-                Chargement de la carte…
+                Chargement de la carteâ€¦
               </div>
             </div>
           ) : null}
@@ -305,7 +305,7 @@ export function PanoramicControlTowerMap({
             {/* fond transparent */}
             <rect x="0" y="0" width="100%" height="100%" fill="transparent" pointerEvents="none" />
 
-            {/* Pays (chargés dynamiquement depuis world-map.svg) */}
+            {/* Pays (chargÃ©s dynamiquement depuis world-map.svg) */}
             <g aria-label="Pays">
               {countries.map((country) => {
                 const active = !!selectedCountry && selectedCountry === country.iso;
@@ -419,3 +419,4 @@ export function PanoramicControlTowerMap({
     </section>
   );
 }
+

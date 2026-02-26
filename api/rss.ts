@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+﻿import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 type ApiItem = {
   title: string;
@@ -6,8 +6,12 @@ type ApiItem = {
   summary: string | null;
   publishedAt: string | null;
   source: string | null;
-  zone: string | null;        // sortie API (compat)
+  zone: string | null; // output compatibility for legacy UIs
   category: string | null;
+  tags: string[];
+  territory: string | null;
+  official: boolean;
+  importance: number;
   imageUrl: string | null;
 };
 
@@ -21,6 +25,14 @@ type FeedItem = {
 };
 
 type RssSource = { name: string; url: string };
+
+type FeedFilter = {
+  territory: string;
+  topic: string | null;
+  from: string | null;
+  to: string | null;
+  officialOnly: boolean;
+};
 
 const PERMANENT_SOURCES: RssSource[] = [
   { name: "Le Moci", url: "https://www.lemoci.com/feed/" },
@@ -136,7 +148,7 @@ function buildBaseUrl(req: VercelRequest) {
 function truncate(s: string, n: number) {
   const t = (s || "").trim();
   if (t.length <= n) return t;
-  return t.slice(0, n - 1).trimEnd() + "…";
+  return `${t.slice(0, n - 1).trimEnd()}...`;
 }
 
 function toIsoDate(value: any): string | null {
@@ -167,6 +179,137 @@ function territoryLabel(code: string) {
   } catch {
     return code;
   }
+}
+
+const TOPIC_SYNONYMS: Record<string, string[]> = {
+  sanctions: ["sanction", "embargo", "ofac", "asset freeze", "restrictive measure"],
+  douane: ["douane", "customs", "tariff", "duty", "import control"],
+  taxes: ["vat", "tva", "tax", "fiscal", "cbam"],
+  documents: ["document", "certificate", "origin", "packing list", "invoice"],
+  logistics: ["transport", "shipping", "maritime", "air freight", "logistics"],
+  sante: ["who", "health", "pandemic", "disease", "vaccin"],
+  trade: ["trade", "commerce", "wto", "market access", "fta"],
+};
+
+const OFFICIAL_SOURCE_HINTS = [
+  "gouv",
+  ".gov",
+  "europa.eu",
+  "wto.org",
+  "who.int",
+  "finma",
+  "ustr",
+  "service-public",
+];
+
+function parseBoolLike(value: unknown, fallback: boolean) {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (!raw) return fallback;
+  if (["1", "true", "yes", "on", "official", "officiel"].includes(raw)) return true;
+  if (["0", "false", "no", "off"].includes(raw)) return false;
+  return fallback;
+}
+
+function parseIsoDateOrNull(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const dt = new Date(raw);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString();
+}
+
+function parseTopic(value: unknown) {
+  const raw = String(value ?? "").trim().toLowerCase();
+  return raw || null;
+}
+
+function normalizeTag(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function inferCategoryAndTags(text: string, sourceName: string | null, fallbackCategory: string | null) {
+  const haystack = `${text || ""} ${sourceName || ""}`.toLowerCase();
+  const found: string[] = [];
+  for (const [topic, synonyms] of Object.entries(TOPIC_SYNONYMS)) {
+    if (synonyms.some((synonym) => haystack.includes(synonym))) {
+      found.push(topic);
+    }
+  }
+
+  const fallback = fallbackCategory ? [normalizeTag(fallbackCategory)] : [];
+  const tags = Array.from(
+    new Set(
+      [...found, ...fallback]
+        .map((tag) => normalizeTag(tag))
+        .filter(Boolean)
+    )
+  );
+
+  return {
+    category: fallbackCategory || found[0] || null,
+    tags,
+  };
+}
+
+function isOfficialSource(sourceName: string | null, sourceUrl: string | null) {
+  const haystack = `${sourceName || ""} ${sourceUrl || ""}`.toLowerCase();
+  return OFFICIAL_SOURCE_HINTS.some((hint) => haystack.includes(hint));
+}
+
+function computeImportance(item: Pick<ApiItem, "title" | "summary" | "publishedAt" | "source" | "official" | "category">) {
+  let score = 10;
+  const text = `${item.title} ${item.summary || ""}`.toLowerCase();
+
+  if (item.official) score += 25;
+  if (/(sanction|embargo|ban|urgent|alerte|critical|warning)/i.test(text)) score += 30;
+  if (/(douane|customs|tariff|duty|tax|cbam|vat|tva)/i.test(text)) score += 15;
+  if (item.category && ["sanctions", "douane", "taxes"].includes(normalizeTag(item.category))) score += 10;
+
+  const publishedAt = item.publishedAt ? new Date(item.publishedAt).getTime() : 0;
+  if (publishedAt > 0) {
+    const ageDays = Math.max(0, (Date.now() - publishedAt) / (1000 * 60 * 60 * 24));
+    if (ageDays <= 2) score += 15;
+    else if (ageDays <= 7) score += 8;
+    else if (ageDays <= 30) score += 3;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function applyItemFilters(items: ApiItem[], filter: FeedFilter) {
+  const fromTs = filter.from ? new Date(filter.from).getTime() : null;
+  const toTs = filter.to ? new Date(filter.to).getTime() : null;
+  const topic = filter.topic ? normalizeTag(filter.topic) : null;
+
+  return items.filter((item) => {
+    if (filter.territory !== "WORLD") {
+      const itemTerritory = normalizeTerritory(item.territory || item.zone || "");
+      if (itemTerritory !== filter.territory) return false;
+    }
+
+    if (filter.officialOnly && !item.official) return false;
+
+    if (topic) {
+      const categoryTag = item.category ? normalizeTag(item.category) : "";
+      const tags = item.tags.map(normalizeTag);
+      const inTags = tags.includes(topic) || categoryTag === topic;
+      if (!inTags) return false;
+    }
+
+    if (fromTs || toTs) {
+      const publishedTs = item.publishedAt ? new Date(item.publishedAt).getTime() : null;
+      if (!publishedTs || Number.isNaN(publishedTs)) return false;
+      if (fromTs && publishedTs < fromTs) return false;
+      if (toTs && publishedTs > toTs) return false;
+    }
+
+    return true;
+  });
 }
 
 function dedupeSources(sources: RssSource[]) {
@@ -355,16 +498,20 @@ async function fetchExternalItems(sources: RssSource[], limit: number, territory
           if (!res.ok || !text) return { items: [] as ApiItem[], failed: true };
           const parsed = isAtom(text) ? parseAtomItems(text) : parseRssItems(text);
           const zoneValue = territory === "WORLD" ? null : territory;
+          const official = isOfficialSource(src.name, src.url);
           return {
             failed: false,
             items: parsed.map((it) => ({
+              ...(inferCategoryAndTags(`${it.title} ${it.description || ""}`, src.name, null)),
               title: it.title,
               link: it.link,
               summary: it.description ?? null,
               publishedAt: it.pubDate ?? null,
               source: src.name,
               zone: zoneValue,
-              category: null,
+              territory: zoneValue,
+              official,
+              importance: 0,
               imageUrl: it.imageUrl ?? null,
             })) as ApiItem[],
           };
@@ -435,20 +582,43 @@ function mapRowToItem(row: any): ApiItem | null {
   const publishedAt = toIsoDate(row.published_at) || toIsoDate(row.created_at);
 
   const source = (feed?.source_name || feed?.name || row.source || null) as string | null;
-
-  // ✅ ton schéma: territory (pas zone)
   const zone = (row.territory || feed?.territory || null) as string | null;
+  const territory = zone;
   const category = (row.category || feed?.category || null) as string | null;
+  const tags = Array.isArray(row.tags) ? row.tags : Array.isArray(feed?.tags) ? feed.tags : [];
+  const official = isOfficialSource(source, feed?.source_url || null);
 
   const imageUrl = (row.image_url || row.imageUrl || feed?.logo_url || null) as string | null;
-
-  return { title, link, summary, publishedAt, source, zone, category, imageUrl };
+  return {
+    title,
+    link,
+    summary,
+    publishedAt,
+    source,
+    zone,
+    territory,
+    category,
+    tags: tags.map((tag: unknown) => String(tag || "").trim()).filter(Boolean),
+    official,
+    importance: 0,
+    imageUrl,
+  };
 }
 
 function parseLimit(req: VercelRequest) {
   const n = Number(req.query?.limit);
   if (!Number.isFinite(n)) return 12;
-  return Math.min(Math.max(Math.trunc(n), 1), 30);
+  return Math.min(Math.max(Math.trunc(n), 1), 50);
+}
+
+function parseFilters(req: VercelRequest): FeedFilter {
+  const territory = normalizeTerritory(String(req.query?.territory || req.query?.zone || "").trim());
+  const topic = parseTopic(req.query?.topic || req.query?.category);
+  const from = parseIsoDateOrNull(req.query?.from || req.query?.date_from);
+  const to = parseIsoDateOrNull(req.query?.to || req.query?.date_to);
+  const officialOnly = parseBoolLike(req.query?.official, true);
+
+  return { territory, topic, from, to, officialOnly };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -500,12 +670,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const wantsXml = format === "xml" || accept.includes("application/rss+xml") || accept.includes("application/xml");
 
     const limit = parseLimit(req);
-    const queryLimit = Math.min(limit * 3, 60);
-
-    // filtres (optionnels)
-    const categoryQ = String(req.query?.category || "").trim();
-    const territoryQ = normalizeTerritory(String(req.query?.zone || req.query?.territory || "").trim());
-    const sourcePlan = buildSourcesForTerritory(territoryQ);
+    const queryLimit = Math.min(limit * 4, 120);
+    const filters = parseFilters(req);
+    const sourcePlan = buildSourcesForTerritory(filters.territory);
 
     let dbItems: ApiItem[] = [];
     let items: ApiItem[] = [];
@@ -518,13 +685,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let q = admin
         .from("regulatory_items")
-        .select("id,title,summary,link,published_at,category,territory,image_url,created_at, regulatory_feeds(name,source_name,source_url,logo_url,enabled,is_public,territory,category)")
+        .select("id,title,summary,link,published_at,category,territory,tags,image_url,created_at, regulatory_feeds(name,source_name,source_url,logo_url,enabled,is_public,territory,category,tags)")
         .order("published_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(queryLimit);
 
-      if (categoryQ) q = q.eq("category", categoryQ);
-      if (territoryQ !== "WORLD") q = q.eq("territory", territoryQ);
+      if (filters.territory !== "WORLD") q = q.eq("territory", filters.territory);
 
       const { data, error } = await q;
 
@@ -543,8 +709,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error("[api/rss] supabase init error:", err?.message || String(err));
     }
 
-    let external = await fetchExternalItems(sourcePlan, queryLimit, territoryQ);
-    if (!external.items.length && territoryQ !== "WORLD") {
+    let external = await fetchExternalItems(sourcePlan, queryLimit, filters.territory);
+    if (!external.items.length && filters.territory !== "WORLD") {
       const worldFallback = await fetchExternalItems(buildSourcesForTerritory("WORLD"), queryLimit, "WORLD");
       if (worldFallback.items.length) {
         external = worldFallback;
@@ -564,16 +730,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!merged.has(it.link)) merged.set(it.link, it);
     }
 
-    items = sortByPublishedDesc(Array.from(merged.values())).slice(0, limit);
+    const enriched = Array.from(merged.values()).map((item) => {
+      const inferred = inferCategoryAndTags(`${item.title} ${item.summary || ""}`, item.source, item.category);
+      const territory = item.territory || item.zone || null;
+      const official = item.official || isOfficialSource(item.source, item.link);
+      const mergedItem: ApiItem = {
+        ...item,
+        category: item.category || inferred.category,
+        tags: Array.from(new Set([...(item.tags || []), ...inferred.tags])).slice(0, 10),
+        territory,
+        zone: territory,
+        official,
+        importance: 0,
+      };
+      return {
+        ...mergedItem,
+        importance: computeImportance(mergedItem),
+      };
+    });
+
+    let filteredItems = applyItemFilters(sortByPublishedDesc(enriched), filters);
+    let officialFallbackUsed = false;
+    if (!filteredItems.length && filters.territory !== "WORLD" && filters.officialOnly) {
+      filteredItems = applyItemFilters(sortByPublishedDesc(enriched), {
+        ...filters,
+        officialOnly: false,
+      });
+      officialFallbackUsed = true;
+      degraded = true;
+    }
+
+    items = filteredItems.slice(0, limit);
     updatedAt = items[0]?.publishedAt || null;
 
     res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
 
     if (wantsXml) {
       const xml = buildRssXml({
-        title: "ExportFranceFacile — Veille Export (RSS)",
+        title: "ExportFranceFacile - Veille Export (RSS)",
         link: `${baseUrl}/veille`,
-        description: "Mises à jour, signaux faibles, conformité et points de vigilance export.",
+        description: "Mises a jour, signaux faibles, conformite et points de vigilance export.",
         items: items.map((it) => ({
           title: it.title,
           link: it.link,
@@ -593,7 +789,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(200).json({
       ok: true,
       degraded,
-      territory: territoryQ,
+      territory: filters.territory,
+      topic: filters.topic,
+      from: filters.from,
+      to: filters.to,
+      official_only: filters.officialOnly,
+      official_fallback_used: officialFallbackUsed,
       updatedAt,
       items,
       sources: sourcePlan.map((source) => source.name),
@@ -612,3 +813,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 export const config = { runtime: "nodejs" };
+

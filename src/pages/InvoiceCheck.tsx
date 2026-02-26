@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { runImportWorkflow } from "@/lib/workflows/importWorkflow";
 import {
   COUNTRIES,
   CURRENCIES,
@@ -217,6 +218,33 @@ export default function InvoiceCheck() {
     }
     return resolveStatusFromChecks(localChecks);
   }, [analysis?.status, localChecks]);
+
+  const importWorkflow = React.useMemo(
+    () =>
+      runImportWorkflow({
+        origin: context.operationType === "import" ? "WORLD" : "FR",
+        destination: context.destination || analysis?.extracted.destination || "FR",
+        hs6: context.productCode || "000000",
+        incoterm: context.incoterm || analysis?.extracted.incoterm || "DAP",
+        value: Number(analysis?.extracted.total_ht || analysis?.extracted.total_ttc || 0),
+        currency: context.currency || analysis?.extracted.currency || "EUR",
+        transport: "road",
+        payment: context.paymentTerm || "tt",
+      }),
+    [
+      analysis?.extracted.currency,
+      analysis?.extracted.destination,
+      analysis?.extracted.incoterm,
+      analysis?.extracted.total_ht,
+      analysis?.extracted.total_ttc,
+      context.currency,
+      context.destination,
+      context.incoterm,
+      context.operationType,
+      context.paymentTerm,
+      context.productCode,
+    ],
+  );
 
   const onContextChange = (patch: Partial<EditableInvoiceContext>) => {
     setContext((prev) => ({ ...prev, ...patch }));
@@ -563,6 +591,37 @@ export default function InvoiceCheck() {
                     <li key={`reco-${item}`}>{item}</li>
                   ))}
                 </ul>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{isEn ? "Unified workflow" : "Workflow unifie"}</CardTitle>
+                <CardDescription>
+                  {isEn
+                    ? "Estimated duties/taxes with source traceability (eu/mock/fallback)."
+                    : "Estimation droits/taxes avec tracabilite de source (eu/mock/fallback)."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span>{importWorkflow.amounts.duty_estimate.label}</span>
+                  <span className="font-medium">
+                    {formatMoney(importWorkflow.amounts.duty_estimate.value, importWorkflow.amounts.duty_estimate.currency)} ({importWorkflow.amounts.duty_estimate.source})
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>{importWorkflow.amounts.tax_estimate.label}</span>
+                  <span className="font-medium">
+                    {formatMoney(importWorkflow.amounts.tax_estimate.value, importWorkflow.amounts.tax_estimate.currency)} ({importWorkflow.amounts.tax_estimate.source})
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>{importWorkflow.amounts.total_import_estimate.label}</span>
+                  <span className="font-semibold">
+                    {formatMoney(importWorkflow.amounts.total_import_estimate.value, importWorkflow.amounts.total_import_estimate.currency)} ({importWorkflow.amounts.total_import_estimate.source})
+                  </span>
+                </div>
               </CardContent>
             </Card>
           </>

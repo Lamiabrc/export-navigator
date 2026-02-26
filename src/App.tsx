@@ -16,6 +16,7 @@ import { RequirePlan } from "@/components/RequirePlan";
 import { CompanyProfileGuard } from "@/components/CompanyProfileGuard";
 import { CookieConsent } from "@/components/CookieConsent";
 import { LanguageChooser } from "@/components/LanguageChooser";
+import { EnvMissingBanner } from "@/components/EnvMissingBanner";
 
 import Home from "@/pages/Home";
 import ServicesPage from "@/pages/Services";
@@ -84,6 +85,7 @@ export default function App() {
               <LanguageProvider persist="local">
                 <CookieConsent />
                 <BrowserRouter>
+                  <EnvMissingBanner />
                   <LanguageChooser />
                   <CompanyProfileGuard />
                   <GlobalFiltersProvider>
