@@ -2,6 +2,8 @@
 import { FileSpreadsheet, Plus, RefreshCw, UploadCloud } from "lucide-react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PanoramicControlTowerMap } from "@/components/controlTower/PanoramicControlTowerMap";
+import { RssFooter } from "@/components/RssFooter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +17,6 @@ import {
   DISTRIBUTION_CHANNELS,
   INCOTERMS,
   PRODUCTS,
-  TRANSPORT_MODES,
   getCountryLabel,
 } from "@/lib/constants";
 import { useI18n } from "@/contexts/LanguageContext";
@@ -94,6 +95,10 @@ function parseNumber(value: string | null | undefined) {
 
   const num = Number(raw);
   return Number.isFinite(num) ? num : 0;
+}
+
+function isIso2(value: string) {
+  return /^[A-Z]{2}$/.test(String(value || "").toUpperCase());
 }
 
 function detectDelimiter(line: string) {
@@ -262,10 +267,67 @@ export default function ControlTower() {
   const [importMode, setImportMode] = React.useState<"merge" | "replace">("merge");
   const [rows, setRows] = React.useState<ControlTowerRow[]>([]);
   const [manualRow, setManualRow] = React.useState<ManualRowInput>(EMPTY_MANUAL_ROW);
+  const [selectedCountry, setSelectedCountry] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [errorText, setErrorText] = React.useState("");
 
   const hasMappedRequiredFields = Boolean(mapping.country && mapping.product && mapping.qty && mapping.amount);
+
+  const rowsForDashboard = React.useMemo(() => {
+    if (!selectedCountry) return rows;
+    return rows.filter((row) => row.country === selectedCountry);
+  }, [rows, selectedCountry]);
+
+  const countryStats = React.useMemo(() => {
+    const map: Record<string, { label?: string; alerts: number; updates: number; total: number }> = {};
+
+    rows.forEach((row) => {
+      const country = String(row.country || "").toUpperCase();
+      if (!isIso2(country)) return;
+
+      const margin = row.amount - estimateTotalCosts(row);
+      const current = map[country] || {
+        label: getCountryLabel(country, lang),
+        alerts: 0,
+        updates: 0,
+        total: 0,
+      };
+
+      if (margin < 0) {
+        current.alerts += 1;
+      } else {
+        current.updates += 1;
+      }
+      current.total += 1;
+      map[country] = current;
+    });
+
+    return map;
+  }, [lang, rows]);
+
+  const selectedCountryStats = React.useMemo(() => {
+    if (selectedCountry && countryStats[selectedCountry]) {
+      return countryStats[selectedCountry];
+    }
+
+    return Object.values(countryStats).reduce(
+      (acc, item) => {
+        acc.alerts += item.alerts || 0;
+        acc.updates += item.updates || 0;
+        acc.total += item.total || 0;
+        return acc;
+      },
+      { alerts: 0, updates: 0, total: 0 }
+    );
+  }, [countryStats, selectedCountry]);
+
+  React.useEffect(() => {
+    if (!selectedCountry) return;
+    const stillPresent = rows.some((row) => row.country === selectedCountry);
+    if (!stillPresent) {
+      setSelectedCountry(null);
+    }
+  }, [rows, selectedCountry]);
 
   const profitabilityByCountry = React.useMemo(() => {
     const map = new Map<
@@ -273,7 +335,7 @@ export default function ControlTower() {
       { country: string; revenue: number; cost: number; margin: number; lines: number }
     >();
 
-    rows.forEach((row) => {
+    rowsForDashboard.forEach((row) => {
       const current = map.get(row.country) || { country: row.country, revenue: 0, cost: 0, margin: 0, lines: 0 };
       const costs = estimateTotalCosts(row);
       const margin = row.amount - costs;
@@ -285,12 +347,12 @@ export default function ControlTower() {
     });
 
     return Array.from(map.values()).sort((a, b) => b.margin - a.margin);
-  }, [rows]);
+  }, [rowsForDashboard]);
 
   const topProductsByCountry = React.useMemo(() => {
     const map = new Map<string, { country: string; productCode: string; qty: number; amount: number }>();
 
-    rows.forEach((row) => {
+    rowsForDashboard.forEach((row) => {
       const key = `${row.country}:${row.productCode}`;
       const current = map.get(key) || {
         country: row.country,
@@ -304,12 +366,12 @@ export default function ControlTower() {
     });
 
     return Array.from(map.values()).sort((a, b) => b.qty - a.qty).slice(0, 10);
-  }, [rows]);
+  }, [rowsForDashboard]);
 
   const channelPerformance = React.useMemo(() => {
     const map = new Map<string, { channel: string; amount: number; margin: number }>();
 
-    rows.forEach((row) => {
+    rowsForDashboard.forEach((row) => {
       const current = map.get(row.channel) || { channel: row.channel, amount: 0, margin: 0 };
       const margin = row.amount - estimateTotalCosts(row);
       current.amount += row.amount;
@@ -318,7 +380,7 @@ export default function ControlTower() {
     });
 
     return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
-  }, [rows]);
+  }, [rowsForDashboard]);
 
   const suggestions = React.useMemo(() => {
     const list: string[] = [];
@@ -431,6 +493,7 @@ export default function ControlTower() {
 
   const clearRows = () => {
     setRows([]);
+    setSelectedCountry(null);
     setFileName("");
     setTabularData({ headers: [], rows: [] });
     setMapping(EMPTY_MAPPING);
@@ -673,9 +736,41 @@ export default function ControlTower() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{isEn ? "Dashboard" : "Tableau de bord"}</CardTitle>
+            <CardTitle>{isEn ? "Map & RSS watch" : "Carte & veille RSS"}</CardTitle>
             <CardDescription>
               {isEn
+                ? "Select a country on the map to filter dashboard metrics. RSS feed remains available below."
+                : "Selectionnez un pays sur la carte pour filtrer les indicateurs du dashboard. Les flux RSS restent disponibles ci-dessous."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <PanoramicControlTowerMap
+              selectedCountry={selectedCountry}
+              selectedLabel={
+                selectedCountry
+                  ? getCountryLabel(selectedCountry, lang)
+                  : isEn
+                  ? "All countries"
+                  : "Tous les pays"
+              }
+              stats={selectedCountryStats}
+              countryStats={countryStats}
+              onCountrySelect={(iso) => setSelectedCountry((prev) => (prev === iso ? null : iso))}
+              onReset={() => setSelectedCountry(null)}
+            />
+            <RssFooter />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{isEn ? "Dashboard" : "Tableau de bord"}</CardTitle>
+            <CardDescription>
+              {selectedCountry
+                ? isEn
+                  ? `Filtered on ${getCountryLabel(selectedCountry, "en")}.`
+                  : `Filtre actif sur ${getCountryLabel(selectedCountry, "fr")}.`
+                : isEn
                 ? "Top products by country, profitable destinations and channel performance."
                 : "Top produits par pays, destinations rentables et performance canaux."}
             </CardDescription>
@@ -684,15 +779,15 @@ export default function ControlTower() {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-lg border p-3">
                 <div className="text-xs text-muted-foreground">{isEn ? "Rows" : "Lignes"}</div>
-                <div className="text-2xl font-semibold">{rows.length}</div>
+                <div className="text-2xl font-semibold">{rowsForDashboard.length}</div>
               </div>
               <div className="rounded-lg border p-3">
                 <div className="text-xs text-muted-foreground">{isEn ? "Countries" : "Pays"}</div>
-                <div className="text-2xl font-semibold">{new Set(rows.map((row) => row.country)).size}</div>
+                <div className="text-2xl font-semibold">{new Set(rowsForDashboard.map((row) => row.country)).size}</div>
               </div>
               <div className="rounded-lg border p-3">
                 <div className="text-xs text-muted-foreground">{isEn ? "Channels" : "Canaux"}</div>
-                <div className="text-2xl font-semibold">{new Set(rows.map((row) => row.channel)).size}</div>
+                <div className="text-2xl font-semibold">{new Set(rowsForDashboard.map((row) => row.channel)).size}</div>
               </div>
             </div>
 
