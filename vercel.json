@@ -76,6 +76,7 @@
     { "source": "/api/alerts", "destination": "/api/lead-magnet?mode=alerts" },
     { "source": "/api/prefs", "destination": "/api/lead-magnet?mode=prefs" },
     { "source": "/api/export/brief", "destination": "/api/lead-magnet?mode=export-brief" },
+    { "source": "/api/invoice/analyze", "destination": "/api/taxes-product?mode=invoice-analyze" },
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/:path*", "destination": "/index.html" }
   ]

@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=DM+Serif+Display:ital@0;1&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -135,7 +135,12 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: "Sora", "Segoe UI", sans-serif;
+    font-family: "Inter", "Source Sans 3", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     background:
       radial-gradient(circle at 8% 12%, rgba(18, 76, 175, 0.16), transparent 42%),
       radial-gradient(circle at 92% 16%, rgba(197, 34, 52, 0.14), transparent 40%),
@@ -147,8 +152,14 @@
   h3,
   h4,
   .font-display {
-    font-family: "DM Serif Display", "Georgia", serif;
-    letter-spacing: -0.01em;
+    font-family: "Inter", "Source Sans 3", "Segoe UI", Roboto, sans-serif;
+    letter-spacing: -0.015em;
+    line-height: 1.2;
+    font-weight: 600;
+  }
+
+  p {
+    line-height: 1.6;
   }
 
   /* ✅ FIX IMPORTANT: supprime l’effet Vite “site centré + padding + text-align:center” */

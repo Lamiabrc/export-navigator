@@ -118,8 +118,9 @@ export default {
         "pulse-soft": "pulse-soft 2s ease-in-out infinite",
       },
       fontFamily: {
-        sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
-        serif: ['"IBM Plex Serif"', 'Georgia', 'serif'],
+        sans: ['"Inter"', '"Source Sans 3"', "ui-sans-serif", "system-ui", "-apple-system", '"Segoe UI"', "sans-serif"],
+        display: ['"Inter"', '"Source Sans 3"', "ui-sans-serif", "system-ui", "sans-serif"],
+        serif: ['"Merriweather"', "Georgia", "serif"],
       },
     },
   },
