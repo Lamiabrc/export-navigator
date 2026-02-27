@@ -69,6 +69,11 @@ type ChatMessage = {
   blocks?: AssistantBlocks;
 };
 
+type FollowUpAction = {
+  label: string;
+  value: string;
+};
+
 const uid = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 const COUNTRY_FOLLOWUP_RE = /(quel est le pays|pays de destination|destination exact)/i;
 const COUNTRY_MISSING_RE = /(pays.*(a confirmer|manquant)|quel est le pays de destination|destination exacte)/i;
@@ -197,6 +202,29 @@ function withPriorityFollowUp(params: {
   return base;
 }
 
+function followUpToAction(question: string): FollowUpAction {
+  const normalized = normalizePrompt(question);
+  if (/\b(pays|destination|transit)\b/.test(normalized)) {
+    return { label: "Renseigner le pays", value: "Pays de destination: " };
+  }
+  if (/\b(produit|marchandise|usage|composition)\b/.test(normalized)) {
+    return { label: "Renseigner le produit", value: "Produit: " };
+  }
+  if (/\b(code hs|hs)\b/.test(normalized)) {
+    return { label: "Renseigner le code HS", value: "Code HS (6 chiffres): " };
+  }
+  if (/\bincoterm\b/.test(normalized)) {
+    return { label: "Renseigner l'Incoterm", value: "Incoterm: " };
+  }
+  if (/\btransport\b/.test(normalized)) {
+    return { label: "Renseigner le transport", value: "Transport: " };
+  }
+  if (/\bpayment|paiement|reglement\b/.test(normalized)) {
+    return { label: "Renseigner le paiement", value: "Mode de paiement: " };
+  }
+  return { label: "Repondre maintenant", value: "Reponse: " };
+}
+
 export default function Copilote() {
   const [messages, setMessages] = React.useState<ChatMessage[]>([
     {
@@ -216,6 +244,7 @@ export default function Copilote() {
   const [error, setError] = React.useState<string | null>(null);
 
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const inputRef = React.useRef<HTMLTextAreaElement | null>(null);
 
   React.useEffect(() => {
     const el = scrollRef.current;
@@ -533,14 +562,20 @@ export default function Copilote() {
                     {m.role === "assistant" && m.followUpQuestions?.length ? (
                       <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/70 pt-2">
                         {m.followUpQuestions.map((q) => (
-                          <button
+                          <Button
                             key={`${m.id}-${q}`}
                             type="button"
-                            onClick={() => setDraft(q)}
-                            className="rounded-full border border-border bg-muted/40 px-2 py-1 text-[11px] text-slate-700 hover:bg-muted"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 rounded-full px-2 text-[11px]"
+                            onClick={() => {
+                              const action = followUpToAction(q);
+                              setDraft(action.value);
+                              window.setTimeout(() => inputRef.current?.focus(), 0);
+                            }}
                           >
-                            {q}
-                          </button>
+                            {followUpToAction(q).label}
+                          </Button>
                         ))}
                       </div>
                     ) : null}
@@ -560,6 +595,7 @@ export default function Copilote() {
 
             <div className="flex items-end gap-2">
               <Textarea
+                ref={inputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Ecrivez votre question export ici..."

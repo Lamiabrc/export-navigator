@@ -86,6 +86,8 @@ type EssentialAlert = {
   message: string;
 };
 
+type ProAccordionKey = "pro-customs" | "pro-payment" | "pro-docs";
+
 type CoreContext = {
   goodsOrServices: "goods" | "services";
   goodsKnown: boolean;
@@ -562,6 +564,40 @@ function fieldDomId(fieldPath?: string) {
   return FIELD_DOM_IDS[fieldPath] || "";
 }
 
+function getAccordionKeyForFieldPath(fieldPath?: string): ProAccordionKey | null {
+  if (!fieldPath) return null;
+  if (
+    fieldPath.startsWith("context.incoterm")
+    || fieldPath.startsWith("context.proofOfTransport")
+    || fieldPath.startsWith("invoice.lines.0.hs6")
+    || fieldPath.startsWith("invoice.lines.0.originCountry")
+    || fieldPath.startsWith("invoice.grossWeight")
+    || fieldPath.startsWith("invoice.packageCount")
+    || fieldPath.startsWith("invoice.charges")
+  ) {
+    return "pro-customs";
+  }
+  if (
+    fieldPath.startsWith("context.sellerVat")
+    || fieldPath.startsWith("context.currency")
+    || fieldPath.startsWith("context.exchangeRate")
+    || fieldPath.startsWith("invoice.payment")
+  ) {
+    return "pro-payment";
+  }
+  if (
+    fieldPath.startsWith("invoice.invoiceNumber")
+    || fieldPath.startsWith("invoice.issueDate")
+    || fieldPath.startsWith("invoice.seller")
+    || fieldPath.startsWith("invoice.buyer")
+    || fieldPath.startsWith("invoice.totals")
+    || fieldPath.startsWith("invoice.documents")
+  ) {
+    return "pro-docs";
+  }
+  return null;
+}
+
 function buildAssessmentInput(
   express: ExpressForm,
   pro: ProForm,
@@ -757,6 +793,7 @@ export default function InvoiceCheck() {
   const [pastedText, setPastedText] = React.useState("");
   const [pdfText, setPdfText] = React.useState("");
   const [pdfFileName, setPdfFileName] = React.useState("");
+  const [pdfPreviewUrl, setPdfPreviewUrl] = React.useState("");
   const [isExtractingPdf, setIsExtractingPdf] = React.useState(false);
   const [extractError, setExtractError] = React.useState("");
   const [detected, setDetected] = React.useState<Detection | null>(null);
@@ -766,6 +803,8 @@ export default function InvoiceCheck() {
   const [productQuery, setProductQuery] = React.useState("");
   const [productChecks, setProductChecks] = React.useState<CheckerItem[]>([]);
   const [adminRateDraft, setAdminRateDraft] = React.useState("");
+  const [openProAccordions, setOpenProAccordions] = React.useState<ProAccordionKey[]>([]);
+  const pdfPreviewRef = React.useRef<string>("");
 
   const mergedSourceText = React.useMemo(
     () => [pdfText, pastedText].filter(Boolean).join("\n"),
@@ -813,6 +852,14 @@ export default function InvoiceCheck() {
     }
   }, [detectedPending, hasExpressCoreInput]);
 
+  React.useEffect(() => {
+    return () => {
+      if (pdfPreviewRef.current) {
+        URL.revokeObjectURL(pdfPreviewRef.current);
+      }
+    };
+  }, []);
+
   const handlePdfSelected = React.useCallback(
     async (file: File | null | undefined) => {
       if (!file) return;
@@ -828,6 +875,12 @@ export default function InvoiceCheck() {
       setPdfFileName(file.name);
       setExtractError("");
       setIsExtractingPdf(true);
+      if (pdfPreviewRef.current) {
+        URL.revokeObjectURL(pdfPreviewRef.current);
+      }
+      const nextPreviewUrl = URL.createObjectURL(file);
+      pdfPreviewRef.current = nextPreviewUrl;
+      setPdfPreviewUrl(nextPreviewUrl);
 
       try {
         const text = await extractTextFromPdf(file);
@@ -963,26 +1016,74 @@ export default function InvoiceCheck() {
 
   const focusFieldPath = React.useCallback((fieldPath?: string) => {
     const domId = fieldDomId(fieldPath);
+    const accordionKey = getAccordionKeyForFieldPath(fieldPath);
+    if (accordionKey) {
+      setOpenProAccordions((prev) => (prev.includes(accordionKey) ? prev : [...prev, accordionKey]));
+    }
     setCurrentStep(1);
-    if (!domId) return;
+    if (!domId) {
+      toast({
+        title: "Champ a corriger",
+        description: "Le champ cible n'est pas precise. Verifiez les informations de l'etape 1.",
+      });
+      return;
+    }
 
-    window.setTimeout(() => {
+    const tryFocus = () => {
       const node = document.getElementById(domId);
-      if (!node) return;
+      if (!node) return false;
       node.scrollIntoView({ behavior: "smooth", block: "center" });
 
       const focusable = node as HTMLElement;
       if (typeof focusable.focus === "function") {
         focusable.focus();
-        return;
+      } else {
+        const nestedFocusable = node.querySelector<HTMLElement>(
+          "input, textarea, button, select, [tabindex]:not([tabindex='-1'])",
+        );
+        nestedFocusable?.focus();
       }
+      return true;
+    };
 
-      const nestedFocusable = node.querySelector<HTMLElement>(
-        "input, textarea, button, select, [tabindex]:not([tabindex='-1'])",
-      );
-      nestedFocusable?.focus();
-    }, 120);
-  }, []);
+    window.setTimeout(() => {
+      if (tryFocus()) return;
+      window.setTimeout(() => {
+        tryFocus();
+      }, 220);
+    }, 160);
+  }, [toast]);
+
+  const handleMissingQuestionClick = React.useCallback((question: string) => {
+    const normalized = normalizeText(question);
+    if (normalized.includes("pays vendeur")) {
+      focusFieldPath("context.sellerCountry");
+      return;
+    }
+    if (normalized.includes("pays acheteur") || normalized.includes("destination")) {
+      focusFieldPath("context.buyerCountry");
+      return;
+    }
+    if (normalized.includes("assujetti") || normalized.includes("tva")) {
+      focusFieldPath("context.buyerIsTaxable");
+      return;
+    }
+    if (normalized.includes("biens") || normalized.includes("services")) {
+      focusFieldPath("context.goodsOrServices");
+      return;
+    }
+    if (normalized.includes("produit") || normalized.includes("code hs")) {
+      setCurrentStep(2);
+      window.setTimeout(() => {
+        const node = document.getElementById("field-product-query");
+        node?.scrollIntoView({ behavior: "smooth", block: "center" });
+        const field = node as HTMLElement | null;
+        field?.focus?.();
+      }, 120);
+      return;
+    }
+    focusFieldPath("context.goodsOrServices");
+  }, [focusFieldPath]);
 
   const handleAnalyze = React.useCallback(() => {
     runAnalysis({
@@ -1176,6 +1277,18 @@ export default function InvoiceCheck() {
                   </p>
                 ) : null}
                 {extractError ? <p className="text-xs text-amber-700">{extractError}</p> : null}
+                {pdfPreviewUrl ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-slate-700">Apercu PDF</p>
+                    <div className="overflow-hidden rounded-md border bg-white">
+                      <iframe
+                        title="Apercu facture PDF"
+                        src={pdfPreviewUrl}
+                        className="h-64 w-full"
+                      />
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <div className="space-y-2">
@@ -1291,11 +1404,17 @@ export default function InvoiceCheck() {
                   setPastedText("");
                   setPdfText("");
                   setPdfFileName("");
+                  if (pdfPreviewRef.current) {
+                    URL.revokeObjectURL(pdfPreviewRef.current);
+                    pdfPreviewRef.current = "";
+                  }
+                  setPdfPreviewUrl("");
                   setDetected(null);
                   setDetectedPending(false);
                   setResult(null);
                   setProductQuery("");
                   setProductChecks([]);
+                  setOpenProAccordions([]);
                   setCurrentStep(1);
                 }}
               >
@@ -1352,7 +1471,15 @@ export default function InvoiceCheck() {
 
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" onClick={applyDetectedValues}>Confirmer et analyser</Button>
-                <Button size="sm" variant="outline" onClick={() => setDetectedPending(false)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setDetectedPending(false);
+                    setCurrentStep(1);
+                    focusFieldPath("context.goodsOrServices");
+                  }}
+                >
                   Corriger
                 </Button>
               </div>
@@ -1368,7 +1495,12 @@ export default function InvoiceCheck() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Accordion type="multiple" className="w-full">
+            <Accordion
+              type="multiple"
+              value={openProAccordions}
+              onValueChange={(values) => setOpenProAccordions(values as ProAccordionKey[])}
+              className="w-full"
+            >
               <AccordionItem value="pro-customs">
                 <AccordionTrigger>PRO Douane</AccordionTrigger>
                 <AccordionContent>
@@ -1517,11 +1649,11 @@ export default function InvoiceCheck() {
                     </div>
                     <div className="space-y-1">
                       <Label>B/L</Label>
-                      <Input value={pro.bl} onChange={(event) => setPro((prev) => ({ ...prev, bl: event.target.value }))} />
+                      <Input id="field-bl" value={pro.bl} onChange={(event) => setPro((prev) => ({ ...prev, bl: event.target.value }))} />
                     </div>
                     <div className="space-y-1">
                       <Label>Packing list</Label>
-                      <Input value={pro.packingList} onChange={(event) => setPro((prev) => ({ ...prev, packingList: event.target.value }))} />
+                      <Input id="field-packing-list" value={pro.packingList} onChange={(event) => setPro((prev) => ({ ...prev, packingList: event.target.value }))} />
                     </div>
                   </div>
                 </AccordionContent>
@@ -1833,9 +1965,18 @@ export default function InvoiceCheck() {
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>Questions manquantes prioritaires</AlertTitle>
                   <AlertDescription>
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {result.missingQuestions.map((question) => (
-                        <p key={question}>- {question}</p>
+                        <div key={question} className="flex flex-wrap items-center gap-2">
+                          <p>- {question}</p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleMissingQuestionClick(question)}
+                          >
+                            Renseigner maintenant
+                          </Button>
+                        </div>
                       ))}
                     </div>
                   </AlertDescription>
