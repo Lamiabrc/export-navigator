@@ -98,6 +98,7 @@ export type CheckerItem = {
   what_to_fix: string;
   example: string;
   source_link?: string;
+  fieldPath?: string;
 };
 
 export type VatResultStatus =

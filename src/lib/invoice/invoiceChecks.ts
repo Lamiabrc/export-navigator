@@ -19,6 +19,7 @@ function makeCheck(
   whatToFix: string,
   example: string,
   source?: string,
+  fieldPath?: string,
 ): CheckerItem {
   return {
     id,
@@ -28,6 +29,7 @@ function makeCheck(
     what_to_fix: whatToFix,
     example,
     source_link: source,
+    fieldPath,
   };
 }
 
@@ -52,6 +54,7 @@ function checkMandatoryMentions(context: TransactionContext, invoice: InvoiceDat
       "Renseigner un numero unique de facture.",
       "FAC-2026-00154",
       OFFICIAL_LINKS.douane_fr,
+      "invoice.invoiceNumber",
     ),
   );
 
@@ -64,6 +67,7 @@ function checkMandatoryMentions(context: TransactionContext, invoice: InvoiceDat
       "Ajouter la date d'emission de la facture.",
       "2026-02-26",
       OFFICIAL_LINKS.douane_fr,
+      "invoice.issueDate",
     ),
   );
 
@@ -77,6 +81,7 @@ function checkMandatoryMentions(context: TransactionContext, invoice: InvoiceDat
       "Completer nom, adresse et identifiant vendeur.",
       "MPL Export SAS, 12 rue du Port, FR...",
       OFFICIAL_LINKS.douane_fr,
+      "invoice.seller",
     ),
   );
 
@@ -90,6 +95,7 @@ function checkMandatoryMentions(context: TransactionContext, invoice: InvoiceDat
       "Completer nom, adresse et identifiant acheteur.",
       "ABC Italia SRL, Via Roma 15, IT...",
       OFFICIAL_LINKS.douane_fr,
+      "invoice.buyer",
     ),
   );
 
@@ -102,6 +108,7 @@ function checkMandatoryMentions(context: TransactionContext, invoice: InvoiceDat
       "Ajouter au moins une ligne article/service.",
       "Description, quantite, prix unitaire, valeur ligne.",
       OFFICIAL_LINKS.douane_fr,
+      "invoice.lines",
     ),
   );
 
@@ -116,6 +123,7 @@ function checkMandatoryMentions(context: TransactionContext, invoice: InvoiceDat
       "Renseigner l'incoterm et le lieu (obligatoire en international).",
       "FCA Le Havre",
       OFFICIAL_LINKS.incoterms_icc,
+      "context.incoterm",
     ),
   );
 
@@ -140,6 +148,7 @@ function checkTotals(invoice: InvoiceData): CheckerItem[] {
       "Recalculer total HT a partir des lignes.",
       "HT = somme des valeurs lignes",
       OFFICIAL_LINKS.douane_fr,
+      "invoice.totals.totalHt",
     ),
   );
 
@@ -157,6 +166,7 @@ function checkTotals(invoice: InvoiceData): CheckerItem[] {
       "Ajuster total TTC ou TVA.",
       "TTC = HT + TVA",
       OFFICIAL_LINKS.douane_fr,
+      "invoice.totals.totalTtc",
     ),
   );
 
@@ -172,6 +182,7 @@ function checkTotals(invoice: InvoiceData): CheckerItem[] {
       "Verifier qty, PU, remise et valeur ligne.",
       "Valeur ligne = qty x PU x (1-remise)",
       OFFICIAL_LINKS.douane_fr,
+      "invoice.lines.0.lineValue",
     ),
   );
 
@@ -205,6 +216,7 @@ function checkPayment(context: TransactionContext, invoice: InvoiceData): Checke
       "Verifier l'IBAN (pays + cle + numero de compte).",
       "FR7612345987650123456789014",
       "https://www.banque-france.fr/",
+      "invoice.payment.iban",
     ),
   );
 
@@ -222,6 +234,7 @@ function checkPayment(context: TransactionContext, invoice: InvoiceData): Checke
       "Verifier code BIC (8 ou 11 caracteres).",
       "BNPAFRPP",
       "https://www.banque-france.fr/",
+      "invoice.payment.bic",
     ),
   );
 
@@ -239,6 +252,7 @@ function checkPayment(context: TransactionContext, invoice: InvoiceData): Checke
       "Confirmer le compte bancaire contractuel du vendeur.",
       "Vendeur FR -> IBAN commencant par FR",
       "https://www.banque-france.fr/",
+      "invoice.payment.iban",
     ),
   );
 
@@ -262,6 +276,7 @@ function checkInterDocs(invoice: InvoiceData): CheckerItem[] {
       "Ajouter AWB/B-L/Packing List quand disponibles.",
       "AWB 020-12345675, PL-2026-0084",
       OFFICIAL_LINKS.douane_fr,
+      "invoice.documents",
     ),
   ];
 }
@@ -280,6 +295,7 @@ function checkRiskSignals(invoice: InvoiceData): CheckerItem[] {
       "Verifier les poids et l'unite.",
       "Poids net 850 kg, brut 910 kg",
       OFFICIAL_LINKS.douane_fr,
+      "invoice.grossWeight",
     ),
   );
 
@@ -294,6 +310,7 @@ function checkRiskSignals(invoice: InvoiceData): CheckerItem[] {
       "Completer nombre de colis et marques/numeros.",
       "12 colis, marques ABX/001-012",
       OFFICIAL_LINKS.douane_fr,
+      "invoice.packageCount",
     ),
   );
 

@@ -38,7 +38,12 @@ export function assessInvoice(context: TransactionContext, invoice: InvoiceData)
 
   const checksByTab = {
     mentions: baseChecks.mentions,
-    vat: [...vatResultToChecks(vatResult)],
+    vat: [...vatResultToChecks(vatResult, {
+      buyerVat: context.buyerVat,
+      sellerVat: context.sellerVat,
+      buyerIsTaxable: context.buyerIsTaxable,
+      proofOfTransport: context.proofOfTransport,
+    })],
     customs: customsResult.customs_checks,
     fx: fxResult.checks,
     calculs: baseChecks.calculs,

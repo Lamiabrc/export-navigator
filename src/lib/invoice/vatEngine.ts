@@ -218,7 +218,10 @@ export function evaluateVat(input: VatEngineInput): VatResult {
   };
 }
 
-export function vatResultToChecks(vat: VatResult) {
+export function vatResultToChecks(
+  vat: VatResult,
+  context?: Pick<TransactionContext, "buyerVat" | "sellerVat" | "buyerIsTaxable" | "proofOfTransport">,
+) {
   const status = vat.status === "UNKNOWN"
     ? "WARN"
     : vat.missing_questions.length > 0
@@ -246,6 +249,11 @@ export function vatResultToChecks(vat: VatResult) {
         vat.status === "REVERSE_CHARGE" || vat.status === "VAT_EXEMPT"
           ? "https://www.impots.gouv.fr/"
           : "https://www.douane.gouv.fr/",
+      fieldPath: !context?.buyerIsTaxable
+        ? "context.buyerIsTaxable"
+        : !context?.proofOfTransport
+          ? "context.proofOfTransport"
+          : "context.buyerVat",
     },
     {
       id: "vat_vies_format",
@@ -255,6 +263,7 @@ export function vatResultToChecks(vat: VatResult) {
       what_to_fix: "Corriger le format (ex: FR12345678901) puis verifier dans VIES.",
       example: "FRXX999999999",
       source_link: vat.vies_validation.vies_link,
+      fieldPath: !context?.sellerVat ? "context.sellerVat" : "context.buyerVat",
     },
   ];
 }

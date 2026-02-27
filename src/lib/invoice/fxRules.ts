@@ -20,7 +20,15 @@ function isIso4217(currency: string) {
   return ISO4217.has(code);
 }
 
-function baseCheck(id: string, label: string, status: "OK" | "WARN" | "KO", explanation: string, whatToFix: string, example: string): CheckerItem {
+function baseCheck(
+  id: string,
+  label: string,
+  status: "OK" | "WARN" | "KO",
+  explanation: string,
+  whatToFix: string,
+  example: string,
+  fieldPath?: string,
+): CheckerItem {
   return {
     id,
     label,
@@ -29,6 +37,7 @@ function baseCheck(id: string, label: string, status: "OK" | "WARN" | "KO", expl
     what_to_fix: whatToFix,
     example,
     source_link: BERCY_LINK,
+    fieldPath,
   };
 }
 
@@ -46,6 +55,7 @@ export function evaluateFxRules(context: TransactionContext, invoice: InvoiceDat
       isoOk ? `Devise ${currency} reconnue.` : `Devise ${currency || "n/a"} non reconnue.`,
       "Utiliser un code devise ISO 4217 (EUR, USD, GBP, ...).",
       "USD",
+      "context.currency",
     ),
   );
 
@@ -65,6 +75,7 @@ export function evaluateFxRules(context: TransactionContext, invoice: InvoiceDat
         : "Facture en EUR: taux non requis.",
       "Renseigner le taux de change utilise pour les calculs fiscaux/comptables.",
       "1 USD = 0.92 EUR",
+      "context.exchangeRate",
     ),
   );
 
@@ -84,6 +95,7 @@ export function evaluateFxRules(context: TransactionContext, invoice: InvoiceDat
         "Contre-valeur EUR calculee pour base taxable/TVA.",
         "Reporter la contre-valeur EUR sur les documents fiscaux internes.",
         `HT EUR: ${converted.totalHtEur}`,
+        "context.exchangeRate",
       ),
     );
   }

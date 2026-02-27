@@ -24,6 +24,7 @@ function checkLineDescriptions(invoice: InvoiceData): CheckerItem {
     what_to_fix: "Ajouter une description technique/commerciale precise par ligne.",
     example: "Pompe centrifuge acier inoxydable 2.2 kW, usage industriel.",
     source_link: OFFICIAL_LINKS.douane_fr,
+    fieldPath: "invoice.lines.0.description",
   };
 }
 
@@ -40,6 +41,7 @@ function checkHs6(invoice: InvoiceData): CheckerItem {
     what_to_fix: "Completer chaque ligne avec un HS6 valide (6 chiffres).",
     example: "HS6 850760 pour batteries lithium-ion.",
     source_link: OFFICIAL_LINKS.taric,
+    fieldPath: "invoice.lines.0.hs6",
   };
 }
 
@@ -56,6 +58,7 @@ function checkCountryOfOrigin(invoice: InvoiceData): CheckerItem {
     what_to_fix: "Ajouter le pays d'origine des marchandises par ligne.",
     example: "Origine: FR (fabrication France).",
     source_link: OFFICIAL_LINKS.douane_fr,
+    fieldPath: "invoice.lines.0.originCountry",
   };
 }
 
@@ -73,6 +76,7 @@ function checkIncoterm(context: TransactionContext): CheckerItem {
     what_to_fix: "Renseigner un incoterm ICC + lieu precis (ex: FCA Lyon).",
     example: "DAP Milan, Italie.",
     source_link: OFFICIAL_LINKS.incoterms_icc,
+    fieldPath: "context.incoterm",
   };
 }
 
@@ -88,6 +92,7 @@ function checkValueAndCurrency(context: TransactionContext, invoice: InvoiceData
     what_to_fix: "Verifier total HT/TTC et renseigner une devise ISO 4217.",
     example: "Total HT 24 000 USD, devise USD.",
     source_link: OFFICIAL_LINKS.access2markets,
+    fieldPath: "invoice.totals.totalHt",
   };
 }
 
@@ -103,6 +108,7 @@ function checkCustomsBreakdown(invoice: InvoiceData): CheckerItem {
     what_to_fix: "Ajouter fret et assurance (et autres assists/royalties si applicables).",
     example: "Fret 900 EUR, assurance 120 EUR.",
     source_link: OFFICIAL_LINKS.douane_fr,
+    fieldPath: "invoice.charges.freight",
   };
 }
 
@@ -116,6 +122,7 @@ function checkDdpConsistency(context: TransactionContext, invoice: InvoiceData):
       explanation: "Incoterm non DDP: controle DDP non applicable.",
       what_to_fix: "Aucune action requise.",
       example: "DAP / FCA / EXW.",
+      fieldPath: "context.incoterm",
     };
   }
 
@@ -130,6 +137,7 @@ function checkDdpConsistency(context: TransactionContext, invoice: InvoiceData):
     what_to_fix: "Documenter qui supporte droits/taxes et integrer ces montants au prix.",
     example: "DDP Madrid - droits et TVA import inclus dans le prix facture.",
     source_link: OFFICIAL_LINKS.incoterms_icc,
+    fieldPath: "context.incoterm",
   };
 }
 
