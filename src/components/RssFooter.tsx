@@ -32,6 +32,7 @@ type RssApiJsonResponse = {
 type RssFooterProps = {
   territory?: string | null;
   territoryLabel?: string | null;
+  topic?: string | null;
 };
 
 const PINNED_SOURCE_LABELS = [
@@ -67,6 +68,12 @@ function normalizeTerritory(value?: string | null) {
     return "WORLD";
   }
   return /^[A-Z]{2}$/.test(raw) ? raw : "WORLD";
+}
+
+function normalizeTopic(value?: string | null) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  return raw.replace(/[^a-z0-9_-]/g, "");
 }
 
 function toStringOrUndefined(value: unknown) {
@@ -160,8 +167,9 @@ async function fetchRaw(url: string, signal: AbortSignal) {
   return { raw, contentType: res.headers.get("content-type") || "" };
 }
 
-export function RssFooter({ territory, territoryLabel }: RssFooterProps) {
+export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) {
   const effectiveTerritory = React.useMemo(() => normalizeTerritory(territory), [territory]);
+  const effectiveTopic = React.useMemo(() => normalizeTopic(topic), [topic]);
   const [items, setItems] = React.useState<RssFooterItem[]>([]);
   const [meta, setMeta] = React.useState<RssMeta>({});
   const [sourceLabels, setSourceLabels] = React.useState<string[]>([]);
@@ -179,7 +187,8 @@ export function RssFooter({ territory, territoryLabel }: RssFooterProps) {
       setError(null);
 
       // Flux dynamique lie au territoire selectionne (map -> RSS).
-      const endpoint = `/api/rss?limit=18&territory=${encodeURIComponent(effectiveTerritory)}`;
+      const topicParam = effectiveTopic ? `&topic=${encodeURIComponent(effectiveTopic)}` : "";
+      const endpoint = `/api/rss?limit=18&territory=${encodeURIComponent(effectiveTerritory)}${topicParam}`;
 
       try {
         const { raw, contentType } = await fetchRaw(endpoint, controller.signal);
@@ -207,7 +216,7 @@ export function RssFooter({ territory, territoryLabel }: RssFooterProps) {
             title: payload?.meta?.title || `Veille export - ${territoryText}`,
             description:
               payload?.meta?.description ||
-              `Flux dynamique relie a la carte (territoire: ${territoryText}).`,
+              `Flux dynamique relie a la carte (territoire: ${territoryText}${effectiveTopic ? `, focus: ${effectiveTopic}` : ""}).`,
             link: payload?.meta?.link || "/veille",
             lastBuildDate: payload?.meta?.lastBuildDate,
           });
@@ -247,7 +256,7 @@ export function RssFooter({ territory, territoryLabel }: RssFooterProps) {
       mounted = false;
       controller.abort();
     };
-  }, [effectiveTerritory, refreshTick, territoryLabel]);
+  }, [effectiveTerritory, effectiveTopic, refreshTick, territoryLabel]);
 
   const hasItems = items.length > 0;
   const lastBuild = safeDateTimeLabel(meta.lastBuildDate);
@@ -277,6 +286,7 @@ export function RssFooter({ territory, territoryLabel }: RssFooterProps) {
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Badge variant="secondary">Pays/zone: {selectedLabel}</Badge>
+          {effectiveTopic ? <Badge variant="secondary">Focus: {effectiveTopic}</Badge> : null}
           {pinnedLabels.map((label) => (
             <Badge key={`pinned-${label}`} variant="outline">
               {label}
