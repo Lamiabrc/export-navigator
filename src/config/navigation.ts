@@ -57,14 +57,9 @@ export const publicNav: PublicNavItem[] = [
   },
   {
     id: "services",
-    to: "/services",
-    tKey: "header.menu.services",
-    labels: { fr: "Produits", en: "Products" },
-  },
-  {
-    id: "pricing",
     to: "/pricing",
-    labels: { fr: "Tarifs", en: "Pricing" },
+    tKey: "header.menu.services",
+    labels: { fr: "Offres & tarifs", en: "Plans & pricing" },
   },
   {
     id: "about",

@@ -19,7 +19,6 @@ import { LanguageChooser } from "@/components/LanguageChooser";
 import { EnvMissingBanner } from "@/components/EnvMissingBanner";
 
 import Home from "@/pages/Home";
-import ServicesPage from "@/pages/Services";
 import AboutPage from "@/pages/About";
 import ShareDecision from "@/pages/ShareDecision";
 import Methodologie from "@/pages/Methodologie";
@@ -99,8 +98,8 @@ export default function App() {
                         <Route path="/verifier-facture" element={<PublicAppGate mode="invoice-check" />} />
                         <Route path="/tool" element={<Navigate to="/verifier-facture" replace />} />
 
-                        <Route path="/services" element={<ServicesPage />} />
-                        <Route path="/conseil-audit-export" element={<Navigate to="/services" replace />} />
+                        <Route path="/services" element={<Navigate to="/pricing" replace />} />
+                        <Route path="/conseil-audit-export" element={<Navigate to="/pricing" replace />} />
 
                         {/* ✅ EN/legacy marketing (Watch supprimée => redirect) */}
                         <Route path="/watch" element={<Navigate to="/veille" replace />} />
