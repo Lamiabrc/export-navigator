@@ -234,6 +234,14 @@ function normalizeIso2(value: string) {
   return String(value || "").trim().toUpperCase().slice(0, 2);
 }
 
+function formatCountry(iso2: string) {
+  const normalized = normalizeIso2(iso2);
+  if (!normalized) return "";
+  const found = COUNTRIES.find((country) => country.iso2 === normalized);
+  if (!found) return normalized;
+  return `${found.label_fr} (${normalized})`;
+}
+
 function mergeUnique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
@@ -751,6 +759,47 @@ export default function InvoiceCheck() {
     [pdfText, pastedText],
   );
 
+  const hasExpressCoreInput = React.useMemo(
+    () =>
+      Boolean(
+        express.goodsOrServices
+        && express.sellerCountry
+        && express.buyerCountry
+        && express.buyerIsTaxable,
+      ),
+    [express.buyerCountry, express.buyerIsTaxable, express.goodsOrServices, express.sellerCountry],
+  );
+
+  const detectedOverrides = React.useMemo(() => {
+    if (!detected) return [];
+    const overrides: string[] = [];
+
+    const detectedType = detected.goodsOrServices || "";
+    if (express.goodsOrServices && detectedType && express.goodsOrServices !== detectedType) {
+      overrides.push("type biens/services");
+    }
+
+    const detectedSeller = normalizeIso2(detected.sellerCountry || "");
+    const detectedBuyer = normalizeIso2(detected.buyerCountry || "");
+    const expressSeller = normalizeIso2(express.sellerCountry);
+    const expressBuyer = normalizeIso2(express.buyerCountry);
+
+    if (expressSeller && detectedSeller && expressSeller !== detectedSeller) {
+      overrides.push("pays vendeur");
+    }
+    if (expressBuyer && detectedBuyer && expressBuyer !== detectedBuyer) {
+      overrides.push("pays acheteur");
+    }
+
+    return overrides;
+  }, [detected, express.buyerCountry, express.goodsOrServices, express.sellerCountry]);
+
+  React.useEffect(() => {
+    if (detectedPending && hasExpressCoreInput) {
+      setDetectedPending(false);
+    }
+  }, [detectedPending, hasExpressCoreInput]);
+
   const handlePdfSelected = React.useCallback(
     async (file: File | null | undefined) => {
       if (!file) return;
@@ -850,10 +899,10 @@ export default function InvoiceCheck() {
 
     if (freshDetected) {
       setDetected(freshDetected);
-      if (!detectedPending) setDetectedPending(true);
+      if (!hasExpressCoreInput && !detectedPending) setDetectedPending(true);
     }
 
-    const resolvedCore = resolveCoreContext(express, detected, freshDetected, mergedSourceText);
+    const resolvedCore = resolveCoreContext(express, effectiveDetected, freshDetected, mergedSourceText);
     const built = buildAssessmentInput(express, pro, effectiveDetected, resolvedCore);
     const assessment = assessInvoice(built.context, built.invoice);
 
@@ -887,7 +936,7 @@ export default function InvoiceCheck() {
 
     setProductChecks([]);
     setCurrentStep(2);
-  }, [detected, detectedPending, express, mergedSourceText, pro]);
+  }, [detected, detectedPending, express, hasExpressCoreInput, mergedSourceText, pro]);
 
   const handleProductRefine = React.useCallback(() => {
     if (!result) return;
@@ -1137,10 +1186,34 @@ export default function InvoiceCheck() {
               <CardDescription>Champs proposes depuis PDF/texte. Confirmez ou corrigez.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
+              {detectedOverrides.length > 0 ? (
+                <Alert>
+                  <CircleHelp className="h-4 w-4" />
+                  <AlertTitle>Priorite aux champs du formulaire</AlertTitle>
+                  <AlertDescription>
+                    Les valeurs detectees restent indicatives. Vos saisies manuelles sont utilisees pour:{" "}
+                    {detectedOverrides.join(", ")}.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
               <div className="grid gap-2 text-sm md:grid-cols-2 lg:grid-cols-3">
                 {detected?.goodsOrServices ? <p>Type: {detected.goodsOrServices === "goods" ? "Biens" : "Services"}</p> : null}
-                {detected?.sellerCountry ? <p>Vendeur: {detected.sellerCountry}</p> : null}
-                {detected?.buyerCountry ? <p>Acheteur: {detected.buyerCountry}</p> : null}
+                {detected?.sellerCountry ? (
+                  <p>
+                    Vendeur detecte: {formatCountry(detected.sellerCountry)}
+                    {express.sellerCountry && normalizeIso2(express.sellerCountry) !== normalizeIso2(detected.sellerCountry) ? (
+                      <span className="text-muted-foreground"> (utilise: {formatCountry(express.sellerCountry)})</span>
+                    ) : null}
+                  </p>
+                ) : null}
+                {detected?.buyerCountry ? (
+                  <p>
+                    Acheteur detecte: {formatCountry(detected.buyerCountry)}
+                    {express.buyerCountry && normalizeIso2(express.buyerCountry) !== normalizeIso2(detected.buyerCountry) ? (
+                      <span className="text-muted-foreground"> (utilise: {formatCountry(express.buyerCountry)})</span>
+                    ) : null}
+                  </p>
+                ) : null}
                 {detected?.invoiceNumber ? <p>Facture: {detected.invoiceNumber}</p> : null}
                 {detected?.invoiceDate ? <p>Date: {detected.invoiceDate}</p> : null}
                 {detected?.currency ? <p>Devise: {detected.currency}</p> : null}
