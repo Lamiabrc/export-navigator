@@ -1,15 +1,15 @@
-﻿import * as React from "react";
-import { Bot, ExternalLink, Loader2, Send } from "lucide-react";
+import * as React from "react";
+import { AlertTriangle, Bot, ExternalLink, Loader2, Send } from "lucide-react";
 
 import { PublicLayout } from "@/components/layout/PublicLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ingestChatExchange } from "@/lib/chatIngest";
-import { buildGuidedFallback, buildResearchLinks, type GuidedFallback } from "@/lib/chatGuidance";
-import { detectCountryFromShortInput } from "@/lib/countryInput";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { buildGuidedFallback, buildResearchLinks, type GuidedFallback } from "@/lib/chatGuidance";
+import { ingestChatExchange } from "@/lib/chatIngest";
+import { detectCountryFromShortInput } from "@/lib/countryInput";
 
 type ChatDocument = {
   name: string;
@@ -28,6 +28,22 @@ type ChatDossier = {
   next_actions: string[];
 };
 
+type ChatCheck = {
+  id: string;
+  label: string;
+  status: "OK" | "A_CONFIRMER" | "MANQUANT" | "KO";
+  explanation: string;
+  what_to_fix: string;
+  example_mention?: string;
+  fieldPath?: string;
+  source_link?: string;
+};
+
+type ChatDecision = {
+  status: "GO" | "NO_GO" | "SOUS_CONDITIONS";
+  reason: string;
+};
+
 type ChatResponse = {
   ok?: boolean;
   error?: string;
@@ -41,6 +57,9 @@ type ChatResponse = {
   follow_up_questions?: string[];
   source_links?: Array<{ title: string; url: string }>;
   dossier?: ChatDossier;
+  checks?: ChatCheck[];
+  main_blocker?: ChatCheck | null;
+  decision?: ChatDecision;
 };
 
 type QuotaResponse = {
@@ -67,6 +86,9 @@ type ChatMessage = {
   links?: Array<{ title: string; url: string }>;
   followUpQuestions?: string[];
   blocks?: AssistantBlocks;
+  checks?: ChatCheck[];
+  mainBlocker?: ChatCheck | null;
+  decision?: ChatDecision;
 };
 
 type FollowUpAction = {
@@ -84,6 +106,43 @@ function isUncertainAnswer(answer: string) {
   if (txt.length < 40) return true;
   if (/(pas de reponse|indisponible|erreur|vide|reessaye|reessaie)/i.test(txt)) return true;
   return false;
+}
+
+function statusLabel(status: ChatCheck["status"]) {
+  switch (status) {
+    case "KO":
+      return "KO";
+    case "MANQUANT":
+      return "Manquant";
+    case "A_CONFIRMER":
+      return "A confirmer";
+    default:
+      return "OK";
+  }
+}
+
+function normalizePrompt(value: string) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function deriveMainBlocker(checks: ChatCheck[] | undefined) {
+  if (!checks?.length) return null;
+  const byPriority = [...checks].sort((a, b) => {
+    const rank = (status: ChatCheck["status"]) => {
+      if (status === "KO") return 4;
+      if (status === "MANQUANT") return 3;
+      if (status === "A_CONFIRMER") return 2;
+      return 1;
+    };
+    return rank(b.status) - rank(a.status);
+  });
+  return byPriority.find((check) => check.status === "KO") || byPriority.find((check) => check.status === "MANQUANT") || null;
 }
 
 function buildAssistantBlocks(dossier: ChatDossier | undefined): AssistantBlocks | undefined {
@@ -145,16 +204,6 @@ function buildAssistantBlocksFromGuided(guided: GuidedFallback): AssistantBlocks
   };
 }
 
-function normalizePrompt(value: string) {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function isLikelyCountryOnlyPrompt(question: string, detectedCountry: string | null) {
   if (!detectedCountry) return false;
 
@@ -180,7 +229,7 @@ function detectProductOrHsInPrompt(question: string) {
   if (/\b\d{6,10}\b/.test(normalized)) return true;
   if (/\b(exportateur|importateur)\s+(de|d)\s+[a-z0-9]/.test(normalized)) return true;
   if (/\b(produit|marchandise)\b/.test(normalized)) return true;
-  if (/\b(banane|cacao|cafe|textile|cosmetique|vin|fromage|chaussure|batterie|pharma)\b/.test(normalized)) return true;
+  if (/\b(banane|acier|ferraille|drone|logiciel|chiffrement|cacao|textile|pharma)\b/.test(normalized)) return true;
   return false;
 }
 
@@ -197,24 +246,24 @@ function withPriorityFollowUp(params: {
     return [countryQuestion, ...base.filter((q) => q !== countryQuestion)];
   }
   if (params.countryKnown && !params.productKnown) {
-    return [productQuestion, ...base.filter((q) => q !== productQuestion)];
+    return [...base.filter((q) => q !== productQuestion), productQuestion];
   }
   return base;
 }
 
 function followUpToAction(question: string): FollowUpAction {
   const normalized = normalizePrompt(question);
-  if (/\b(pays|destination|transit)\b/.test(normalized)) {
-    return { label: "Renseigner le pays", value: "Pays de destination: " };
+  if (/\b(pays|destination|transit|origin|origine)\b/.test(normalized)) {
+    return { label: "Renseigner le pays", value: "Pays destination: " };
   }
   if (/\b(produit|marchandise|usage|composition)\b/.test(normalized)) {
-    return { label: "Renseigner le produit", value: "Produit: " };
+    return { label: "Renseigner le produit", value: "Produit (nom + usage): " };
   }
   if (/\b(code hs|hs)\b/.test(normalized)) {
     return { label: "Renseigner le code HS", value: "Code HS (6 chiffres): " };
   }
   if (/\bincoterm\b/.test(normalized)) {
-    return { label: "Renseigner l'Incoterm", value: "Incoterm: " };
+    return { label: "Renseigner l'Incoterm", value: "Incoterm + lieu: " };
   }
   if (/\btransport\b/.test(normalized)) {
     return { label: "Renseigner le transport", value: "Transport: " };
@@ -222,7 +271,36 @@ function followUpToAction(question: string): FollowUpAction {
   if (/\bpayment|paiement|reglement\b/.test(normalized)) {
     return { label: "Renseigner le paiement", value: "Mode de paiement: " };
   }
-  return { label: "Repondre maintenant", value: "Reponse: " };
+  return { label: "Repondre", value: "Reponse: " };
+}
+
+function fieldPathToDraft(fieldPath?: string) {
+  switch (fieldPath) {
+    case "context.destination":
+      return "Pays destination (ISO2 ou nom): ";
+    case "context.origin":
+      return "Pays origine (ISO2 ou nom): ";
+    case "context.product":
+      return "Produit (nom commercial + composition/usage): ";
+    case "context.hs6":
+      return "Code HS6: ";
+    case "context.flow":
+      return "Flux: export ou import ? ";
+    case "context.incoterm":
+      return "Incoterm + lieu (ex: FCA Lyon): ";
+    case "context.buyerIsTaxable":
+      return "Acheteur assujetti TVA ? (oui/non): ";
+    case "context.goodsOrServices":
+      return "Operation sur biens ou services ? ";
+    default:
+      return "Correction: ";
+  }
+}
+
+function decisionBadgeClass(status?: ChatDecision["status"]) {
+  if (status === "NO_GO") return "bg-rose-100 text-rose-700 border-rose-200";
+  if (status === "SOUS_CONDITIONS") return "bg-amber-100 text-amber-700 border-amber-200";
+  return "bg-emerald-100 text-emerald-700 border-emerald-200";
 }
 
 export default function Copilote() {
@@ -230,7 +308,7 @@ export default function Copilote() {
     {
       id: uid(),
       role: "assistant",
-      content: "Bonjour. Donnez votre cas export/import en une phrase. Je reponds avec decision rapide, risques, documents et actions.",
+      content: "Bonjour. Donnez votre cas export/import en une phrase. Je reponds avec decision provisoire, checklist, risques et actions.",
     },
   ]);
 
@@ -282,6 +360,11 @@ export default function Copilote() {
         ? "indisponible"
         : `${Math.max(0, Number(remaining ?? 0))}/${quotaLimit}`;
 
+  const applyDraftAndFocus = React.useCallback((value: string) => {
+    setDraft(value);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+
   const send = React.useCallback(async (preset?: string) => {
     const question = (preset ?? draft).trim();
     if (!question || loading) return;
@@ -314,7 +397,7 @@ export default function Copilote() {
           return;
         }
       } catch {
-        // Endpoint quota non bloquant: on continue pour tenter /api/chat.
+        // quota endpoint is non-blocking for /api/chat
       }
 
       const detectedCountry = detectCountryFromShortInput(question);
@@ -323,7 +406,7 @@ export default function Copilote() {
       const productKnownFromPrompt = detectProductOrHsInPrompt(question);
 
       const questionForApi = detectedCountry && isLikelyCountryOnlyPrompt(question, detectedCountry)
-        ? `Destination: ${detectedCountry}. Je n'ai donne que le pays. Cadre le dossier export et demande ensuite produit + code HS + incoterm.`
+        ? `Destination: ${detectedCountry}. Je n'ai donne que le pays. Donne d'abord les regles generales puis demande le produit pour affiner.`
         : question;
 
       const { data: sessionData } = await supabase.auth.getSession();
@@ -341,8 +424,6 @@ export default function Copilote() {
           lang: "fr",
           overrides: {
             destination: resolvedDestination,
-            incoterm: "DAP",
-            transport: "road",
           },
         }),
       });
@@ -397,10 +478,12 @@ export default function Copilote() {
               .map((x) => ({ title: x.title, url: x.url }))
           : []),
         ...(uncertain ? buildResearchLinks(question).map((x) => ({ title: x.title, url: x.url })) : []),
-      ].slice(0, 6);
+      ].slice(0, 8);
 
       const answer = uncertain ? guided.answer : (answerRaw || guided.answer);
       const finalBlocks = uncertain ? (guidedBlocks || blocks) : blocks;
+      const responseChecks = Array.isArray(data?.checks) ? data.checks : [];
+      const mainBlocker = data?.main_blocker ?? deriveMainBlocker(responseChecks);
 
       const nextThreadId = data?.thread_id || data?.session_id;
       if (nextThreadId) setSessionId(nextThreadId);
@@ -416,6 +499,9 @@ export default function Copilote() {
         links,
         followUpQuestions: prioritizedFollowUpQuestions,
         blocks: finalBlocks,
+        checks: responseChecks,
+        mainBlocker,
+        decision: data?.decision,
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
@@ -433,6 +519,8 @@ export default function Copilote() {
           follow_up_questions_count: prioritizedFollowUpQuestions.length,
           destination_country: resolvedDestination,
           has_structured_blocks: Boolean(finalBlocks),
+          decision: data?.decision?.status || null,
+          main_blocker: mainBlocker?.id || null,
         },
       });
     } catch (err: any) {
@@ -483,7 +571,7 @@ export default function Copilote() {
               <CardTitle>Copilote IA export</CardTitle>
               <Badge variant="secondary">Gratuit</Badge>
             </div>
-            <p className="text-sm text-slate-600">Resume, checklist, risques, documents et actions sur une seule reponse.</p>
+            <p className="text-sm text-slate-600">Decision provisoire, checklist, risques, documents et actions en une reponse.</p>
             <p className="text-xs text-slate-500">Quota restant: {quotaLabel}</p>
           </CardHeader>
 
@@ -497,7 +585,53 @@ export default function Copilote() {
                     </div>
                   ) : null}
 
-                  <div className={`max-w-[86%] rounded-xl border px-3 py-2 text-sm ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-white"}`}>
+                  <div className={`max-w-[88%] rounded-xl border px-3 py-2 text-sm ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-white"}`}>
+                    {m.role === "assistant" && m.decision ? (
+                      <div className="mb-2 flex items-center gap-2 border-b border-border/70 pb-2">
+                        <Badge className={`border ${decisionBadgeClass(m.decision.status)}`}>{m.decision.status}</Badge>
+                        <span className="text-xs text-slate-600">{m.decision.reason}</span>
+                      </div>
+                    ) : null}
+
+                    {m.role === "assistant" && m.mainBlocker ? (
+                      <div className="mb-2 rounded-lg border border-rose-200 bg-rose-50 p-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1 text-xs font-semibold text-rose-700">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            Point bloquant principal
+                          </div>
+                          <Badge variant="outline" className="border-rose-200 text-rose-700">
+                            {statusLabel(m.mainBlocker.status)}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs font-medium text-slate-900">{m.mainBlocker.label}</p>
+                        <p className="mt-1 text-xs text-slate-700">{m.mainBlocker.explanation}</p>
+                        <p className="mt-1 text-xs text-slate-700">Action: {m.mainBlocker.what_to_fix}</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-[11px]"
+                            onClick={() => applyDraftAndFocus(fieldPathToDraft(m.mainBlocker?.fieldPath))}
+                          >
+                            Corriger
+                          </Button>
+                          {m.mainBlocker.source_link ? (
+                            <a
+                              href={m.mainBlocker.source_link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] text-slate-600 underline"
+                            >
+                              Source
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+
                     <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
 
                     {m.role === "assistant" && m.blocks ? (
@@ -513,7 +647,7 @@ export default function Copilote() {
 
                         {m.blocks.checklist.length ? (
                           <div className="rounded-lg border bg-muted/30 p-2">
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Checklist</div>
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Documents</div>
                             <ul className="mt-1 space-y-1 text-xs">
                               {m.blocks.checklist.map((item) => (
                                 <li key={`${m.id}-chk-${item.label}`}>{item.required ? "[x]" : "[ ]"} {item.label}</li>
@@ -561,22 +695,21 @@ export default function Copilote() {
 
                     {m.role === "assistant" && m.followUpQuestions?.length ? (
                       <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/70 pt-2">
-                        {m.followUpQuestions.map((q) => (
-                          <Button
-                            key={`${m.id}-${q}`}
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-7 rounded-full px-2 text-[11px]"
-                            onClick={() => {
-                              const action = followUpToAction(q);
-                              setDraft(action.value);
-                              window.setTimeout(() => inputRef.current?.focus(), 0);
-                            }}
-                          >
-                            {followUpToAction(q).label}
-                          </Button>
-                        ))}
+                        {m.followUpQuestions.map((q) => {
+                          const action = followUpToAction(q);
+                          return (
+                            <Button
+                              key={`${m.id}-${q}`}
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 rounded-full px-2 text-[11px]"
+                              onClick={() => applyDraftAndFocus(action.value)}
+                            >
+                              {action.label}
+                            </Button>
+                          );
+                        })}
                       </div>
                     ) : null}
                   </div>
@@ -621,4 +754,3 @@ export default function Copilote() {
     </PublicLayout>
   );
 }
-

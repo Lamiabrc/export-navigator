@@ -1,16 +1,28 @@
-﻿import crypto from "crypto";
+import crypto from "crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { z } from "zod";
 
 import { allowCors, json, readJson, supabaseAdmin } from "../src/server/supabaseAdmin.js";
-
-type Lang = "fr" | "en";
+import { classifyProduct } from "../src/lib/copilot/classifier.js";
+import { evaluateControls } from "../src/lib/copilot/controlsEngine.js";
+import { buildMissingQuestions, resolveEntities } from "../src/lib/copilot/entityResolver.js";
+import { retrievePolicyContext } from "../src/lib/copilot/policyRetriever.js";
+import type {
+  CheckStatus,
+  ClassificationResult,
+  CopilotCheck,
+  DecisionStatus,
+  Lang,
+  PolicyContext,
+  ResolvedContext,
+  SourceLink,
+} from "../src/lib/copilot/types.js";
 
 type ChatRequest = {
   message?: string;
   thread_id?: string | null;
   lang?: string | null;
-  overrides?: Partial<DetectedEntities> | null;
+  overrides?: Record<string, unknown> | null;
 };
 
 type DetectedEntities = {
@@ -24,42 +36,13 @@ type DetectedEntities = {
   contract_type: string | null;
 };
 
-const COUNTRY_ALIASES: Array<{ iso2: string; patterns: RegExp[] }> = [
-  { iso2: "FR", patterns: [/\bfrance\b/i] },
-  { iso2: "DE", patterns: [/\ballemagne\b/i, /\bgermany\b/i] },
-  { iso2: "ES", patterns: [/\bespagne\b/i, /\bspain\b/i] },
-  { iso2: "IT", patterns: [/\bitalie\b/i, /\bitaly\b/i] },
-  { iso2: "PT", patterns: [/\bportugal\b/i] },
-  { iso2: "BE", patterns: [/\bbelgique\b/i, /\bbelgium\b/i] },
-  { iso2: "NL", patterns: [/\bpays[\s-]?bas\b/i, /\bnetherlands\b/i, /\bhollande\b/i] },
-  { iso2: "GB", patterns: [/\broyaume[\s-]?uni\b/i, /\buk\b/i, /\bunited kingdom\b/i] },
-  { iso2: "US", patterns: [/\busa\b/i, /\betats?[\s-]?unis\b/i, /\bunited states\b/i] },
-  { iso2: "CA", patterns: [/\bcanada\b/i] },
-  { iso2: "CN", patterns: [/\bchine\b/i, /\bchina\b/i] },
-  { iso2: "JP", patterns: [/\bjapon\b/i, /\bjapan\b/i] },
-  { iso2: "MA", patterns: [/\bmaroc\b/i, /\bmorocco\b/i] },
-  { iso2: "TR", patterns: [/\bturquie\b/i, /\bturkey\b/i] },
-  { iso2: "CH", patterns: [/\bsuisse\b/i, /\bswitzerland\b/i] },
-  { iso2: "BR", patterns: [/\bbresil\b/i, /\bbrazil\b/i] },
-  { iso2: "MX", patterns: [/\bmexique\b/i, /\bmexico\b/i] },
-  { iso2: "IN", patterns: [/\binde\b/i, /\bindia\b/i] },
-  { iso2: "AE", patterns: [/\bemirats\b/i, /\buae\b/i, /\bunited arab emirates\b/i] },
-];
-
-const INCOTERMS = ["EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF"] as const;
 const PAYMENT_PATTERNS: Array<{ code: string; pattern: RegExp }> = [
   { code: "LC", pattern: /\b(lc|l\/c|letter of credit|credit documentaire|credoc)\b/i },
   { code: "CAD", pattern: /\b(cad|documents against payment|remise documentaire)\b/i },
   { code: "OA", pattern: /\b(oa|open account|compte ouvert)\b/i },
   { code: "TT", pattern: /\b(tt|t\/t|wire transfer|virement)\b/i },
 ];
-const TRANSPORT_PATTERNS: Array<{ code: string; pattern: RegExp }> = [
-  { code: "air", pattern: /\b(air|airfreight|aerien|aerienne)\b/i },
-  { code: "sea", pattern: /\b(sea|ocean|maritime|mer)\b/i },
-  { code: "road", pattern: /\b(road|truck|route|camion)\b/i },
-  { code: "rail", pattern: /\b(rail|train|ferroviaire)\b/i },
-  { code: "courier", pattern: /\b(courier|express|parcel|colis)\b/i },
-];
+
 const CONTRACT_PATTERNS: Array<{ code: string; pattern: RegExp }> = [
   { code: "sales", pattern: /\b(vente internationale|contrat de vente|sales contract|sale of goods)\b/i },
   { code: "distribution", pattern: /\b(distribution|distributor)\b/i },
@@ -68,19 +51,25 @@ const CONTRACT_PATTERNS: Array<{ code: string; pattern: RegExp }> = [
   { code: "licensing", pattern: /\b(licence|license|licensing)\b/i },
   { code: "oem", pattern: /\b(oem|sous[- ]traitance|subcontract|manufacturing agreement)\b/i },
 ];
-const CURRENCY_PATTERNS: Array<{ code: string; pattern: RegExp }> = [
-  { code: "EUR", pattern: /\b(eur|euro)\b/i },
-  { code: "USD", pattern: /\b(usd|\$|dollar)\b/i },
-  { code: "GBP", pattern: /\b(gbp|pound)\b/i },
-  { code: "CHF", pattern: /\b(chf|franc suisse)\b/i },
-  { code: "CNY", pattern: /\b(cny|rmb|yuan)\b/i },
-  { code: "JPY", pattern: /\b(jpy|yen)\b/i },
-  { code: "CAD", pattern: /\b(cad|canadian dollar)\b/i },
-];
+
+const CheckSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  status: z.enum(["OK", "A_CONFIRMER", "MANQUANT", "KO"]),
+  explanation: z.string(),
+  what_to_fix: z.string(),
+  example_mention: z.string().optional(),
+  fieldPath: z.string().optional(),
+  source_link: z.string().optional(),
+});
 
 const ChatResponseSchema = z.object({
   ok: z.literal(true),
   lang: z.enum(["fr", "en"]),
+  decision: z.object({
+    status: z.enum(["GO", "NO_GO", "SOUS_CONDITIONS"]),
+    reason: z.string(),
+  }),
   entities: z.object({
     origin: z.string().nullable(),
     destination: z.string().nullable(),
@@ -110,47 +99,35 @@ const ChatResponseSchema = z.object({
     }),
     next_actions: z.array(z.string()),
   }),
+  checks: z.array(CheckSchema),
+  main_blocker: CheckSchema.nullable(),
   answer_markdown: z.string(),
   source_links: z.array(z.object({ title: z.string(), url: z.string() })),
   follow_up_questions: z.array(z.string()),
 });
 
-function asObject(value: unknown): Record<string, any> {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, any>) : {};
+const CHECK_SEVERITY: Record<CheckStatus, number> = {
+  KO: 4,
+  MANQUANT: 3,
+  A_CONFIRMER: 2,
+  OK: 1,
+};
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 function normalizeLang(input: unknown): Lang {
   const value = String(input || "").trim().toLowerCase();
-  if (value === "en") return "en";
-  return "fr";
+  return value === "en" ? "en" : "fr";
 }
 
 function inferLangFromMessage(message: string): Lang {
-  if (/\b(the|what|which|export|import|invoice|incoterm|payment)\b/i.test(message)) return "en";
-  return "fr";
+  return /\b(the|what|which|export|import|invoice|incoterm|payment|screening)\b/i.test(message) ? "en" : "fr";
 }
 
 function cleanMessage(message: unknown) {
   return String(message || "").trim().slice(0, 8000);
-}
-
-function normalizeIso2(value: unknown) {
-  const code = String(value || "").trim().toUpperCase();
-  return /^[A-Z]{2}$/.test(code) ? code : null;
-}
-
-function normalizeHs6(value: unknown) {
-  const digits = String(value || "").replace(/[^0-9]/g, "");
-  if (digits.length < 6) return null;
-  return digits.slice(0, 6);
-}
-
-function detectIncoterm(message: string) {
-  const up = message.toUpperCase();
-  for (const code of INCOTERMS) {
-    if (new RegExp(`\\b${code}\\b`, "i").test(up)) return code;
-  }
-  return null;
 }
 
 function detectByPatterns(message: string, patterns: Array<{ code: string; pattern: RegExp }>) {
@@ -160,199 +137,327 @@ function detectByPatterns(message: string, patterns: Array<{ code: string; patte
   return null;
 }
 
-function detectCountries(message: string) {
-  const detected: string[] = [];
-  for (const entry of COUNTRY_ALIASES) {
-    if (entry.patterns.some((pattern) => pattern.test(message))) {
-      detected.push(entry.iso2);
-    }
-  }
-  return Array.from(new Set(detected));
-}
-
-function isValidUrl(url: string | null | undefined) {
-  const value = String(url || "").trim();
-  return /^https?:\/\//i.test(value);
-}
-
-function defaultEntities(): DetectedEntities {
+function toEntities(context: ResolvedContext, message: string): DetectedEntities {
   return {
-    origin: null,
-    destination: null,
-    hs6: null,
-    incoterm: null,
-    payment: null,
-    transport: null,
-    currency: null,
-    contract_type: null,
+    origin: context.origin,
+    destination: context.destination,
+    hs6: context.hs6,
+    incoterm: context.incoterm,
+    payment: detectByPatterns(message, PAYMENT_PATTERNS),
+    transport: context.transport,
+    currency: context.currency,
+    contract_type: detectByPatterns(message, CONTRACT_PATTERNS),
   };
 }
 
-function mergeEntities(base: DetectedEntities, updates: Partial<DetectedEntities>): DetectedEntities {
-  return {
-    origin: updates.origin ?? base.origin ?? null,
-    destination: updates.destination ?? base.destination ?? null,
-    hs6: updates.hs6 ?? base.hs6 ?? null,
-    incoterm: updates.incoterm ?? base.incoterm ?? null,
-    payment: updates.payment ?? base.payment ?? null,
-    transport: updates.transport ?? base.transport ?? null,
-    currency: updates.currency ?? base.currency ?? null,
-    contract_type: updates.contract_type ?? base.contract_type ?? null,
-  };
-}
-
-function defaultQuestionBySlot(lang: Lang, slot: keyof DetectedEntities) {
-  if (lang === "en") {
-    switch (slot) {
-      case "destination":
-        return "What is your destination country (ISO2 or country name)?";
-      case "hs6":
-        return "What is the product or HS code (6 digits)?";
-      case "incoterm":
-        return "Which Incoterm do you target (EXW, FCA, CIF, DDP...)?";
-      case "payment":
-        return "Which payment method do you plan to use (LC, CAD, OA, TT)?";
-      case "transport":
-        return "Which transport mode do you plan to use (air, sea, road, rail, courier)?";
-      case "origin":
-        return "What is your origin country?";
-      case "currency":
-        return "What is your invoicing currency?";
-      case "contract_type":
-        return "Which contract type do you need (sales, distribution, agency, franchise, licensing, OEM)?";
-      default:
-        return "What is the missing information?";
+function mergeChecks(checks: CopilotCheck[]) {
+  const merged = new Map<string, CopilotCheck>();
+  for (const check of checks) {
+    const previous = merged.get(check.id);
+    if (!previous || CHECK_SEVERITY[check.status] > CHECK_SEVERITY[previous.status]) {
+      merged.set(check.id, check);
     }
   }
-
-  switch (slot) {
-    case "destination":
-      return "Quel est le pays de destination (code ISO2 ou nom du pays) ?";
-    case "hs6":
-      return "Quel est le produit ou le code HS (6 chiffres) ?";
-    case "incoterm":
-      return "Quel Incoterm ciblez-vous (EXW, FCA, CIF, DDP...) ?";
-    case "payment":
-      return "Quel mode de paiement prevoyez-vous (LC, CAD, OA, TT) ?";
-    case "transport":
-      return "Quel mode de transport prevoyez-vous (air, sea, road, rail, courier) ?";
-    case "origin":
-      return "Quel est le pays d'origine ?";
-    case "currency":
-      return "Quelle est la devise de facturation ?";
-    case "contract_type":
-      return "Quel type de contrat visez-vous (vente, distribution, agence, franchise, licence, OEM) ?";
-    default:
-      return "Quelle information manque ?";
-  }
+  return Array.from(merged.values());
 }
 
-function missingSlots(entities: DetectedEntities) {
-  const missing: Array<keyof DetectedEntities> = [];
-  if (!entities.destination) missing.push("destination");
-  if (!entities.hs6) missing.push("hs6");
-  if (!entities.incoterm) missing.push("incoterm");
-  if (!entities.payment) missing.push("payment");
-  if (!entities.transport) missing.push("transport");
-  if (!entities.origin) missing.push("origin");
-  if (!entities.currency) missing.push("currency");
-  if (!entities.contract_type) missing.push("contract_type");
-  return missing;
-}
-
-function buildSummaryLines(entities: DetectedEntities) {
-  return [
-    `Destination: ${entities.destination || "-"}`,
-    `HS6: ${entities.hs6 || "-"}`,
-    `Incoterm: ${entities.incoterm || "-"}`,
+function checkPriority(id: string) {
+  const order = [
+    "sanctions_country",
+    "sanctions_parties",
+    "flow_scope",
+    "destination_presence",
+    "origin_presence",
+    "goods_or_services",
+    "hs_classification",
+    "dual_use_signal",
+    "incoterm_presence",
   ];
+  const index = order.indexOf(id);
+  return index === -1 ? order.length + 1 : index;
 }
 
-function normalizeDossier(dossierRaw: Record<string, any>, entities: DetectedEntities, lang: Lang) {
-  const docsRaw = Array.isArray(dossierRaw.documents) ? dossierRaw.documents : [];
-  const restrictionsRaw = Array.isArray(dossierRaw.restrictions) ? dossierRaw.restrictions : [];
-  const contractClausesRaw = Array.isArray(dossierRaw?.contracts?.clauses) ? dossierRaw.contracts.clauses : [];
-  const nextActionsRaw = Array.isArray(dossierRaw.next_actions) ? dossierRaw.next_actions : [];
+function sortChecks(checks: CopilotCheck[]) {
+  return [...checks].sort((a, b) => {
+    const deltaSeverity = CHECK_SEVERITY[b.status] - CHECK_SEVERITY[a.status];
+    if (deltaSeverity !== 0) return deltaSeverity;
+    return checkPriority(a.id) - checkPriority(b.id);
+  });
+}
 
-  const documents = docsRaw
-    .map((item: any) => ({
-      name: String(item?.name || item?.code || "Document").trim(),
-      required: item?.required !== false,
-      source_url: isValidUrl(item?.source_url || item?.source || item?.legal_ref)
-        ? String(item.source_url || item.source || item.legal_ref)
-        : null,
-    }))
-    .filter((item: { name: string }) => Boolean(item.name));
+function findMainBlocker(checks: CopilotCheck[]) {
+  const sorted = sortChecks(checks);
+  return sorted.find((check) => check.status === "KO") || sorted.find((check) => check.status === "MANQUANT") || null;
+}
 
-  const restrictions = restrictionsRaw
-    .map((item: any) => String(item?.summary || item?.notes || item?.legal_ref || "").trim())
-    .filter(Boolean)
+function buildBaseChecks(context: ResolvedContext, classification: ClassificationResult, lang: Lang): CopilotCheck[] {
+  const checks: CopilotCheck[] = [];
+
+  checks.push({
+    id: "flow_scope",
+    label: lang === "en" ? "Operation flow" : "Flux operation",
+    status: context.flow === "unknown" ? "MANQUANT" : "OK",
+    explanation:
+      context.flow === "unknown"
+        ? lang === "en"
+          ? "Import/export direction is missing."
+          : "Le sens import/export est manquant."
+        : lang === "en"
+          ? `Detected flow: ${context.flow}.`
+          : `Flux detecte: ${context.flow}.`,
+    what_to_fix:
+      lang === "en"
+        ? "Specify whether this is import or export."
+        : "Preciser s'il s'agit d'un import ou d'un export.",
+    fieldPath: "context.flow",
+  });
+
+  checks.push({
+    id: "origin_presence",
+    label: lang === "en" ? "Origin country" : "Pays d'origine",
+    status: context.origin ? "OK" : "MANQUANT",
+    explanation:
+      context.origin
+        ? lang === "en"
+          ? `Origin detected: ${context.origin}.`
+          : `Origine detectee: ${context.origin}.`
+        : lang === "en"
+          ? "Origin country missing."
+          : "Pays d'origine manquant.",
+    what_to_fix:
+      lang === "en"
+        ? "Provide origin country (ISO2 or full name)."
+        : "Renseigner le pays d'origine (ISO2 ou nom complet).",
+    fieldPath: "context.origin",
+  });
+
+  checks.push({
+    id: "destination_presence",
+    label: lang === "en" ? "Destination country" : "Pays de destination",
+    status: context.destination ? "OK" : "MANQUANT",
+    explanation:
+      context.destination
+        ? lang === "en"
+          ? `Destination detected: ${context.destination}.`
+          : `Destination detectee: ${context.destination}.`
+        : lang === "en"
+          ? "Destination country missing."
+          : "Pays de destination manquant.",
+    what_to_fix:
+      lang === "en"
+        ? "Provide destination country (ISO2 or full name)."
+        : "Renseigner le pays de destination (ISO2 ou nom complet).",
+    fieldPath: "context.destination",
+  });
+
+  checks.push({
+    id: "goods_or_services",
+    label: lang === "en" ? "Goods or services" : "Biens ou services",
+    status: context.goodsOrServices === "unknown" ? "MANQUANT" : "OK",
+    explanation:
+      context.goodsOrServices === "unknown"
+        ? lang === "en"
+          ? "Goods/services nature missing."
+          : "Nature biens/services manquante."
+        : lang === "en"
+          ? `Detected: ${context.goodsOrServices}.`
+          : `Detecte: ${context.goodsOrServices}.`,
+    what_to_fix:
+      lang === "en"
+        ? "Specify goods or services."
+        : "Preciser si la transaction porte sur des biens ou des services.",
+    fieldPath: "context.goodsOrServices",
+  });
+
+  checks.push({
+    id: "buyer_taxable",
+    label: lang === "en" ? "Buyer VAT status" : "Statut TVA acheteur",
+    status: context.buyerIsTaxable === null ? "A_CONFIRMER" : "OK",
+    explanation:
+      context.buyerIsTaxable === null
+        ? lang === "en"
+          ? "Buyer taxable status not confirmed."
+          : "Le statut assujetti TVA de l'acheteur n'est pas confirme."
+        : context.buyerIsTaxable
+          ? lang === "en"
+            ? "Buyer declared as taxable."
+            : "Acheteur declare assujetti."
+          : lang === "en"
+            ? "Buyer declared as non-taxable."
+            : "Acheteur declare non assujetti.",
+    what_to_fix:
+      lang === "en"
+        ? "Confirm taxable status (B2B/B2C impact)."
+        : "Confirmer le statut assujetti (impact TVA B2B/B2C).",
+    fieldPath: "context.buyerIsTaxable",
+  });
+
+  checks.push({
+    id: "product_presence",
+    label: lang === "en" ? "Product description" : "Description produit",
+    status: context.product || context.hs6 ? "OK" : "MANQUANT",
+    explanation:
+      context.product || context.hs6
+        ? lang === "en"
+          ? "Product or HS information available."
+          : "Produit ou HS disponible."
+        : lang === "en"
+          ? "Product description missing."
+          : "Description produit manquante.",
+    what_to_fix:
+      lang === "en"
+        ? "Add product commercial name and use; HS if known."
+        : "Ajouter nom commercial + usage du produit; HS si connu.",
+    fieldPath: "context.product",
+  });
+
+  if (classification.requiresRtcBti) {
+    checks.push({
+      id: "rtc_bti_recommendation",
+      label: "RTC/BTI",
+      status: "A_CONFIRMER",
+      explanation:
+        lang === "en"
+          ? "HS confidence is low; binding tariff information is recommended."
+          : "Confiance HS limitee; RTC/BTI recommande.",
+      what_to_fix:
+        lang === "en"
+          ? "Prepare technical specs and request RTC/BTI when tariff exposure is material."
+          : "Preparer la fiche technique et demander un RTC/BTI si enjeu tarifaire eleve.",
+      fieldPath: "context.product",
+      source_link: "https://trade.ec.europa.eu/access-to-markets/en/home",
+    });
+  }
+
+  return checks;
+}
+
+function dedupeSources(links: SourceLink[]) {
+  const map = new Map<string, SourceLink>();
+  for (const link of links) {
+    if (!/^https?:\/\//i.test(link.url)) continue;
+    map.set(link.url, link);
+  }
+  return Array.from(map.values()).slice(0, 12);
+}
+
+function decisionFromChecks(params: { checks: CopilotCheck[]; hardStop: boolean; lang: Lang }): { status: DecisionStatus; reason: string } {
+  const hasKo = params.checks.some((check) => check.status === "KO");
+  const hasMissing = params.checks.some((check) => check.status === "MANQUANT");
+  const hasConfirm = params.checks.some((check) => check.status === "A_CONFIRMER");
+
+  if (params.hardStop || hasKo) {
+    const blocker = findMainBlocker(params.checks);
+    return {
+      status: "NO_GO",
+      reason:
+        blocker?.explanation ||
+        (params.lang === "en"
+          ? "A blocking compliance risk has been identified."
+          : "Un risque de conformite bloquant a ete identifie."),
+    };
+  }
+
+  if (hasMissing || hasConfirm) {
+    const blocker = findMainBlocker(params.checks);
+    return {
+      status: "SOUS_CONDITIONS",
+      reason:
+        blocker?.explanation ||
+        (params.lang === "en"
+          ? "Operation can proceed only after completing critical checks."
+          : "Operation possible sous conditions, apres completion des verifications critiques."),
+    };
+  }
+
+  return {
+    status: "GO",
+    reason:
+      params.lang === "en"
+        ? "No blocking signal detected with current data."
+        : "Aucun blocage majeur detecte avec les donnees disponibles.",
+  };
+}
+
+function buildDocuments(context: ResolvedContext, policy: PolicyContext) {
+  const docs = new Map<string, { name: string; required: boolean; source_url: string | null }>();
+
+  const add = (name: string, required: boolean, sourceUrl: string | null) => {
+    const key = name.toLowerCase();
+    if (!docs.has(key)) docs.set(key, { name, required, source_url: sourceUrl });
+  };
+
+  if (context.flow === "export") {
+    add("Facture commerciale", true, "https://www.douane.gouv.fr");
+    add("Packing list", true, "https://www.douane.gouv.fr");
+    add("Declaration export", true, "https://www.douane.gouv.fr/service-en-ligne/rita-encyclopedie-tarifaire");
+  }
+
+  if (context.flow === "import") {
+    add("Facture fournisseur", true, "https://www.douane.gouv.fr");
+    add("Declaration en douane import", true, "https://www.douane.gouv.fr/service-en-ligne/rita-encyclopedie-tarifaire");
+    add("Justificatif origine", true, "https://trade.ec.europa.eu/access-to-markets/en/home");
+  }
+
+  for (const rule of [...policy.hsRules, ...policy.countryRules]) {
+    for (const doc of rule.docs) {
+      add(doc.name, doc.required, doc.source_url || null);
+    }
+  }
+
+  return Array.from(docs.values()).slice(0, 10);
+}
+
+function buildDossier(params: {
+  lang: Lang;
+  context: ResolvedContext;
+  decision: { status: DecisionStatus; reason: string };
+  checks: CopilotCheck[];
+  classification: ClassificationResult;
+  policy: PolicyContext;
+  controls: ReturnType<typeof evaluateControls>;
+  missingQuestions: string[];
+}) {
+  const summaryLines = [
+    `Decision: ${params.decision.status} - ${params.decision.reason}`,
+    `Flux: ${params.context.flow} | Origine: ${params.context.origin || "?"} -> Destination: ${params.context.destination || "?"}`,
+    `HS: ${params.context.hs6 || params.classification.primary?.hs6 || "a confirmer"} | Produit: ${params.context.product || "a preciser"}`,
+  ];
+
+  const restrictions = sortChecks(params.checks)
+    .filter((check) => check.status === "KO" || check.status === "A_CONFIRMER")
+    .map((check) => `${check.label}: ${check.explanation}`)
     .slice(0, 8);
 
-  const sanctionsLists = asObject(dossierRaw.sanctions).lists;
-  const sanctionsEntities = asObject(dossierRaw.sanctions).entities_hint;
-  const sanctions = [
-    ...(Array.isArray(sanctionsLists)
-      ? sanctionsLists
-          .map((item: any) => String(item?.list_name || item?.authority || "").trim())
-          .filter(Boolean)
-      : []),
-    ...(Array.isArray(sanctionsEntities)
-      ? sanctionsEntities
-          .map((item: any) => String(item?.name || "").trim())
-          .filter(Boolean)
-      : []),
-  ].slice(0, 8);
-
-  const taxAndCustoms = asObject(dossierRaw.tax_and_customs);
-  const vat = asObject(taxAndCustoms.vat);
-  const duties = Array.isArray(taxAndCustoms.duties_concept) ? taxAndCustoms.duties_concept : [];
-  const procedures = Array.isArray(taxAndCustoms.procedures) ? taxAndCustoms.procedures : [];
-
-  const taxes = [
-    vat.standard_rate != null
-      ? lang === "en"
-        ? `Standard VAT rate: ${vat.standard_rate}`
-        : `Taux de TVA standard: ${vat.standard_rate}`
-      : null,
-    ...duties
-      .map((item: any) => String(item?.name || item?.code || "").trim())
-      .filter(Boolean)
-      .slice(0, 4),
-    ...procedures
-      .map((item: any) => String(item?.name || item?.code || "").trim())
-      .filter(Boolean)
-      .slice(0, 4),
-  ].filter(Boolean) as string[];
+  const taxes = [...params.policy.hsRules, ...params.policy.countryRules]
+    .filter((rule) => /tax|tva|vat|duty|tarif|douane/i.test(rule.topic + " " + rule.rule_text))
+    .map((rule) => rule.rule_text)
+    .slice(0, 6);
 
   const logistics = [
-    entities.incoterm ? `Incoterm: ${entities.incoterm}` : null,
-    entities.transport ? `Transport: ${entities.transport}` : null,
-    entities.payment ? `Payment: ${entities.payment}` : null,
-    entities.currency ? `Currency: ${entities.currency}` : null,
-  ].filter(Boolean) as string[];
+    params.context.incoterm ? `Incoterm: ${params.context.incoterm}` : "Incoterm a confirmer",
+    params.context.transport ? `Transport: ${params.context.transport}` : "Transport a confirmer",
+    params.context.currency ? `Devise: ${params.context.currency}` : "Devise a confirmer",
+  ];
 
-  const contractClauses = contractClausesRaw
-    .map((item: any) => String(item?.title || item?.code || "").trim())
-    .filter(Boolean)
-    .slice(0, 8);
+  const contractClauses = [
+    "Clause de conformite sanctions/export-control",
+    "Clause Incoterm 2020 + transfert des risques",
+    "Clause paiement securise et preuve documentaire",
+  ];
 
-  const nextActions = nextActionsRaw.map((item: any) => String(item || "").trim()).filter(Boolean).slice(0, 8);
-  if (!nextActions.length) {
-    nextActions.push(
-      lang === "en"
-        ? "Validate assumptions with legal/tax advisor before execution."
-        : "Valider les hypotheses avec un conseil juridique/fiscal avant execution."
-    );
-  }
-
-  const summary = buildSummaryLines(entities).join("\n");
+  const nextActions = Array.from(
+    new Set([
+      ...params.controls.actions,
+      ...(params.missingQuestions[0] ? [params.missingQuestions[0]] : []),
+    ])
+  ).slice(0, 6);
 
   return {
-    summary,
-    documents,
+    summary: summaryLines.join("\n"),
+    documents: buildDocuments(params.context, params.policy),
     restrictions,
-    sanctions,
+    sanctions: params.controls.sanctions.slice(0, 8),
     taxes,
     logistics,
     contract: { clauses: contractClauses },
@@ -360,72 +465,64 @@ function normalizeDossier(dossierRaw: Record<string, any>, entities: DetectedEnt
   };
 }
 
-function buildSourceLinks(dossier: ReturnType<typeof normalizeDossier>) {
-  const links = new Map<string, { title: string; url: string }>();
-  for (const doc of dossier.documents) {
-    if (doc.source_url && isValidUrl(doc.source_url)) {
-      links.set(doc.source_url, { title: doc.name, url: doc.source_url });
-    }
-  }
-  return Array.from(links.values()).slice(0, 8);
+function checklistLineForCheck(status: CheckStatus, label: string) {
+  const marker = status === "OK" ? "[OK]" : status === "A_CONFIRMER" ? "[A confirmer]" : status === "MANQUANT" ? "[Manquant]" : "[KO]";
+  return `- ${marker} ${label}`;
 }
 
 function buildAnswerMarkdown(params: {
   lang: Lang;
-  dossier: ReturnType<typeof normalizeDossier>;
+  decision: { status: DecisionStatus; reason: string };
+  checks: CopilotCheck[];
+  dossier: ReturnType<typeof buildDossier>;
   missingQuestions: string[];
-  sourceLinks: Array<{ title: string; url: string }>;
+  sourceLinks: SourceLink[];
 }) {
-  const { lang, dossier, missingQuestions, sourceLinks } = params;
-  const summaryLines = dossier.summary.split("\n").filter(Boolean).slice(0, 3);
+  const sorted = sortChecks(params.checks);
+  const checklist = sorted.slice(0, 10).map((check) => checklistLineForCheck(check.status, check.label));
 
-  const checklist = dossier.documents.length
-    ? dossier.documents.map((item) => `- ${item.required ? "[x]" : "[ ]"} ${item.name}`)
-    : [lang === "en" ? "- [ ] No specific document matched yet." : "- [ ] Aucun document specifique detecte pour le moment."];
+  const risks = sorted
+    .filter((check) => check.status === "KO" || check.status === "A_CONFIRMER")
+    .map((check) => `- ${check.explanation}`)
+    .slice(0, 3);
 
-  const risks = dossier.restrictions.length
-    ? dossier.restrictions.map((item) => `- ${item}`)
-    : [lang === "en" ? "- No explicit restriction detected with current inputs." : "- Aucune restriction explicite detectee avec les informations actuelles."];
+  const actions = params.dossier.next_actions.map((item) => `- ${item}`).slice(0, 3);
 
-  const docs = dossier.documents.length
-    ? dossier.documents.map((item) => `- ${item.name}${item.source_url ? ` (${item.source_url})` : ""}`)
-    : [lang === "en" ? "- Document list will be refined after missing fields are filled." : "- La liste documentaire sera precisee apres completion des champs manquants."];
+  const priorityQuestion = params.missingQuestions[0]
+    || (params.lang === "en"
+      ? "What is the destination country?"
+      : "Quel est le pays de destination ?");
 
-  const actions = dossier.next_actions.map((item) => `- ${item}`);
-  const links = sourceLinks.length
-    ? sourceLinks.map((item) => `- [${item.title}](${item.url})`)
-    : [lang === "en" ? "- No official link available yet." : "- Aucun lien officiel disponible pour le moment."];
+  const productQuestion = params.lang === "en"
+    ? "To refine, provide product details (commercial name + composition/use) and HS if known."
+    : "Pour affiner: indiquez le produit (nom commercial + composition/usage) et le HS si connu.";
 
-  const questionsBlock = missingQuestions.length
-    ? `\n## ${lang === "en" ? "Missing questions" : "Questions manquantes"}\n${missingQuestions
-        .slice(0, 3)
-        .map((question) => `- ${question}`)
-        .join("\n")}\n`
-    : "";
+  const links = params.sourceLinks.length
+    ? params.sourceLinks.map((link) => `- [${link.title}](${link.url})`)
+    : [params.lang === "en" ? "- No official source link available yet." : "- Aucun lien officiel disponible pour le moment."];
 
   return [
-    `## ${lang === "en" ? "Summary" : "Resume"}`,
-    ...summaryLines.map((line) => `- ${line}`),
+    `## ${params.lang === "en" ? "Provisional decision" : "Decision provisoire"}: ${params.decision.status}`,
+    `- ${params.decision.reason}`,
     "",
-    `## ${lang === "en" ? "Checklist" : "Checklist"}`,
+    `## ${params.lang === "en" ? "Checklist" : "Checklist"}`,
     ...checklist,
     "",
-    `## ${lang === "en" ? "Risks" : "Risques"}`,
-    ...risks,
+    `## ${params.lang === "en" ? "Risks (max 3)" : "Risques (max 3)"}`,
+    ...(risks.length ? risks : [params.lang === "en" ? "- No major risk flagged with current data." : "- Aucun risque majeur remonte avec les donnees actuelles."]),
     "",
-    `## ${lang === "en" ? "Documents" : "Documents"}`,
-    ...docs,
+    `## ${params.lang === "en" ? "Actions (max 3)" : "Actions (max 3)"}`,
+    ...(actions.length ? actions : [params.lang === "en" ? "- Complete missing fields to refine." : "- Completer les informations manquantes pour affiner."]),
     "",
-    `## ${lang === "en" ? "Next actions" : "Actions"}`,
-    ...actions,
+    `## ${params.lang === "en" ? "Priority question" : "Question prioritaire"}`,
+    `- ${priorityQuestion}`,
     "",
-    `## ${lang === "en" ? "Sources" : "Liens"}`,
+    `## ${params.lang === "en" ? "Product question for refinement" : "Question produit pour affiner"}`,
+    `- ${productQuestion}`,
+    "",
+    `## ${params.lang === "en" ? "Official sources" : "Sources officielles"}`,
     ...links,
-    questionsBlock,
-  ]
-    .flat()
-    .join("\n")
-    .trim();
+  ].join("\n");
 }
 
 function getBearerToken(req: VercelRequest) {
@@ -471,7 +568,7 @@ async function persistExchange(params: {
   message: string;
   answer: string;
   entities: DetectedEntities;
-  dossier: ReturnType<typeof normalizeDossier>;
+  dossier: ReturnType<typeof buildDossier>;
 }) {
   if (!params.userId || !params.threadId) return;
 
@@ -519,106 +616,85 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
     const threadId = await ensureThreadId(userId, body?.thread_id || null, message);
 
     const admin = supabaseAdmin();
+    const resolver = resolveEntities({
+      message,
+      overrides: asObject(body?.overrides),
+      lang: preferredLang,
+    });
 
-    let detectRpc: Record<string, any> = {};
-    try {
-      const { data } = await admin.rpc("rpc_detect_entities", {
-        q: message,
-        ui_lang: preferredLang,
-      });
-      detectRpc = asObject(data);
-    } catch {
-      detectRpc = {};
-    }
+    const phaseOnePolicy = await retrievePolicyContext({ admin, context: resolver.context });
 
-    const rpcCountries = Array.isArray(detectRpc.countries)
-      ? detectRpc.countries
-          .map((item: any) => normalizeIso2(item?.iso2))
-          .filter((item: string | null): item is string => Boolean(item))
-      : [];
+    const classification = classifyProduct({
+      context: resolver.context,
+      aliases: phaseOnePolicy.aliases,
+    });
 
-    const countryFromText = detectCountries(message);
-    const combinedCountries = Array.from(new Set([...rpcCountries, ...countryFromText]));
-
-    const rpcHs = Array.isArray(detectRpc.hs)
-      ? detectRpc.hs
-          .map((item: any) => normalizeHs6(item?.hs6))
-          .filter((item: string | null): item is string => Boolean(item))
-      : [];
-
-    const detectedFromMessage: Partial<DetectedEntities> = {
-      destination: combinedCountries[0] || null,
-      origin: combinedCountries[1] || null,
-      hs6: rpcHs[0] || normalizeHs6(message),
-      incoterm: detectIncoterm(message),
-      payment: detectByPatterns(message, PAYMENT_PATTERNS),
-      transport: detectByPatterns(message, TRANSPORT_PATTERNS),
-      currency: detectByPatterns(message, CURRENCY_PATTERNS),
-      contract_type: detectByPatterns(message, CONTRACT_PATTERNS),
+    const finalContext: ResolvedContext = {
+      ...resolver.context,
+      hs6: resolver.context.hs6 || classification.primary?.hs6 || null,
     };
 
-    const overrides = asObject(body?.overrides);
-    const overrideEntities: Partial<DetectedEntities> = {
-      origin: normalizeIso2(overrides.origin),
-      destination: normalizeIso2(overrides.destination),
-      hs6: normalizeHs6(overrides.hs6),
-      incoterm: String(overrides.incoterm || "").toUpperCase() || null,
-      payment: String(overrides.payment || "").toUpperCase() || null,
-      transport: String(overrides.transport || "").toLowerCase() || null,
-      currency: String(overrides.currency || "").toUpperCase() || null,
-      contract_type: String(overrides.contract_type || "").toLowerCase() || null,
-    };
+    const policy =
+      finalContext.hs6 !== resolver.context.hs6
+        ? await retrievePolicyContext({ admin, context: finalContext })
+        : phaseOnePolicy;
 
-    const entities = mergeEntities(mergeEntities(defaultEntities(), detectedFromMessage), overrideEntities);
+    const controls = evaluateControls({
+      context: finalContext,
+      classification,
+      policy,
+    });
 
-    const inScope = typeof detectRpc.in_scope === "boolean"
-      ? Boolean(detectRpc.in_scope)
-      : /\b(export|import|incoterm|douane|customs|hs|sanction|logistique|transport|facture|invoice|tva|vat)\b/i.test(message);
+    const baseChecks = buildBaseChecks(finalContext, classification, preferredLang);
+    const checks = sortChecks(mergeChecks([...baseChecks, ...controls.checks]));
+    const decision = decisionFromChecks({ checks, hardStop: controls.hardStop, lang: preferredLang });
 
-    let dossierRaw: Record<string, any> = {};
-    if (inScope) {
-      try {
-        const { data } = await admin.rpc("rpc_build_export_dossier", {
-          input: {
-            lang: preferredLang,
-            origin: entities.origin,
-            destination: entities.destination,
-            hs6: entities.hs6,
-            incoterm: entities.incoterm,
-            payment: entities.payment,
-            transport: entities.transport,
-            currency: entities.currency,
-            contract_type: entities.contract_type,
-          },
-        });
-        dossierRaw = asObject(data);
-      } catch {
-        dossierRaw = {};
-      }
-    }
-
-    const dossier = normalizeDossier(dossierRaw, entities, preferredLang);
-    const missingQuestions = inScope ? missingSlots(entities).map((slot) => defaultQuestionBySlot(preferredLang, slot)) : [];
+    const missingQuestions = buildMissingQuestions(finalContext, preferredLang).slice(0, 5);
     const followUpQuestions = missingQuestions.slice(0, 3);
-    const sourceLinks = buildSourceLinks(dossier);
 
-    const answerMarkdown = inScope
-      ? buildAnswerMarkdown({
-          lang: preferredLang,
-          dossier,
-          missingQuestions,
-          sourceLinks,
-        })
-      : preferredLang === "en"
-      ? "I focus on import/export operations. Please ask an international trade question."
-      : "Je suis specialise sur les operations import/export. Posez une question de commerce international.";
+    const sourceLinks = dedupeSources([
+      ...policy.officialLinks,
+      ...controls.sourceLinks,
+      ...checks
+        .filter((check) => check.source_link)
+        .map((check) => ({
+          title: check.label,
+          url: String(check.source_link),
+        })),
+    ]);
+
+    const dossier = buildDossier({
+      lang: preferredLang,
+      context: finalContext,
+      decision,
+      checks,
+      classification,
+      policy,
+      controls,
+      missingQuestions,
+    });
+
+    const answerMarkdown = buildAnswerMarkdown({
+      lang: preferredLang,
+      decision,
+      checks,
+      dossier,
+      missingQuestions,
+      sourceLinks,
+    });
+
+    const entities = toEntities(finalContext, message);
+    const mainBlocker = findMainBlocker(checks);
 
     const payload = ChatResponseSchema.parse({
       ok: true,
       lang: preferredLang,
+      decision,
       entities,
       missing_questions: missingQuestions,
       dossier,
+      checks,
+      main_blocker: mainBlocker,
       answer_markdown: answerMarkdown,
       source_links: sourceLinks,
       follow_up_questions: followUpQuestions,
@@ -639,10 +715,17 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
       session_id: threadId,
       answer: payload.answer_markdown,
       mode: payload.missing_questions.length ? "needs_input" : "brief_ready",
-      in_scope: inScope,
-      intent: String(detectRpc.intent || "export_expert"),
+      in_scope: true,
+      intent: "export_expert",
       assistant_message: payload.answer_markdown,
       assistant_mode: payload.missing_questions.length ? "needs_input" : "brief_ready",
+      detected_context: {
+        countryIso2: payload.entities.destination,
+        product: finalContext.product,
+        hs6: payload.entities.hs6,
+      },
+      decision_status: payload.decision.status,
+      retrieval_at: policy.retrievalAt,
     });
   } catch (err: any) {
     return json(res, 500, {
@@ -653,5 +736,3 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
 }
 
 export default allowCors(chatHandler);
-
-
