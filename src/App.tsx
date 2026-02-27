@@ -64,8 +64,6 @@ import AdminData from "@/pages/AdminData";
 import TaxesOm from "@/pages/TaxesOm";
 import Prospection from "@/pages/Prospection";
 import Copilote from "@/pages/Copilote";
-import TourDeControle from "@/pages/TourDeControle";
-import ControlTowerWizard from "@/pages/ControlTowerWizard";
 
 const queryClient = new QueryClient();
 const LazyFallback = () => <div className="p-6 text-sm text-muted-foreground">Chargement…</div>;
@@ -92,7 +90,7 @@ export default function App() {
                         {/* ===================== Marketing / Public ===================== */}
                         <Route path="/" element={<Home />} />
                         <Route path="/copilote" element={<Copilote />} />
-                        <Route path="/control-tower" element={<ControlTowerWizard />} />
+                        <Route path="/control-tower" element={<Navigate to="/app/control-tower" replace />} />
 
                         {/* ✅ Outils publics => accès app uniquement */}
                         <Route path="/verifier-facture" element={<PublicAppGate mode="invoice-check" />} />
@@ -200,14 +198,7 @@ export default function App() {
                         />
 
                         {/* ===================== App (privé) ===================== */}
-                        <Route
-                          path="/tour-de-controle"
-                          element={
-                            <ProtectedRoute>
-                              <TourDeControle />
-                            </ProtectedRoute>
-                          }
-                        />
+                        <Route path="/tour-de-controle" element={<Navigate to="/app/control-tower" replace />} />
 
                         <Route
                           path="/app/control-tower"

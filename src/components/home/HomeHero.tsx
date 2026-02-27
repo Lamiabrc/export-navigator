@@ -457,7 +457,7 @@ export function HomeHero({ labels, isEn }: { labels: HeroLabels; isEn: boolean }
                 <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <Button asChild variant="outline" className="w-full"><Link to="/contact">{isEn ? "Contact an expert" : "Contacter un expert"}</Link></Button>
                   <Button asChild variant="outline" className="w-full"><a href="tel:+33676435551">{isEn ? "Call" : "Appeler"}</a></Button>
-                  <Button asChild className="w-full"><Link to="/tour-de-controle">{isEn ? "Export growth tool" : "Outil de suivi export"}</Link></Button>
+                  <Button asChild className="w-full"><Link to="/app/control-tower">{isEn ? "Export growth tool" : "Outil de suivi export"}</Link></Button>
                 </div>
               </div>
             </CardContent>

@@ -462,7 +462,7 @@ function buildResponseSections(state: WizardState, lang: UiLang) {
         },
       ],
       links: [{ label: "MPL Guide", url: OFFICIAL_LINKS.access2markets }],
-      ctaPath: "/control-tower",
+      ctaPath: "/app/control-tower",
     };
   }
 

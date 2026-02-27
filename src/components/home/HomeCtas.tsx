@@ -51,7 +51,7 @@ export function HomeCtas({ isEn }: Props) {
               : "Pilotez dossiers, tâches et plan de croissance export dans un seul espace."}
           </p>
           <Button asChild className="w-full">
-            <Link to="/tour-de-controle">{isEn ? "Open Pro tool" : "Accéder à l'outil Pro"}</Link>
+            <Link to="/app/control-tower">{isEn ? "Open Pro tool" : "Accéder à l'outil Pro"}</Link>
           </Button>
         </div>
       </div>
