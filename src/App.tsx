@@ -36,7 +36,6 @@ import HeroVideoPreview from "@/pages/HeroVideoPreview";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
-import Welcome from "@/pages/Welcome";
 import SetPassword from "@/pages/SetPassword";
 import ControlTower from "@/pages/ControlTower";
 import ExportSimulator from "@/pages/ExportSimulator";
@@ -127,6 +126,13 @@ export default function App() {
                         <Route path="/solutions" element={<Solutions />} />
                         <Route path="/resources" element={<Resources />} />
                         <Route path="/tarifs" element={<Navigate to="/pricing" replace />} />
+                        <Route path="/tarif" element={<Navigate to="/pricing" replace />} />
+                        <Route path="/offre" element={<Navigate to="/pricing" replace />} />
+                        <Route path="/offres" element={<Navigate to="/pricing" replace />} />
+                        <Route path="/abonnement" element={<Navigate to="/pricing" replace />} />
+                        <Route path="/abonnements" element={<Navigate to="/pricing" replace />} />
+                        <Route path="/plans" element={<Navigate to="/pricing" replace />} />
+                        <Route path="/plan" element={<Navigate to="/pricing" replace />} />
 
                         <Route path="/contact" element={<Contact />} />
                         <Route path="/billing/success" element={<BillingSuccess />} />
@@ -404,7 +410,7 @@ export default function App() {
                         />
 
                         {/* ===================== Aliases / Legacy ===================== */}
-                        <Route path="/welcome" element={<Welcome />} />
+                        <Route path="/welcome" element={<Navigate to="/pricing" replace />} />
                         <Route path="/ressources" element={<Navigate to="/resources" replace />} />
 
                         <Route path="/hub" element={<Navigate to="/app/control-tower" replace />} />

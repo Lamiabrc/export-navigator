@@ -13,7 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { isAdminUser } from "@/lib/authz";
 import { COUNTRIES, CURRENCIES, INCOTERMS } from "@/lib/constants";
 import {
   assessInvoice,
@@ -737,8 +739,18 @@ function statusPill(status: "OK" | "WARN" | "KO") {
 function statusPillFromAssessment(status: "OK" | "WARNING" | "BLOCKING") {
   return statusPill(status === "OK" ? "OK" : status === "WARNING" ? "WARN" : "KO");
 }
+
+function aggregateStatus(checks: CheckerItem[]): "OK" | "WARN" | "KO" {
+  if (!checks.length) return "WARN";
+  if (checks.some((check) => check.status === "KO")) return "KO";
+  if (checks.some((check) => check.status === "WARN")) return "WARN";
+  return "OK";
+}
+
 export default function InvoiceCheck() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = isAdminUser(user);
 
   const [express, setExpress] = React.useState<ExpressForm>(() => createInitialExpress());
   const [pro, setPro] = React.useState<ProForm>(() => createInitialPro());
@@ -753,6 +765,7 @@ export default function InvoiceCheck() {
   const [result, setResult] = React.useState<AnalysisOutput | null>(null);
   const [productQuery, setProductQuery] = React.useState("");
   const [productChecks, setProductChecks] = React.useState<CheckerItem[]>([]);
+  const [adminRateDraft, setAdminRateDraft] = React.useState("");
 
   const mergedSourceText = React.useMemo(
     () => [pdfText, pastedText].filter(Boolean).join("\n"),
@@ -1011,6 +1024,77 @@ export default function InvoiceCheck() {
     if (!result) return [];
     return buildExpectedDocs(result.context);
   }, [result]);
+
+  React.useEffect(() => {
+    if (!result || result.context.currency === "EUR") {
+      setAdminRateDraft("");
+      return;
+    }
+    setAdminRateDraft(result.context.exchangeRate ? String(result.context.exchangeRate) : "");
+  }, [result]);
+
+  const handleAdminRateApply = React.useCallback(() => {
+    if (!result) return;
+    if (result.context.currency === "EUR") {
+      toast({
+        title: "Devise EUR",
+        description: "Aucun taux de change requis pour EUR.",
+      });
+      return;
+    }
+
+    const parsed = parseOptionalNumber(adminRateDraft);
+    if (parsed == null) {
+      toast({
+        title: "Taux invalide",
+        description: "Saisissez un taux numerique > 0 (ex: 1.08).",
+      });
+      return;
+    }
+
+    const nextPro: ProForm = {
+      ...pro,
+      exchangeRate: String(parsed),
+      currency: result.context.currency,
+    };
+
+    setPro(nextPro);
+    runAnalysis({
+      expressInput: express,
+      proInput: nextPro,
+      sourceText: mergedSourceText,
+      detectedInput: detected,
+      preferFreshDetection: false,
+      allowDetectedPrompt: false,
+    });
+
+    toast({
+      title: "Taux applique",
+      description: "Le resultat a ete recalcule avec le nouveau taux.",
+    });
+  }, [adminRateDraft, detected, express, mergedSourceText, pro, result, runAnalysis, toast]);
+
+  const coverageStatus = React.useMemo(() => {
+    if (!result) return null;
+
+    const paymentChecks = result.allChecks.filter((check) => check.id.startsWith("pay_"));
+    const vatCustomsChecks = result.allChecks.filter(
+      (check) => check.id.startsWith("vat_") || check.id.startsWith("customs_"),
+    );
+    const productStatus: "OK" | "WARN" | "KO" = !result.coreContextReady
+      ? "WARN"
+      : productChecks.some((check) => check.status === "KO")
+        ? "KO"
+        : productChecks.some((check) => check.status === "WARN")
+          ? "WARN"
+          : "OK";
+
+    return {
+      paymentStatus: aggregateStatus(paymentChecks),
+      vatCustomsStatus: aggregateStatus(vatCustomsChecks),
+      productStatus,
+    };
+  }, [productChecks, result]);
 
   return (
     <AppLayout>
@@ -1465,6 +1549,85 @@ export default function InvoiceCheck() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {coverageStatus ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Promesse de l'encart: visible dans le resultat</CardTitle>
+                    <CardDescription>
+                      Paiement, TVA/douane et logique "4 infos puis produit" sont traces ici.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-3 text-sm md:grid-cols-3">
+                    <div className="rounded-md border p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <p className="font-medium">Paiement</p>
+                        {statusPill(coverageStatus.paymentStatus)}
+                      </div>
+                      <p className="text-muted-foreground">
+                        Controles IBAN/BIC/SWIFT et signaux de coherence facture.
+                      </p>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <p className="font-medium">TVA + Douane</p>
+                        {statusPill(coverageStatus.vatCustomsStatus)}
+                      </div>
+                      <p className="text-muted-foreground">
+                        Decision TVA, mentions facture et alertes douane essentielles.
+                      </p>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <p className="font-medium">4 infos puis produit</p>
+                        {statusPill(coverageStatus.productStatus)}
+                      </div>
+                      <p className="text-muted-foreground">
+                        Verdict initial disponible avec 4 infos; produit sert a affiner HS/origine/restrictions.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              {isAdmin && result.context.currency !== "EUR" ? (
+                <Card className="border-primary/40">
+                  <CardHeader>
+                    <CardTitle className="text-base">Ajustement taux de change (Admin)</CardTitle>
+                    <CardDescription>
+                      Devise facture: {result.context.currency}. Ajustez le taux et relancez le calcul du resultat.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div className="grid gap-3 md:grid-cols-[220px_auto] md:items-end">
+                      <div className="space-y-1">
+                        <Label htmlFor="field-admin-rate">Taux {result.context.currency} vers EUR</Label>
+                        <Input
+                          id="field-admin-rate"
+                          value={adminRateDraft}
+                          onChange={(event) => setAdminRateDraft(event.target.value)}
+                          placeholder="Ex: 1.08"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button onClick={handleAdminRateApply}>Appliquer le taux</Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setAdminRateDraft(result.context.exchangeRate ? String(result.context.exchangeRate) : "")}
+                        >
+                          Reprendre le taux courant
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-muted-foreground">
+                      Contre-valeur courante:{" "}
+                      {result.context.exchangeRate
+                        ? `${round2(result.invoice.totals.totalHt / result.context.exchangeRate).toFixed(2)} EUR (base HT)`
+                        : "indisponible (taux manquant)."}
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : null}
+
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">1) Point bloquant principal</CardTitle>
