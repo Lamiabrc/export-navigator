@@ -143,22 +143,32 @@ export function buildGuidedFallback(question: string): GuidedFallback {
   const hs = detectHs(question);
   const product = detectProduct(question);
 
+  const countryQuestion = "Quel est le pays de destination exact (et pays de transit si applicable) ?";
+  const productQuestion = "Quel est le produit exact (nom commercial + composition/usage) ?";
+  const hsQuestion = "Avez-vous deja un code HS (6 ou 8 chiffres) ?";
+  const incotermQuestion = "Quel Incoterm est prevu (EXW, FCA, FOB, CIF, DAP, DDP...) ?";
+  const transportQuestion = "Quel est le mode de transport et la valeur approximative de l'envoi ?";
+  const paymentQuestion = "Quel mode de paiement client est prevu (avance, CAD, credoc, OA) ?";
+
   const followUps: string[] = [];
-  if (!country) {
-    followUps.push("Quel est le pays de destination exact (et pays de transit si applicable) ?");
+
+  // Regle de priorisation demandee:
+  // 1) produit detecte sans pays => demander pays en premier
+  // 2) pays detecte sans produit/HS => demander produit en premier
+  if ((product || hs) && !country) {
+    followUps.push(countryQuestion);
+  } else if (country && !product && !hs) {
+    followUps.push(productQuestion);
+  } else {
+    if (!country) followUps.push(countryQuestion);
+    if (!product && !hs) followUps.push(productQuestion);
   }
-  if (!product && !hs) {
-    followUps.push("Quel est le produit exact (nom commercial + composition/usage) ?");
-  }
-  if (!hs) {
-    followUps.push("Avez-vous deja un code HS (6 ou 8 chiffres) ?");
-  }
-  if (!incoterm) {
-    followUps.push("Quel Incoterm est prevu (EXW, FCA, FOB, CIF, DAP, DDP...) ?");
-  }
-  followUps.push("Quel est le mode de transport et la valeur approximative de l'envoi ?");
+
+  if (!hs) followUps.push(hsQuestion);
+  if (!incoterm) followUps.push(incotermQuestion);
+  followUps.push(transportQuestion);
   if (followUps.length < 3) {
-    followUps.push("Quel mode de paiement client est prevu (avance, CAD, credoc, OA) ?");
+    followUps.push(paymentQuestion);
   }
   const prioritizedFollowUps = uniqueList(followUps).slice(0, 3);
 

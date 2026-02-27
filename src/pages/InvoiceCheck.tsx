@@ -840,35 +840,113 @@ export default function InvoiceCheck() {
     [toast],
   );
 
+  const runAnalysis = React.useCallback((params: {
+    expressInput: ExpressForm;
+    proInput: ProForm;
+    sourceText: string;
+    detectedInput: Detection | null;
+    preferFreshDetection?: boolean;
+    allowDetectedPrompt?: boolean;
+  }) => {
+    const shouldUseFreshDetection = params.preferFreshDetection !== false;
+    const freshDetected = shouldUseFreshDetection && params.sourceText
+      ? detectFromText(params.sourceText)
+      : null;
+    const effectiveDetected = params.detectedInput || freshDetected;
+
+    if (freshDetected) {
+      setDetected(freshDetected);
+      const expressCoreFilled = Boolean(
+        params.expressInput.goodsOrServices
+        && params.expressInput.sellerCountry
+        && params.expressInput.buyerCountry
+        && params.expressInput.buyerIsTaxable,
+      );
+      if (params.allowDetectedPrompt !== false && !expressCoreFilled && !detectedPending) {
+        setDetectedPending(true);
+      }
+    }
+
+    const resolvedCore = resolveCoreContext(
+      params.expressInput,
+      effectiveDetected,
+      freshDetected,
+      params.sourceText,
+    );
+    const built = buildAssessmentInput(params.expressInput, params.proInput, effectiveDetected, resolvedCore);
+    const assessment = assessInvoice(built.context, built.invoice);
+
+    const rawChecks = [
+      ...assessment.checks_by_tab.mentions,
+      ...assessment.checks_by_tab.vat,
+      ...assessment.checks_by_tab.customs,
+      ...assessment.checks_by_tab.fx,
+      ...assessment.checks_by_tab.calculs,
+      ...assessment.checks_by_tab.risks,
+    ];
+    const allChecks = rawChecks.map(ensureCheckFieldPath);
+    const summary = summarizeChecks(allChecks);
+    const missingQuestions = mergeUnique([
+      ...assessment.vat_result.missing_questions,
+      ...built.localQuestions,
+    ]).slice(0, 4);
+    const customsAlerts = buildEssentialCustomsAlerts(built.context, built.invoice);
+
+    setResult({
+      assessment,
+      context: built.context,
+      invoice: built.invoice,
+      allChecks,
+      summary,
+      customsAlerts,
+      missingQuestions,
+      coreContextReady: built.coreContextReady,
+    });
+
+    setProductChecks([]);
+    setCurrentStep(2);
+  }, [detectedPending]);
+
   const applyDetectedValues = React.useCallback(() => {
     if (!detected) return;
 
-    setExpress((prev) => ({
-      goodsOrServices: prev.goodsOrServices || detected.goodsOrServices || "",
-      sellerCountry: prev.sellerCountry || detected.sellerCountry || "",
-      buyerCountry: prev.buyerCountry || detected.buyerCountry || "",
-      buyerIsTaxable: prev.buyerIsTaxable,
-      buyerVat: prev.buyerVat || detected.buyerVat || "",
-    }));
+    const nextExpress: ExpressForm = {
+      goodsOrServices: express.goodsOrServices || detected.goodsOrServices || "",
+      sellerCountry: express.sellerCountry || detected.sellerCountry || "",
+      buyerCountry: express.buyerCountry || detected.buyerCountry || "",
+      buyerIsTaxable: express.buyerIsTaxable,
+      buyerVat: express.buyerVat || detected.buyerVat || "",
+    };
 
-    setPro((prev) => ({
-      ...prev,
-      currency: prev.currency || detected.currency || "EUR",
-      incoterm: prev.incoterm || detected.incoterm || "",
-      invoiceNumber: prev.invoiceNumber || detected.invoiceNumber || "",
-      invoiceDate: prev.invoiceDate || detected.invoiceDate || "",
-      totalHt: prev.totalHt || (detected.totalHt ? String(detected.totalHt) : ""),
-      totalTtc: prev.totalTtc || (detected.totalTtc ? String(detected.totalTtc) : ""),
-      sellerName: prev.sellerName || detected.sellerName || "",
-      buyerName: prev.buyerName || detected.buyerName || "",
-    }));
+    const nextPro: ProForm = {
+      ...pro,
+      currency: pro.currency || detected.currency || "EUR",
+      incoterm: pro.incoterm || detected.incoterm || "",
+      invoiceNumber: pro.invoiceNumber || detected.invoiceNumber || "",
+      invoiceDate: pro.invoiceDate || detected.invoiceDate || "",
+      totalHt: pro.totalHt || (detected.totalHt ? String(detected.totalHt) : ""),
+      totalTtc: pro.totalTtc || (detected.totalTtc ? String(detected.totalTtc) : ""),
+      sellerName: pro.sellerName || detected.sellerName || "",
+      buyerName: pro.buyerName || detected.buyerName || "",
+    };
+
+    setExpress(nextExpress);
+    setPro(nextPro);
 
     setDetectedPending(false);
+    runAnalysis({
+      expressInput: nextExpress,
+      proInput: nextPro,
+      sourceText: mergedSourceText,
+      detectedInput: detected,
+      preferFreshDetection: false,
+      allowDetectedPrompt: false,
+    });
     toast({
       title: "Valeurs detectees appliquees",
-      description: "Les champs express ont ete pre-remplis.",
+      description: "Les champs ont ete pre-remplis et l'analyse a ete lancee.",
     });
-  }, [detected, toast]);
+  }, [detected, express, mergedSourceText, pro, runAnalysis, toast]);
 
   const focusFieldPath = React.useCallback((fieldPath?: string) => {
     const domId = fieldDomId(fieldPath);
@@ -894,49 +972,15 @@ export default function InvoiceCheck() {
   }, []);
 
   const handleAnalyze = React.useCallback(() => {
-    const freshDetected = mergedSourceText ? detectFromText(mergedSourceText) : null;
-    const effectiveDetected = freshDetected || detected;
-
-    if (freshDetected) {
-      setDetected(freshDetected);
-      if (!hasExpressCoreInput && !detectedPending) setDetectedPending(true);
-    }
-
-    const resolvedCore = resolveCoreContext(express, effectiveDetected, freshDetected, mergedSourceText);
-    const built = buildAssessmentInput(express, pro, effectiveDetected, resolvedCore);
-    const assessment = assessInvoice(built.context, built.invoice);
-
-    const rawChecks = [
-      ...assessment.checks_by_tab.mentions,
-      ...assessment.checks_by_tab.vat,
-      ...assessment.checks_by_tab.customs,
-      ...assessment.checks_by_tab.fx,
-      ...assessment.checks_by_tab.calculs,
-      ...assessment.checks_by_tab.risks,
-    ];
-    const allChecks = rawChecks.map(ensureCheckFieldPath);
-    const summary = summarizeChecks(allChecks);
-    const missingQuestions = mergeUnique([
-      ...assessment.vat_result.missing_questions,
-      ...built.localQuestions,
-    ]).slice(0, 4);
-
-    const customsAlerts = buildEssentialCustomsAlerts(built.context, built.invoice);
-
-    setResult({
-      assessment,
-      context: built.context,
-      invoice: built.invoice,
-      allChecks,
-      summary,
-      customsAlerts,
-      missingQuestions,
-      coreContextReady: built.coreContextReady,
+    runAnalysis({
+      expressInput: express,
+      proInput: pro,
+      sourceText: mergedSourceText,
+      detectedInput: detected,
+      preferFreshDetection: true,
+      allowDetectedPrompt: true,
     });
-
-    setProductChecks([]);
-    setCurrentStep(2);
-  }, [detected, detectedPending, express, hasExpressCoreInput, mergedSourceText, pro]);
+  }, [detected, express, mergedSourceText, pro, runAnalysis]);
 
   const handleProductRefine = React.useCallback(() => {
     if (!result) return;
@@ -1072,7 +1116,7 @@ export default function InvoiceCheck() {
                   }
                 >
                   <SelectTrigger id="field-goods-or-services">
-                    <SelectValue placeholder="Si non detecte" />
+                    <SelectValue placeholder="Selectionner" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="goods">Biens</SelectItem>
@@ -1088,7 +1132,7 @@ export default function InvoiceCheck() {
                   onValueChange={(value) => setExpress((prev) => ({ ...prev, sellerCountry: value }))}
                 >
                   <SelectTrigger id="field-seller-country">
-                    <SelectValue placeholder="Si non detecte" />
+                    <SelectValue placeholder="Selectionner un pays" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[320px]">
                     {COUNTRIES.map((country) => (
@@ -1107,7 +1151,7 @@ export default function InvoiceCheck() {
                   onValueChange={(value) => setExpress((prev) => ({ ...prev, buyerCountry: value }))}
                 >
                   <SelectTrigger id="field-buyer-country">
-                    <SelectValue placeholder="Si non detecte" />
+                    <SelectValue placeholder="Selectionner un pays" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[320px]">
                     {COUNTRIES.map((country) => (
@@ -1128,7 +1172,7 @@ export default function InvoiceCheck() {
                   }
                 >
                   <SelectTrigger id="field-buyer-taxable">
-                    <SelectValue placeholder="Obligatoire" />
+                    <SelectValue placeholder="Selectionner" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="yes">Oui</SelectItem>
@@ -1183,7 +1227,7 @@ export default function InvoiceCheck() {
                 <Sparkles className="h-4 w-4" />
                 Detecte
               </CardTitle>
-              <CardDescription>Champs proposes depuis PDF/texte. Confirmez ou corrigez.</CardDescription>
+              <CardDescription>Champs proposes depuis PDF/texte. Confirmez pour appliquer puis lancer l'analyse.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {detectedOverrides.length > 0 ? (
@@ -1223,7 +1267,7 @@ export default function InvoiceCheck() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={applyDetectedValues}>Confirmer</Button>
+                <Button size="sm" onClick={applyDetectedValues}>Confirmer et analyser</Button>
                 <Button size="sm" variant="outline" onClick={() => setDetectedPending(false)}>
                   Corriger
                 </Button>

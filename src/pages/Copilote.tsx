@@ -169,6 +169,34 @@ function isLikelyCountryOnlyPrompt(question: string, detectedCountry: string | n
   return stripped === normalizedCountry;
 }
 
+function detectProductOrHsInPrompt(question: string) {
+  const normalized = normalizePrompt(question);
+  if (!normalized) return false;
+  if (/\b\d{6,10}\b/.test(normalized)) return true;
+  if (/\b(exportateur|importateur)\s+(de|d)\s+[a-z0-9]/.test(normalized)) return true;
+  if (/\b(produit|marchandise)\b/.test(normalized)) return true;
+  if (/\b(banane|cacao|cafe|textile|cosmetique|vin|fromage|chaussure|batterie|pharma)\b/.test(normalized)) return true;
+  return false;
+}
+
+function withPriorityFollowUp(params: {
+  followUps: string[];
+  countryKnown: boolean;
+  productKnown: boolean;
+}) {
+  const countryQuestion = "Quel est le pays de destination exact (et pays de transit si applicable) ?";
+  const productQuestion = "Quel est le produit exact (nom commercial + composition/usage) ?";
+
+  const base = Array.from(new Set(params.followUps.filter(Boolean)));
+  if (params.productKnown && !params.countryKnown) {
+    return [countryQuestion, ...base.filter((q) => q !== countryQuestion)];
+  }
+  if (params.countryKnown && !params.productKnown) {
+    return [productQuestion, ...base.filter((q) => q !== productQuestion)];
+  }
+  return base;
+}
+
 export default function Copilote() {
   const [messages, setMessages] = React.useState<ChatMessage[]>([
     {
@@ -263,6 +291,7 @@ export default function Copilote() {
       const detectedCountry = detectCountryFromShortInput(question);
       if (detectedCountry) setDestinationCountry(detectedCountry);
       const resolvedDestination = detectedCountry || destinationCountry || null;
+      const productKnownFromPrompt = detectProductOrHsInPrompt(question);
 
       const questionForApi = detectedCountry && isLikelyCountryOnlyPrompt(question, detectedCountry)
         ? `Destination: ${detectedCountry}. Je n'ai donne que le pays. Cadre le dossier export et demande ensuite produit + code HS + incoterm.`
@@ -322,6 +351,12 @@ export default function Copilote() {
         ? filteredModelFollowUps.slice(0, 3)
         : (filteredGuidedFollowUps.length ? filteredGuidedFollowUps.slice(0, 3) : guided.followUpQuestions.slice(0, 3));
 
+      const prioritizedFollowUpQuestions = withPriorityFollowUp({
+        followUps: followUpQuestions,
+        countryKnown: Boolean(resolvedDestination),
+        productKnown: productKnownFromPrompt,
+      }).slice(0, 3);
+
       const countryStillMissing = Boolean(resolvedDestination && COUNTRY_MISSING_RE.test(answerRaw.toLowerCase()));
       const blocks = buildAssistantBlocks(data?.dossier) || guidedBlocks;
       const uncertain = isUncertainAnswer(answerRaw) || countryStillMissing;
@@ -350,7 +385,7 @@ export default function Copilote() {
         role: "assistant",
         content: answer,
         links,
-        followUpQuestions,
+        followUpQuestions: prioritizedFollowUpQuestions,
         blocks: finalBlocks,
       };
 
@@ -366,7 +401,7 @@ export default function Copilote() {
           session_id: nextThreadId || sessionId || null,
           remaining: trackedRemaining,
           source_links_count: links.length,
-          follow_up_questions_count: followUpQuestions.length,
+          follow_up_questions_count: prioritizedFollowUpQuestions.length,
           destination_country: resolvedDestination,
           has_structured_blocks: Boolean(finalBlocks),
         },
