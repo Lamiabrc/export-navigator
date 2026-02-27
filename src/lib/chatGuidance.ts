@@ -1,17 +1,28 @@
+import { detectCountryFromShortInput } from "./countryInput";
+
 export type GuidedFallback = {
   answer: string;
   followUpQuestions: string[];
+  blocks?: {
+    summary: string[];
+    checklist: Array<{ label: string; required: boolean }>;
+    risks: string[];
+    actions: string[];
+  };
 };
 
 function detectFlow(question: string): "export" | "import" | "trade" {
-  const q = question.toLowerCase();
-  if (/\bimport|importer|importation\b/.test(q) && !/\bexport|exporter|exportation\b/.test(q)) return "import";
-  if (/\bexport|exporter|exportation\b/.test(q)) return "export";
+  const q = normalize(question);
+  if (/\bimport|importer|importation|importateur\b/.test(q) && !/\bexport|exporter|exportation|exportateur\b/.test(q)) return "import";
+  if (/\bexport|exporter|exportation|exportateur\b/.test(q)) return "export";
   return "trade";
 }
 
 function detectCountry(question: string) {
-  const q = question.toLowerCase();
+  const shortDetected = detectCountryFromQuestion(question);
+  if (shortDetected) return shortDetected;
+
+  const q = normalize(question);
   const map: Array<[RegExp, string]> = [
     [/\bportugal\b/, "Portugal"],
     [/\bjapon|japan\b/, "Japon"],
@@ -44,16 +55,85 @@ function detectHs(question: string) {
 }
 
 function detectProduct(question: string) {
-  const q = question.trim();
+  const q = normalize(question);
+  const compact = q.replace(/\s+/g, " ").trim();
+  if (!compact) return null;
+
+  const roleMatch = compact.match(/\b(?:exportateur|importateur)\s+(?:de|d)\s+([a-z0-9][a-z0-9\s-]{2,60})\b/i);
+  if (roleMatch?.[1]) {
+    return cleanupProduct(roleMatch[1]);
+  }
+
+  const simpleVerbMatch = compact.match(/\b(?:j ?exporte|nous exportons|j ?importe|nous importons)\s+(?:des|de|du|d)\s+([a-z0-9][a-z0-9\s-]{2,60})\b/i);
+  if (simpleVerbMatch?.[1]) {
+    return cleanupProduct(simpleVerbMatch[1]);
+  }
+
   const patterns = [
     /exporter?\s+(?:des|de|du|d')\s+(.+?)\s+(?:vers|au|en)\s+/i,
     /importer?\s+(?:des|de|du|d')\s+(.+?)\s+(?:depuis|de)\s+/i,
+    /(?:produit|marchandise)\s*[:\-]\s*(.+?)(?:$|[,.!?;])/i,
   ];
   for (const p of patterns) {
-    const m = q.match(p);
-    if (m?.[1]) return m[1].trim();
+    const m = compact.match(p);
+    if (m?.[1]) return cleanupProduct(m[1]);
   }
+
+  const knownProducts = [
+    "banane",
+    "bananes",
+    "cacao",
+    "cafe",
+    "textile",
+    "cosmetique",
+    "vin",
+    "fromage",
+    "chaussure",
+    "batterie",
+    "pharmaceutique",
+  ];
+  const known = knownProducts.find((item) => new RegExp(`\\b${item}\\b`, "i").test(compact));
+  if (known) return cleanupProduct(known);
+
   return null;
+}
+
+function normalize(value: string) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanupProduct(value: string) {
+  return String(value || "")
+    .replace(/\b(vers|au|aux|en|depuis|de|du|d)\b.*$/i, "")
+    .replace(/[.,;:!?]+$/g, "")
+    .trim();
+}
+
+function detectCountryFromQuestion(question: string) {
+  const country = detectCountryFromShortInput(question);
+  return country || null;
+}
+
+function uniqueList(values: string[]) {
+  return Array.from(new Set(values.map((item) => item.trim()).filter(Boolean)));
+}
+
+function formatObjective(params: {
+  flow: "export" | "import" | "trade";
+  product: string | null;
+  hs: string | null;
+  country: string | null;
+}) {
+  const flowLabel = params.flow === "export" ? "export" : params.flow === "import" ? "import" : "operation internationale";
+  const productLabel = params.product || (params.hs ? `produit HS ${params.hs}` : "produit a preciser");
+  const destinationLabel = params.country ? `vers ${params.country}` : "destination a confirmer";
+  return `${flowLabel} ${productLabel} (${destinationLabel})`;
 }
 
 export function buildGuidedFallback(question: string): GuidedFallback {
@@ -76,28 +156,69 @@ export function buildGuidedFallback(question: string): GuidedFallback {
   if (!incoterm) {
     followUps.push("Quel Incoterm est prevu (EXW, FCA, FOB, CIF, DAP, DDP...) ?");
   }
+  followUps.push("Quel est le mode de transport et la valeur approximative de l'envoi ?");
   if (followUps.length < 3) {
-    followUps.push("Quel est le mode de transport et la valeur approximative de l'envoi ?");
+    followUps.push("Quel mode de paiement client est prevu (avance, CAD, credoc, OA) ?");
   }
+  const prioritizedFollowUps = uniqueList(followUps).slice(0, 3);
 
-  const flowLabel = flow === "export" ? "export" : flow === "import" ? "import" : "operation internationale";
-  const objective = `${flowLabel} ${product || (hs ? `produit HS ${hs}` : "produit non precise")} ${country ? `vers ${country}` : ""}`.trim();
-  const firstQuestion = followUps[0];
-  const extraQuestions = followUps.slice(1, 3);
+  const objective = formatObjective({ flow, product, hs, country });
+  const firstQuestion = prioritizedFollowUps[0];
+  const extraQuestions = prioritizedFollowUps.slice(1, 3);
+
+  const summary = uniqueList([
+    `Contexte pris en compte: ${objective}.`,
+    country ? `Pays detecte: ${country}.` : "Pays non detecte: sans destination, les regles TVA/douane restent indicatives.",
+    product || hs
+      ? `Produit detecte: ${product || `HS ${hs}`}.`
+      : "Produit non detecte: la classification HS reste a confirmer.",
+  ]).slice(0, 3);
+
+  const checklist = [
+    { label: country ? `Pays destination: ${country}` : "Pays de destination", required: true },
+    { label: product ? `Produit: ${product}` : "Produit exact (composition/usage)", required: true },
+    { label: hs ? `HS: ${hs}` : "Code HS 6 chiffres", required: true },
+    { label: incoterm ? `Incoterm: ${incoterm}` : "Incoterm + lieu", required: true },
+    { label: "Mode de transport + valeur facture", required: true },
+  ].slice(0, 5);
+
+  const risks = uniqueList([
+    !country ? "Decision export incomplete sans pays de destination." : "",
+    !hs ? "Risque droits/taxes faux sans HS6." : "",
+    !incoterm ? "Risque de litige sur transfert des risques/couts sans Incoterm." : "",
+    product && /banane|cacao|cafe|agri|aliment/i.test(normalize(product))
+      ? "Verifier exigences phytosanitaires/sanitaires du pays importateur."
+      : "",
+  ]).slice(0, 4);
+
+  const actions = uniqueList([
+    firstQuestion ? `Repondez d'abord: ${firstQuestion}` : "",
+    extraQuestions[0] ? `Puis: ${extraQuestions[0]}` : "",
+    extraQuestions[1] ? `Ensuite: ${extraQuestions[1]}` : "",
+    "Des reception des infos, je fournis checklist documentaire + risques + prochaines actions.",
+  ]).slice(0, 4);
 
   const answer = [
-    `D'accord, j'ai compris votre demande: ${objective}.`,
-    `Je vois deja ${country ? `le pays (${country})` : "une partie du contexte"}, mais il manque des infos critiques (${hs ? "HS OK" : "HS manquant"}, ${incoterm ? `incoterm ${incoterm}` : "incoterm manquant"}).`,
+    `Demande comprise: ${objective}.`,
+    country
+      ? `Regle generale immediate: appliquez les regles export/import vers ${country}, puis confirmez HS et Incoterm pour fiabiliser droits, taxes et documents.`
+      : "Regle generale immediate: il faut confirmer la destination pour valider TVA, formalites douane et restrictions pays.",
     `Question prioritaire: ${firstQuestion}`,
     extraQuestions.length ? `Ensuite:\n- ${extraQuestions.join("\n- ")}` : null,
-    "Des que vous repondez, je vous donne une reponse precise et directement actionnable.",
+    "Une fois ces points donnes, je fournis une reponse exploitable (checklist, risques, actions).",
   ]
     .filter(Boolean)
     .join("\n\n");
 
   return {
     answer,
-    followUpQuestions: followUps.slice(0, 3),
+    followUpQuestions: prioritizedFollowUps,
+    blocks: {
+      summary,
+      checklist,
+      risks,
+      actions,
+    },
   };
 }
 

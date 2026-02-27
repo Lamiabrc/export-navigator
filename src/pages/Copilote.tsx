@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ingestChatExchange } from "@/lib/chatIngest";
-import { buildGuidedFallback, buildResearchLinks } from "@/lib/chatGuidance";
+import { buildGuidedFallback, buildResearchLinks, type GuidedFallback } from "@/lib/chatGuidance";
 import { detectCountryFromShortInput } from "@/lib/countryInput";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -118,12 +118,63 @@ function buildAssistantBlocks(dossier: ChatDossier | undefined): AssistantBlocks
   return { summary, checklist, risks, documents, actions };
 }
 
+function buildAssistantBlocksFromGuided(guided: GuidedFallback): AssistantBlocks | undefined {
+  const blocks = guided.blocks;
+  if (!blocks) return undefined;
+
+  const summary = Array.isArray(blocks.summary) ? blocks.summary.slice(0, 3) : [];
+  const checklist = Array.isArray(blocks.checklist) ? blocks.checklist.slice(0, 8) : [];
+  const risks = Array.isArray(blocks.risks) ? blocks.risks.slice(0, 8) : [];
+  const actions = Array.isArray(blocks.actions) ? blocks.actions.slice(0, 8) : [];
+
+  if (!summary.length && !checklist.length && !risks.length && !actions.length) {
+    return undefined;
+  }
+
+  return {
+    summary,
+    checklist,
+    risks,
+    documents: [],
+    actions,
+  };
+}
+
+function normalizePrompt(value: string) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isLikelyCountryOnlyPrompt(question: string, detectedCountry: string | null) {
+  if (!detectedCountry) return false;
+
+  const normalizedQuestion = normalizePrompt(question);
+  const normalizedCountry = normalizePrompt(detectedCountry);
+  if (!normalizedQuestion || !normalizedCountry) return false;
+
+  if (normalizedQuestion.split(" ").length <= 3) {
+    return normalizedQuestion.includes(normalizedCountry);
+  }
+
+  const stripped = normalizedQuestion
+    .replace(/\b(destination|pays|vers|pour|to|export|import)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return stripped === normalizedCountry;
+}
+
 export default function Copilote() {
   const [messages, setMessages] = React.useState<ChatMessage[]>([
     {
       id: uid(),
       role: "assistant",
-      content: "Bonjour. Posez votre question export en une phrase. Je reponds avec resume, checklist, risques, documents et actions.",
+      content: "Bonjour. Donnez votre cas export/import en une phrase. Je reponds avec decision rapide, risques, documents et actions.",
     },
   ]);
 
@@ -186,33 +237,34 @@ export default function Copilote() {
 
     try {
       let trackedRemaining: number | null = null;
-      const trackingResp = await fetch(
-        `/api/hs/search?mode=track&q=${encodeURIComponent(question)}&universe=copilote&locale=fr`,
-        { method: "GET" },
-      );
-      const trackingData = (await trackingResp.json().catch(() => ({}))) as QuotaResponse;
-      if (typeof trackingData?.limit === "number") setQuotaLimit(trackingData.limit);
-      if (typeof trackingData?.remaining === "number") {
-        trackedRemaining = trackingData.remaining;
-        setRemaining(trackedRemaining);
-        setQuotaStatus("ready");
-      }
+      try {
+        const trackingResp = await fetch(
+          `/api/hs/search?mode=track&q=${encodeURIComponent(question)}&universe=copilote&locale=fr`,
+          { method: "GET" },
+        );
+        const trackingData = (await trackingResp.json().catch(() => ({}))) as QuotaResponse;
+        if (typeof trackingData?.limit === "number") setQuotaLimit(trackingData.limit);
+        if (typeof trackingData?.remaining === "number") {
+          trackedRemaining = trackingData.remaining;
+          setRemaining(trackedRemaining);
+          setQuotaStatus("ready");
+        }
 
-      if (trackingResp.status === 429 || trackingData?.error === "daily_limit_reached") {
-        const blockedAnswer = "Quota gratuit atteint pour les 24h. Reessayez plus tard ou contactez l'equipe MPL.";
-        setError(blockedAnswer);
-        setMessages((prev) => [...prev, { id: uid(), role: "assistant", content: blockedAnswer }]);
-        return;
-      }
-      if (!trackingResp.ok || trackingData?.ok === false) {
-        throw new Error(trackingData?.detail || trackingData?.error || `quota_track_failed_${trackingResp.status}`);
+        if (trackingResp.status === 429 || trackingData?.error === "daily_limit_reached") {
+          const blockedAnswer = "Quota gratuit atteint pour les 24h. Reessayez plus tard ou contactez l'equipe MPL.";
+          setError(blockedAnswer);
+          setMessages((prev) => [...prev, { id: uid(), role: "assistant", content: blockedAnswer }]);
+          return;
+        }
+      } catch {
+        // Endpoint quota non bloquant: on continue pour tenter /api/chat.
       }
 
       const detectedCountry = detectCountryFromShortInput(question);
       if (detectedCountry) setDestinationCountry(detectedCountry);
       const resolvedDestination = detectedCountry || destinationCountry || null;
 
-      const questionForApi = detectedCountry
+      const questionForApi = detectedCountry && isLikelyCountryOnlyPrompt(question, detectedCountry)
         ? `Destination: ${detectedCountry}. Je n'ai donne que le pays. Cadre le dossier export et demande ensuite produit + code HS + incoterm.`
         : question;
 
@@ -243,7 +295,12 @@ export default function Copilote() {
       }
 
       const answerRaw = String(data?.answer_markdown || data?.answer || "").trim();
-      const guided = buildGuidedFallback(resolvedDestination ? `export vers ${resolvedDestination}` : question);
+      const guidanceSeed =
+        resolvedDestination && !detectCountryFromShortInput(question)
+          ? `${question} destination ${resolvedDestination}`
+          : question;
+      const guided = buildGuidedFallback(guidanceSeed);
+      const guidedBlocks = buildAssistantBlocksFromGuided(guided);
 
       const modelFollowUps = [
         ...(Array.isArray(data?.follow_up_questions) ? data.follow_up_questions : []),
@@ -266,8 +323,8 @@ export default function Copilote() {
         : (filteredGuidedFollowUps.length ? filteredGuidedFollowUps.slice(0, 3) : guided.followUpQuestions.slice(0, 3));
 
       const countryStillMissing = Boolean(resolvedDestination && COUNTRY_MISSING_RE.test(answerRaw.toLowerCase()));
-      const blocks = buildAssistantBlocks(data?.dossier);
-      const uncertain = (isUncertainAnswer(answerRaw) && !blocks) || countryStillMissing;
+      const blocks = buildAssistantBlocks(data?.dossier) || guidedBlocks;
+      const uncertain = isUncertainAnswer(answerRaw) || countryStillMissing;
 
       const links = [
         ...(Array.isArray(data?.source_links)
@@ -279,6 +336,7 @@ export default function Copilote() {
       ].slice(0, 6);
 
       const answer = uncertain ? guided.answer : (answerRaw || guided.answer);
+      const finalBlocks = uncertain ? (guidedBlocks || blocks) : blocks;
 
       const nextThreadId = data?.thread_id || data?.session_id;
       if (nextThreadId) setSessionId(nextThreadId);
@@ -293,7 +351,7 @@ export default function Copilote() {
         content: answer,
         links,
         followUpQuestions,
-        blocks,
+        blocks: finalBlocks,
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
@@ -310,15 +368,16 @@ export default function Copilote() {
           source_links_count: links.length,
           follow_up_questions_count: followUpQuestions.length,
           destination_country: resolvedDestination,
-          has_structured_blocks: Boolean(blocks),
+          has_structured_blocks: Boolean(finalBlocks),
         },
       });
     } catch (err: any) {
       const guided = buildGuidedFallback(question);
       const links = buildResearchLinks(question).map((x) => ({ title: x.title, url: x.url }));
       const answer = guided.answer;
+      const blocks = buildAssistantBlocksFromGuided(guided);
 
-      setError("Reponse serveur indisponible: je passe en mode guide pour avancer pas a pas.");
+      setError("Serveur temporairement indisponible. Mode guide active avec plan d'action.");
       setMessages((prev) => [
         ...prev,
         {
@@ -327,6 +386,7 @@ export default function Copilote() {
           content: answer,
           links,
           followUpQuestions: guided.followUpQuestions,
+          blocks,
         },
       ]);
 
@@ -342,6 +402,7 @@ export default function Copilote() {
           source_links_count: links.length,
           follow_up_questions_count: guided.followUpQuestions.length,
           destination_country: destinationCountry,
+          has_structured_blocks: Boolean(blocks),
         },
       });
     } finally {

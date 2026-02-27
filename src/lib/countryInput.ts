@@ -74,6 +74,15 @@ const COUNTRY_ALIASES: Record<string, string> = {
   brazil: "Bresil",
   inde: "Inde",
   india: "Inde",
+  emirats: "Emirats arabes unis",
+  "emirats arabes unis": "Emirats arabes unis",
+  uae: "Emirats arabes unis",
+  argentine: "Argentine",
+  argentina: "Argentine",
+  suisse: "Suisse",
+  switzerland: "Suisse",
+  "great britain": "Royaume-Uni",
+  angleterre: "Royaume-Uni",
 };
 
 function normalize(value: string) {
@@ -90,8 +99,21 @@ export function detectCountryFromShortInput(value: string) {
   const normalized = normalize(value);
   if (!normalized) return null;
 
-  const words = normalized.split(" ").filter(Boolean);
-  if (words.length < 1 || words.length > 2) return null;
+  if (COUNTRY_ALIASES[normalized]) {
+    return COUNTRY_ALIASES[normalized];
+  }
 
-  return COUNTRY_ALIASES[normalized] || null;
+  const haystack = ` ${normalized} `;
+  const aliases = Object.entries(COUNTRY_ALIASES)
+    .sort((a, b) => b[0].length - a[0].length);
+
+  for (const [alias, label] of aliases) {
+    const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`\\b${escaped}\\b`, "i");
+    if (re.test(haystack)) {
+      return label;
+    }
+  }
+
+  return null;
 }
