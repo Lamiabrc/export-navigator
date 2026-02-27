@@ -39,13 +39,17 @@ function buildUnknown(reason: string, questions: string[]): VatResult {
     status: "UNKNOWN",
     reason,
     required_invoice_mentions: [],
-    missing_questions: questions,
+    missing_questions: capMissingQuestions(questions),
     vies_validation: {
       seller_format_ok: false,
       buyer_format_ok: false,
       vies_link: VIES_LINK,
     },
   };
+}
+
+function capMissingQuestions(questions: string[]) {
+  return Array.from(new Set(questions.filter(Boolean))).slice(0, 2);
 }
 
 function resolvedFlow(context: TransactionContext): "import" | "export" {
@@ -141,7 +145,7 @@ export function evaluateVat(input: VatEngineInput): VatResult {
         status: "VAT_APPLIES",
         reason: "Conditions d'exoneration intra-UE non completes; TVA applicable tant que les preuves manquent.",
         required_invoice_mentions: ["TVA francaise appliquee en attente des preuves d'exoneration."],
-        missing_questions: missingQuestions,
+        missing_questions: capMissingQuestions(missingQuestions),
         vies_validation: {
           seller_format_ok: sellerVatOk,
           buyer_format_ok: buyerVatOk,
@@ -155,7 +159,7 @@ export function evaluateVat(input: VatEngineInput): VatResult {
         status: "VAT_EXEMPT",
         reason: "Export de biens hors UE: exoneration TVA sous reserve de preuve d'export.",
         required_invoice_mentions: ["Exoneration TVA - export hors UE (CGI art. 262-I)."],
-        missing_questions: ["Avez-vous la preuve de sortie/export (DAU, MRN, transport) ?"],
+        missing_questions: capMissingQuestions(["Avez-vous la preuve de sortie/export (DAU, MRN, transport) ?"]),
         vies_validation: {
           seller_format_ok: sellerVatOk,
           buyer_format_ok: buyerVatOk,
@@ -205,7 +209,7 @@ export function evaluateVat(input: VatEngineInput): VatResult {
     status: fallbackStatus,
     reason: "Informations insuffisantes ou scenario hors regles standards; verification experte recommandee.",
     required_invoice_mentions: [],
-    missing_questions: missingQuestions,
+    missing_questions: capMissingQuestions(missingQuestions),
     vies_validation: {
       seller_format_ok: sellerVatOk,
       buyer_format_ok: buyerVatOk,

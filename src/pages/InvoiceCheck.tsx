@@ -1,17 +1,9 @@
-﻿import * as React from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  FileUp,
-  Info,
-  Link as LinkIcon,
-  Plus,
-  RefreshCcw,
-  Trash2,
-  XCircle,
-} from "lucide-react";
+﻿
+import * as React from "react";
+import { AlertTriangle, CheckCircle2, FileUp, Loader2, Sparkles } from "lucide-react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,250 +11,501 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { COUNTRIES, CURRENCIES, INCOTERMS, OFFICIAL_LINKS } from "@/lib/constants";
+import { COUNTRIES, CURRENCIES, INCOTERMS } from "@/lib/constants";
 import {
   assessInvoice,
-  isEuIso2,
-  isValidIsoCurrency,
-  type CheckStatus,
   type CheckerItem,
-  type CheckerTab,
+  type InvoiceAssessment,
   type InvoiceData,
-  type InvoiceLineInput,
   type TransactionContext,
 } from "@/lib/invoice";
 
-const TAB_ORDER: CheckerTab[] = ["mentions", "vat", "customs", "fx", "calculs", "risks"];
-
-const TAB_LABELS: Record<CheckerTab, string> = {
-  mentions: "Mentions facture",
-  vat: "TVA",
-  customs: "Douane",
-  fx: "Devise",
-  calculs: "Calculs",
-  risks: "Risques",
+type ExpressForm = {
+  goodsOrServices: "" | "goods" | "services";
+  sellerCountry: string;
+  buyerCountry: string;
+  buyerIsTaxable: "" | "yes" | "no";
+  buyerVat: string;
 };
 
-type FormIssue = {
+type ProForm = {
+  incoterm: string;
+  incotermPlace: string;
+  hs6: string;
+  originCountry: string;
+  proofOfTransport: boolean;
+  netWeight: string;
+  grossWeight: string;
+  packageCount: string;
+  freight: string;
+  insurance: string;
+  sellerVat: string;
+  currency: string;
+  exchangeRate: string;
+  iban: string;
+  bic: string;
+  swift: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  totalHt: string;
+  totalTtc: string;
+  sellerName: string;
+  buyerName: string;
+  awb: string;
+  bl: string;
+  packingList: string;
+};
+
+type Detection = {
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  currency?: string;
+  totalHt?: number;
+  totalTtc?: number;
+  incoterm?: string;
+  vatRate?: number;
+  sellerName?: string;
+  buyerName?: string;
+  sellerCountry?: string;
+  buyerCountry?: string;
+  goodsOrServices?: "goods" | "services";
+  buyerVat?: string;
+};
+
+type EssentialAlert = {
   id: string;
-  level: "KO" | "WARN";
+  label: string;
+  status: "OK" | "WARN";
   message: string;
 };
+
+type AnalysisOutput = {
+  assessment: InvoiceAssessment;
+  context: TransactionContext;
+  invoice: InvoiceData;
+  customsAlerts: EssentialAlert[];
+  actionsToFix: string[];
+  missingQuestions: string[];
+};
+
+function stripAccents(value: string) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
 function round2(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-function parseNumberInput(value: string) {
-  const parsed = Number(String(value || "").replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
+function parseAmount(raw: string): number | null {
+  const cleaned = String(raw || "").replace(/[^0-9,.-]/g, "").trim();
+  if (!cleaned) return null;
 
-function parseNullableNumberInput(value: string) {
-  const raw = String(value || "").trim();
-  if (!raw) return null;
-  const parsed = Number(raw.replace(",", "."));
+  const normalized = cleaned.includes(",") && cleaned.includes(".")
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned.replace(",", ".");
+
+  const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function normalizeIso2(value: string) {
-  return String(value || "").trim().toUpperCase().slice(0, 2);
+function parseOptionalNumber(value: string): number | null {
+  const parsed = Number(String(value || "").replace(",", "."));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseOptionalInteger(value: string): number {
+  const parsed = Number(String(value || "").replace(/[^0-9-]/g, ""));
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 0;
 }
 
 function normalizeHs6(value: string) {
   return String(value || "").replace(/[^0-9]/g, "").slice(0, 6);
 }
 
-function formatMoney(value: number | null | undefined, currency: string) {
-  const amount = Number(value ?? 0);
-  if (!Number.isFinite(amount)) return "-";
+function normalizeIso2(value: string) {
+  return String(value || "").trim().toUpperCase().slice(0, 2);
+}
+
+function mergeUnique(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function hasDetectedData(detected: Detection | null) {
+  if (!detected) return false;
+  return Object.values(detected).some((value) => value !== undefined && value !== null && String(value).trim() !== "");
+}
+
+function extractReadableTextFromPdfBytes(bytes: Uint8Array) {
+  const raw = new TextDecoder("latin1").decode(bytes);
+  const parenthesisStrings = Array.from(raw.matchAll(/\(([^()]{2,180})\)/g))
+    .map((match) => match[1])
+    .join(" ");
+
+  const coarseText = raw.replace(/[^A-Za-z0-9%.,:;\/\-\s]/g, " ");
+  const merged = `${parenthesisStrings} ${coarseText}`.replace(/\s+/g, " ").trim();
+  return merged.slice(0, 40000);
+}
+
+async function extractTextFromPdf(file: File) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+
   try {
-    return new Intl.NumberFormat("fr-FR", {
-      style: "currency",
-      currency: currency || "EUR",
-      maximumFractionDigits: 2,
-    }).format(amount);
+    const pdfjsLib: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const loadingTask = pdfjsLib.getDocument({
+      data: bytes,
+      useWorkerFetch: false,
+      isEvalSupported: false,
+      disableFontFace: true,
+    });
+
+    const pdf = await loadingTask.promise;
+    let text = "";
+
+    for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
+      const page = await pdf.getPage(pageNo);
+      const content = await page.getTextContent();
+      const pageText = (content.items || [])
+        .map((item: any) => ("str" in item ? String(item.str) : ""))
+        .join(" ");
+      text += `${pageText}\n`;
+    }
+
+    if (text.trim()) {
+      return text.trim();
+    }
   } catch {
-    return `${amount.toFixed(2)} ${currency || "EUR"}`;
+    // fallback below
   }
+
+  return extractReadableTextFromPdfBytes(bytes);
 }
 
-function countryLabel(iso2: string) {
-  const code = normalizeIso2(iso2);
-  const found = COUNTRIES.find((country) => country.iso2 === code);
-  return found ? `${found.label_fr} (${found.iso2})` : code || "-";
+function detectCountryFromChunk(chunk: string, allowIso = false): string | null {
+  const normalized = stripAccents(chunk).toLowerCase();
+
+  for (const country of COUNTRIES) {
+    const fr = stripAccents(country.label_fr).toLowerCase();
+    const en = stripAccents(country.label_en).toLowerCase();
+    if ((fr && normalized.includes(fr)) || (en && normalized.includes(en))) {
+      return country.iso2;
+    }
+  }
+
+  if (!allowIso) return null;
+
+  const isoMatches = chunk.toUpperCase().match(/\b[A-Z]{2}\b/g) || [];
+  for (const match of isoMatches) {
+    if (COUNTRIES.some((country) => country.iso2 === match)) {
+      return match;
+    }
+  }
+
+  return null;
 }
 
-function computeLineValue(line: Pick<InvoiceLineInput, "qty" | "unitPrice" | "discountPct">) {
-  const qty = Number.isFinite(line.qty) ? line.qty : 0;
-  const unitPrice = Number.isFinite(line.unitPrice) ? line.unitPrice : 0;
-  const discountPct = Number.isFinite(line.discountPct) ? line.discountPct : 0;
-  return round2(qty * unitPrice * (1 - discountPct / 100));
+function detectCountryNearLabel(rawText: string, labels: RegExp[]) {
+  const lines = rawText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  for (const line of lines) {
+    if (!labels.some((label) => label.test(line))) continue;
+    const iso2 = detectCountryFromChunk(line, true);
+    if (iso2) return iso2;
+  }
+  return null;
 }
 
-function createLine(position: number): InvoiceLineInput {
+function detectCountriesByOrder(rawText: string) {
+  const normalized = stripAccents(rawText).toLowerCase();
+  const hits: Array<{ iso2: string; index: number }> = [];
+
+  for (const country of COUNTRIES) {
+    const fr = stripAccents(country.label_fr).toLowerCase();
+    const en = stripAccents(country.label_en).toLowerCase();
+    const idxFr = fr ? normalized.indexOf(fr) : -1;
+    const idxEn = en ? normalized.indexOf(en) : -1;
+    const idx = [idxFr, idxEn].filter((value) => value >= 0).sort((a, b) => a - b)[0];
+
+    if (typeof idx === "number" && idx >= 0) {
+      hits.push({ iso2: country.iso2, index: idx });
+    }
+  }
+
+  hits.sort((a, b) => a.index - b.index);
+  return mergeUnique(hits.map((hit) => hit.iso2));
+}
+function detectFromText(rawText: string): Detection | null {
+  const compact = String(rawText || "").replace(/\u0000/g, " ");
+  const oneLine = compact.replace(/\s+/g, " ").trim();
+  if (oneLine.length < 20) return null;
+
+  const detection: Detection = {};
+
+  const invoiceMatch = oneLine.match(/(?:invoice|facture)\s*(?:n[o°]|number|numero)?\s*[:#-]?\s*([A-Z0-9\-/]{4,})/i);
+  if (invoiceMatch) detection.invoiceNumber = invoiceMatch[1];
+
+  const dateMatch = oneLine.match(/\b(20\d{2}[\/-]\d{2}[\/-]\d{2}|\d{2}[\/-]\d{2}[\/-]20\d{2})\b/);
+  if (dateMatch) detection.invoiceDate = dateMatch[1];
+
+  const currencyMatch = oneLine.match(/\b(EUR|USD|GBP|CHF|CAD|AUD|JPY|CNY|MAD|BRL)\b/i);
+  if (currencyMatch) detection.currency = currencyMatch[1].toUpperCase();
+
+  const htMatch = oneLine.match(/(?:total\s*ht|subtotal|net\s*amount)\s*[:\-]?\s*([0-9][0-9\s.,-]{1,20})/i);
+  if (htMatch) {
+    const parsed = parseAmount(htMatch[1]);
+    if (parsed != null) detection.totalHt = parsed;
+  }
+
+  const ttcMatch = oneLine.match(/(?:total\s*(?:ttc|due)|grand\s*total|amount\s*due)\s*[:\-]?\s*([0-9][0-9\s.,-]{1,20})/i);
+  if (ttcMatch) {
+    const parsed = parseAmount(ttcMatch[1]);
+    if (parsed != null) detection.totalTtc = parsed;
+  }
+
+  const incotermMatch = oneLine.match(/\b(EXW|FCA|FOB|CFR|CIF|CPT|CIP|DAP|DPU|DDP)\b/i);
+  if (incotermMatch) detection.incoterm = incotermMatch[1].toUpperCase();
+
+  const vatRateMatch = oneLine.match(/(?:tva|vat)\s*[: ]?(\d{1,2}(?:[.,]\d{1,2})?)\s*%/i);
+  if (vatRateMatch) {
+    const parsed = parseOptionalNumber(vatRateMatch[1]);
+    if (parsed != null) detection.vatRate = parsed;
+  }
+
+  const buyerVatMatch = oneLine.match(/\b([A-Z]{2}[A-Z0-9]{8,12})\b/);
+  if (buyerVatMatch) detection.buyerVat = buyerVatMatch[1].toUpperCase();
+
+  if (/\b(service|services|prestation|consulting)\b/i.test(oneLine)) {
+    detection.goodsOrServices = "services";
+  } else if (/\b(goods|marchandise|product|quantity|qty|hs\s*\d{4,6})\b/i.test(oneLine)) {
+    detection.goodsOrServices = "goods";
+  }
+
+  const sellerNameMatch = compact.match(/(?:seller|vendeur|fournisseur)\s*[:\-]\s*([^\n\r]+)/i);
+  if (sellerNameMatch) detection.sellerName = sellerNameMatch[1].trim();
+
+  const buyerNameMatch = compact.match(/(?:buyer|acheteur|client|bill\s*to)\s*[:\-]\s*([^\n\r]+)/i);
+  if (buyerNameMatch) detection.buyerName = buyerNameMatch[1].trim();
+
+  const sellerCountry = detectCountryNearLabel(compact, [/(seller|vendeur|fournisseur|exporter|ship\s*from)/i, /(pays\s*vendeur)/i]);
+  const buyerCountry = detectCountryNearLabel(compact, [/(buyer|acheteur|client|importer|ship\s*to)/i, /(pays\s*acheteur)/i]);
+
+  if (sellerCountry) detection.sellerCountry = sellerCountry;
+  if (buyerCountry) detection.buyerCountry = buyerCountry;
+
+  if (!detection.sellerCountry || !detection.buyerCountry) {
+    const ordered = detectCountriesByOrder(compact);
+    if (!detection.sellerCountry && ordered[0]) detection.sellerCountry = ordered[0];
+    if (!detection.buyerCountry && ordered[1]) detection.buyerCountry = ordered[1];
+  }
+
+  return hasDetectedData(detection) ? detection : null;
+}
+
+function createInitialExpress(): ExpressForm {
   return {
-    id: `line_${Date.now()}_${position}`,
-    description: "",
-    hs6: "",
-    originCountry: "",
-    qty: 1,
-    unit: "pcs",
-    unitPrice: 0,
-    discountPct: 0,
-    lineValue: 0,
+    goodsOrServices: "",
+    sellerCountry: "",
+    buyerCountry: "",
+    buyerIsTaxable: "",
+    buyerVat: "",
   };
 }
 
-function createInitialContext(): TransactionContext {
+function createInitialPro(): ProForm {
   return {
-    goodsOrServices: "goods",
-    flowDirection: "auto",
-    sellerCountry: "FR",
-    buyerCountry: "",
-    buyerIsTaxable: true,
-    sellerVat: "",
-    buyerVat: "",
-    currency: "EUR",
-    exchangeRate: null,
     incoterm: "",
     incotermPlace: "",
+    hs6: "",
+    originCountry: "",
     proofOfTransport: false,
+    netWeight: "",
+    grossWeight: "",
+    packageCount: "",
+    freight: "",
+    insurance: "",
+    sellerVat: "",
+    currency: "EUR",
+    exchangeRate: "",
+    iban: "",
+    bic: "",
+    swift: "",
+    invoiceNumber: "",
+    invoiceDate: "",
+    totalHt: "",
+    totalTtc: "",
+    sellerName: "",
+    buyerName: "",
+    awb: "",
+    bl: "",
+    packingList: "",
   };
 }
 
-function createInitialInvoice(): InvoiceData {
-  return {
-    invoiceNumber: "",
-    issueDate: "",
+function buildAssessmentInput(express: ExpressForm, pro: ProForm, detected: Detection | null) {
+  const localQuestions: string[] = [];
+
+  const goodsOrServices = express.goodsOrServices || detected?.goodsOrServices || "goods";
+  if (!express.goodsOrServices && !detected?.goodsOrServices) {
+    localQuestions.push("La facture concerne des biens ou des services ?");
+  }
+
+  const sellerCountry = normalizeIso2(express.sellerCountry || detected?.sellerCountry || "");
+  if (!sellerCountry) localQuestions.push("Quel est le pays vendeur ?");
+
+  const buyerCountry = normalizeIso2(express.buyerCountry || detected?.buyerCountry || "");
+  if (!buyerCountry) localQuestions.push("Quel est le pays acheteur ?");
+
+  const buyerIsTaxable = express.buyerIsTaxable === "yes" ? true : express.buyerIsTaxable === "no" ? false : true;
+  if (!express.buyerIsTaxable) localQuestions.push("Acheteur professionnel assujetti TVA ?");
+
+  const flowDirection: TransactionContext["flowDirection"] =
+    sellerCountry && buyerCountry && sellerCountry !== buyerCountry
+      ? buyerCountry === "FR"
+        ? "import"
+        : sellerCountry === "FR"
+          ? "export"
+          : "auto"
+      : "auto";
+
+  const currency = String(pro.currency || detected?.currency || "EUR").toUpperCase();
+  const exchangeRate = parseOptionalNumber(pro.exchangeRate);
+
+  const totalHt = parseAmount(pro.totalHt) ?? detected?.totalHt ?? 0;
+  const totalTtcRaw = parseAmount(pro.totalTtc) ?? detected?.totalTtc ?? 0;
+  const vatFromRate = detected?.vatRate ? round2(totalHt * detected.vatRate / 100) : 0;
+  const vatAmount = totalTtcRaw > 0 && totalHt > 0 ? round2(Math.max(0, totalTtcRaw - totalHt)) : vatFromRate;
+  const totalTtc = totalTtcRaw > 0 ? totalTtcRaw : round2(totalHt + vatAmount);
+
+  const context: TransactionContext = {
+    goodsOrServices,
+    flowDirection,
+    sellerCountry,
+    buyerCountry,
+    buyerIsTaxable,
+    sellerVat: String(pro.sellerVat || "").toUpperCase().replace(/\s+/g, ""),
+    buyerVat: String(express.buyerVat || detected?.buyerVat || "").toUpperCase().replace(/\s+/g, ""),
+    currency,
+    exchangeRate,
+    incoterm: (pro.incoterm || detected?.incoterm || "").toUpperCase(),
+    incotermPlace: pro.incotermPlace,
+    proofOfTransport: pro.proofOfTransport,
+  };
+
+  const invoice: InvoiceData = {
+    invoiceNumber: pro.invoiceNumber || detected?.invoiceNumber || "",
+    issueDate: pro.invoiceDate || detected?.invoiceDate || "",
     poReference: "",
     contractReference: "",
     seller: {
-      name: "",
+      name: pro.sellerName || detected?.sellerName || "",
       address: "",
       identifier: "",
     },
     buyer: {
-      name: "",
+      name: pro.buyerName || detected?.buyerName || "",
       address: "",
       identifier: "",
     },
-    lines: [createLine(1)],
+    lines: [
+      {
+        id: "line-1",
+        description: goodsOrServices === "services" ? "Prestation" : "Marchandises",
+        hs6: normalizeHs6(pro.hs6),
+        originCountry: normalizeIso2(pro.originCountry),
+        qty: 1,
+        unit: goodsOrServices === "services" ? "service" : "lot",
+        unitPrice: totalHt,
+        discountPct: 0,
+        lineValue: totalHt,
+      },
+    ],
     totals: {
-      totalHt: 0,
-      vatAmount: 0,
-      totalTtc: 0,
+      totalHt,
+      vatAmount,
+      totalTtc: totalTtc,
     },
-    netWeight: 0,
-    grossWeight: 0,
-    packageCount: 0,
+    netWeight: parseOptionalNumber(pro.netWeight) || 0,
+    grossWeight: parseOptionalNumber(pro.grossWeight) || 0,
+    packageCount: parseOptionalInteger(pro.packageCount),
     marksNumbers: "",
     payment: {
       dueDate: "",
-      iban: "",
-      bic: "",
-      swift: "",
+      iban: String(pro.iban || "").toUpperCase().replace(/\s+/g, ""),
+      bic: String(pro.bic || "").toUpperCase().replace(/\s+/g, ""),
+      swift: String(pro.swift || "").toUpperCase().replace(/\s+/g, ""),
     },
     charges: {
-      freight: 0,
-      insurance: 0,
+      freight: parseOptionalNumber(pro.freight) || 0,
+      insurance: parseOptionalNumber(pro.insurance) || 0,
       other: 0,
     },
     documents: {
-      awb: "",
-      bl: "",
-      packingList: "",
+      awb: pro.awb,
+      bl: pro.bl,
+      packingList: pro.packingList,
     },
   };
-}
-function buildContextIssues(context: TransactionContext): FormIssue[] {
-  const issues: FormIssue[] = [];
-  const seller = normalizeIso2(context.sellerCountry);
-  const buyer = normalizeIso2(context.buyerCountry);
-  const isInternational = Boolean(seller && buyer && seller !== buyer);
-  const isIntraEuGoods = context.goodsOrServices === "goods" && isEuIso2(seller) && isEuIso2(buyer) && seller !== buyer;
 
-  if (!seller) {
-    issues.push({
-      id: "ctx_seller",
-      level: "KO",
-      message: "Pays vendeur obligatoire.",
-    });
-  }
-
-  if (!buyer) {
-    issues.push({
-      id: "ctx_buyer",
-      level: "KO",
-      message: "Pays acheteur obligatoire.",
-    });
-  }
-
-  if (!isValidIsoCurrency(context.currency)) {
-    issues.push({
-      id: "ctx_currency",
-      level: "KO",
-      message: "Devise invalide: utilisez un code ISO 4217 (EUR, USD, GBP, ...).",
-    });
-  }
-
-  if (context.currency.toUpperCase() !== "EUR" && (!context.exchangeRate || context.exchangeRate <= 0)) {
-    issues.push({
-      id: "ctx_fx",
-      level: "KO",
-      message: "Taux de change obligatoire si la devise est differente de EUR.",
-    });
-  }
-
-  if (isInternational && (!context.incoterm.trim() || !context.incotermPlace.trim())) {
-    issues.push({
-      id: "ctx_incoterm",
-      level: "WARN",
-      message: "Incoterm + lieu recommandes en international (warning si absent).",
-    });
-  }
-
-  if (isIntraEuGoods && !context.proofOfTransport) {
-    issues.push({
-      id: "ctx_transport_proof",
-      level: "WARN",
-      message: "Preuve de transport intra-UE non cochee: condition d'exoneration TVA potentiellement manquante.",
-    });
-  }
-
-  return issues;
+  return {
+    context,
+    invoice,
+    localQuestions: mergeUnique(localQuestions).slice(0, 3),
+  };
 }
 
-function statusBadge(status: "OK" | "WARNING" | "BLOCKING") {
-  if (status === "OK") {
-    return (
-      <Badge className="gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
-        <CheckCircle2 className="h-3.5 w-3.5" />
-        OK
-      </Badge>
-    );
-  }
-  if (status === "WARNING") {
-    return (
-      <Badge className="gap-1 bg-amber-100 text-amber-800 hover:bg-amber-100">
-        <AlertTriangle className="h-3.5 w-3.5" />
-        WARNING
-      </Badge>
-    );
-  }
-  return (
-    <Badge className="gap-1 bg-rose-100 text-rose-800 hover:bg-rose-100">
-      <XCircle className="h-3.5 w-3.5" />
-      BLOCKING
-    </Badge>
+function buildEssentialCustomsAlerts(context: TransactionContext, invoice: InvoiceData): EssentialAlert[] {
+  return [
+    {
+      id: "incoterm",
+      label: "Incoterm",
+      status: context.incoterm && context.incotermPlace ? "OK" : "WARN",
+      message: context.incoterm && context.incotermPlace
+        ? `${context.incoterm} ${context.incotermPlace}`
+        : "Incoterm ou lieu manquant",
+    },
+    {
+      id: "hs6",
+      label: "Code HS",
+      status: invoice.lines[0]?.hs6?.length === 6 ? "OK" : "WARN",
+      message: invoice.lines[0]?.hs6?.length === 6 ? invoice.lines[0].hs6 : "HS6 absent",
+    },
+    {
+      id: "origin",
+      label: "Origine",
+      status: invoice.lines[0]?.originCountry ? "OK" : "WARN",
+      message: invoice.lines[0]?.originCountry || "Pays d'origine absent",
+    },
+    {
+      id: "value",
+      label: "Valeur facture",
+      status: invoice.totals.totalHt > 0 ? "OK" : "WARN",
+      message: invoice.totals.totalHt > 0
+        ? `${invoice.totals.totalHt.toFixed(2)} ${context.currency}`
+        : "Valeur HT manquante",
+    },
+    {
+      id: "freight_insurance",
+      label: "Fret / Assurance",
+      status: invoice.charges.freight > 0 || invoice.charges.insurance > 0 ? "OK" : "WARN",
+      message: invoice.charges.freight > 0 || invoice.charges.insurance > 0
+        ? `Fret ${invoice.charges.freight || 0} / Assurance ${invoice.charges.insurance || 0}`
+        : "Fret et assurance non renseignes",
+    },
+  ];
+}
+
+function buildActions(checks: CheckerItem[]) {
+  const fixes = mergeUnique(
+    checks
+      .filter((check) => check.status !== "OK")
+      .map((check) => check.what_to_fix),
   );
+  return fixes.slice(0, 5);
 }
 
-function checkStatusBadge(status: CheckStatus) {
+function statusPill(status: "OK" | "WARN" | "KO") {
   if (status === "OK") {
     return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">OK</Badge>;
   }
@@ -271,183 +514,214 @@ function checkStatusBadge(status: CheckStatus) {
   }
   return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100">KO</Badge>;
 }
-
-function toResultSummary(assessmentChecks: CheckerItem[]) {
-  const ko = assessmentChecks.filter((check) => check.status === "KO").length;
-  const warn = assessmentChecks.filter((check) => check.status === "WARN").length;
-  const ok = assessmentChecks.filter((check) => check.status === "OK").length;
-  return { ko, warn, ok };
-}
-
 export default function InvoiceCheck() {
   const { toast } = useToast();
 
-  const [context, setContext] = React.useState<TransactionContext>(() => createInitialContext());
-  const [invoice, setInvoice] = React.useState<InvoiceData>(() => createInitialInvoice());
-  const [activeTab, setActiveTab] = React.useState<CheckerTab>("mentions");
+  const [express, setExpress] = React.useState<ExpressForm>(() => createInitialExpress());
+  const [pro, setPro] = React.useState<ProForm>(() => createInitialPro());
+  const [pastedText, setPastedText] = React.useState("");
+  const [pdfText, setPdfText] = React.useState("");
   const [pdfFileName, setPdfFileName] = React.useState("");
+  const [isExtractingPdf, setIsExtractingPdf] = React.useState(false);
+  const [extractError, setExtractError] = React.useState("");
+  const [detected, setDetected] = React.useState<Detection | null>(null);
+  const [detectedPending, setDetectedPending] = React.useState(false);
+  const [currentStep, setCurrentStep] = React.useState<1 | 2>(1);
+  const [result, setResult] = React.useState<AnalysisOutput | null>(null);
 
-  const isInternational = React.useMemo(
-    () => Boolean(context.sellerCountry && context.buyerCountry && context.sellerCountry !== context.buyerCountry),
-    [context.buyerCountry, context.sellerCountry],
+  const mergedSourceText = React.useMemo(
+    () => [pdfText, pastedText].filter(Boolean).join("\n"),
+    [pdfText, pastedText],
   );
 
-  const contextIssues = React.useMemo(() => buildContextIssues(context), [context]);
-  const assessment = React.useMemo(() => assessInvoice(context, invoice), [context, invoice]);
-
-  const allChecks = React.useMemo(
-    () => TAB_ORDER.flatMap((tab) => assessment.checks_by_tab[tab]),
-    [assessment],
-  );
-  const checkSummary = React.useMemo(() => toResultSummary(allChecks), [allChecks]);
-
-  const lineTotal = React.useMemo(
-    () => round2(invoice.lines.reduce((sum, line) => sum + Number(line.lineValue || 0), 0)),
-    [invoice.lines],
-  );
-
-  const updateContext = React.useCallback((patch: Partial<TransactionContext>) => {
-    setContext((prev) => ({ ...prev, ...patch }));
-  }, []);
-
-  const updateInvoice = React.useCallback(<K extends keyof InvoiceData>(key: K, value: InvoiceData[K]) => {
-    setInvoice((prev) => ({ ...prev, [key]: value }));
-  }, []);
-
-  const updateLine = React.useCallback((lineId: string, patch: Partial<InvoiceLineInput>) => {
-    setInvoice((prev) => ({
-      ...prev,
-      lines: prev.lines.map((line) => {
-        if (line.id !== lineId) return line;
-        const next = { ...line, ...patch };
-        const lineValueExplicit = "lineValue" in patch;
-        const shouldAutoCompute = "qty" in patch || "unitPrice" in patch || "discountPct" in patch;
-        if (!lineValueExplicit && shouldAutoCompute) {
-          next.lineValue = computeLineValue(next);
-        }
-        return next;
-      }),
-    }));
-  }, []);
-
-  const addLine = React.useCallback(() => {
-    setInvoice((prev) => ({
-      ...prev,
-      lines: [...prev.lines, createLine(prev.lines.length + 1)],
-    }));
-  }, []);
-
-  const removeLine = React.useCallback((lineId: string) => {
-    setInvoice((prev) => {
-      if (prev.lines.length <= 1) return prev;
-      return {
-        ...prev,
-        lines: prev.lines.filter((line) => line.id !== lineId),
-      };
-    });
-  }, []);
-
-  const recomputeTotals = React.useCallback(() => {
-    setInvoice((prev) => {
-      const recomputedHt = round2(prev.lines.reduce((sum, line) => sum + Number(line.lineValue || 0), 0));
-      return {
-        ...prev,
-        totals: {
-          ...prev.totals,
-          totalHt: recomputedHt,
-          totalTtc: round2(recomputedHt + Number(prev.totals.vatAmount || 0)),
-        },
-      };
-    });
-    toast({
-      title: "Totaux recalcules",
-      description: "HT aligne sur la somme des lignes, TTC = HT + TVA.",
-    });
-  }, [toast]);
-
-  const resetForm = React.useCallback(() => {
-    setContext(createInitialContext());
-    setInvoice(createInitialInvoice());
-    setActiveTab("mentions");
-    setPdfFileName("");
-  }, []);
-
-  const handlePdfUpload = React.useCallback(
-    (file: File | null | undefined) => {
+  const handlePdfSelected = React.useCallback(
+    async (file: File | null | undefined) => {
       if (!file) return;
+
       if (!file.type.includes("pdf") && !file.name.toLowerCase().endsWith(".pdf")) {
         toast({
           title: "Format non supporte",
-          description: "Importez un PDF. L'extraction OCR reste optionnelle et non bloquante.",
+          description: "Importez un fichier PDF.",
         });
         return;
       }
+
       setPdfFileName(file.name);
-      toast({
-        title: "PDF charge",
-        description: "La verification s'appuie prioritairement sur la saisie guidee.",
-      });
+      setExtractError("");
+      setIsExtractingPdf(true);
+
+      try {
+        const text = await extractTextFromPdf(file);
+        setPdfText(text);
+
+        const auto = detectFromText(text);
+        setDetected(auto);
+        setDetectedPending(Boolean(auto));
+
+        toast({
+          title: "PDF traite",
+          description: auto
+            ? "Champs detectes proposes. Confirmez ou corrigez."
+            : "Extraction partielle: continuez en saisie express.",
+        });
+      } catch {
+        setExtractError("Extraction PDF indisponible. Continuez en saisie manuelle.");
+        setPdfText("");
+      } finally {
+        setIsExtractingPdf(false);
+      }
     },
     [toast],
   );
 
-  const alertVariant = contextIssues.some((issue) => issue.level === "KO") ? "destructive" : "warning";
-  const currencyUpper = context.currency.toUpperCase();
-  const requiresFxRate = currencyUpper !== "EUR";
+  const applyDetectedValues = React.useCallback(() => {
+    if (!detected) return;
+
+    setExpress((prev) => ({
+      goodsOrServices: prev.goodsOrServices || detected.goodsOrServices || "",
+      sellerCountry: prev.sellerCountry || detected.sellerCountry || "",
+      buyerCountry: prev.buyerCountry || detected.buyerCountry || "",
+      buyerIsTaxable: prev.buyerIsTaxable,
+      buyerVat: prev.buyerVat || detected.buyerVat || "",
+    }));
+
+    setPro((prev) => ({
+      ...prev,
+      currency: prev.currency || detected.currency || "EUR",
+      incoterm: prev.incoterm || detected.incoterm || "",
+      invoiceNumber: prev.invoiceNumber || detected.invoiceNumber || "",
+      invoiceDate: prev.invoiceDate || detected.invoiceDate || "",
+      totalHt: prev.totalHt || (detected.totalHt ? String(detected.totalHt) : ""),
+      totalTtc: prev.totalTtc || (detected.totalTtc ? String(detected.totalTtc) : ""),
+      sellerName: prev.sellerName || detected.sellerName || "",
+      buyerName: prev.buyerName || detected.buyerName || "",
+    }));
+
+    setDetectedPending(false);
+    toast({
+      title: "Valeurs detectees appliquees",
+      description: "Les champs express ont ete pre-remplis.",
+    });
+  }, [detected, toast]);
+
+  const handleAnalyze = React.useCallback(() => {
+    const freshDetected = mergedSourceText ? detectFromText(mergedSourceText) : null;
+    const effectiveDetected = freshDetected || detected;
+
+    if (freshDetected) {
+      setDetected(freshDetected);
+      if (!detectedPending) setDetectedPending(true);
+    }
+
+    const built = buildAssessmentInput(express, pro, effectiveDetected);
+    const assessment = assessInvoice(built.context, built.invoice);
+
+    const allChecks = [
+      ...assessment.checks_by_tab.mentions,
+      ...assessment.checks_by_tab.vat,
+      ...assessment.checks_by_tab.customs,
+      ...assessment.checks_by_tab.fx,
+      ...assessment.checks_by_tab.calculs,
+      ...assessment.checks_by_tab.risks,
+    ];
+
+    const actionsToFix = buildActions(allChecks);
+    const missingQuestions = mergeUnique([
+      ...assessment.vat_result.missing_questions,
+      ...built.localQuestions,
+    ]).slice(0, 4);
+
+    const customsAlerts = buildEssentialCustomsAlerts(built.context, built.invoice);
+
+    setResult({
+      assessment,
+      context: built.context,
+      invoice: built.invoice,
+      customsAlerts,
+      actionsToFix,
+      missingQuestions,
+    });
+
+    setCurrentStep(2);
+  }, [detected, detectedPending, express, mergedSourceText, pro]);
+
+  const globalStatus = result
+    ? result.assessment.status === "OK"
+      ? "OK"
+      : result.assessment.status === "WARNING"
+        ? "WARN"
+        : "KO"
+    : "WARN";
 
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">Mode guide: facture import/export</p>
-            <h1 className="text-xl font-semibold text-slate-900">Verification de facture operationnelle</h1>
-            <p className="text-sm text-muted-foreground">
-              Flux en 3 blocs: contexte, donnees facture, resultat expert TVA/douane/devise.
-            </p>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold text-slate-900">Verification de facture</h1>
+          <p className="text-sm text-muted-foreground">
+            Wizard 30 secondes: verif express puis resultat. Les champs Pro sont optionnels.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className={currentStep === 1 ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}>
+              Etape 1: Verif express
+            </Badge>
+            <Badge className={currentStep === 2 ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}>
+              Etape 2: Resultat
+            </Badge>
           </div>
-          <Button variant="outline" onClick={resetForm}>
-            Reinitialiser
-          </Button>
         </div>
-
-        {contextIssues.length > 0 ? (
-          <Alert variant={alertVariant}>
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Points de saisie a corriger</AlertTitle>
-            <AlertDescription className="space-y-1">
-              {contextIssues.map((issue) => (
-                <p key={issue.id}>- {issue.message}</p>
-              ))}
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <Alert>
-            <CheckCircle2 className="h-4 w-4" />
-            <AlertTitle>Contexte minimum complet</AlertTitle>
-            <AlertDescription>
-              Les champs critiques sont renseignes. Vous pouvez fiabiliser les calculs et les checks detailes.
-            </AlertDescription>
-          </Alert>
-        )}
 
         <Card>
           <CardHeader>
-            <CardTitle>A) Contexte transaction</CardTitle>
+            <CardTitle>Etape 1 - Verif express</CardTitle>
             <CardDescription>
-              Obligatoire pour determiner TVA, logique import/export, devise et exigences documentaires.
+              5 champs maximum pour un verdict TVA rapide. Les donnees partielles restent analysees.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Upload PDF (optionnel)</Label>
+                <Input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  onChange={(event) => {
+                    void handlePdfSelected(event.target.files?.[0]);
+                    event.currentTarget.value = "";
+                  }}
+                />
+                {pdfFileName ? <p className="text-xs text-muted-foreground">Fichier: {pdfFileName}</p> : null}
+                {isExtractingPdf ? (
+                  <p className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Extraction PDF en cours
+                  </p>
+                ) : null}
+                {extractError ? <p className="text-xs text-amber-700">{extractError}</p> : null}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Coller texte (optionnel)</Label>
+                <Textarea
+                  value={pastedText}
+                  onChange={(event) => setPastedText(event.target.value)}
+                  placeholder="Collez ici le texte de la facture ou du mail client"
+                  className="min-h-[98px]"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
               <div className="space-y-1">
                 <Label>Biens / Services</Label>
                 <Select
-                  value={context.goodsOrServices}
-                  onValueChange={(value: "goods" | "services") => updateContext({ goodsOrServices: value })}
+                  value={express.goodsOrServices || undefined}
+                  onValueChange={(value: "goods" | "services") =>
+                    setExpress((prev) => ({ ...prev, goodsOrServices: value }))
+                  }
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Si non detecte" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="goods">Biens</SelectItem>
@@ -457,30 +731,13 @@ export default function InvoiceCheck() {
               </div>
 
               <div className="space-y-1">
-                <Label>Flux</Label>
-                <Select
-                  value={context.flowDirection}
-                  onValueChange={(value: "auto" | "import" | "export") => updateContext({ flowDirection: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">Auto via pays</SelectItem>
-                    <SelectItem value="import">Import</SelectItem>
-                    <SelectItem value="export">Export</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
                 <Label>Pays vendeur</Label>
                 <Select
-                  value={context.sellerCountry || undefined}
-                  onValueChange={(value) => updateContext({ sellerCountry: value })}
+                  value={express.sellerCountry || undefined}
+                  onValueChange={(value) => setExpress((prev) => ({ ...prev, sellerCountry: value }))}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Choisir" />
+                    <SelectValue placeholder="Si non detecte" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[320px]">
                     {COUNTRIES.map((country) => (
@@ -495,11 +752,11 @@ export default function InvoiceCheck() {
               <div className="space-y-1">
                 <Label>Pays acheteur</Label>
                 <Select
-                  value={context.buyerCountry || undefined}
-                  onValueChange={(value) => updateContext({ buyerCountry: value })}
+                  value={express.buyerCountry || undefined}
+                  onValueChange={(value) => setExpress((prev) => ({ ...prev, buyerCountry: value }))}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Choisir" />
+                    <SelectValue placeholder="Si non detecte" />
                   </SelectTrigger>
                   <SelectContent className="max-h-[320px]">
                     {COUNTRIES.map((country) => (
@@ -512,13 +769,15 @@ export default function InvoiceCheck() {
               </div>
 
               <div className="space-y-1">
-                <Label>Acheteur assujetti TVA ?</Label>
+                <Label>Acheteur pro assujetti ?</Label>
                 <Select
-                  value={context.buyerIsTaxable ? "yes" : "no"}
-                  onValueChange={(value) => updateContext({ buyerIsTaxable: value === "yes" })}
+                  value={express.buyerIsTaxable || undefined}
+                  onValueChange={(value: "yes" | "no") =>
+                    setExpress((prev) => ({ ...prev, buyerIsTaxable: value }))
+                  }
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Obligatoire" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="yes">Oui</SelectItem>
@@ -528,828 +787,329 @@ export default function InvoiceCheck() {
               </div>
 
               <div className="space-y-1">
-                <Label>N TVA vendeur</Label>
+                <Label>N TVA acheteur (optionnel)</Label>
                 <Input
-                  value={context.sellerVat}
+                  value={express.buyerVat}
                   onChange={(event) =>
-                    updateContext({
-                      sellerVat: event.target.value.toUpperCase().replace(/\s+/g, ""),
-                    })
-                  }
-                  placeholder="FR12345678901"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label>N TVA acheteur</Label>
-                <Input
-                  value={context.buyerVat}
-                  onChange={(event) =>
-                    updateContext({
+                    setExpress((prev) => ({
+                      ...prev,
                       buyerVat: event.target.value.toUpperCase().replace(/\s+/g, ""),
-                    })
+                    }))
                   }
-                  placeholder="IT12345678901"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label>Preuve transport UE ?</Label>
-                <Select
-                  value={context.proofOfTransport ? "yes" : "no"}
-                  onValueChange={(value) => updateContext({ proofOfTransport: value === "yes" })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="yes">Oui</SelectItem>
-                    <SelectItem value="no">Non</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label>Devise (ISO 4217)</Label>
-                <Input
-                  value={context.currency}
-                  onChange={(event) =>
-                    updateContext({
-                      currency: event.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3),
-                    })
-                  }
-                  placeholder="EUR"
-                />
-                <p className="text-xs text-muted-foreground">Codes frequents: {CURRENCIES.map((currency) => currency.value).join(", ")}</p>
-              </div>
-
-              <div className="space-y-1">
-                <Label>Taux de change ({currencyUpper} vers EUR)</Label>
-                <Input
-                  type="number"
-                  step="0.0001"
-                  min="0"
-                  value={context.exchangeRate == null ? "" : String(context.exchangeRate)}
-                  onChange={(event) => updateContext({ exchangeRate: parseNullableNumberInput(event.target.value) })}
-                  placeholder={requiresFxRate ? "Obligatoire si devise != EUR" : "Non requis en EUR"}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label>Incoterm</Label>
-                <Select value={context.incoterm || undefined} onValueChange={(value) => updateContext({ incoterm: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="EXW / FCA / DDP..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {INCOTERMS.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.value}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label>Lieu Incoterm</Label>
-                <Input
-                  value={context.incotermPlace}
-                  onChange={(event) => updateContext({ incotermPlace: event.target.value })}
-                  placeholder="FCA Lyon / DAP Milan"
+                  placeholder="IT123..."
                 />
               </div>
             </div>
 
-            {isInternational && (!context.incoterm || !context.incotermPlace) ? (
-              <Alert variant="warning">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>International sans Incoterm complet</AlertTitle>
-                <AlertDescription>
-                  Le moteur continue, mais ce point reste en warning. Ajoutez le code Incoterm et le lieu.
-                </AlertDescription>
-              </Alert>
-            ) : null}
-
-            <p className="text-xs text-muted-foreground">
-              Verification VIES:{" "}
-              <a className="underline" href="https://ec.europa.eu/taxation_customs/vies/" target="_blank" rel="noreferrer">
-                https://ec.europa.eu/taxation_customs/vies/
-              </a>
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <CardTitle>B) Donnees facture</CardTitle>
-                <CardDescription>
-                  Saisie guidee complete: identites, lignes, totaux, devise, poids, paiement et frais douaniers.
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={addLine}>
-                  <Plus className="h-4 w-4" />
-                  Ajouter ligne
-                </Button>
-                <Button variant="outline" size="sm" onClick={recomputeTotals}>
-                  <RefreshCcw className="h-4 w-4" />
-                  Recalculer HT/TTC
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-1">
-                <Label>Numero unique facture</Label>
-                <Input
-                  value={invoice.invoiceNumber}
-                  onChange={(event) => updateInvoice("invoiceNumber", event.target.value)}
-                  placeholder="FAC-2026-001"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Date emission</Label>
-                <Input
-                  type="date"
-                  value={invoice.issueDate}
-                  onChange={(event) => updateInvoice("issueDate", event.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Reference PO</Label>
-                <Input
-                  value={invoice.poReference}
-                  onChange={(event) => updateInvoice("poReference", event.target.value)}
-                  placeholder="PO-8842"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Reference contrat</Label>
-                <Input
-                  value={invoice.contractReference}
-                  onChange={(event) => updateInvoice("contractReference", event.target.value)}
-                  placeholder="CTR-2026-18"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-3 rounded-lg border p-4">
-                <p className="text-sm font-semibold">Vendeur</p>
-                <div className="space-y-1">
-                  <Label>Nom</Label>
-                  <Input
-                    value={invoice.seller.name}
-                    onChange={(event) =>
-                      updateInvoice("seller", {
-                        ...invoice.seller,
-                        name: event.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Adresse</Label>
-                  <Input
-                    value={invoice.seller.address}
-                    onChange={(event) =>
-                      updateInvoice("seller", {
-                        ...invoice.seller,
-                        address: event.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>ID (SIREN / VAT / Registre)</Label>
-                  <Input
-                    value={invoice.seller.identifier}
-                    onChange={(event) =>
-                      updateInvoice("seller", {
-                        ...invoice.seller,
-                        identifier: event.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-3 rounded-lg border p-4">
-                <p className="text-sm font-semibold">Acheteur</p>
-                <div className="space-y-1">
-                  <Label>Nom</Label>
-                  <Input
-                    value={invoice.buyer.name}
-                    onChange={(event) =>
-                      updateInvoice("buyer", {
-                        ...invoice.buyer,
-                        name: event.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Adresse</Label>
-                  <Input
-                    value={invoice.buyer.address}
-                    onChange={(event) =>
-                      updateInvoice("buyer", {
-                        ...invoice.buyer,
-                        address: event.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>ID (VAT / Registre)</Label>
-                  <Input
-                    value={invoice.buyer.identifier}
-                    onChange={(event) =>
-                      updateInvoice("buyer", {
-                        ...invoice.buyer,
-                        identifier: event.target.value,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">Lignes facture</p>
-                <p className="text-xs text-muted-foreground">Chaque ligne: description, HS6, qty, PU, remise, valeur</p>
-              </div>
-
-              {invoice.lines.map((line, index) => {
-                const autoValue = computeLineValue(line);
-                return (
-                  <div key={line.id} className="space-y-3 rounded-lg border p-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold">Ligne {index + 1}</p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeLine(line.id)}
-                        disabled={invoice.lines.length <= 1}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Supprimer
-                      </Button>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                      <div className="space-y-1 md:col-span-2">
-                        <Label>Description</Label>
-                        <Input
-                          value={line.description}
-                          onChange={(event) => updateLine(line.id, { description: event.target.value })}
-                          placeholder="Description produit/service"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>HS6 (si connu)</Label>
-                        <Input
-                          value={line.hs6}
-                          onChange={(event) => updateLine(line.id, { hs6: normalizeHs6(event.target.value) })}
-                          placeholder="850760"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Pays origine</Label>
-                        <Input
-                          value={line.originCountry}
-                          onChange={(event) => updateLine(line.id, { originCountry: normalizeIso2(event.target.value) })}
-                          placeholder="FR"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Quantite</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.001"
-                          value={String(line.qty)}
-                          onChange={(event) => updateLine(line.id, { qty: parseNumberInput(event.target.value) })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Unite</Label>
-                        <Input
-                          value={line.unit}
-                          onChange={(event) => updateLine(line.id, { unit: event.target.value })}
-                          placeholder="pcs/kg/litre"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Prix unitaire</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={String(line.unitPrice)}
-                          onChange={(event) => updateLine(line.id, { unitPrice: parseNumberInput(event.target.value) })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Remise %</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          value={String(line.discountPct)}
-                          onChange={(event) => updateLine(line.id, { discountPct: parseNumberInput(event.target.value) })}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Valeur ligne</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={String(line.lineValue)}
-                          onChange={(event) => updateLine(line.id, { lineValue: parseNumberInput(event.target.value) })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      <span>Valeur auto calculee: {autoValue.toFixed(2)}</span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => updateLine(line.id, { lineValue: autoValue })}
-                      >
-                        Utiliser valeur auto
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <Separator />
-
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-1">
-                <Label>Total HT</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={String(invoice.totals.totalHt)}
-                  onChange={(event) =>
-                    updateInvoice("totals", {
-                      ...invoice.totals,
-                      totalHt: parseNumberInput(event.target.value),
-                    })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">Somme lignes actuelle: {lineTotal.toFixed(2)}</p>
-              </div>
-              <div className="space-y-1">
-                <Label>Montant TVA</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={String(invoice.totals.vatAmount)}
-                  onChange={(event) =>
-                    updateInvoice("totals", {
-                      ...invoice.totals,
-                      vatAmount: parseNumberInput(event.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Total TTC</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={String(invoice.totals.totalTtc)}
-                  onChange={(event) =>
-                    updateInvoice("totals", {
-                      ...invoice.totals,
-                      totalTtc: parseNumberInput(event.target.value),
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Nombre colis</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={String(invoice.packageCount)}
-                  onChange={(event) => updateInvoice("packageCount", parseNumberInput(event.target.value))}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Poids net</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.001"
-                  value={String(invoice.netWeight)}
-                  onChange={(event) => updateInvoice("netWeight", parseNumberInput(event.target.value))}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Poids brut</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.001"
-                  value={String(invoice.grossWeight)}
-                  onChange={(event) => updateInvoice("grossWeight", parseNumberInput(event.target.value))}
-                />
-              </div>
-              <div className="space-y-1 md:col-span-2">
-                <Label>Marques / numeros colis</Label>
-                <Input
-                  value={invoice.marksNumbers}
-                  onChange={(event) => updateInvoice("marksNumbers", event.target.value)}
-                  placeholder="ABX/001-012"
-                />
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="space-y-3 rounded-lg border p-4">
-                <p className="text-sm font-semibold">Paiement</p>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label>Echeance</Label>
-                    <Input
-                      type="date"
-                      value={invoice.payment.dueDate}
-                      onChange={(event) =>
-                        updateInvoice("payment", {
-                          ...invoice.payment,
-                          dueDate: event.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>IBAN (optionnel)</Label>
-                    <Input
-                      value={invoice.payment.iban}
-                      onChange={(event) =>
-                        updateInvoice("payment", {
-                          ...invoice.payment,
-                          iban: event.target.value.toUpperCase().replace(/\s+/g, ""),
-                        })
-                      }
-                      placeholder="FR76..."
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>BIC (optionnel)</Label>
-                    <Input
-                      value={invoice.payment.bic}
-                      onChange={(event) =>
-                        updateInvoice("payment", {
-                          ...invoice.payment,
-                          bic: event.target.value.toUpperCase().replace(/\s+/g, ""),
-                        })
-                      }
-                      placeholder="BNPAFRPP"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>SWIFT (optionnel)</Label>
-                    <Input
-                      value={invoice.payment.swift}
-                      onChange={(event) =>
-                        updateInvoice("payment", {
-                          ...invoice.payment,
-                          swift: event.target.value.toUpperCase().replace(/\s+/g, ""),
-                        })
-                      }
-                      placeholder="DEUTDEFF"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3 rounded-lg border p-4">
-                <p className="text-sm font-semibold">Frais pour valeur en douane</p>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="space-y-1">
-                    <Label>Freight</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={String(invoice.charges.freight)}
-                      onChange={(event) =>
-                        updateInvoice("charges", {
-                          ...invoice.charges,
-                          freight: parseNumberInput(event.target.value),
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Insurance</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={String(invoice.charges.insurance)}
-                      onChange={(event) =>
-                        updateInvoice("charges", {
-                          ...invoice.charges,
-                          insurance: parseNumberInput(event.target.value),
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Autres</Label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={String(invoice.charges.other)}
-                      onChange={(event) =>
-                        updateInvoice("charges", {
-                          ...invoice.charges,
-                          other: parseNumberInput(event.target.value),
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="space-y-1">
-                <Label>AWB (optionnel)</Label>
-                <Input
-                  value={invoice.documents.awb}
-                  onChange={(event) =>
-                    updateInvoice("documents", {
-                      ...invoice.documents,
-                      awb: event.target.value,
-                    })
-                  }
-                  placeholder="020-12345675"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>B/L (optionnel)</Label>
-                <Input
-                  value={invoice.documents.bl}
-                  onChange={(event) =>
-                    updateInvoice("documents", {
-                      ...invoice.documents,
-                      bl: event.target.value,
-                    })
-                  }
-                  placeholder="MSCU1234567"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Packing list (optionnel)</Label>
-                <Input
-                  value={invoice.documents.packingList}
-                  onChange={(event) =>
-                    updateInvoice("documents", {
-                      ...invoice.documents,
-                      packingList: event.target.value,
-                    })
-                  }
-                  placeholder="PL-2026-001"
-                />
-              </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleAnalyze}>Analyser</Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setExpress(createInitialExpress());
+                  setPro(createInitialPro());
+                  setPastedText("");
+                  setPdfText("");
+                  setPdfFileName("");
+                  setDetected(null);
+                  setDetectedPending(false);
+                  setResult(null);
+                  setCurrentStep(1);
+                }}
+              >
+                Reinitialiser
+              </Button>
             </div>
           </CardContent>
         </Card>
+        {hasDetectedData(detected) ? (
+          <Card className={detectedPending ? "border-primary/50" : undefined}>
+            <CardHeader>
+              <CardTitle className="inline-flex items-center gap-2 text-base">
+                <Sparkles className="h-4 w-4" />
+                Detecte
+              </CardTitle>
+              <CardDescription>Champs proposes depuis PDF/texte. Confirmez ou corrigez.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 text-sm md:grid-cols-2 lg:grid-cols-3">
+                {detected?.goodsOrServices ? <p>Type: {detected.goodsOrServices === "goods" ? "Biens" : "Services"}</p> : null}
+                {detected?.sellerCountry ? <p>Vendeur: {detected.sellerCountry}</p> : null}
+                {detected?.buyerCountry ? <p>Acheteur: {detected.buyerCountry}</p> : null}
+                {detected?.invoiceNumber ? <p>Facture: {detected.invoiceNumber}</p> : null}
+                {detected?.invoiceDate ? <p>Date: {detected.invoiceDate}</p> : null}
+                {detected?.currency ? <p>Devise: {detected.currency}</p> : null}
+                {typeof detected?.totalHt === "number" ? <p>Total HT: {detected.totalHt}</p> : null}
+                {typeof detected?.totalTtc === "number" ? <p>Total TTC: {detected.totalTtc}</p> : null}
+                {detected?.incoterm ? <p>Incoterm: {detected.incoterm}</p> : null}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={applyDetectedValues}>Confirmer</Button>
+                <Button size="sm" variant="outline" onClick={() => setDetectedPending(false)}>
+                  Corriger
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader>
-            <CardTitle>OCR / PDF (optionnel)</CardTitle>
+            <CardTitle>Mode Pro (optionnel)</CardTitle>
             <CardDescription>
-              L'extraction PDF/OCR n'est pas bloquante. La saisie guidee reste la source principale de validation.
+              Champs avances pour douane, paiement et coherence documentaire. Aucun de ces champs ne bloque le verdict TVA.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="rounded-xl border-2 border-dashed p-5">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <FileUp className="h-4 w-4" />
-                Import PDF (optionnel)
-              </div>
-              <div className="mt-3">
-                <Input
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  onChange={(event) => {
-                    handlePdfUpload(event.target.files?.[0]);
-                    event.currentTarget.value = "";
-                  }}
-                />
-              </div>
-              {pdfFileName ? (
-                <p className="mt-2 text-xs text-muted-foreground">Dernier fichier charge: {pdfFileName}</p>
-              ) : null}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>C) Resultat</CardTitle>
-            <CardDescription>Score global, statut et checks detailles par onglet.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-lg border p-3">
-                <p className="text-xs text-muted-foreground">Score global</p>
-                <p className="mt-1 text-2xl font-semibold">{assessment.score}/100</p>
-              </div>
-              <div className="rounded-lg border p-3">
-                <p className="text-xs text-muted-foreground">Statut</p>
-                <div className="mt-2">{statusBadge(assessment.status)}</div>
-              </div>
-              <div className="rounded-lg border p-3">
-                <p className="text-xs text-muted-foreground">Decision TVA</p>
-                <p className="mt-1 text-sm font-semibold">{assessment.vat_result.status}</p>
-              </div>
-              <div className="rounded-lg border p-3">
-                <p className="text-xs text-muted-foreground">Checks</p>
-                <p className="mt-1 text-sm font-semibold">
-                  {checkSummary.ko} KO / {checkSummary.warn} WARN / {checkSummary.ok} OK
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 lg:grid-cols-2">
-              <div className="rounded-lg border p-3">
-                <p className="text-sm font-semibold">TVA - raison</p>
-                <p className="mt-1 text-sm text-muted-foreground">{assessment.vat_result.reason}</p>
-                <div className="mt-2 space-y-1">
-                  <p className="text-xs font-semibold text-muted-foreground">Mentions facture attendues</p>
-                  {assessment.vat_result.required_invoice_mentions.length > 0 ? (
-                    assessment.vat_result.required_invoice_mentions.map((mention) => (
-                      <p key={mention} className="text-xs">
-                        - {mention}
-                      </p>
-                    ))
-                  ) : (
-                    <p className="text-xs text-muted-foreground">Aucune mention specifique retournee.</p>
-                  )}
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  VIES:{" "}
-                  <a
-                    className="underline"
-                    href={assessment.vat_result.vies_validation.vies_link}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    verifier les numeros TVA
-                  </a>
-                </p>
-              </div>
-
-              <div className="rounded-lg border p-3">
-                <p className="text-sm font-semibold">Douane / Devise</p>
-                <div className="mt-2 space-y-1">
-                  {assessment.customs_usage.map((item) => (
-                    <p key={item} className="text-xs text-muted-foreground">
-                      - {item}
-                    </p>
-                  ))}
-                </div>
-                {assessment.fx_result.converted ? (
-                  <div className="mt-3 rounded-md bg-muted/40 p-2 text-xs">
-                    <p>Contre-valeur EUR HT: {formatMoney(assessment.fx_result.converted.totalHtEur, "EUR")}</p>
-                    <p>Contre-valeur EUR TVA: {formatMoney(assessment.fx_result.converted.vatAmountEur, "EUR")}</p>
-                    <p>Contre-valeur EUR TTC: {formatMoney(assessment.fx_result.converted.totalTtcEur, "EUR")}</p>
-                  </div>
-                ) : null}
-                {assessment.fx_result.recommendations.length > 0 ? (
-                  <div className="mt-3 space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground">Recommandations devise</p>
-                    {assessment.fx_result.recommendations.map((item) => (
-                      <p key={item} className="text-xs text-muted-foreground">
-                        - {item}
-                      </p>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            {assessment.vat_result.missing_questions.length > 0 ? (
-              <Alert variant="warning">
-                <Info className="h-4 w-4" />
-                <AlertTitle>Questions manquantes a trancher</AlertTitle>
-                <AlertDescription>
-                  {assessment.vat_result.missing_questions.map((question) => (
-                    <p key={question}>- {question}</p>
-                  ))}
-                </AlertDescription>
-              </Alert>
-            ) : null}
-
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as CheckerTab)} className="space-y-3">
-              <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-6">
-                {TAB_ORDER.map((tab) => {
-                  const tabChecks = assessment.checks_by_tab[tab];
-                  const issuesCount = tabChecks.filter((check) => check.status !== "OK").length;
-                  return (
-                    <TabsTrigger key={tab} value={tab} className="text-xs sm:text-sm">
-                      {TAB_LABELS[tab]}
-                      {issuesCount > 0 ? ` (${issuesCount})` : ""}
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
-
-              {TAB_ORDER.map((tab) => {
-                const checks = assessment.checks_by_tab[tab];
-                return (
-                  <TabsContent key={tab} value={tab}>
-                    {checks.length === 0 ? (
-                      <div className="rounded-lg border p-3 text-sm text-muted-foreground">Aucun check pour cet onglet.</div>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Check</TableHead>
-                            <TableHead>Statut</TableHead>
-                            <TableHead>Explication</TableHead>
-                            <TableHead>Quoi corriger</TableHead>
-                            <TableHead>Exemple</TableHead>
-                            <TableHead>Source</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {checks.map((check) => (
-                            <TableRow key={`${tab}_${check.id}`}>
-                              <TableCell className="font-mono text-xs">{check.id}</TableCell>
-                              <TableCell className="font-medium">{check.label}</TableCell>
-                              <TableCell>{checkStatusBadge(check.status)}</TableCell>
-                              <TableCell className="text-sm text-muted-foreground">{check.explanation}</TableCell>
-                              <TableCell className="text-sm">{check.what_to_fix}</TableCell>
-                              <TableCell className="text-sm text-muted-foreground">{check.example}</TableCell>
-                              <TableCell>
-                                {check.source_link ? (
-                                  <a
-                                    href={check.source_link}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs underline"
-                                  >
-                                    <LinkIcon className="h-3 w-3" />
-                                    Ouvrir
-                                  </a>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">-</span>
-                                )}
-                              </TableCell>
-                            </TableRow>
+          <CardContent>
+            <Accordion type="multiple" className="w-full">
+              <AccordionItem value="pro-customs">
+                <AccordionTrigger>PRO Douane</AccordionTrigger>
+                <AccordionContent>
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                    <div className="space-y-1">
+                      <Label>Incoterm</Label>
+                      <Select value={pro.incoterm || undefined} onValueChange={(value) => setPro((prev) => ({ ...prev, incoterm: value }))}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Optionnel" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {INCOTERMS.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>{item.value}</SelectItem>
                           ))}
-                        </TableBody>
-                      </Table>
-                    )}
-                  </TabsContent>
-                );
-              })}
-            </Tabs>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Lieu Incoterm</Label>
+                      <Input value={pro.incotermPlace} onChange={(event) => setPro((prev) => ({ ...prev, incotermPlace: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>HS6</Label>
+                      <Input value={pro.hs6} onChange={(event) => setPro((prev) => ({ ...prev, hs6: normalizeHs6(event.target.value) }))} placeholder="850760" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Origine</Label>
+                      <Input value={pro.originCountry} onChange={(event) => setPro((prev) => ({ ...prev, originCountry: normalizeIso2(event.target.value) }))} placeholder="FR" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Poids net</Label>
+                      <Input value={pro.netWeight} onChange={(event) => setPro((prev) => ({ ...prev, netWeight: event.target.value }))} placeholder="kg" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Poids brut</Label>
+                      <Input value={pro.grossWeight} onChange={(event) => setPro((prev) => ({ ...prev, grossWeight: event.target.value }))} placeholder="kg" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Nombre colis</Label>
+                      <Input value={pro.packageCount} onChange={(event) => setPro((prev) => ({ ...prev, packageCount: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Preuve transport UE</Label>
+                      <Select
+                        value={pro.proofOfTransport ? "yes" : "no"}
+                        onValueChange={(value) => setPro((prev) => ({ ...prev, proofOfTransport: value === "yes" }))}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="yes">Oui</SelectItem>
+                          <SelectItem value="no">Non</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Fret</Label>
+                      <Input value={pro.freight} onChange={(event) => setPro((prev) => ({ ...prev, freight: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Assurance</Label>
+                      <Input value={pro.insurance} onChange={(event) => setPro((prev) => ({ ...prev, insurance: event.target.value }))} />
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
 
-            <p className="text-xs text-muted-foreground">
-              Sources officielles:{" "}
-              <a className="underline" href={OFFICIAL_LINKS.douane_fr} target="_blank" rel="noreferrer">
-                Douane FR
-              </a>{" "}
-              |{" "}
-              <a className="underline" href={OFFICIAL_LINKS.incoterms_icc} target="_blank" rel="noreferrer">
-                ICC Incoterms
-              </a>{" "}
-              |{" "}
-              <a className="underline" href="https://www.impots.gouv.fr/" target="_blank" rel="noreferrer">
-                impots.gouv.fr
-              </a>
-            </p>
+              <AccordionItem value="pro-payment">
+                <AccordionTrigger>PRO Paiement / Fraude</AccordionTrigger>
+                <AccordionContent>
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="space-y-1">
+                      <Label>N TVA vendeur</Label>
+                      <Input value={pro.sellerVat} onChange={(event) => setPro((prev) => ({ ...prev, sellerVat: event.target.value.toUpperCase().replace(/\s+/g, "") }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Devise</Label>
+                      <Input value={pro.currency} onChange={(event) => setPro((prev) => ({ ...prev, currency: event.target.value.toUpperCase().slice(0, 3) }))} placeholder="EUR" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Taux de change</Label>
+                      <Input value={pro.exchangeRate} onChange={(event) => setPro((prev) => ({ ...prev, exchangeRate: event.target.value }))} placeholder="si devise != EUR" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>IBAN</Label>
+                      <Input value={pro.iban} onChange={(event) => setPro((prev) => ({ ...prev, iban: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>BIC</Label>
+                      <Input value={pro.bic} onChange={(event) => setPro((prev) => ({ ...prev, bic: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>SWIFT</Label>
+                      <Input value={pro.swift} onChange={(event) => setPro((prev) => ({ ...prev, swift: event.target.value }))} />
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="pro-docs">
+                <AccordionTrigger>PRO Coherence docs</AccordionTrigger>
+                <AccordionContent>
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="space-y-1">
+                      <Label>Numero facture</Label>
+                      <Input value={pro.invoiceNumber} onChange={(event) => setPro((prev) => ({ ...prev, invoiceNumber: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Date facture</Label>
+                      <Input type="date" value={pro.invoiceDate} onChange={(event) => setPro((prev) => ({ ...prev, invoiceDate: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Total HT</Label>
+                      <Input value={pro.totalHt} onChange={(event) => setPro((prev) => ({ ...prev, totalHt: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Total TTC</Label>
+                      <Input value={pro.totalTtc} onChange={(event) => setPro((prev) => ({ ...prev, totalTtc: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Nom vendeur</Label>
+                      <Input value={pro.sellerName} onChange={(event) => setPro((prev) => ({ ...prev, sellerName: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Nom acheteur</Label>
+                      <Input value={pro.buyerName} onChange={(event) => setPro((prev) => ({ ...prev, buyerName: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>AWB</Label>
+                      <Input value={pro.awb} onChange={(event) => setPro((prev) => ({ ...prev, awb: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>B/L</Label>
+                      <Input value={pro.bl} onChange={(event) => setPro((prev) => ({ ...prev, bl: event.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Packing list</Label>
+                      <Input value={pro.packingList} onChange={(event) => setPro((prev) => ({ ...prev, packingList: event.target.value }))} />
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </CardContent>
         </Card>
+        {result ? (
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle>Etape 2 - Resultat</CardTitle>
+                  <CardDescription>Decision rapide avec priorites de correction.</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge className="text-sm">Score {result.assessment.score}/100</Badge>
+                  {statusPill(globalStatus)}
+                  <Button size="sm" variant="outline" onClick={() => setCurrentStep(1)}>
+                    Modifier la saisie
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">1) Decision TVA</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <p className="font-semibold">{result.assessment.vat_result.status}</p>
+                    <p className="text-muted-foreground">{result.assessment.vat_result.reason}</p>
+                    {result.assessment.vat_result.required_invoice_mentions.length > 0 ? (
+                      <div className="space-y-1">
+                        {result.assessment.vat_result.required_invoice_mentions.map((mention) => (
+                          <p key={mention}>- {mention}</p>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground">Aucune mention specifique detectee.</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">2) Douane essentiel</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    {result.customsAlerts.map((alert) => (
+                      <div key={alert.id} className="rounded-md border p-2">
+                        <div className="mb-1 flex items-center justify-between">
+                          <p className="font-medium">{alert.label}</p>
+                          {statusPill(alert.status)}
+                        </div>
+                        <p className="text-muted-foreground">{alert.message}</p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">3) Actions</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div>
+                      <p className="mb-1 font-medium">Ce qu'il faut corriger</p>
+                      {result.actionsToFix.length > 0 ? (
+                        result.actionsToFix.map((action) => <p key={action}>- {action}</p>)
+                      ) : (
+                        <p className="text-muted-foreground">Aucune correction bloquante.</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="mb-1 font-medium">Questions manquantes</p>
+                      {result.missingQuestions.length > 0 ? (
+                        result.missingQuestions.map((question) => <p key={question}>- {question}</p>)
+                      ) : (
+                        <p className="text-muted-foreground">Aucune question prioritaire.</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {result.assessment.status === "BLOCKING" ? (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Points bloquants detectes</AlertTitle>
+                  <AlertDescription>
+                    Completez les champs critiques, puis relancez l'analyse.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertTitle>Analyse terminee</AlertTitle>
+                  <AlertDescription>
+                    Verdict disponible meme avec donnees partielles. Mode Pro pour affiner si necessaire.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
 
         <p className="text-xs text-muted-foreground">
-          Coherence docs simplifiee: AWB/B-L/Packing list controles seulement si saisis.
+          Conseil: commencez en express, puis ouvrez seulement l'accordeon Pro utile au cas.
         </p>
       </div>
     </AppLayout>
