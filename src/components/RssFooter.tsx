@@ -1,6 +1,7 @@
 ﻿import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowRight, ExternalLink, RefreshCw, Rss, ShieldCheck } from "lucide-react";
 
 type RssFooterItem = {
@@ -76,6 +77,11 @@ function normalizeTopic(value?: string | null) {
   return raw.replace(/[^a-z0-9_-]/g, "");
 }
 
+function normalizeSourceFilter(value?: string | null) {
+  const raw = String(value || "").trim();
+  return raw || "__all";
+}
+
 function toStringOrUndefined(value: unknown) {
   const text = typeof value === "string" ? value.trim() : "";
   return text || undefined;
@@ -113,7 +119,7 @@ function pickItemsJson(payload: RssApiJsonResponse | null): RssFooterItem[] {
 }
 
 function parseRssXml(xml: string): { meta: RssMeta; items: RssFooterItem[] } {
-  // DOMParser dispo cÃ´tÃ© navigateur
+  // DOMParser disponible cote navigateur
   if (typeof window === "undefined") return { meta: {}, items: [] };
 
   try {
@@ -160,8 +166,8 @@ async function fetchRaw(url: string, signal: AbortSignal) {
   const raw = await res.text();
 
   if (!res.ok) {
-    // certains backends renvoient HTML en erreur â†’ on renvoie un message gÃ©nÃ©rique
-    throw new Error("Veille indisponible pour le moment. RÃ©essayez dans quelques minutes.");
+    // certains backends renvoient du HTML en erreur -> message generique
+    throw new Error("Veille indisponible pour le moment. Reessayez dans quelques minutes.");
   }
 
   return { raw, contentType: res.headers.get("content-type") || "" };
@@ -177,6 +183,7 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [refreshTick, setRefreshTick] = React.useState(0);
+  const [sourceFilter, setSourceFilter] = React.useState<string>("__all");
 
   React.useEffect(() => {
     let mounted = true;
@@ -245,7 +252,7 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
         setItems([]);
         setSourceLabels([]);
         setPinnedLabels(PINNED_SOURCE_LABELS);
-        setError(anyErr?.message || "Veille indisponible pour le moment. RÃ©essayez dans quelques minutes.");
+        setError(anyErr?.message || "Veille indisponible pour le moment. Reessayez dans quelques minutes.");
       } finally {
         if (mounted) setLoading(false);
       }
@@ -261,6 +268,31 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
   const hasItems = items.length > 0;
   const lastBuild = safeDateTimeLabel(meta.lastBuildDate);
   const selectedLabel = territoryLabel || (effectiveTerritory === "WORLD" ? "Monde" : effectiveTerritory);
+  const sourceOptions = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const label of pinnedLabels) {
+      if (label) set.add(label);
+    }
+    for (const label of sourceLabels) {
+      if (label) set.add(label);
+    }
+    for (const item of items) {
+      if (item.sourceName) set.add(item.sourceName);
+    }
+    return Array.from(set.values());
+  }, [items, pinnedLabels, sourceLabels]);
+  const effectiveSourceFilter = normalizeSourceFilter(sourceFilter);
+  const filteredItems = React.useMemo(() => {
+    if (effectiveSourceFilter === "__all") return items;
+    return items.filter((item) => (item.sourceName || "").toLowerCase() === effectiveSourceFilter.toLowerCase());
+  }, [effectiveSourceFilter, items]);
+  const hasFilteredItems = filteredItems.length > 0;
+
+  React.useEffect(() => {
+    if (sourceFilter === "__all") return;
+    const exists = sourceOptions.some((label) => label.toLowerCase() === sourceFilter.toLowerCase());
+    if (!exists) setSourceFilter("__all");
+  }, [sourceFilter, sourceOptions]);
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -274,25 +306,34 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
             <div>
               <div className="text-xs uppercase tracking-[0.35em] text-muted-foreground">Veille export</div>
               <div className="text-sm font-semibold text-foreground">
-                {meta.title ? meta.title : "Alertes rÃ©centes"}
+                {meta.title ? meta.title : "Alertes recentes"}
               </div>
             </div>
           </div>
           <div className="text-xs text-muted-foreground">
-            {meta.description ? meta.description : "Signaux faibles, conformitÃ© et points de vigilance."}
-            {lastBuild ? <span className="ml-2">Â· DerniÃ¨re mise Ã  jour : <b>{lastBuild}</b></span> : null}
+            {meta.description ? meta.description : "Signaux faibles, conformite et points de vigilance."}
+            {lastBuild ? <span className="ml-2">· Derniere mise a jour : <b>{lastBuild}</b></span> : null}
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Badge variant="secondary">Pays/zone: {selectedLabel}</Badge>
           {effectiveTopic ? <Badge variant="secondary">Focus: {effectiveTopic}</Badge> : null}
-          {pinnedLabels.map((label) => (
-            <Badge key={`pinned-${label}`} variant="outline">
-              {label}
-            </Badge>
-          ))}
-          {sourceLabels.length ? <Badge variant="outline">+{sourceLabels.length} source(s) pays</Badge> : null}
+          <div className="w-[220px]">
+            <Select value={sourceFilter} onValueChange={setSourceFilter}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Toutes les sources" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all">Toutes les sources</SelectItem>
+                {sourceOptions.map((label) => (
+                  <SelectItem key={`source-${label}`} value={label}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -308,7 +349,7 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
             Actualiser
           </Button>
 
-          {/* /watch redirige dÃ©jÃ  vers /veille chez toi */}
+          {/* /watch redirige deja vers /veille */}
           <a href="/veille" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
             Centre de veille <ArrowRight className="h-4 w-4" />
           </a>
@@ -331,15 +372,19 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
             </div>
           ) : !hasItems ? (
             <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-              <div className="font-medium text-foreground">Aucune actualitÃ© disponible pour le moment.</div>
+              <div className="font-medium text-foreground">Aucune actualite disponible pour le moment.</div>
               <div className="mt-1 text-xs">
-                Ton RSS est valide mais il ne contient aucun <code>&lt;item&gt;</code>. DÃ¨s que le flux est alimentÃ©,
-                les alertes apparaÃ®tront ici automatiquement.
+                Ton RSS est valide mais il ne contient aucun <code>&lt;item&gt;</code>. Des que le flux est alimente,
+                les alertes apparaitront ici automatiquement.
               </div>
+            </div>
+          ) : !hasFilteredItems ? (
+            <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+              Aucune actualite pour cette source. Choisissez "Toutes les sources" ou une autre source.
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {items.map((item) => {
+              {filteredItems.map((item) => {
                 const href = safeExternalUrl(item.link);
                 const dateLabel = safeDateLabel(item.pubDate);
                 const key = item.id || item.link || item.title || Math.random().toString(36);
@@ -393,9 +438,9 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
               <ShieldCheck className="h-4 w-4" />
             </div>
             <div className="space-y-1">
-              <div className="text-sm font-semibold text-foreground">DÃ©bloquez le suivi et lâ€™historique</div>
+              <div className="text-sm font-semibold text-foreground">Debloquez le suivi et l'historique</div>
               <div className="text-xs text-muted-foreground">
-                Compte gratuit : sauvegarde de vos contrÃ´les + accÃ¨s aux vues avancÃ©es.
+                Compte gratuit : sauvegarde de vos controles + acces aux vues avancees.
               </div>
             </div>
           </div>
@@ -403,22 +448,22 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
           <ul className="mt-3 space-y-2 text-sm text-foreground/90">
             <li className="flex items-start gap-2">
               <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-              <span>Historique des vÃ©rifications & export des rÃ©sultats</span>
+              <span>Historique des verifications et export des resultats</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-              <span>Veille plus ciblÃ©e (pays/secteur) dans lâ€™app</span>
+              <span>Veille plus ciblee (pays/secteur) dans l'app</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-              <span>AccÃ¨s aux outils : Control Tower, simulateur, conformitÃ©</span>
+              <span>Acces aux outils : Control Tower, simulateur, conformite</span>
             </li>
           </ul>
 
           <div className="mt-4 flex flex-wrap gap-2">
             <a href="/register?next=%2Fapp%2Finvoice-check" className="w-full">
               <Button className="w-full gap-2">
-                CrÃ©er un compte gratuit <ArrowRight className="h-4 w-4" />
+                Creer un compte gratuit <ArrowRight className="h-4 w-4" />
               </Button>
             </a>
             <a href="/login" className="w-full">

@@ -660,8 +660,8 @@ export default function ControlTower() {
   }, [lang, rows]);
 
   const selectedCountryStats = React.useMemo(() => {
-    if (selectedCountry && countryStats[selectedCountry]) {
-      return countryStats[selectedCountry];
+    if (selectedCountry) {
+      return countryStats[selectedCountry] || { alerts: 0, updates: 0, total: 0 };
     }
 
     return Object.values(countryStats).reduce(
@@ -674,14 +674,6 @@ export default function ControlTower() {
       { alerts: 0, updates: 0, total: 0 }
     );
   }, [countryStats, selectedCountry]);
-
-  React.useEffect(() => {
-    if (!selectedCountry) return;
-    const stillPresent = rows.some((row) => row.country === selectedCountry);
-    if (!stillPresent) {
-      setSelectedCountry(null);
-    }
-  }, [rows, selectedCountry]);
 
   const profitabilityByCountry = React.useMemo(() => {
     const map = new Map<
