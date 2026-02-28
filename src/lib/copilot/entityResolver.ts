@@ -1,4 +1,5 @@
 import type { Lang, GoodsKind, ResolvedContext, TradeFlow } from "./types";
+import { extractCountriesFromText as extractCountriesFromAnyText, resolveCountryIso2 } from "./officialLinks";
 
 type ResolveParams = {
   message: string;
@@ -11,54 +12,6 @@ type ResolveResult = {
   detectedCountries: string[];
   normalizedMessage: string;
 };
-
-type CountryEntry = {
-  iso2: string;
-  aliases: string[];
-};
-
-const COUNTRY_ENTRIES: CountryEntry[] = [
-  { iso2: "FR", aliases: ["fr", "france"] },
-  { iso2: "DE", aliases: ["de", "germany", "allemagne"] },
-  { iso2: "ES", aliases: ["es", "spain", "espagne"] },
-  { iso2: "IT", aliases: ["it", "italy", "italie"] },
-  { iso2: "PT", aliases: ["pt", "portugal"] },
-  { iso2: "BE", aliases: ["be", "belgium", "belgique"] },
-  { iso2: "NL", aliases: ["nl", "netherlands", "pays bas", "hollande"] },
-  { iso2: "GB", aliases: ["gb", "uk", "united kingdom", "royaume uni", "angleterre", "great britain"] },
-  { iso2: "US", aliases: ["us", "usa", "united states", "etats unis", "amerique"] },
-  { iso2: "CA", aliases: ["ca", "canada"] },
-  { iso2: "MX", aliases: ["mx", "mexico", "mexique"] },
-  { iso2: "BR", aliases: ["br", "brazil", "bresil"] },
-  { iso2: "MA", aliases: ["ma", "morocco", "maroc"] },
-  { iso2: "CN", aliases: ["cn", "china", "chine"] },
-  { iso2: "JP", aliases: ["jp", "japan", "japon"] },
-  { iso2: "IN", aliases: ["in", "india", "inde"] },
-  { iso2: "AE", aliases: ["ae", "uae", "emirats", "emirats arabes unis", "united arab emirates"] },
-  { iso2: "RU", aliases: ["ru", "russia", "russie"] },
-  { iso2: "IR", aliases: ["ir", "iran"] },
-  { iso2: "SY", aliases: ["sy", "syria", "syrie"] },
-  { iso2: "KP", aliases: ["kp", "north korea", "coree du nord"] },
-  { iso2: "CU", aliases: ["cu", "cuba"] },
-  { iso2: "BY", aliases: ["by", "belarus", "bielorussie"] },
-  { iso2: "UA", aliases: ["ua", "ukraine"] },
-  { iso2: "TR", aliases: ["tr", "turkey", "turquie"] },
-  { iso2: "AR", aliases: ["ar", "argentina", "argentine"] },
-  { iso2: "CL", aliases: ["cl", "chile", "chili"] },
-  { iso2: "SN", aliases: ["sn", "senegal", "senegal"] },
-  { iso2: "DZ", aliases: ["dz", "algeria", "algerie"] },
-  { iso2: "TN", aliases: ["tn", "tunisia", "tunisie"] },
-  { iso2: "EG", aliases: ["eg", "egypt", "egypte"] },
-  { iso2: "NG", aliases: ["ng", "nigeria"] },
-  { iso2: "ZA", aliases: ["za", "south africa", "afrique du sud"] },
-];
-
-const COUNTRY_LOOKUP = new Map<string, string>();
-for (const entry of COUNTRY_ENTRIES) {
-  for (const alias of entry.aliases) {
-    COUNTRY_LOOKUP.set(alias, entry.iso2);
-  }
-}
 
 const INCOTERMS = ["EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF"] as const;
 
@@ -118,40 +71,12 @@ function normalizeIso2(value: string | null): string | null {
 function lookupCountry(value: string | null): string | null {
   if (!value) return null;
   const iso = normalizeIso2(value);
-  if (iso) return iso;
-
-  const normalized = normalizeText(value);
-  if (!normalized) return null;
-
-  if (COUNTRY_LOOKUP.has(normalized)) return COUNTRY_LOOKUP.get(normalized) || null;
-
-  for (const [alias, code] of COUNTRY_LOOKUP.entries()) {
-    const pattern = new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
-    if (pattern.test(normalized)) return code;
-  }
-
-  return null;
+  if (iso) return resolveCountryIso2(iso);
+  return resolveCountryIso2(value);
 }
 
 function extractCountriesFromText(message: string): string[] {
-  const normalized = normalizeText(message);
-  if (!normalized) return [];
-
-  const matches: Array<{ iso2: string; index: number }> = [];
-  for (const entry of COUNTRY_ENTRIES) {
-    for (const alias of entry.aliases.sort((a, b) => b.length - a.length)) {
-      const pattern = new RegExp(`\\b${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
-      const m = normalized.match(pattern);
-      if (m && typeof m.index === "number") {
-        matches.push({ iso2: entry.iso2, index: m.index });
-        break;
-      }
-    }
-  }
-
-  return Array.from(
-    new Set(matches.sort((a, b) => a.index - b.index).map((item) => item.iso2))
-  );
+  return extractCountriesFromAnyText(message, 3);
 }
 
 function extractCountryByPattern(message: string, pattern: RegExp): string | null {
@@ -239,7 +164,7 @@ function detectValue(message: string, overrides: Record<string, unknown>): numbe
     if (Number.isFinite(parsed) && parsed > 0) return parsed;
   }
 
-  const m = message.match(/\b([0-9]{1,3}(?:[\s.,][0-9]{3})*(?:[.,][0-9]{1,2})?)\s*(eur|usd|gbp|chf|mad|cny|jpy|€|\$)?\b/i);
+  const m = message.match(/\b([0-9]{1,3}(?:[\s.,][0-9]{3})*(?:[.,][0-9]{1,2})?)\s*(eur|usd|gbp|chf|mad|cny|jpy|\$)?\b/i);
   if (!m) return null;
   const parsed = Number(String(m[1]).replace(/\s/g, "").replace(/,/g, "."));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;

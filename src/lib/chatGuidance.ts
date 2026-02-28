@@ -1,4 +1,9 @@
 import { detectCountryFromShortInput } from "./countryInput";
+import {
+  countryNameFromIso2,
+  detectGlobalTradeIntent,
+  extractCountriesFromText,
+} from "./copilot/officialLinks";
 
 export type GuidedFallback = {
   answer: string;
@@ -21,6 +26,9 @@ function detectFlow(question: string): "export" | "import" | "trade" {
 function detectCountry(question: string) {
   const shortDetected = detectCountryFromQuestion(question);
   if (shortDetected) return shortDetected;
+
+  const detectedIso2 = extractCountriesFromText(question, 1)[0] || null;
+  if (detectedIso2) return countryNameFromIso2(detectedIso2, "fr");
 
   const q = normalize(question);
   const map: Array<[RegExp, string]> = [
@@ -142,6 +150,7 @@ export function buildGuidedFallback(question: string): GuidedFallback {
   const incoterm = detectIncoterm(question);
   const hs = detectHs(question);
   const product = detectProduct(question);
+  const isGlobalIntent = detectGlobalTradeIntent({ question, product });
 
   const countryQuestion = "Quel est le pays de destination exact (et pays de transit si applicable) ?";
   const productQuestion = "Quel est le produit exact (nom commercial + composition/usage) ?";
@@ -213,6 +222,10 @@ export function buildGuidedFallback(question: string): GuidedFallback {
     country
       ? `Regle generale immediate: appliquez les regles export/import vers ${country}, puis confirmez HS et Incoterm pour fiabiliser droits, taxes et documents.`
       : "Regle generale immediate: il faut confirmer la destination pour valider TVA, formalites douane et restrictions pays.",
+    "Orientation veille: activez la veille puis choisissez le pays via la liste ou la carte pour recevoir le suivi adapte.",
+    isGlobalIntent
+      ? "Question orientee commerce mondial produit: activez la veille pays pour un suivi continu."
+      : null,
     `Question prioritaire: ${firstQuestion}`,
     extraQuestions.length ? `Ensuite:\n- ${extraQuestions.join("\n- ")}` : null,
     "Une fois ces points donnes, je fournis une reponse exploitable (checklist, risques, actions).",
@@ -233,48 +246,41 @@ export function buildGuidedFallback(question: string): GuidedFallback {
 }
 
 export function buildResearchLinks(question: string) {
-  const q = question.trim();
-  const lower = q.toLowerCase();
+  const isGlobalIntent = detectGlobalTradeIntent({
+    question,
+    product: detectProduct(question),
+  });
+
   const links: Array<{ title: string; url: string; origin: "internet" }> = [
     {
-      title: "Recherche web ciblee",
-      url: `https://www.google.com/search?q=${encodeURIComponent(`${q} reglementation export`)}`,
+      title: "Ouvrir la page veille",
+      url: "/veille",
+      origin: "internet",
+    },
+    {
+      title: "S'inscrire pour la veille",
+      url: "/register?next=%2Fapp%2Fcentre-veille%2Freglementation",
+      origin: "internet",
+    },
+    {
+      title: "Voir les tarifs",
+      url: "/pricing#plans",
+      origin: "internet",
+    },
+    {
+      title: "Control Tower (carte pays)",
+      url: "/app/control-tower",
       origin: "internet",
     },
   ];
 
-  if (/(incoterm|fob|dap|ddp|cif|cip|exw|fca)/i.test(lower)) {
+  if (isGlobalIntent) {
     links.push({
-      title: "Guide ICC Incoterms",
-      url: "https://iccwbo.org/business-solutions/incoterms-rules/",
+      title: "Centre veille reglementaire",
+      url: "/app/centre-veille/reglementation",
       origin: "internet",
     });
   }
 
-  if (/(douane|droit|tarif|taric|hs|code hs|tva)/i.test(lower)) {
-    links.push(
-      {
-        title: "Douane francaise",
-        url: "https://www.douane.gouv.fr/",
-        origin: "internet",
-      },
-      {
-        title: "Taric UE",
-        url: "https://ec.europa.eu/taxation_customs/dds2/taric/taric_consultation.jsp",
-        origin: "internet",
-      }
-    );
-  }
-
-  if (/(sanction|embargo|restriction|compliance|conformite)/i.test(lower)) {
-    links.push({
-      title: "EU Sanctions Map",
-      url: "https://www.sanctionsmap.eu/",
-      origin: "internet",
-    });
-  }
-
-  const deduped = new Map<string, { title: string; url: string; origin: "internet" }>();
-  for (const item of links) deduped.set(item.url, item);
-  return Array.from(deduped.values()).slice(0, 4);
+  return links.slice(0, 5);
 }

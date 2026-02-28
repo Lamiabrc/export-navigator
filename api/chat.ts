@@ -6,6 +6,7 @@ import { allowCors, json, readJson, supabaseAdmin } from "../src/server/supabase
 import { classifyProduct } from "../src/lib/copilot/classifier.js";
 import { evaluateControls } from "../src/lib/copilot/controlsEngine.js";
 import { buildMissingQuestions, resolveEntities } from "../src/lib/copilot/entityResolver.js";
+import { detectGlobalTradeIntent } from "../src/lib/copilot/officialLinks.js";
 import { retrievePolicyContext } from "../src/lib/copilot/policyRetriever.js";
 import type {
   CheckStatus,
@@ -335,10 +336,44 @@ function buildBaseChecks(context: ResolvedContext, classification: Classificatio
 function dedupeSources(links: SourceLink[]) {
   const map = new Map<string, SourceLink>();
   for (const link of links) {
-    if (!/^https?:\/\//i.test(link.url)) continue;
+    if (!/^(https?:\/\/|\/)/i.test(link.url)) continue;
     map.set(link.url, link);
   }
   return Array.from(map.values()).slice(0, 12);
+}
+
+function buildWatchLinks(params: { isAuthenticated: boolean; lang: Lang }): SourceLink[] {
+  if (params.isAuthenticated) {
+    return [
+      {
+        title: params.lang === "en" ? "Open watch center" : "Ouvrir la veille",
+        url: "/app/centre-veille/reglementation",
+      },
+      {
+        title: params.lang === "en" ? "Choose a country (list)" : "Choisir un pays (liste)",
+        url: "/app/centre-veille/reglementation",
+      },
+      {
+        title: params.lang === "en" ? "Choose a country (map)" : "Choisir un pays (carte)",
+        url: "/app/control-tower",
+      },
+    ];
+  }
+
+  return [
+    {
+      title: params.lang === "en" ? "Open watch page" : "Ouvrir la page veille",
+      url: "/veille",
+    },
+    {
+      title: params.lang === "en" ? "Sign up for watch" : "S'inscrire pour la veille",
+      url: "/register?next=%2Fapp%2Fcentre-veille%2Freglementation",
+    },
+    {
+      title: params.lang === "en" ? "View pricing" : "Voir les tarifs",
+      url: "/pricing#plans",
+    },
+  ];
 }
 
 function decisionFromChecks(params: { checks: CopilotCheck[]; hardStop: boolean; lang: Lang }): { status: DecisionStatus; reason: string } {
@@ -477,6 +512,8 @@ function buildAnswerMarkdown(params: {
   dossier: ReturnType<typeof buildDossier>;
   missingQuestions: string[];
   sourceLinks: SourceLink[];
+  globalTradeIntent: boolean;
+  isAuthenticated: boolean;
 }) {
   const sorted = sortChecks(params.checks);
   const checklist = sorted.slice(0, 10).map((check) => checklistLineForCheck(check.status, check.label));
@@ -496,6 +533,16 @@ function buildAnswerMarkdown(params: {
   const productQuestion = params.lang === "en"
     ? "To refine, provide product details (commercial name + composition/use) and HS if known."
     : "Pour affiner: indiquez le produit (nom commercial + composition/usage) et le HS si connu.";
+
+  const globalMonitoringLine = params.globalTradeIntent
+    ? params.lang === "en"
+      ? params.isAuthenticated
+        ? "Global product-trade topic detected: choose country via watch list or map to activate monitoring."
+        : "Global product-trade topic detected: open watch page and sign up to activate monitoring."
+      : params.isAuthenticated
+        ? "Question sur activite mondiale detectee: choisissez un pays via la liste veille ou la carte."
+        : "Question sur activite mondiale detectee: ouvrez Veille puis inscrivez-vous pour activer le suivi."
+    : null;
 
   const links = params.sourceLinks.length
     ? params.sourceLinks.map((link) => `- [${link.title}](${link.url})`)
@@ -519,8 +566,15 @@ function buildAnswerMarkdown(params: {
     "",
     `## ${params.lang === "en" ? "Product question for refinement" : "Question produit pour affiner"}`,
     `- ${productQuestion}`,
+    ...(globalMonitoringLine
+      ? [
+          "",
+          `## ${params.lang === "en" ? "Global monitoring" : "Veille mondiale"}`,
+          `- ${globalMonitoringLine}`,
+        ]
+      : []),
     "",
-    `## ${params.lang === "en" ? "Official sources" : "Sources officielles"}`,
+    `## ${params.lang === "en" ? "Watch orientation" : "Orientation veille"}`,
     ...links,
   ].join("\n");
 }
@@ -651,17 +705,16 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
 
     const missingQuestions = buildMissingQuestions(finalContext, preferredLang).slice(0, 5);
     const followUpQuestions = missingQuestions.slice(0, 3);
+    const globalTradeIntent = detectGlobalTradeIntent({
+      question: message,
+      product: finalContext.product,
+    });
+    const watchLinks = buildWatchLinks({
+      isAuthenticated: Boolean(userId),
+      lang: preferredLang,
+    });
 
-    const sourceLinks = dedupeSources([
-      ...policy.officialLinks,
-      ...controls.sourceLinks,
-      ...checks
-        .filter((check) => check.source_link)
-        .map((check) => ({
-          title: check.label,
-          url: String(check.source_link),
-        })),
-    ]);
+    const sourceLinks = dedupeSources(watchLinks);
 
     const dossier = buildDossier({
       lang: preferredLang,
@@ -681,6 +734,8 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
       dossier,
       missingQuestions,
       sourceLinks,
+      globalTradeIntent,
+      isAuthenticated: Boolean(userId),
     });
 
     const entities = toEntities(finalContext, message);

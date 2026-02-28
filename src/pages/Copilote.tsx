@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { buildGuidedFallback, buildResearchLinks, type GuidedFallback } from "@/lib/chatGuidance";
+import { buildGuidedFallback, type GuidedFallback } from "@/lib/chatGuidance";
 import { ingestChatExchange } from "@/lib/chatIngest";
 import { detectCountryFromShortInput } from "@/lib/countryInput";
 
@@ -303,6 +303,29 @@ function decisionBadgeClass(status?: ChatDecision["status"]) {
   return "bg-emerald-100 text-emerald-700 border-emerald-200";
 }
 
+function buildWatchLinks(isAuthenticated: boolean) {
+  if (isAuthenticated) {
+    return [
+      { title: "Ouvrir la veille", url: "/app/centre-veille/reglementation" },
+      { title: "Choisir un pays (liste)", url: "/app/centre-veille/reglementation" },
+      { title: "Choisir un pays (carte)", url: "/app/control-tower" },
+    ];
+  }
+
+  return [
+    { title: "Ouvrir la page veille", url: "/veille" },
+    { title: "S'inscrire pour la veille", url: "/register?next=%2Fapp%2Fcentre-veille%2Freglementation" },
+    { title: "Voir les tarifs", url: "/pricing#plans" },
+  ];
+}
+
+function buildWatchHint(isAuthenticated: boolean) {
+  if (isAuthenticated) {
+    return "Etape suivante: ouvrez la veille et choisissez un pays via la liste deroulante ou la carte.";
+  }
+  return "Etape suivante: ouvrez la page veille puis inscrivez-vous pour activer le suivi par pays.";
+}
+
 export default function Copilote() {
   const [messages, setMessages] = React.useState<ChatMessage[]>([
     {
@@ -374,6 +397,7 @@ export default function Copilote() {
     setDraft("");
     setLoading(true);
     setError(null);
+    let isAuthenticated = false;
 
     try {
       let trackedRemaining: number | null = null;
@@ -411,6 +435,7 @@ export default function Copilote() {
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
+      isAuthenticated = Boolean(token);
 
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
@@ -470,17 +495,10 @@ export default function Copilote() {
       const countryStillMissing = Boolean(resolvedDestination && COUNTRY_MISSING_RE.test(answerRaw.toLowerCase()));
       const blocks = buildAssistantBlocks(data?.dossier) || guidedBlocks;
       const uncertain = isUncertainAnswer(answerRaw) || countryStillMissing;
+      const links = buildWatchLinks(isAuthenticated);
 
-      const links = [
-        ...(Array.isArray(data?.source_links)
-          ? data.source_links
-              .filter((x): x is { title: string; url: string } => Boolean(x?.title && x?.url))
-              .map((x) => ({ title: x.title, url: x.url }))
-          : []),
-        ...(uncertain ? buildResearchLinks(question).map((x) => ({ title: x.title, url: x.url })) : []),
-      ].slice(0, 8);
-
-      const answer = uncertain ? guided.answer : (answerRaw || guided.answer);
+      const baseAnswer = uncertain ? guided.answer : (answerRaw || guided.answer);
+      const answer = `${baseAnswer}\n\n${buildWatchHint(isAuthenticated)}`;
       const finalBlocks = uncertain ? (guidedBlocks || blocks) : blocks;
       const responseChecks = Array.isArray(data?.checks) ? data.checks : [];
       const mainBlocker = data?.main_blocker ?? deriveMainBlocker(responseChecks);
@@ -525,8 +543,8 @@ export default function Copilote() {
       });
     } catch (err: any) {
       const guided = buildGuidedFallback(question);
-      const links = buildResearchLinks(question).map((x) => ({ title: x.title, url: x.url }));
-      const answer = guided.answer;
+      const links = buildWatchLinks(isAuthenticated);
+      const answer = `${guided.answer}\n\n${buildWatchHint(isAuthenticated)}`;
       const blocks = buildAssistantBlocksFromGuided(guided);
 
       setError("Serveur temporairement indisponible. Mode guide active avec plan d'action.");
