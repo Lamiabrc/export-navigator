@@ -261,7 +261,7 @@ function extractReadableTextFromPdfBytes(bytes: Uint8Array) {
     .map((match) => match[1])
     .join(" ");
 
-  const coarseText = raw.replace(/[^A-Za-z0-9%.,:;\/\-\s]/g, " ");
+  const coarseText = raw.replace(/[^A-Za-z0-9%.,:;/\s-]/g, " ");
   const merged = `${parenthesisStrings} ${coarseText}`.replace(/\s+/g, " ").trim();
   return merged.slice(0, 40000);
 }
@@ -378,28 +378,28 @@ function detectCountriesByOrder(rawText: string) {
   return mergeUnique(hits.map((hit) => hit.iso2));
 }
 function detectFromText(rawText: string): Detection | null {
-  const compact = String(rawText || "").replace(/\u0000/g, " ");
+  const compact = String(rawText || "").split("\0").join(" ");
   const oneLine = compact.replace(/\s+/g, " ").trim();
   if (oneLine.length < 20) return null;
 
   const detection: Detection = {};
 
-  const invoiceMatch = oneLine.match(/(?:invoice|facture)\s*(?:n[o°]|number|numero)?\s*[:#-]?\s*([A-Z0-9\-/]{4,})/i);
+  const invoiceMatch = oneLine.match(/(?:invoice|facture)\s*(?:n[o°]|number|numero)?\s*[:#-]?\s*([A-Z0-9/-]{4,})/i);
   if (invoiceMatch) detection.invoiceNumber = invoiceMatch[1];
 
-  const dateMatch = oneLine.match(/\b(20\d{2}[\/-]\d{2}[\/-]\d{2}|\d{2}[\/-]\d{2}[\/-]20\d{2})\b/);
+  const dateMatch = oneLine.match(/\b(20\d{2}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2}[-/]20\d{2})\b/);
   if (dateMatch) detection.invoiceDate = dateMatch[1];
 
   const currencyMatch = oneLine.match(/\b(EUR|USD|GBP|CHF|CAD|AUD|JPY|CNY|MAD|BRL)\b/i);
   if (currencyMatch) detection.currency = currencyMatch[1].toUpperCase();
 
-  const htMatch = oneLine.match(/(?:total\s*ht|subtotal|net\s*amount)\s*[:\-]?\s*([0-9][0-9\s.,-]{1,20})/i);
+  const htMatch = oneLine.match(/(?:total\s*ht|subtotal|net\s*amount)\s*[:-]?\s*([0-9][0-9\s.,-]{1,20})/i);
   if (htMatch) {
     const parsed = parseAmount(htMatch[1]);
     if (parsed != null) detection.totalHt = parsed;
   }
 
-  const ttcMatch = oneLine.match(/(?:total\s*(?:ttc|due)|grand\s*total|amount\s*due)\s*[:\-]?\s*([0-9][0-9\s.,-]{1,20})/i);
+  const ttcMatch = oneLine.match(/(?:total\s*(?:ttc|due)|grand\s*total|amount\s*due)\s*[:-]?\s*([0-9][0-9\s.,-]{1,20})/i);
   if (ttcMatch) {
     const parsed = parseAmount(ttcMatch[1]);
     if (parsed != null) detection.totalTtc = parsed;
@@ -423,10 +423,10 @@ function detectFromText(rawText: string): Detection | null {
     detection.goodsOrServices = "goods";
   }
 
-  const sellerNameMatch = compact.match(/(?:seller|vendeur|fournisseur)\s*[:\-]\s*([^\n\r]+)/i);
+  const sellerNameMatch = compact.match(/(?:seller|vendeur|fournisseur)\s*[:-]\s*([^\n\r]+)/i);
   if (sellerNameMatch) detection.sellerName = sellerNameMatch[1].trim();
 
-  const buyerNameMatch = compact.match(/(?:buyer|acheteur|client|bill\s*to)\s*[:\-]\s*([^\n\r]+)/i);
+  const buyerNameMatch = compact.match(/(?:buyer|acheteur|client|bill\s*to)\s*[:-]\s*([^\n\r]+)/i);
   if (buyerNameMatch) detection.buyerName = buyerNameMatch[1].trim();
 
   const sellerCountry = detectCountryNearLabel(compact, [/(seller|vendeur|fournisseur|exporter|ship\s*from)/i, /(pays\s*vendeur)/i]);

@@ -153,14 +153,14 @@ function buildInvoiceAnalyzeResult(text: string, payload: InvoiceAnalyzePayload)
     text.match(/\b([A-Z]{1,3}-\d{4,12})\b/)?.[1] ||
     null;
   const date =
-    text.match(/\b(\d{2}[\/.-]\d{2}[\/.-]\d{4})\b/)?.[1] ||
-    text.match(/\b(\d{4}[\/.-]\d{2}[\/.-]\d{2})\b/)?.[1] ||
+    text.match(/\b(\d{2}[/.-]\d{2}[/.-]\d{4})\b/)?.[1] ||
+    text.match(/\b(\d{4}[/.-]\d{2}[/.-]\d{2})\b/)?.[1] ||
     null;
   const seller =
-    text.match(/\b(?:vendeur|seller|supplier)\s*[:\-]\s*([^\n]{3,120})/i)?.[1]?.trim() ||
+    text.match(/\b(?:vendeur|seller|supplier)\s*[:-]\s*([^\n]{3,120})/i)?.[1]?.trim() ||
     null;
   const buyer =
-    text.match(/\b(?:acheteur|buyer|bill to|ship to)\s*[:\-]\s*([^\n]{3,120})/i)?.[1]?.trim() ||
+    text.match(/\b(?:acheteur|buyer|bill to|ship to)\s*[:-]\s*([^\n]{3,120})/i)?.[1]?.trim() ||
     null;
 
   const totalHt = extractAmountByLabel(text, ["total ht", "total h.t", "subtotal", "montant ht"]) || null;

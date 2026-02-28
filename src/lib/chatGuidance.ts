@@ -80,7 +80,7 @@ function detectProduct(question: string) {
   const patterns = [
     /exporter?\s+(?:des|de|du|d')\s+(.+?)\s+(?:vers|au|en)\s+/i,
     /importer?\s+(?:des|de|du|d')\s+(.+?)\s+(?:depuis|de)\s+/i,
-    /(?:produit|marchandise)\s*[:\-]\s*(.+?)(?:$|[,.!?;])/i,
+    /(?:produit|marchandise)\s*[:-]\s*(.+?)(?:$|[,.!?;])/i,
   ];
   for (const p of patterns) {
     const m = compact.match(p);

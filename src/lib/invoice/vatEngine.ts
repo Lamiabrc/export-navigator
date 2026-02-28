@@ -1,6 +1,6 @@
 ﻿import { COUNTRIES } from "@/lib/constants";
 
-import type { TransactionContext, VatResult, VatResultStatus } from "./types";
+import type { CheckerItem, TransactionContext, VatResult, VatResultStatus } from "./types";
 
 const EU_ISO2 = new Set([
   "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT",
@@ -221,8 +221,8 @@ export function evaluateVat(input: VatEngineInput): VatResult {
 export function vatResultToChecks(
   vat: VatResult,
   context?: Pick<TransactionContext, "buyerVat" | "sellerVat" | "buyerIsTaxable" | "proofOfTransport">,
-) {
-  const status = vat.status === "UNKNOWN"
+): CheckerItem[] {
+  const status: CheckerItem["status"] = vat.status === "UNKNOWN"
     ? "WARN"
     : vat.missing_questions.length > 0
       ? "WARN"
@@ -230,7 +230,7 @@ export function vatResultToChecks(
         ? "OK"
         : "KO";
 
-  const viesStatus = vat.vies_validation.seller_format_ok && vat.vies_validation.buyer_format_ok
+  const viesStatus: CheckerItem["status"] = vat.vies_validation.seller_format_ok && vat.vies_validation.buyer_format_ok
     ? "OK"
     : "WARN";
 

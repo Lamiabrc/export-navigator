@@ -1,9 +1,18 @@
 ﻿import type { UiLang } from "@/lib/constants";
 
+function stripControlChars(value: string) {
+  return Array.from(String(value || ""))
+    .map((char) => {
+      const code = char.charCodeAt(0);
+      if ((code >= 0 && code <= 31) || code === 127) return " ";
+      return char;
+    })
+    .join("");
+}
+
 export function sanitizeOptionalComment(input: string, maxLength = 600) {
-  return String(input || "")
+  return stripControlChars(input)
     .normalize("NFC")
-    .replace(/[\u0000-\u001F\u007F]/g, " ")
     .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -11,9 +20,8 @@ export function sanitizeOptionalComment(input: string, maxLength = 600) {
 }
 
 export function sanitizeCompactText(input: string, maxLength = 180) {
-  return String(input || "")
+  return stripControlChars(input)
     .normalize("NFC")
-    .replace(/[\u0000-\u001F\u007F]/g, " ")
     .replace(/[<>]/g, "")
     .replace(/\s+/g, " ")
     .trim()
