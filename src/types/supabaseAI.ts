@@ -11,6 +11,17 @@ export type CountryFunnelResult = {
   raw: unknown;
 };
 
+export type CountryFunnelAnalysisSuggestion = CountrySuggestion & {
+  code_iso2: string;
+};
+
+export type CountryFunnelAnalysisResult = {
+  status: string;
+  suggestions: CountryFunnelAnalysisSuggestion[];
+  question: string | null;
+  raw: unknown;
+};
+
 export type HsSuggestion = {
   hs_code: string;
   label: string;

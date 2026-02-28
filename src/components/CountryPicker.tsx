@@ -52,8 +52,20 @@ export function CountryPicker({
       {countryQuery.isError ? <p className="text-xs text-destructive">{(countryQuery.error as Error).message}</p> : null}
       <div className="flex flex-wrap gap-2">
         {countryQuery.data?.suggestions.map((suggestion) => (
-          <Button key={`${suggestion.iso2}-${suggestion.label}`} type="button" variant="outline" size="sm" onClick={() => onSelect(suggestion)}>
-            {suggestion.label} ({suggestion.iso2})
+          <Button
+            key={`${suggestion.iso2}-${suggestion.label}`}
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onSelect(suggestion)}
+            className="h-auto px-3 py-2 text-left"
+          >
+            <span className="block text-xs font-medium">
+              {suggestion.label} ({suggestion.iso2})
+            </span>
+            <span className="block text-[11px] text-muted-foreground">
+              Zone: {suggestion.zone || "-"} | Confiance: {typeof suggestion.confidence === "number" ? `${Math.round(suggestion.confidence * 100)}%` : "-"}
+            </span>
           </Button>
         ))}
       </div>

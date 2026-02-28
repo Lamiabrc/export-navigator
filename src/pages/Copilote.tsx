@@ -10,6 +10,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { buildGuidedFallback, type GuidedFallback } from "@/lib/chatGuidance";
 import { ingestChatExchange } from "@/lib/chatIngest";
 import { detectCountryFromShortInput } from "@/lib/countryInput";
+import { resolveCountryIso2 } from "@/lib/copilot/officialLinks";
+import { countryFunnelAnalysis } from "@/services/supabaseAI";
 
 type ChatDocument = {
   name: string;
@@ -96,9 +98,18 @@ type FollowUpAction = {
   value: string;
 };
 
+type CopilotFormContext = {
+  sellerCountry: string;
+  buyerCountry: string;
+};
+
 const uid = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 const COUNTRY_FOLLOWUP_RE = /(quel est le pays|pays de destination|destination exact)/i;
 const COUNTRY_MISSING_RE = /(pays.*(a confirmer|manquant)|quel est le pays de destination|destination exacte)/i;
+const COUNTRY_OVERRIDE_KEYS = {
+  seller: ["sellerCountry", "seller_country", "origin", "from"],
+  buyer: ["buyerCountry", "buyer_country", "destination", "to", "country"],
+} as const;
 
 function isUncertainAnswer(answer: string) {
   const txt = answer.trim().toLowerCase();
@@ -223,6 +234,61 @@ function isLikelyCountryOnlyPrompt(question: string, detectedCountry: string | n
   return stripped === normalizedCountry;
 }
 
+function normalizeCountryOverride(value: string | null | undefined): string | null {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const directIso2 = resolveCountryIso2(raw);
+  if (directIso2) return directIso2;
+  const detected = detectCountryFromShortInput(raw);
+  if (!detected) return null;
+  return resolveCountryIso2(detected);
+}
+
+function pickObjectText(value: unknown, keys: readonly string[]) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const object = value as Record<string, unknown>;
+  for (const key of keys) {
+    const text = String(object[key] ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function readFormContext(): CopilotFormContext {
+  if (typeof window === "undefined") return { sellerCountry: "", buyerCountry: "" };
+
+  const fromQuery = (() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return {
+        sellerCountry: String(params.get("sellerCountry") || params.get("seller_country") || params.get("origin") || params.get("from") || "").trim(),
+        buyerCountry: String(params.get("buyerCountry") || params.get("buyer_country") || params.get("destination") || params.get("to") || params.get("country") || "").trim(),
+      };
+    } catch {
+      return { sellerCountry: "", buyerCountry: "" };
+    }
+  })();
+
+  const fromStorage = (() => {
+    try {
+      const raw = window.localStorage.getItem("mpl_copilot_form_context");
+      if (!raw) return { sellerCountry: "", buyerCountry: "" };
+      const parsed = JSON.parse(raw) as unknown;
+      return {
+        sellerCountry: pickObjectText(parsed, COUNTRY_OVERRIDE_KEYS.seller),
+        buyerCountry: pickObjectText(parsed, COUNTRY_OVERRIDE_KEYS.buyer),
+      };
+    } catch {
+      return { sellerCountry: "", buyerCountry: "" };
+    }
+  })();
+
+  return {
+    sellerCountry: fromQuery.sellerCountry || fromStorage.sellerCountry,
+    buyerCountry: fromQuery.buyerCountry || fromStorage.buyerCountry,
+  };
+}
+
 function detectProductOrHsInPrompt(question: string) {
   const normalized = normalizePrompt(question);
   if (!normalized) return false;
@@ -342,6 +408,8 @@ export default function Copilote() {
   const [remaining, setRemaining] = React.useState<number | null>(null);
   const [quotaStatus, setQuotaStatus] = React.useState<"loading" | "ready" | "error">("loading");
   const [destinationCountry, setDestinationCountry] = React.useState<string | null>(null);
+  const [sellerCountry, setSellerCountry] = React.useState<string | null>(null);
+  const [formContext] = React.useState<CopilotFormContext>(() => readFormContext());
   const [error, setError] = React.useState<string | null>(null);
 
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -424,13 +492,32 @@ export default function Copilote() {
         // quota endpoint is non-blocking for /api/chat
       }
 
-      const detectedCountry = detectCountryFromShortInput(question);
-      if (detectedCountry) setDestinationCountry(detectedCountry);
-      const resolvedDestination = detectedCountry || destinationCountry || null;
+      const formSeller = normalizeCountryOverride(formContext.sellerCountry);
+      const formBuyer = normalizeCountryOverride(formContext.buyerCountry);
+      const detectedCountry = normalizeCountryOverride(detectCountryFromShortInput(question) || "");
+
+      const finalSellerCountry = formSeller || sellerCountry || null;
+      let finalBuyerCountry = formBuyer || detectedCountry || destinationCountry || null;
+
+      if (!formBuyer && !finalBuyerCountry) {
+        try {
+          const funnel = await countryFunnelAnalysis(question, "fr", 5);
+          if (funnel.status === "ok" && funnel.suggestions[0]?.code_iso2) {
+            finalBuyerCountry = normalizeCountryOverride(funnel.suggestions[0].code_iso2) || funnel.suggestions[0].code_iso2;
+          }
+        } catch {
+          // non bloquant: on garde le flux courant
+        }
+      }
+
+      if (finalSellerCountry) setSellerCountry(finalSellerCountry);
+      if (finalBuyerCountry) setDestinationCountry(finalBuyerCountry);
+      const countryKnown = Boolean(finalBuyerCountry || finalSellerCountry);
+      const resolvedDestination = finalBuyerCountry;
       const productKnownFromPrompt = detectProductOrHsInPrompt(question);
 
-      const questionForApi = detectedCountry && isLikelyCountryOnlyPrompt(question, detectedCountry)
-        ? `Destination: ${detectedCountry}. Je n'ai donne que le pays. Donne d'abord les regles generales puis demande le produit pour affiner.`
+      const questionForApi = resolvedDestination && isLikelyCountryOnlyPrompt(question, resolvedDestination)
+        ? `Destination: ${resolvedDestination}. Je n'ai donne que le pays. Donne d'abord les regles generales puis demande le produit pour affiner.`
         : question;
 
       const { data: sessionData } = await supabase.auth.getSession();
@@ -448,7 +535,10 @@ export default function Copilote() {
           thread_id: sessionId || null,
           lang: "fr",
           overrides: {
+            origin: finalSellerCountry,
             destination: resolvedDestination,
+            sellerCountry: finalSellerCountry,
+            buyerCountry: finalBuyerCountry,
           },
         }),
       });
@@ -459,10 +549,11 @@ export default function Copilote() {
       }
 
       const answerRaw = String(data?.answer_markdown || data?.answer || "").trim();
-      const guidanceSeed =
-        resolvedDestination && !detectCountryFromShortInput(question)
-          ? `${question} destination ${resolvedDestination}`
-          : question;
+      const guidanceSeed = [
+        question,
+        finalSellerCountry ? `origine ${finalSellerCountry}` : "",
+        resolvedDestination ? `destination ${resolvedDestination}` : "",
+      ].filter(Boolean).join(" ");
       const guided = buildGuidedFallback(guidanceSeed);
       const guidedBlocks = buildAssistantBlocksFromGuided(guided);
 
@@ -474,11 +565,11 @@ export default function Copilote() {
         .map((x) => x.trim())
         .slice(0, 6);
 
-      const filteredModelFollowUps = resolvedDestination
+      const filteredModelFollowUps = countryKnown
         ? modelFollowUps.filter((q) => !COUNTRY_FOLLOWUP_RE.test(q))
         : modelFollowUps;
 
-      const filteredGuidedFollowUps = resolvedDestination
+      const filteredGuidedFollowUps = countryKnown
         ? guided.followUpQuestions.filter((q) => !COUNTRY_FOLLOWUP_RE.test(q))
         : guided.followUpQuestions;
 
@@ -488,11 +579,11 @@ export default function Copilote() {
 
       const prioritizedFollowUpQuestions = withPriorityFollowUp({
         followUps: followUpQuestions,
-        countryKnown: Boolean(resolvedDestination),
+        countryKnown,
         productKnown: productKnownFromPrompt,
       }).slice(0, 3);
 
-      const countryStillMissing = Boolean(resolvedDestination && COUNTRY_MISSING_RE.test(answerRaw.toLowerCase()));
+      const countryStillMissing = Boolean(!countryKnown && COUNTRY_MISSING_RE.test(answerRaw.toLowerCase()));
       const blocks = buildAssistantBlocks(data?.dossier) || guidedBlocks;
       const uncertain = isUncertainAnswer(answerRaw) || countryStillMissing;
       const links = buildWatchLinks(isAuthenticated);
@@ -536,6 +627,7 @@ export default function Copilote() {
           source_links_count: links.length,
           follow_up_questions_count: prioritizedFollowUpQuestions.length,
           destination_country: resolvedDestination,
+          origin_country: finalSellerCountry,
           has_structured_blocks: Boolean(finalBlocks),
           decision: data?.decision?.status || null,
           main_blocker: mainBlocker?.id || null,
@@ -571,14 +663,15 @@ export default function Copilote() {
           error: String(err?.message || "api_chat_error"),
           source_links_count: links.length,
           follow_up_questions_count: guided.followUpQuestions.length,
-          destination_country: destinationCountry,
+          destination_country: destinationCountry || formContext.buyerCountry || null,
+          origin_country: sellerCountry || formContext.sellerCountry || null,
           has_structured_blocks: Boolean(blocks),
         },
       });
     } finally {
       setLoading(false);
     }
-  }, [draft, loading, destinationCountry, sessionId]);
+  }, [draft, loading, destinationCountry, formContext.buyerCountry, formContext.sellerCountry, sellerCountry, sessionId]);
 
   return (
     <PublicLayout>

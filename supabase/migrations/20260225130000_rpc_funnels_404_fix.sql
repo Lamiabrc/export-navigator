@@ -26,7 +26,7 @@ begin
      and v_result <> 'TABLE(iso2 text, label text, zone text, confidence numeric)' then
     execute format(
       'alter function public.rpc_country_funnel(text, text, integer, boolean) rename to %I',
-      'rpc_country_funnel_legacy_' || to_char(clock_timestamp(), 'YYYYMMDDHH24MISSMS')
+      'rpc_country_funnel_archived_' || to_char(clock_timestamp(), 'YYYYMMDDHH24MISSMS')
     );
   end if;
 exception
@@ -45,7 +45,7 @@ begin
      and v_result <> 'TABLE(hs_code text, label text, chapter text, confidence numeric)' then
     execute format(
       'alter function public.rpc_hs_funnel(text, text, integer) rename to %I',
-      'rpc_hs_funnel_legacy_' || to_char(clock_timestamp(), 'YYYYMMDDHH24MISSMS')
+      'rpc_hs_funnel_archived_' || to_char(clock_timestamp(), 'YYYYMMDDHH24MISSMS')
     );
   end if;
 exception

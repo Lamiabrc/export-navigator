@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type {
+  CountryFunnelAnalysisResult,
+  CountryFunnelAnalysisSuggestion,
   CountryFunnelResult,
   CountrySuggestion,
   ExportAnswerResult,
@@ -86,7 +88,7 @@ async function callRpcFallback<T>(names: string[], params: Record<string, unknow
   throw new Error(errors[0] ?? `RPC unavailable (${names.join(", ")})`);
 }
 
-const mapCountrySuggestions = (raw: unknown): CountrySuggestion[] => {
+const mapCountrySuggestionsFromRows = (raw: unknown): CountrySuggestion[] => {
   const rows = asArray(raw);
   return rows
     .map((row) => {
@@ -103,6 +105,26 @@ const mapCountrySuggestions = (raw: unknown): CountrySuggestion[] => {
       } satisfies CountrySuggestion;
     })
     .filter(Boolean) as CountrySuggestion[];
+};
+
+const mapCountrySuggestionsFromJson = (raw: unknown): CountryFunnelAnalysisSuggestion[] => {
+  const rows = asArray(raw);
+  return rows
+    .map((row) => {
+      if (!row || typeof row !== "object") return null;
+      const value = row as Record<string, unknown>;
+      const codeIso2 = String(value.code_iso2 ?? value.iso2 ?? value.country_iso2 ?? "").toUpperCase();
+      if (!codeIso2) return null;
+      const label = String(value.label ?? value.name ?? value.country_name ?? codeIso2);
+      return {
+        code_iso2: codeIso2,
+        iso2: codeIso2,
+        label,
+        zone: (value.zone as string | null | undefined) ?? null,
+        confidence: Number(value.confidence ?? value.score ?? 0) || null,
+      } satisfies CountryFunnelAnalysisSuggestion;
+    })
+    .filter(Boolean) as CountryFunnelAnalysisSuggestion[];
 };
 
 const mapHsSuggestions = (raw: unknown): HsSuggestion[] => {
@@ -123,15 +145,50 @@ const mapHsSuggestions = (raw: unknown): HsSuggestion[] => {
     .filter(Boolean) as HsSuggestion[];
 };
 
-export async function countryFunnel(q: string, lang: string, ignoreLearning = false): Promise<CountryFunnelResult> {
-  const raw = await callRpcFallback<unknown>(["rpc_country_funnel", "country_funnel"], {
+export async function countryFunnel(
+  q: string,
+  lang: string,
+  ignoreLearning = false,
+  lim = 8
+): Promise<CountryFunnelResult> {
+  const raw = await callRpc<unknown>("rpc_country_funnel_table", {
     q,
     lang,
-    lim: 8,
+    lim,
     ignore_learning: ignoreLearning,
   });
-  const suggestions = mapCountrySuggestions(raw);
+  const suggestions = mapCountrySuggestionsFromRows(raw);
   return { suggestions, needsClarification: suggestions.length > 1, raw };
+}
+
+export async function countryFunnelAnalysis(
+  q: string,
+  lang: string,
+  lim = 8
+): Promise<CountryFunnelAnalysisResult> {
+  const raw = await callRpc<unknown>("rpc_country_funnel", { q, lang, lim });
+
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const payload = raw as Record<string, unknown>;
+    const suggestions = mapCountrySuggestionsFromJson(payload.suggestions);
+    const status = String(payload.status || (suggestions.length ? "ok" : "empty")).trim().toLowerCase() || "empty";
+    const question = String(payload.question || "").trim() || null;
+
+    return {
+      status,
+      suggestions,
+      question,
+      raw,
+    };
+  }
+
+  const fallbackSuggestions = mapCountrySuggestionsFromJson(raw);
+  return {
+    status: fallbackSuggestions.length ? "ok" : "empty",
+    suggestions: fallbackSuggestions,
+    question: null,
+    raw,
+  };
 }
 
 export async function confirmCountry(term: string, lang: string, code_iso2: string) {
@@ -261,7 +318,7 @@ export async function getSupabaseAiFallback(question: string): Promise<SupabaseA
   if (!q) return null;
 
   const lang = detectLang(q);
-  const [countryResult, hsResult] = await Promise.allSettled([countryFunnel(q, lang, true), hsFunnel(q, lang)]);
+  const [countryResult, hsResult] = await Promise.allSettled([countryFunnelAnalysis(q, lang, 8), hsFunnel(q, lang)]);
 
   const country =
     countryResult.status === "fulfilled" ? (countryResult.value.suggestions?.[0] ?? null) : null;
