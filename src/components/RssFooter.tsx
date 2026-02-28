@@ -321,7 +321,7 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
 
     setNewsletterSaving(true);
     try {
-      await postPrefs({
+      const saved = await postPrefs({
         email,
         countries: newsletterOptIn ? newsletterCountries : [],
         hsCodes: [],
@@ -330,8 +330,12 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
       toast({
         title: newsletterOptIn ? "Newsletter activee" : "Newsletter desactivee",
         description: newsletterOptIn
-          ? `Vous recevrez la veille pour ${selectedLabel}${effectiveTopic ? ` (focus: ${effectiveTopic})` : ""}.`
-          : "Vous ne recevrez plus cette newsletter veille.",
+          ? saved.mode === "local"
+            ? `Preference enregistree localement pour ${selectedLabel}${effectiveTopic ? ` (focus: ${effectiveTopic})` : ""}. Synchronisation serveur en attente.`
+            : `Vous recevrez la veille pour ${selectedLabel}${effectiveTopic ? ` (focus: ${effectiveTopic})` : ""}.`
+          : saved.mode === "local"
+            ? "Desactivation enregistree localement. Synchronisation serveur en attente."
+            : "Vous ne recevrez plus cette newsletter veille.",
       });
     } catch (err) {
       const msg = String((err as { message?: string })?.message || "Impossible d'enregistrer la preference.");
