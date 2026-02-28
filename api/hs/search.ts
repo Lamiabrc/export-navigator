@@ -43,20 +43,12 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
   }
 
   if (quota.remaining <= 0) {
-    try {
-      await insertHsSearchLog(admin, req, {
-        query: q || "[empty]",
-        universe,
-        locale,
-        status: "limit_reached",
-      });
-    } catch (err: any) {
-      return json(res, 500, {
-        ok: false,
-        error: "quota_log_failed",
-        detail: String(err?.message || "log failed"),
-      });
-    }
+    await insertHsSearchLog(admin, req, {
+      query: q || "[empty]",
+      universe,
+      locale,
+      status: "limit_reached",
+    });
 
     return json(res, 429, {
       ok: false,
@@ -69,20 +61,12 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
   }
 
   if (mode === "track") {
-    try {
-      await insertHsSearchLog(admin, req, {
-        query: q || "[track-only]",
-        universe,
-        locale,
-        status: "track_only",
-      });
-    } catch (err: any) {
-      return json(res, 500, {
-        ok: false,
-        error: "quota_log_failed",
-        detail: String(err?.message || "log failed"),
-      });
-    }
+    await insertHsSearchLog(admin, req, {
+      query: q || "[track-only]",
+      universe,
+      locale,
+      status: "track_only",
+    });
 
     const used = usedPlusOne(quota.used);
     return json(res, 200, {
@@ -95,20 +79,12 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
   }
 
   if (q.length < 2) {
-    try {
-      await insertHsSearchLog(admin, req, {
-        query: q || "[short-query]",
-        universe,
-        locale,
-        status: "short_query",
-      });
-    } catch (err: any) {
-      return json(res, 500, {
-        ok: false,
-        error: "quota_log_failed",
-        detail: String(err?.message || "log failed"),
-      });
-    }
+    await insertHsSearchLog(admin, req, {
+      query: q || "[short-query]",
+      universe,
+      locale,
+      status: "short_query",
+    });
 
     const used = usedPlusOne(quota.used);
     return json(res, 200, {
@@ -122,20 +98,12 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
 
   const { data, error } = await admin.rpc("mpl_search_hs", { q, lim: 12 });
   if (error) {
-    try {
-      await insertHsSearchLog(admin, req, {
-        query: q,
-        universe,
-        locale,
-        status: "search_error",
-      });
-    } catch (logErr: any) {
-      return json(res, 500, {
-        ok: false,
-        error: "search_and_log_failed",
-        detail: `${error.message} | ${String(logErr?.message || "log failed")}`,
-      });
-    }
+    await insertHsSearchLog(admin, req, {
+      query: q,
+      universe,
+      locale,
+      status: "search_error",
+    });
 
     return json(res, 500, {
       ok: false,
@@ -144,20 +112,12 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     });
   }
 
-  try {
-    await insertHsSearchLog(admin, req, {
-      query: q,
-      universe,
-      locale,
-      status: "ok",
-    });
-  } catch (err: any) {
-    return json(res, 500, {
-      ok: false,
-      error: "quota_log_failed",
-      detail: String(err?.message || "log failed"),
-    });
-  }
+  await insertHsSearchLog(admin, req, {
+    query: q,
+    universe,
+    locale,
+    status: "ok",
+  });
 
   const used = usedPlusOne(quota.used);
   return json(res, 200, {

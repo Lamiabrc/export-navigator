@@ -73,6 +73,16 @@ export function getUserAgent(req: VercelRequest) {
   return readHeader(req, "user-agent").slice(0, 512) || null;
 }
 
+function formatSupabaseError(error: unknown) {
+  if (!error || typeof error !== "object") return String(error || "");
+  const e = error as Record<string, unknown>;
+  const message = String(e.message || "").trim();
+  const details = String(e.details || "").trim();
+  const hint = String(e.hint || "").trim();
+  const code = String(e.code || "").trim();
+  return [message, details, hint, code ? `code=${code}` : ""].filter(Boolean).join(" | ");
+}
+
 export async function getQuotaSnapshotForRequest(admin: SupabaseClient, req: VercelRequest) {
   const ipHash = getIpHashFromRequest(req);
   const limit = getDailyLimit();
@@ -85,7 +95,16 @@ export async function getQuotaSnapshotForRequest(admin: SupabaseClient, req: Ver
     .gte("created_at", since);
 
   if (error) {
-    throw new Error(`quota_count_failed:${error.message}`);
+    const detail = formatSupabaseError(error);
+    console.warn("[hsQuota] quota count failed; fallback to zero usage", detail || "(empty)");
+    return {
+      ipHash,
+      limit,
+      used: 0,
+      remaining: limit,
+      degraded: true,
+      degradedReason: detail || "quota_count_failed",
+    };
   }
 
   const used = Number(count || 0);
@@ -94,6 +113,8 @@ export async function getQuotaSnapshotForRequest(admin: SupabaseClient, req: Ver
     limit,
     used,
     remaining: Math.max(0, limit - used),
+    degraded: false,
+    degradedReason: null,
   };
 }
 
@@ -120,6 +141,10 @@ export async function insertHsSearchLog(
   });
 
   if (error) {
-    throw new Error(`hs_search_log_insert_failed:${error.message}`);
+    const detail = formatSupabaseError(error);
+    console.warn("[hsQuota] hs_search_logs insert failed; continue without log", detail || "(empty)");
+    return false;
   }
+
+  return true;
 }

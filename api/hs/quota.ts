@@ -23,6 +23,8 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       limit: quota.limit,
       used: quota.used,
       remaining: quota.remaining,
+      degraded: Boolean((quota as any).degraded),
+      detail: (quota as any).degradedReason || null,
     });
   } catch (err: any) {
     return json(res, 500, {
