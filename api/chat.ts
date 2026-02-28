@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { allowCors, json, readJson, supabaseAdmin } from "../src/server/supabaseAdmin.js";
@@ -342,6 +343,23 @@ function dedupeSources(links: SourceLink[]) {
   return Array.from(map.values()).slice(0, 12);
 }
 
+function fallbackPolicyContext(): PolicyContext {
+  return {
+    aliases: [
+      { term: "banane", hs_chapters: ["08"], examples: ["banane", "banana"] },
+      { term: "ferraille", hs_chapters: ["72", "73"], examples: ["ferraille", "steel scrap"] },
+      { term: "drone", hs_chapters: ["88", "85"], examples: ["drone", "uav"] },
+      { term: "logiciel chiffrement", hs_chapters: ["85", "90"], examples: ["encryption software", "cryptography"] },
+      { term: "service logiciel", hs_chapters: ["85"], examples: ["saas", "licence"] },
+    ],
+    hsRules: [],
+    countryRules: [],
+    sanctionsMatches: [],
+    officialLinks: [],
+    retrievalAt: new Date().toISOString(),
+  };
+}
+
 function buildWatchLinks(params: { isAuthenticated: boolean; lang: Lang }): SourceLink[] {
   if (params.isAuthenticated) {
     return [
@@ -585,21 +603,26 @@ function getBearerToken(req: VercelRequest) {
   return match?.[1]?.trim() || null;
 }
 
-async function resolveUserIdFromToken(token: string | null) {
+async function resolveUserIdFromToken(token: string | null, adminClient: SupabaseClient | null) {
   if (!token) return null;
-  const admin = supabaseAdmin();
-  const { data, error } = await admin.auth.getUser(token);
+  if (!adminClient) return null;
+  const { data, error } = await adminClient.auth.getUser(token);
   if (error || !data?.user?.id) return null;
   return String(data.user.id);
 }
 
-async function ensureThreadId(userId: string | null, requestedThreadId: string | null, message: string) {
+async function ensureThreadId(
+  userId: string | null,
+  requestedThreadId: string | null,
+  message: string,
+  adminClient: SupabaseClient | null
+) {
   if (!userId) return requestedThreadId || null;
+  if (!adminClient) return requestedThreadId || null;
 
-  const admin = supabaseAdmin();
   const requested = String(requestedThreadId || "").trim();
   if (requested) {
-    const { data } = await admin
+    const { data } = await adminClient
       .from("chat_sessions")
       .select("id")
       .eq("id", requested)
@@ -608,7 +631,7 @@ async function ensureThreadId(userId: string | null, requestedThreadId: string |
     if (data?.id) return String(data.id);
   }
 
-  const { data: created } = await admin
+  const { data: created } = await adminClient
     .from("chat_sessions")
     .insert({ user_id: userId, title: message.slice(0, 120) })
     .select("id")
@@ -617,6 +640,7 @@ async function ensureThreadId(userId: string | null, requestedThreadId: string |
 }
 
 async function persistExchange(params: {
+  adminClient: SupabaseClient | null;
   userId: string | null;
   threadId: string | null;
   message: string;
@@ -624,10 +648,9 @@ async function persistExchange(params: {
   entities: DetectedEntities;
   dossier: ReturnType<typeof buildDossier>;
 }) {
-  if (!params.userId || !params.threadId) return;
+  if (!params.userId || !params.threadId || !params.adminClient) return;
 
-  const admin = supabaseAdmin();
-  await admin
+  await params.adminClient
     .from("chat_messages")
     .insert([
       {
@@ -665,18 +688,24 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
     }
 
     const preferredLang = normalizeLang(body?.lang) || inferLangFromMessage(message);
+    let adminClient: SupabaseClient | null = null;
+    try {
+      adminClient = supabaseAdmin();
+    } catch {
+      adminClient = null;
+    }
     const token = getBearerToken(req);
-    const userId = await resolveUserIdFromToken(token);
-    const threadId = await ensureThreadId(userId, body?.thread_id || null, message);
-
-    const admin = supabaseAdmin();
+    const userId = await resolveUserIdFromToken(token, adminClient);
+    const threadId = await ensureThreadId(userId, body?.thread_id || null, message, adminClient);
     const resolver = resolveEntities({
       message,
       overrides: asObject(body?.overrides),
       lang: preferredLang,
     });
 
-    const phaseOnePolicy = await retrievePolicyContext({ admin, context: resolver.context });
+    const phaseOnePolicy = adminClient
+      ? await retrievePolicyContext({ admin: adminClient, context: resolver.context }).catch(() => fallbackPolicyContext())
+      : fallbackPolicyContext();
 
     const classification = classifyProduct({
       context: resolver.context,
@@ -690,7 +719,9 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
 
     const policy =
       finalContext.hs6 !== resolver.context.hs6
-        ? await retrievePolicyContext({ admin, context: finalContext })
+        ? adminClient
+          ? await retrievePolicyContext({ admin: adminClient, context: finalContext }).catch(() => phaseOnePolicy)
+          : phaseOnePolicy
         : phaseOnePolicy;
 
     const controls = evaluateControls({
@@ -756,6 +787,7 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
     });
 
     await persistExchange({
+      adminClient,
       userId,
       threadId,
       message,
