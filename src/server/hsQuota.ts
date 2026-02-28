@@ -4,6 +4,7 @@ import { createHash } from "crypto";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_DAILY_LIMIT = 30;
+let hasWarnedMissingPepper = false;
 
 type LogStatus =
   | "ok"
@@ -48,8 +49,21 @@ export function getDailyLimit() {
 }
 
 export function getIpHashFromRequest(req: VercelRequest) {
-  const pepper = String(process.env.IP_HASH_PEPPER || "").trim();
-  if (!pepper) throw new Error("missing_env_IP_HASH_PEPPER");
+  const configuredPepper = String(process.env.IP_HASH_PEPPER || "").trim();
+  const pepper =
+    configuredPepper
+    || [
+      String(process.env.VERCEL_PROJECT_PRODUCTION_URL || "").trim(),
+      String(process.env.VERCEL_URL || "").trim(),
+      String(process.env.VERCEL_PROJECT_ID || "").trim(),
+      String(process.env.SUPABASE_URL || "").trim(),
+    ].filter(Boolean).join("|")
+    || "fallback_pepper_change_me";
+
+  if (!configuredPepper && !hasWarnedMissingPepper) {
+    hasWarnedMissingPepper = true;
+    console.warn("[hsQuota] IP_HASH_PEPPER missing; using derived fallback pepper. Configure IP_HASH_PEPPER for stable privacy-preserving hashing.");
+  }
 
   const ip = getClientIp(req);
   return createHash("sha256").update(`${ip}:${pepper}`).digest("hex");
