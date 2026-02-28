@@ -1,8 +1,13 @@
 ﻿import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowRight, ExternalLink, RefreshCw, Rss, ShieldCheck } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { postPrefs } from "@/lib/leadMagnetApi";
 
 type RssFooterItem = {
   id?: string;
@@ -174,6 +179,8 @@ async function fetchRaw(url: string, signal: AbortSignal) {
 }
 
 export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) {
+  const { isAuthenticated, user } = useAuth();
+  const { toast } = useToast();
   const effectiveTerritory = React.useMemo(() => normalizeTerritory(territory), [territory]);
   const effectiveTopic = React.useMemo(() => normalizeTopic(topic), [topic]);
   const [items, setItems] = React.useState<RssFooterItem[]>([]);
@@ -184,6 +191,9 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
   const [loading, setLoading] = React.useState(true);
   const [refreshTick, setRefreshTick] = React.useState(0);
   const [sourceFilter, setSourceFilter] = React.useState<string>("__all");
+  const [newsletterOptIn, setNewsletterOptIn] = React.useState(false);
+  const [newsletterSaving, setNewsletterSaving] = React.useState(false);
+  const [newsletterSaved, setNewsletterSaved] = React.useState(false);
 
   React.useEffect(() => {
     let mounted = true;
@@ -293,6 +303,51 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
     const exists = sourceOptions.some((label) => label.toLowerCase() === sourceFilter.toLowerCase());
     if (!exists) setSourceFilter("__all");
   }, [sourceFilter, sourceOptions]);
+
+  const newsletterCountries = React.useMemo(() => {
+    return /^[A-Z]{2}$/.test(effectiveTerritory) ? [effectiveTerritory] : [];
+  }, [effectiveTerritory]);
+
+  const handleSaveNewsletterPrefs = React.useCallback(async () => {
+    if (!isAuthenticated) return;
+    const email = String(user?.email || "").trim().toLowerCase();
+    if (!email) {
+      toast({
+        title: "Email introuvable",
+        description: "Impossible d'enregistrer la newsletter sans email de compte.",
+      });
+      return;
+    }
+
+    setNewsletterSaving(true);
+    try {
+      await postPrefs({
+        email,
+        countries: newsletterOptIn ? newsletterCountries : [],
+        hsCodes: [],
+      });
+      setNewsletterSaved(true);
+      toast({
+        title: newsletterOptIn ? "Newsletter activee" : "Newsletter desactivee",
+        description: newsletterOptIn
+          ? `Vous recevrez la veille pour ${selectedLabel}${effectiveTopic ? ` (focus: ${effectiveTopic})` : ""}.`
+          : "Vous ne recevrez plus cette newsletter veille.",
+      });
+    } catch (err) {
+      const msg = String((err as { message?: string })?.message || "Impossible d'enregistrer la preference.");
+      toast({ title: "Erreur newsletter", description: msg });
+    } finally {
+      setNewsletterSaving(false);
+    }
+  }, [
+    effectiveTopic,
+    isAuthenticated,
+    newsletterCountries,
+    newsletterOptIn,
+    selectedLabel,
+    toast,
+    user?.email,
+  ]);
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -433,45 +488,100 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
 
         {/* CTA / Conversion */}
         <div className="rounded-2xl border border-border bg-muted/30 p-4">
-          <div className="flex items-start gap-2">
-            <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background">
-              <ShieldCheck className="h-4 w-4" />
-            </div>
-            <div className="space-y-1">
-              <div className="text-sm font-semibold text-foreground">Debloquez le suivi et l'historique</div>
-              <div className="text-xs text-muted-foreground">
-                Compte gratuit : sauvegarde de vos controles + acces aux vues avancees.
+          {isAuthenticated ? (
+            <>
+              <div className="flex items-start gap-2">
+                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm font-semibold text-foreground">Newsletter veille personnalisee</div>
+                  <div className="text-xs text-muted-foreground">
+                    Perimetre: <b>{selectedLabel}</b>
+                    {effectiveTopic ? <span> · focus <b>{effectiveTopic}</b></span> : null}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <ul className="mt-3 space-y-2 text-sm text-foreground/90">
-            <li className="flex items-start gap-2">
-              <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-              <span>Historique des verifications et export des resultats</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-              <span>Veille plus ciblee (pays/secteur) dans l'app</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
-              <span>Acces aux outils : Control Tower, simulateur, conformite</span>
-            </li>
-          </ul>
+              <div className="mt-3 rounded-xl border border-border bg-background p-3">
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="watch-newsletter-optin"
+                    checked={newsletterOptIn}
+                    onCheckedChange={(checked) => {
+                      setNewsletterOptIn(Boolean(checked));
+                      setNewsletterSaved(false);
+                    }}
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="watch-newsletter-optin" className="text-sm font-medium">
+                      Recevoir les news de cette veille
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Cochez pour recevoir les mises a jour de la veille selectionnee.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <a href="/register?next=%2Fapp%2Finvoice-check" className="w-full">
-              <Button className="w-full gap-2">
-                Creer un compte gratuit <ArrowRight className="h-4 w-4" />
-              </Button>
-            </a>
-            <a href="/login" className="w-full">
-              <Button variant="outline" className="w-full">
-                Se connecter
-              </Button>
-            </a>
-          </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={handleSaveNewsletterPrefs}
+                  disabled={newsletterSaving}
+                >
+                  {newsletterSaving ? "Enregistrement..." : "Enregistrer ma preference newsletter"}
+                </Button>
+              </div>
+
+              {newsletterSaved ? (
+                <div className="mt-2 text-xs text-emerald-700">Preference newsletter enregistree.</div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <div className="flex items-start gap-2">
+                <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm font-semibold text-foreground">Debloquez le suivi et l'historique</div>
+                  <div className="text-xs text-muted-foreground">
+                    Compte gratuit : sauvegarde de vos controles + acces aux vues avancees.
+                  </div>
+                </div>
+              </div>
+
+              <ul className="mt-3 space-y-2 text-sm text-foreground/90">
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
+                  <span>Historique des verifications et export des resultats</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
+                  <span>Veille plus ciblee (pays/secteur) dans l'app</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 h-2 w-2 rounded-full bg-primary" />
+                  <span>Acces aux outils : Control Tower, simulateur, conformite</span>
+                </li>
+              </ul>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <a href="/register?next=%2Fapp%2Finvoice-check" className="w-full">
+                  <Button className="w-full gap-2">
+                    Creer un compte gratuit <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </a>
+                <a href="/login" className="w-full">
+                  <Button variant="outline" className="w-full">
+                    Se connecter
+                  </Button>
+                </a>
+              </div>
+            </>
+          )}
 
           {meta.link ? (
             <div className="mt-3 text-[11px] text-muted-foreground">
