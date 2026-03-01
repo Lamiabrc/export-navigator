@@ -9,6 +9,54 @@ create table if not exists public.hs_search_logs (
   status text not null default 'ok'
 );
 
+alter table public.hs_search_logs
+  add column if not exists created_at timestamptz,
+  add column if not exists ip_hash text,
+  add column if not exists user_agent text,
+  add column if not exists query text,
+  add column if not exists universe text,
+  add column if not exists locale text,
+  add column if not exists status text;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'hs_search_logs'
+      and column_name = 'request_ip_hash'
+  ) then
+    execute $sql$
+      update public.hs_search_logs
+      set ip_hash = coalesce(ip_hash, nullif(request_ip_hash, ''))
+      where ip_hash is null
+    $sql$;
+  end if;
+end
+$$;
+
+update public.hs_search_logs
+set
+  created_at = coalesce(created_at, now()),
+  ip_hash = coalesce(ip_hash, 'legacy_unknown'),
+  query = coalesce(query, '[legacy]'),
+  status = coalesce(status, 'ok')
+where created_at is null
+   or ip_hash is null
+   or query is null
+   or status is null;
+
+alter table public.hs_search_logs
+  alter column created_at set default now(),
+  alter column status set default 'ok';
+
+alter table public.hs_search_logs
+  alter column created_at set not null,
+  alter column ip_hash set not null,
+  alter column query set not null,
+  alter column status set not null;
+
 create index if not exists hs_search_logs_ip_created_idx
   on public.hs_search_logs (ip_hash, created_at desc);
 
