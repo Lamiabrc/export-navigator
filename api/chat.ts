@@ -640,6 +640,12 @@ function cleanMessage(message: unknown) {
   return String(message || "").trim().slice(0, 8000);
 }
 
+function queryParam(req: VercelRequest, key: string) {
+  const value = req.query?.[key];
+  if (Array.isArray(value)) return String(value[0] || "").trim();
+  return String(value || "").trim();
+}
+
 function detectByPatterns(message: string, patterns: Array<{ code: string; pattern: RegExp }>) {
   for (const entry of patterns) {
     if (entry.pattern.test(message)) return entry.code;
@@ -1184,13 +1190,31 @@ async function persistExchange(params: {
 }
 
 export async function chatHandler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
+  const method = String(req.method || "").toUpperCase();
+  if (method !== "POST" && method !== "GET") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
   }
 
   try {
     const runtime = await getCopilotRuntime();
-    const body = await readJson<ChatRequest>(req);
+    const body: ChatRequest =
+      method === "GET"
+        ? {
+            message: queryParam(req, "message") || queryParam(req, "q"),
+            thread_id: queryParam(req, "thread_id") || queryParam(req, "session_id") || null,
+            lang: queryParam(req, "lang") || null,
+          }
+        : await readJson<ChatRequest>(req);
+
+    if (method === "GET" && !String(body?.message || "").trim()) {
+      return json(res, 200, {
+        ok: true,
+        endpoint: "/api/chat",
+        methods: ["POST", "GET"],
+        usage: "POST JSON { message, thread_id?, lang?, overrides? } or GET ?message=...",
+      });
+    }
+
     const message = cleanMessage(body?.message);
     if (!message) {
       return json(res, 400, { ok: false, error: "message_required" });

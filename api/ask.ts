@@ -17,6 +17,12 @@ function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+function queryParam(req: VercelRequest, key: string) {
+  const value = req.query?.[key];
+  if (Array.isArray(value)) return String(value[0] || "").trim();
+  return String(value || "").trim();
+}
+
 function asOptionalText(value: unknown) {
   const text = String(value ?? "").trim();
   return text || null;
@@ -67,11 +73,30 @@ function buildOverrides(payload: AskPayload) {
 }
 
 export async function askHandler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
+  const method = String(req.method || "").toUpperCase();
+  if (method !== "POST" && method !== "GET") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
   }
 
-  const body = await readJson<AskPayload>(req);
+  const body: AskPayload =
+    method === "GET"
+      ? {
+          question: queryParam(req, "question") || queryParam(req, "message") || queryParam(req, "q"),
+          lang: queryParam(req, "lang") || null,
+          session_id: queryParam(req, "session_id") || null,
+          thread_id: queryParam(req, "thread_id") || null,
+        }
+      : await readJson<AskPayload>(req);
+
+  if (method === "GET" && !String(body?.question ?? body?.message ?? "").trim()) {
+    return json(res, 200, {
+      ok: true,
+      endpoint: "/api/ask",
+      methods: ["POST", "GET"],
+      usage: "POST JSON { question|message, session_id?, thread_id?, lang?, context?, overrides? } or GET ?question=...",
+    });
+  }
+
   const message = String(body?.question ?? body?.message ?? "").trim();
   if (!message) {
     return json(res, 400, { ok: false, error: "question_required" });
