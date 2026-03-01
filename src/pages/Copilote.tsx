@@ -118,19 +118,18 @@ type GuidedFormValues = {
 
 const uid = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 const COUNTRY_FOLLOWUP_RE = /(quel est le pays|pays de destination|destination exact)/i;
-const COUNTRY_MISSING_RE = /(pays.*(a confirmer|manquant)|quel est le pays de destination|destination exacte)/i;
 const COUNTRY_OVERRIDE_KEYS = {
   seller: ["sellerCountry", "seller_country", "origin", "from"],
   buyer: ["buyerCountry", "buyer_country", "destination", "to", "country"],
 } as const;
 
 const GENERAL_UNKNOWN_PROMPT =
-  "Je ne sais pas encore les details (pays/produit/incoterm). Donne une reponse generale import/export: regles de base TVA/douane, risques majeurs, documents standards et 3 prochaines actions simples.";
+  "Je ne sais pas encore les details (pays/produit/incoterm). Donne une reponse generale import/export courte: douane/incoterm/documents/risques, puis TVA seulement si applicable.";
 
 function isUncertainAnswer(answer: string) {
   const txt = answer.trim().toLowerCase();
   if (!txt) return true;
-  if (txt.length < 40) return true;
+  if (txt.length < 20) return true;
   if (/(pas de reponse|indisponible|erreur|vide|reessaye|reessaie)/i.test(txt)) return true;
   return false;
 }
@@ -426,13 +425,6 @@ function buildWatchLinks(isAuthenticated: boolean) {
   ];
 }
 
-function buildWatchHint(isAuthenticated: boolean) {
-  if (isAuthenticated) {
-    return "Etape suivante: ouvrez la veille et choisissez un pays via la liste deroulante ou la carte.";
-  }
-  return "Etape suivante: ouvrez la page veille puis inscrivez-vous pour activer le suivi par pays.";
-}
-
 export default function Copilote() {
   const [messages, setMessages] = React.useState<ChatMessage[]>([
     {
@@ -646,14 +638,12 @@ export default function Copilote() {
         productKnown: productKnownFromPrompt,
       }).slice(0, 3);
 
-      const countryStillMissing = Boolean(!countryKnown && COUNTRY_MISSING_RE.test(answerRaw.toLowerCase()));
       const blocks = buildAssistantBlocks(data?.dossier) || guidedBlocks;
-      const uncertain = isUncertainAnswer(answerRaw) || countryStillMissing;
-      const links = buildWatchLinks(isAuthenticated);
+      const uncertain = isUncertainAnswer(answerRaw);
+      const links = uncertain ? buildWatchLinks(isAuthenticated) : [];
 
-      const baseAnswer = uncertain ? guided.answer : (answerRaw || guided.answer);
-      const answer = `${baseAnswer}\n\n${buildWatchHint(isAuthenticated)}`;
-      const finalBlocks = uncertain ? (guidedBlocks || blocks) : blocks;
+      const answer = uncertain ? guided.answer : (answerRaw || guided.answer);
+      const finalBlocks = uncertain ? (guidedBlocks || blocks) : undefined;
       const responseChecks = Array.isArray(data?.checks) ? data.checks : [];
       const mainBlocker = data?.main_blocker ?? deriveMainBlocker(responseChecks);
 
@@ -699,7 +689,7 @@ export default function Copilote() {
     } catch (err: any) {
       const guided = buildGuidedFallback(question);
       const links = buildWatchLinks(isAuthenticated);
-      const answer = `${guided.answer}\n\n${buildWatchHint(isAuthenticated)}`;
+      const answer = guided.answer;
       const blocks = buildAssistantBlocksFromGuided(guided);
 
       setError("Serveur temporairement indisponible. Mode guide active avec plan d'action.");

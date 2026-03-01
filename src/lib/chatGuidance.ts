@@ -220,15 +220,11 @@ export function buildGuidedFallback(question: string): GuidedFallback {
   const answer = [
     `Demande comprise: ${objective}.`,
     country
-      ? `Regle generale immediate: appliquez les regles export/import vers ${country}, puis confirmez HS et Incoterm pour fiabiliser droits, taxes et documents.`
-      : "Regle generale immediate: il faut confirmer la destination pour valider TVA, formalites douane et restrictions pays.",
-    "Orientation veille: activez la veille puis choisissez le pays via la liste ou la carte pour recevoir le suivi adapte.",
-    isGlobalIntent
-      ? "Question orientee commerce mondial produit: activez la veille pays pour un suivi continu."
-      : null,
+      ? `Decision provisoire: sous conditions. Priorite douane/Incoterm puis classification HS pour ${country}.`
+      : "Decision provisoire: sous conditions. Donnez d'abord le pays destination pour fiabiliser la reponse.",
     `Question prioritaire: ${firstQuestion}`,
-    extraQuestions.length ? `Ensuite:\n- ${extraQuestions.join("\n- ")}` : null,
-    "Une fois ces points donnes, je fournis une reponse exploitable (checklist, risques, actions).",
+    extraQuestions.length ? `Puis:\n- ${extraQuestions.join("\n- ")}` : null,
+    isGlobalIntent ? "Option: activez la veille pays si vous suivez le marche mondial du produit." : null,
   ]
     .filter(Boolean)
     .join("\n\n");
