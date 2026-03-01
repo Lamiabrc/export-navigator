@@ -87,18 +87,139 @@ create index if not exists idx_regulatory_items_zone on regulatory_items (zone);
 create index if not exists idx_regulatory_items_category on regulatory_items (category);
 create index if not exists idx_alerts_country_iso2 on alerts (country_iso2);
 
+-- Guard seed for environments where products.hs_code already has a FK to hs_codes.
+-- Supports hs_codes code column variants: hs6 / hs_code / code.
+do $$
+declare
+  code_col text;
+  has_label_fr boolean;
+  has_label_en boolean;
+  has_chapter boolean;
+begin
+  if to_regclass('public.hs_codes') is null then
+    return;
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public' and table_name = 'hs_codes' and column_name = 'hs6'
+  ) then
+    code_col := 'hs6';
+  elsif exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public' and table_name = 'hs_codes' and column_name = 'hs_code'
+  ) then
+    code_col := 'hs_code';
+  elsif exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public' and table_name = 'hs_codes' and column_name = 'code'
+  ) then
+    code_col := 'code';
+  else
+    raise notice 'hs_codes exists without recognized code column (hs6/hs_code/code). Seed skipped.';
+    return;
+  end if;
+
+  has_label_fr := exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'hs_codes' and column_name = 'label_fr'
+  );
+  has_label_en := exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'hs_codes' and column_name = 'label_en'
+  );
+  has_chapter := exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'hs_codes' and column_name = 'chapter'
+  );
+
+  if has_label_fr then
+    execute format(
+      $sql$
+        insert into public.hs_codes (%1$I, label_fr%2$s%3$s)
+        values
+          ('3004', 'Preparations medicamenteuses'%4$s%5$s),
+          ('8708', 'Parties et accessoires de vehicules automobiles'%6$s%7$s),
+          ('2204', 'Vins de raisins frais'%8$s%9$s),
+          ('3304', 'Produits de beaute, de maquillage et soins de la peau'%10$s%11$s),
+          ('9403', 'Autres meubles et leurs parties'%12$s%13$s),
+          ('8504', 'Transformateurs electriques, convertisseurs statiques'%14$s%15$s),
+          ('4202', 'Malles, valises, sacs et contenants similaires'%16$s%17$s),
+          ('8471', 'Machines automatiques de traitement de l''information'%18$s%19$s),
+          ('3923', 'Articles de transport ou d''emballage en matieres plastiques'%20$s%21$s),
+          ('7616', 'Autres ouvrages en aluminium'%22$s%23$s)
+        on conflict (%1$I) do nothing
+      $sql$,
+      code_col,
+      case when has_label_en then ', label_en' else '' end,
+      case when has_chapter then ', chapter' else '' end,
+      case when has_label_en then ', ''Medicaments and pharmaceutical products''' else '' end,
+      case when has_chapter then ', ''30''' else '' end,
+      case when has_label_en then ', ''Motor vehicle parts and accessories''' else '' end,
+      case when has_chapter then ', ''87''' else '' end,
+      case when has_label_en then ', ''Wine of fresh grapes''' else '' end,
+      case when has_chapter then ', ''22''' else '' end,
+      case when has_label_en then ', ''Beauty, make-up and skin-care preparations''' else '' end,
+      case when has_chapter then ', ''33''' else '' end,
+      case when has_label_en then ', ''Other furniture and parts thereof''' else '' end,
+      case when has_chapter then ', ''94''' else '' end,
+      case when has_label_en then ', ''Electrical transformers and static converters''' else '' end,
+      case when has_chapter then ', ''85''' else '' end,
+      case when has_label_en then ', ''Travel goods and similar containers''' else '' end,
+      case when has_chapter then ', ''42''' else '' end,
+      case when has_label_en then ', ''Automatic data-processing machines''' else '' end,
+      case when has_chapter then ', ''84''' else '' end,
+      case when has_label_en then ', ''Plastic packing and transport articles''' else '' end,
+      case when has_chapter then ', ''39''' else '' end,
+      case when has_label_en then ', ''Other articles of aluminium''' else '' end,
+      case when has_chapter then ', ''76''' else '' end
+    );
+  else
+    execute format(
+      $sql$
+        insert into public.hs_codes (%1$I)
+        values
+          ('3004'),
+          ('8708'),
+          ('2204'),
+          ('3304'),
+          ('9403'),
+          ('8504'),
+          ('4202'),
+          ('8471'),
+          ('3923'),
+          ('7616')
+        on conflict (%1$I) do nothing
+      $sql$,
+      code_col
+    );
+  end if;
+end
+$$;
+
 insert into products (code, label, hs_code, tva, manufacturer)
-values
-  ('P-3004', 'Gel dermique apaisant', '3004', 20, 'Laboratoires MPL'),
-  ('P-8708', 'Kit freinage premium', '8708', 20, 'MPL Auto'),
-  ('P-2204', 'Coffret vin rouge 2022', '2204', 20, 'Domaine Atlantique'),
-  ('P-3304', 'Soin hydratant visage', '3304', 20, 'MPL Cosmetique'),
-  ('P-9403', 'Chaise bureau ergonomique', '9403', 20, 'Atelier Nord'),
-  ('P-8504', 'Transformateur 220V industriel', '8504', 20, 'ElectroMPL'),
-  ('P-4202', 'Sac de transport textile', '4202', 20, 'MPL Bags'),
-  ('P-8471', 'Kit capteurs IoT export', '8471', 20, 'MPL Tech'),
-  ('P-3923', 'Emballage recyclable', '3923', 20, 'PackMPL'),
-  ('P-7616', 'Profil aluminium sur mesure', '7616', 20, 'MPL Metal');
+select v.code, v.label, v.hs_code, v.tva, v.manufacturer
+from (
+  values
+    ('P-3004', 'Gel dermique apaisant', '3004', 20::numeric, 'Laboratoires MPL'),
+    ('P-8708', 'Kit freinage premium', '8708', 20::numeric, 'MPL Auto'),
+    ('P-2204', 'Coffret vin rouge 2022', '2204', 20::numeric, 'Domaine Atlantique'),
+    ('P-3304', 'Soin hydratant visage', '3304', 20::numeric, 'MPL Cosmetique'),
+    ('P-9403', 'Chaise bureau ergonomique', '9403', 20::numeric, 'Atelier Nord'),
+    ('P-8504', 'Transformateur 220V industriel', '8504', 20::numeric, 'ElectroMPL'),
+    ('P-4202', 'Sac de transport textile', '4202', 20::numeric, 'MPL Bags'),
+    ('P-8471', 'Kit capteurs IoT export', '8471', 20::numeric, 'MPL Tech'),
+    ('P-3923', 'Emballage recyclable', '3923', 20::numeric, 'PackMPL'),
+    ('P-7616', 'Profil aluminium sur mesure', '7616', 20::numeric, 'MPL Metal')
+) as v(code, label, hs_code, tva, manufacturer)
+where not exists (
+  select 1
+  from products p
+  where p.code = v.code
+);
 
 insert into regulatory_feeds (name, source_url, category, zone, enabled)
 values
