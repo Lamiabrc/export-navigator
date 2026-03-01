@@ -17,6 +17,25 @@ type RssFooterItem = {
   pubDate?: string;
 };
 
+type RssUnlockPayload = {
+  price?: number | null;
+  price_monthly?: number | null;
+  price_yearly?: number | null;
+  benefits?: string[];
+  cta_url?: string;
+  country_iso2?: string;
+  pack_tier?: "base" | "free_oecd" | "paid_non_oecd";
+};
+
+type RssPackPayload = {
+  tier?: "base" | "free_oecd" | "paid_non_oecd";
+  is_eu?: boolean;
+  is_oecd?: boolean;
+  country_iso2?: string;
+  country_label?: string;
+  entitled?: boolean;
+};
+
 type RssMeta = {
   title?: string;
   description?: string;
@@ -27,10 +46,14 @@ type RssMeta = {
 type RssApiJsonResponse = {
   data?: { items?: Array<Record<string, unknown>> };
   items?: Array<Record<string, unknown>>;
+  preview_items?: Array<Record<string, unknown>>;
   meta?: RssMeta;
   sources?: string[];
   pinned?: string[];
   territory?: string;
+  locked?: boolean;
+  unlock?: RssUnlockPayload;
+  pack?: RssPackPayload;
   error?: string;
   message?: string;
 };
@@ -95,7 +118,8 @@ function toStringOrUndefined(value: unknown) {
 function pickItemsJson(payload: RssApiJsonResponse | null): RssFooterItem[] {
   const a = payload?.data?.items;
   const b = payload?.items;
-  const items = (Array.isArray(a) ? a : Array.isArray(b) ? b : []) as Array<Record<string, unknown>>;
+  const c = payload?.preview_items;
+  const items = (Array.isArray(a) ? a : Array.isArray(b) ? b : Array.isArray(c) ? c : []) as Array<Record<string, unknown>>;
   return (items
     .map((it, idx) => {
       const title = toStringOrUndefined(it.title) || "Article";
@@ -166,8 +190,8 @@ function parseRssXml(xml: string): { meta: RssMeta; items: RssFooterItem[] } {
   }
 }
 
-async function fetchRaw(url: string, signal: AbortSignal) {
-  const res = await fetch(url, { signal, headers: { Accept: "*/*" } });
+async function fetchRaw(url: string, signal: AbortSignal, headers?: Record<string, string>) {
+  const res = await fetch(url, { signal, headers: { Accept: "*/*", ...(headers || {}) } });
   const raw = await res.text();
 
   if (!res.ok) {
@@ -179,7 +203,7 @@ async function fetchRaw(url: string, signal: AbortSignal) {
 }
 
 export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, session } = useAuth();
   const { toast } = useToast();
   const effectiveTerritory = React.useMemo(() => normalizeTerritory(territory), [territory]);
   const effectiveTopic = React.useMemo(() => normalizeTopic(topic), [topic]);
@@ -191,6 +215,9 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
   const [loading, setLoading] = React.useState(true);
   const [refreshTick, setRefreshTick] = React.useState(0);
   const [sourceFilter, setSourceFilter] = React.useState<string>("__all");
+  const [locked, setLocked] = React.useState(false);
+  const [unlock, setUnlock] = React.useState<RssUnlockPayload | null>(null);
+  const [pack, setPack] = React.useState<RssPackPayload | null>(null);
   const [newsletterOptIn, setNewsletterOptIn] = React.useState(false);
   const [newsletterSaving, setNewsletterSaving] = React.useState(false);
   const [newsletterSaved, setNewsletterSaved] = React.useState(false);
@@ -208,7 +235,11 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
       const endpoint = `/api/rss?limit=18&territory=${encodeURIComponent(effectiveTerritory)}${topicParam}`;
 
       try {
-        const { raw, contentType } = await fetchRaw(endpoint, controller.signal);
+        const headers: Record<string, string> = {};
+        const token = String(session?.access_token || "").trim();
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const { raw, contentType } = await fetchRaw(endpoint, controller.signal, headers);
         if (!mounted) return;
 
         const looksXml = contentType.includes("xml") || raw.trim().startsWith("<rss") || raw.trim().startsWith("<?xml");
@@ -220,6 +251,9 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
           setItems(parsed.items);
           setSourceLabels([]);
           setPinnedLabels(PINNED_SOURCE_LABELS);
+          setLocked(false);
+          setUnlock(null);
+          setPack(null);
           setError(null);
         } else if (looksJson) {
           let payload: RssApiJsonResponse | null = null;
@@ -244,6 +278,9 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
               ? payload.pinned
               : PINNED_SOURCE_LABELS
           );
+          setLocked(Boolean(payload?.locked));
+          setUnlock((payload?.unlock || null) as RssUnlockPayload | null);
+          setPack((payload?.pack || null) as RssPackPayload | null);
           if (payload?.error) setError(payload.error);
           else setError(null);
         } else {
@@ -252,6 +289,9 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
           setItems([]);
           setSourceLabels([]);
           setPinnedLabels(PINNED_SOURCE_LABELS);
+          setLocked(false);
+          setUnlock(null);
+          setPack(null);
           setError("Format de veille non reconnu.");
         }
       } catch (err) {
@@ -262,6 +302,9 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
         setItems([]);
         setSourceLabels([]);
         setPinnedLabels(PINNED_SOURCE_LABELS);
+        setLocked(false);
+        setUnlock(null);
+        setPack(null);
         setError(anyErr?.message || "Veille indisponible pour le moment. Reessayez dans quelques minutes.");
       } finally {
         if (mounted) setLoading(false);
@@ -273,11 +316,17 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
       mounted = false;
       controller.abort();
     };
-  }, [effectiveTerritory, effectiveTopic, refreshTick, territoryLabel]);
+  }, [effectiveTerritory, effectiveTopic, refreshTick, territoryLabel, session?.access_token]);
 
   const hasItems = items.length > 0;
   const lastBuild = safeDateTimeLabel(meta.lastBuildDate);
   const selectedLabel = territoryLabel || (effectiveTerritory === "WORLD" ? "Monde" : effectiveTerritory);
+  const tierLabel =
+    pack?.tier === "paid_non_oecd"
+      ? "Pack payant"
+      : pack?.tier === "free_oecd"
+      ? "OCDE (gratuit)"
+      : "Base FR+UE";
   const sourceOptions = React.useMemo(() => {
     const set = new Set<string>();
     for (const label of pinnedLabels) {
@@ -377,6 +426,7 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Badge variant="secondary">Pays/zone: {selectedLabel}</Badge>
+          <Badge variant={pack?.tier === "paid_non_oecd" ? "destructive" : "outline"}>{tierLabel}</Badge>
           {effectiveTopic ? <Badge variant="secondary">Focus: {effectiveTopic}</Badge> : null}
           <div className="w-[220px]">
             <Select value={sourceFilter} onValueChange={setSourceFilter}>
@@ -419,6 +469,12 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Items */}
         <div className="lg:col-span-2">
+          {locked ? (
+            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              Apercu limite pour {pack?.country_label || selectedLabel}. Debloquez le pack pays pour voir toute la veille ciblee.
+            </div>
+          ) : null}
+
           {error ? (
             <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
               {error}
@@ -492,7 +548,42 @@ export function RssFooter({ territory, territoryLabel, topic }: RssFooterProps) 
 
         {/* CTA / Conversion */}
         <div className="rounded-2xl border border-border bg-muted/30 p-4">
-          {isAuthenticated ? (
+          {locked ? (
+            <>
+              <div className="space-y-1">
+                <div className="text-sm font-semibold text-foreground">Debloquer ce pays</div>
+                <div className="text-xs text-muted-foreground">
+                  {pack?.country_label || selectedLabel} est dans un pack pays payant.
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-border bg-background p-3">
+                <div className="text-sm">
+                  Prix:{" "}
+                  <b>
+                    {typeof unlock?.price_monthly === "number"
+                      ? `${(unlock.price_monthly / 100).toFixed(2)} EUR/mois`
+                      : "sur devis"}
+                  </b>
+                </div>
+                {Array.isArray(unlock?.benefits) && unlock?.benefits.length ? (
+                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    {unlock.benefits.slice(0, 3).map((benefit) => (
+                      <li key={`benefit-${benefit}`}>- {benefit}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+
+              <div className="mt-4">
+                <a href={unlock?.cta_url || "/pricing#country-packs"} className="w-full">
+                  <Button className="w-full gap-2">
+                    Debloquer ce pays <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </a>
+              </div>
+            </>
+          ) : isAuthenticated ? (
             <>
               <div className="flex items-start gap-2">
                 <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-background">

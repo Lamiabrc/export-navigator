@@ -216,7 +216,7 @@ const EXPERT_WATCH = [
 
 export default function Veille() {
   const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, session } = useAuth();
   const prefsRef = React.useRef<HTMLDivElement | null>(null);
 
   const [email, setEmail] = React.useState("");
@@ -235,6 +235,9 @@ export default function Veille() {
   const [rssLoading, setRssLoading] = React.useState(false);
   const [rssItems, setRssItems] = React.useState<RssItem[]>([]);
   const [rssUpdatedAt, setRssUpdatedAt] = React.useState<string | null>(null);
+  const [rssLocked, setRssLocked] = React.useState(false);
+  const [rssPackTier, setRssPackTier] = React.useState<"base" | "free_oecd" | "paid_non_oecd">("base");
+  const [rssUnlockPriceMonthly, setRssUnlockPriceMonthly] = React.useState<number | null>(null);
 
   const [rssQuery, setRssQuery] = React.useState("");
   const [zoneFilter, setZoneFilter] = React.useState("ALL");
@@ -312,8 +315,21 @@ export default function Veille() {
   const loadRss = React.useCallback(async () => {
     setRssLoading(true);
     try {
-      const res = await fetch("/api/rss?limit=30");
+      const headers: Record<string, string> = {};
+      const token = String(session?.access_token || "").trim();
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const res = await fetch("/api/rss?limit=30", { headers });
       const raw = await res.json().catch(() => ({}));
+      setRssLocked(Boolean(raw?.locked));
+      const packTier = String(raw?.pack?.tier || "base");
+      setRssPackTier(
+        packTier === "paid_non_oecd" || packTier === "free_oecd" || packTier === "base"
+          ? packTier
+          : "base"
+      );
+      const monthly = Number(raw?.unlock?.price_monthly);
+      setRssUnlockPriceMonthly(Number.isFinite(monthly) ? monthly : null);
       const items = Array.isArray(raw?.items) ? raw.items : Array.isArray(raw?.data?.items) ? raw.data.items : [];
 
       const normalized: RssItem[] = items.map((it: any) => ({
@@ -363,10 +379,13 @@ export default function Veille() {
     } catch {
       setRssItems([]);
       setRssUpdatedAt(null);
+      setRssLocked(false);
+      setRssPackTier("base");
+      setRssUnlockPriceMonthly(null);
     } finally {
       setRssLoading(false);
     }
-  }, []);
+  }, [session?.access_token]);
 
   React.useEffect(() => {
     loadRss();
@@ -1131,6 +1150,20 @@ export default function Veille() {
               </CardHeader>
 
               <CardContent className="space-y-4">
+                {rssLocked ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    Apercu veille limite ({rssPackTier === "paid_non_oecd" ? "Pack payant" : rssPackTier === "free_oecd" ? "OCDE (gratuit)" : "Base FR+UE"}).
+                    {typeof rssUnlockPriceMonthly === "number" ? (
+                      <span> Prix: {(rssUnlockPriceMonthly / 100).toFixed(2)} EUR/mois.</span>
+                    ) : null}
+                    {rssPackTier === "paid_non_oecd" ? (
+                      <span className="ml-1">
+                        <a className="underline" href="/pricing#country-packs">Debloquer ce pays</a>
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />

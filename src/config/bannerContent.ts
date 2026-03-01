@@ -78,6 +78,18 @@ export function getBannerContent(pathname: string): BannerContent {
   }
 
   if (path.startsWith("/app")) {
+    if (path.includes("sales-dashboard")) {
+      return { title: "Dashboard ventes", question: "Quels deals accelerer cette semaine ?" };
+    }
+    if (path.includes("/app/deals")) {
+      return { title: "Pipeline deals", question: "Quel deal faut-il securiser maintenant ?" };
+    }
+    if (path.includes("market-finder")) {
+      return { title: "Market Finder", question: "Quels 5 pays prioriser sur ce produit ?" };
+    }
+    if (path.includes("lead-templates")) {
+      return { title: "Lead Finder", question: "Quel message de prospection envoyer en premier ?" };
+    }
     if (path.includes("centre-veille")) {
       return { title: "Centre de veille", question: "Quel signal doit-on traiter maintenant ?" };
     }

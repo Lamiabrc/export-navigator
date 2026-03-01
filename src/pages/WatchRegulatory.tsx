@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { formatDateTimeFr } from "@/lib/formatters";
+import { useAuth } from "@/contexts/AuthContext";
 
 type RssItem = {
   title: string;
@@ -25,6 +26,8 @@ type RssItem = {
   official?: boolean;
   importance?: number;
   imageUrl: string | null;
+  why_relevant?: string | null;
+  action_required?: string | null;
 };
 
 type RssPayload = {
@@ -37,8 +40,22 @@ type RssPayload = {
   official_only?: boolean;
   updatedAt?: string | null;
   items?: RssItem[];
+  preview_items?: RssItem[];
   sources?: string[];
   pinned?: string[];
+  locked?: boolean;
+  unlock?: {
+    price?: number | null;
+    price_monthly?: number | null;
+    price_yearly?: number | null;
+    benefits?: string[];
+    cta_url?: string;
+  };
+  pack?: {
+    tier?: "base" | "free_oecd" | "paid_non_oecd";
+    is_oecd?: boolean;
+    country_label?: string;
+  };
   error?: string;
 };
 
@@ -76,6 +93,7 @@ function importanceVariant(score: number) {
 }
 
 export default function WatchRegulatory() {
+  const { session } = useAuth();
   const [territory, setTerritory] = React.useState("WORLD");
   const [topic, setTopic] = React.useState("all");
   const [fromDate, setFromDate] = React.useState("");
@@ -106,7 +124,11 @@ export default function WatchRegulatory() {
       if (toDate) params.set("to", toDate);
 
       try {
-        const res = await fetch(`/api/rss?${params.toString()}`);
+        const headers: Record<string, string> = {};
+        const token = String(session?.access_token || "").trim();
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const res = await fetch(`/api/rss?${params.toString()}`, { headers });
         const json = (await res.json().catch(() => ({}))) as RssPayload;
         if (!res.ok || json?.ok === false) {
           throw new Error(json?.error || `rss_failed_${res.status}`);
@@ -127,14 +149,16 @@ export default function WatchRegulatory() {
     return () => {
       active = false;
     };
-  }, [territory, topic, fromDate, toDate, officialOnly, refreshTick]);
+  }, [territory, topic, fromDate, toDate, officialOnly, refreshTick, session?.access_token]);
 
   const items = React.useMemo(() => (Array.isArray(payload.items) ? payload.items : []), [payload.items]);
+  const locked = Boolean(payload.locked);
+  const visibleItems = locked && Array.isArray(payload.preview_items) ? payload.preview_items : items;
 
   const filteredItems = React.useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((item) => {
+    if (!q) return visibleItems;
+    return visibleItems.filter((item) => {
       const haystack = [
         item.title,
         item.summary || "",
@@ -146,7 +170,7 @@ export default function WatchRegulatory() {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [items, search]);
+  }, [visibleItems, search]);
 
   const countryStats = React.useMemo(() => {
     const stats: Record<string, { label?: string; alerts: number; updates: number; total: number }> = {};
@@ -207,10 +231,17 @@ export default function WatchRegulatory() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
             {(payload.pinned || []).map((name) => (
               <Badge key={`pinned-${name}`} variant="secondary">{name}</Badge>
             ))}
+            <Badge variant={payload.pack?.tier === "paid_non_oecd" ? "destructive" : "outline"}>
+              {payload.pack?.tier === "paid_non_oecd"
+                ? "Pack payant"
+                : payload.pack?.tier === "free_oecd"
+                ? "OCDE (gratuit)"
+                : "Base FR+UE"}
+            </Badge>
             {(payload.sources || []).slice(0, 8).map((name) => (
               <Badge key={`src-${name}`} variant="outline">{name}</Badge>
             ))}
@@ -298,6 +329,11 @@ export default function WatchRegulatory() {
               <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">Aucun item pour ces filtres.</div>
             ) : (
               <div className="space-y-3">
+                {locked ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    Apercu limite: debloquez le pack pays pour voir la veille complete.
+                  </div>
+                ) : null}
                 {filteredItems.map((item) => {
                   const importance = Number(item.importance || 0);
                   const dateLabel = item.publishedAt ? formatDateTimeFr(item.publishedAt) : "Date inconnue";
@@ -317,6 +353,8 @@ export default function WatchRegulatory() {
                       </div>
 
                       {item.summary ? <p className="mt-2 text-sm text-muted-foreground">{item.summary}</p> : null}
+                      {item.why_relevant ? <p className="mt-2 text-xs text-muted-foreground">Pourquoi: {item.why_relevant}</p> : null}
+                      {item.action_required ? <p className="mt-1 text-xs text-primary">Action: {item.action_required}</p> : null}
 
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         {item.source ? <Badge variant="outline">{item.source}</Badge> : null}
@@ -340,6 +378,35 @@ export default function WatchRegulatory() {
                 })}
               </div>
             )}
+
+            {locked ? (
+              <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4">
+                <div className="text-sm font-semibold">Debloquer ce pays</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {payload.pack?.country_label || territoryLabel(territory)} est dans un pack payant.
+                </p>
+                <p className="mt-2 text-sm">
+                  Prix:{" "}
+                  <b>
+                    {typeof payload.unlock?.price_monthly === "number"
+                      ? `${(payload.unlock.price_monthly / 100).toFixed(2)} EUR/mois`
+                      : "sur devis"}
+                  </b>
+                </p>
+                {Array.isArray(payload.unlock?.benefits) && payload.unlock.benefits.length ? (
+                  <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    {payload.unlock.benefits.slice(0, 3).map((benefit) => (
+                      <li key={`unlock-benefit-${benefit}`}>- {benefit}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                <div className="mt-3">
+                  <a href={payload.unlock?.cta_url || "/pricing#country-packs"}>
+                    <Button>Debloquer ce pays</Button>
+                  </a>
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </div>

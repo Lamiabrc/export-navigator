@@ -1,5 +1,5 @@
 import * as React from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -39,7 +39,11 @@ import SetPassword from "@/pages/SetPassword";
 import ControlTower from "@/pages/ControlTower";
 import ExportSimulator from "@/pages/ExportSimulator";
 import Simulator from "@/pages/Simulator";
-import Sales from "@/pages/Sales";
+import DealsBoard from "@/pages/DealsBoard";
+import DealDetail from "@/pages/DealDetail";
+import DashboardVentes from "@/pages/DashboardVentes";
+import MarketFinder from "@/pages/MarketFinder";
+import LeadTemplates from "@/pages/LeadTemplates";
 import InvoiceDetail from "@/pages/InvoiceDetail";
 import Admin from "@/pages/Admin";
 import Assistant from "@/pages/Assistant";
@@ -67,6 +71,11 @@ import Copilote from "@/pages/Copilote";
 
 const queryClient = new QueryClient();
 const LazyFallback = () => <div className="p-6 text-sm text-muted-foreground">Chargement…</div>;
+const LegacyDealRedirect = () => {
+  const params = useParams();
+  const dealId = params.dealId || "";
+  return <Navigate to={`/app/deals/${dealId}`} replace />;
+};
 
 export default function App() {
   return (
@@ -212,10 +221,55 @@ export default function App() {
                         <Route path="/app" element={<Navigate to="/app/control-tower" replace />} />
 
                         <Route
+                          path="/app/sales-dashboard"
+                          element={
+                            <ProtectedRoute>
+                              <DashboardVentes />
+                            </ProtectedRoute>
+                          }
+                        />
+
+                        <Route
                           path="/app/explore"
                           element={
                             <ProtectedRoute>
-                              <Sales />
+                              <DashboardVentes />
+                            </ProtectedRoute>
+                          }
+                        />
+
+                        <Route
+                          path="/app/deals"
+                          element={
+                            <ProtectedRoute>
+                              <DealsBoard />
+                            </ProtectedRoute>
+                          }
+                        />
+
+                        <Route
+                          path="/app/deals/:dealId"
+                          element={
+                            <ProtectedRoute>
+                              <DealDetail />
+                            </ProtectedRoute>
+                          }
+                        />
+
+                        <Route
+                          path="/app/market-finder"
+                          element={
+                            <ProtectedRoute>
+                              <MarketFinder />
+                            </ProtectedRoute>
+                          }
+                        />
+
+                        <Route
+                          path="/app/lead-templates"
+                          element={
+                            <ProtectedRoute>
+                              <LeadTemplates />
                             </ProtectedRoute>
                           }
                         />
@@ -407,7 +461,11 @@ export default function App() {
                         <Route path="/command-center" element={<Navigate to="/app/control-tower" replace />} />
                         <Route path="/dashboard" element={<Navigate to="/app/control-tower" replace />} />
                         <Route path="/explore" element={<Navigate to="/app/explore" replace />} />
-                        <Route path="/sales" element={<Navigate to="/app/explore" replace />} />
+                        <Route path="/sales" element={<Navigate to="/app/sales-dashboard" replace />} />
+                        <Route path="/deals" element={<Navigate to="/app/deals" replace />} />
+                        <Route path="/deal/:dealId" element={<LegacyDealRedirect />} />
+                        <Route path="/market-finder" element={<Navigate to="/app/market-finder" replace />} />
+                        <Route path="/lead-finder" element={<Navigate to="/app/lead-templates" replace />} />
 
                         <Route path="/taxes-om" element={<Navigate to="/app/taxes-om" replace />} />
                         <Route path="/taxes" element={<Navigate to="/app/taxes-om" replace />} />

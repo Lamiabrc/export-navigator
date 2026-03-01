@@ -32,6 +32,7 @@ import {
 } from "@/lib/constants";
 import { COMMODITIES_MARKET_LINKS, FX_RSS_ECB, TRANSPORT_MARKET_LINKS } from "@/lib/rss/feeds";
 import { useI18n } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { toFriendlyErrorMessage } from "@/lib/textSanitizer";
 
 type TabularData = {
@@ -580,6 +581,7 @@ function getProductLabel(productCode: string, lang: "fr" | "en") {
 
 export default function ControlTower() {
   const { lang } = useI18n();
+  const { session } = useAuth();
   const isEn = lang === "en";
 
   const [fileName, setFileName] = React.useState("");
@@ -603,6 +605,9 @@ export default function ControlTower() {
   const [marketEvents, setMarketEvents] = React.useState<MarketEvent[]>([]);
   const [marketEventsLoading, setMarketEventsLoading] = React.useState(false);
   const [marketEventsError, setMarketEventsError] = React.useState("");
+  const [marketEventsLocked, setMarketEventsLocked] = React.useState(false);
+  const [marketEventsTier, setMarketEventsTier] = React.useState<"base" | "free_oecd" | "paid_non_oecd">("base");
+  const [marketEventsUnlockPrice, setMarketEventsUnlockPrice] = React.useState<number | null>(null);
 
   const hasMappedRequiredFields = Boolean(mapping.country && mapping.product && mapping.qty && mapping.amount);
 
@@ -839,9 +844,22 @@ export default function ControlTower() {
           topic: feedTopic,
         });
 
-        const res = await fetch(`/api/rss?${params.toString()}`, { signal: controller.signal });
+        const headers: Record<string, string> = {};
+        const token = String(session?.access_token || "").trim();
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const res = await fetch(`/api/rss?${params.toString()}`, { signal: controller.signal, headers });
         const json = await res.json().catch(() => ({}));
         if (!active) return;
+        setMarketEventsLocked(Boolean(json?.locked));
+        const packTier = String(json?.pack?.tier || "base");
+        setMarketEventsTier(
+          packTier === "paid_non_oecd" || packTier === "free_oecd" || packTier === "base"
+            ? packTier
+            : "base"
+        );
+        const unlockPrice = Number(json?.unlock?.price_monthly);
+        setMarketEventsUnlockPrice(Number.isFinite(unlockPrice) ? unlockPrice : null);
 
         const items = Array.isArray(json?.items) ? json.items : [];
         const normalized = items
@@ -878,6 +896,7 @@ export default function ControlTower() {
               : "Les evenements marches sont temporairement indisponibles."
           );
           setMarketEvents([]);
+          setMarketEventsLocked(false);
         }
       } finally {
         if (active) setMarketEventsLoading(false);
@@ -889,7 +908,7 @@ export default function ControlTower() {
       active = false;
       controller.abort();
     };
-  }, [feedTopic, isEn, selectedCountry]);
+  }, [feedTopic, isEn, selectedCountry, session?.access_token]);
 
   const handleFile = async (file: File) => {
     setLoading(true);
@@ -1118,6 +1137,36 @@ export default function ControlTower() {
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-3 rounded-xl border p-4">
                 <p className="text-sm font-semibold">{isEn ? "Live events feed" : "Flux evenements en direct"}</p>
+                {marketEventsLocked ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                    {isEn
+                      ? "Preview only for this country. Unlock the country pack for full watch details."
+                      : "Apercu limite pour ce pays. Debloquez le pack pays pour la veille complete."}
+                    <div className="mt-1">
+                      {isEn ? "Tier" : "Tier"}:{" "}
+                      <b>
+                        {marketEventsTier === "paid_non_oecd"
+                          ? isEn
+                            ? "Paid pack"
+                            : "Pack payant"
+                          : marketEventsTier === "free_oecd"
+                            ? "OCDE (gratuit)"
+                            : "Base FR+UE"}
+                      </b>
+                      {typeof marketEventsUnlockPrice === "number" ? (
+                        <span>
+                          {" "}
+                          · {isEn ? "Price" : "Prix"}: {(marketEventsUnlockPrice / 100).toFixed(2)} EUR/mois
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-2">
+                      <a href="/pricing#country-packs">
+                        <Button size="sm">{isEn ? "Unlock this country" : "Debloquer ce pays"}</Button>
+                      </a>
+                    </div>
+                  </div>
+                ) : null}
                 {marketEventsLoading ? (
                   <p className="text-sm text-muted-foreground">{isEn ? "Loading..." : "Chargement..."}</p>
                 ) : marketEventsError ? (

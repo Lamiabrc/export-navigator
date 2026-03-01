@@ -13,6 +13,8 @@ type ApiItem = {
   official: boolean;
   importance: number;
   imageUrl: string | null;
+  why_relevant?: string | null;
+  action_required?: string | null;
 };
 
 type FeedItem = {
@@ -32,6 +34,20 @@ type FeedFilter = {
   from: string | null;
   to: string | null;
   officialOnly: boolean;
+};
+
+type PackTier = "base" | "free_oecd" | "paid_non_oecd";
+
+type TerritoryAccess = {
+  territory: string;
+  tier: PackTier;
+  isEu: boolean;
+  isOecd: boolean;
+  entitled: boolean;
+  locked: boolean;
+  priceMonthly: number | null;
+  priceYearly: number | null;
+  countryLabel: string;
 };
 
 const PERMANENT_SOURCES: RssSource[] = [
@@ -93,6 +109,77 @@ const PROXY_ALLOWED_HOSTS = new Set([
   "www.finma.ch",
   "api.io.canada.ca",
   "ustr.gov",
+]);
+
+const EU_ISO2 = new Set([
+  "AT",
+  "BE",
+  "BG",
+  "HR",
+  "CY",
+  "CZ",
+  "DK",
+  "EE",
+  "FI",
+  "FR",
+  "DE",
+  "GR",
+  "HU",
+  "IE",
+  "IT",
+  "LV",
+  "LT",
+  "LU",
+  "MT",
+  "NL",
+  "PL",
+  "PT",
+  "RO",
+  "SK",
+  "SI",
+  "ES",
+  "SE",
+]);
+
+const OECD_ISO2 = new Set([
+  "AU",
+  "AT",
+  "BE",
+  "CA",
+  "CL",
+  "CO",
+  "CR",
+  "CZ",
+  "DK",
+  "EE",
+  "FI",
+  "FR",
+  "DE",
+  "GR",
+  "HU",
+  "IS",
+  "IE",
+  "IL",
+  "IT",
+  "JP",
+  "KR",
+  "LV",
+  "LT",
+  "LU",
+  "MX",
+  "NL",
+  "NZ",
+  "NO",
+  "PL",
+  "PT",
+  "SK",
+  "SI",
+  "ES",
+  "SE",
+  "CH",
+  "TR",
+  "GB",
+  "US",
 ]);
 
 const RSS_USER_AGENT =
@@ -279,6 +366,15 @@ function computeImportance(item: Pick<ApiItem, "title" | "summary" | "publishedA
   }
 
   return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function actionHintForCategory(category: string | null) {
+  const key = normalizeTag(category || "");
+  if (key === "sanctions") return "Verifier immediatement screening pays/parties avant engagement.";
+  if (key === "douane" || key === "taxes") return "Mettre a jour droits/TVA et documents douaniers.";
+  if (key === "documents") return "Controler facture, packing list et preuve d'origine avant expedition.";
+  if (key === "logistics") return "Valider route transport, delais et surcharges pour l'incoterm retenu.";
+  return "Evaluer l'impact sur vos flux et ajuster votre check-list import/export.";
 }
 
 function applyItemFilters(items: ApiItem[], filter: FeedFilter) {
@@ -513,6 +609,8 @@ async function fetchExternalItems(sources: RssSource[], limit: number, territory
               official,
               importance: 0,
               imageUrl: it.imageUrl ?? null,
+              why_relevant: it.description ? truncate(stripHtml(it.description), 220) : null,
+              action_required: null,
             })) as ApiItem[],
           };
         } catch {
@@ -587,8 +685,11 @@ function mapRowToItem(row: any): ApiItem | null {
   const category = (row.category || feed?.category || null) as string | null;
   const tags = Array.isArray(row.tags) ? row.tags : Array.isArray(feed?.tags) ? feed.tags : [];
   const official = isOfficialSource(source, feed?.source_url || null);
+  const inferred = inferCategoryAndTags(`${title} ${summary || ""}`, source, category);
 
   const imageUrl = (row.image_url || row.imageUrl || feed?.logo_url || null) as string | null;
+  const whyRelevant = String(row.why_relevant || "").trim() || summary || null;
+  const actionRequired = String(row.action_required || "").trim() || actionHintForCategory(category || inferred.category);
   return {
     title,
     link,
@@ -597,11 +698,18 @@ function mapRowToItem(row: any): ApiItem | null {
     source,
     zone,
     territory,
-    category,
-    tags: tags.map((tag: unknown) => String(tag || "").trim()).filter(Boolean),
+    category: category || inferred.category,
+    tags: Array.from(
+      new Set([
+        ...tags.map((tag: unknown) => String(tag || "").trim()).filter(Boolean),
+        ...inferred.tags,
+      ])
+    ),
     official,
     importance: 0,
     imageUrl,
+    why_relevant: whyRelevant,
+    action_required: actionRequired,
   };
 }
 
@@ -619,6 +727,150 @@ function parseFilters(req: VercelRequest): FeedFilter {
   const officialOnly = parseBoolLike(req.query?.official, true);
 
   return { territory, topic, from, to, officialOnly };
+}
+
+function getBearerToken(req: VercelRequest) {
+  const header = String(req.headers.authorization || "");
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
+function inferTierFromIso2(territory: string): { tier: PackTier; isEu: boolean; isOecd: boolean } {
+  const isEu = EU_ISO2.has(territory);
+  const isOecd = OECD_ISO2.has(territory);
+  if (territory === "FR" || isEu) return { tier: "base", isEu, isOecd };
+  if (isOecd) return { tier: "free_oecd", isEu, isOecd };
+  return { tier: "paid_non_oecd", isEu, isOecd };
+}
+
+async function resolveTerritoryAccess(params: {
+  req: VercelRequest;
+  territory: string;
+  adminClient: any | null;
+}): Promise<TerritoryAccess> {
+  const territory = normalizeTerritory(params.territory);
+  const countryLabel = territoryLabel(territory);
+
+  if (territory === "WORLD") {
+    return {
+      territory,
+      tier: "base",
+      isEu: false,
+      isOecd: false,
+      entitled: true,
+      locked: false,
+      priceMonthly: null,
+      priceYearly: null,
+      countryLabel,
+    };
+  }
+
+  let territoryRow: any = null;
+  if (params.adminClient) {
+    try {
+      const { data } = await params.adminClient
+        .from("territories")
+        .select("iso2,name,name_fr,name_en,is_eu,is_oecd,pack_tier,pack_price_monthly,pack_price_yearly")
+        .eq("iso2", territory)
+        .maybeSingle();
+      territoryRow = data || null;
+    } catch {
+      territoryRow = null;
+    }
+  }
+
+  const fallback = inferTierFromIso2(territory);
+  const tier = (["base", "free_oecd", "paid_non_oecd"].includes(String(territoryRow?.pack_tier || ""))
+    ? territoryRow.pack_tier
+    : fallback.tier) as PackTier;
+  const isEu = typeof territoryRow?.is_eu === "boolean" ? territoryRow.is_eu : fallback.isEu;
+  const isOecd = typeof territoryRow?.is_oecd === "boolean" ? territoryRow.is_oecd : fallback.isOecd;
+  const priceMonthly =
+    typeof territoryRow?.pack_price_monthly === "number"
+      ? territoryRow.pack_price_monthly
+      : tier === "paid_non_oecd"
+      ? 1900
+      : null;
+  const priceYearly =
+    typeof territoryRow?.pack_price_yearly === "number"
+      ? territoryRow.pack_price_yearly
+      : tier === "paid_non_oecd"
+      ? 19000
+      : null;
+
+  if (tier !== "paid_non_oecd") {
+    return {
+      territory,
+      tier,
+      isEu,
+      isOecd,
+      entitled: true,
+      locked: false,
+      priceMonthly,
+      priceYearly,
+      countryLabel,
+    };
+  }
+
+  const token = getBearerToken(params.req);
+  if (!token || !params.adminClient) {
+    return {
+      territory,
+      tier,
+      isEu,
+      isOecd,
+      entitled: false,
+      locked: true,
+      priceMonthly,
+      priceYearly,
+      countryLabel,
+    };
+  }
+
+  const { data: userData, error: userError } = await params.adminClient.auth.getUser(token);
+  if (userError || !userData?.user?.id) {
+    return {
+      territory,
+      tier,
+      isEu,
+      isOecd,
+      entitled: false,
+      locked: true,
+      priceMonthly,
+      priceYearly,
+      countryLabel,
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  let entitlement: any = null;
+  try {
+    const { data } = await params.adminClient
+      .from("user_entitlements")
+      .select("id,active,expires_at")
+      .eq("user_id", userData.user.id)
+      .eq("country_iso2", territory)
+      .eq("active", true)
+      .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+      .limit(1)
+      .maybeSingle();
+    entitlement = data || null;
+  } catch {
+    entitlement = null;
+  }
+
+  const entitled = Boolean(entitlement?.id);
+  return {
+    territory,
+    tier,
+    isEu,
+    isOecd,
+    entitled,
+    locked: !entitled,
+    priceMonthly,
+    priceYearly,
+    countryLabel,
+  };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -678,14 +930,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let items: ApiItem[] = [];
     let updatedAt: string | null = null;
     let degraded = false;
+    let adminClient: any | null = null;
 
     try {
       const { supabaseAdmin } = await import("../src/server/supabaseAdmin.js");
-      const admin = supabaseAdmin();
+      adminClient = supabaseAdmin();
 
-      let q = admin
+      let q = adminClient
         .from("regulatory_items")
-        .select("id,title,summary,link,published_at,category,territory,tags,image_url,created_at, regulatory_feeds(name,source_name,source_url,logo_url,enabled,is_public,territory,category,tags)")
+        .select("id,title,summary,link,published_at,category,territory,tags,image_url,why_relevant,action_required,created_at, regulatory_feeds(name,source_name,source_url,logo_url,enabled,is_public,territory,category,tags)")
         .order("published_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(queryLimit);
@@ -734,14 +987,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const inferred = inferCategoryAndTags(`${item.title} ${item.summary || ""}`, item.source, item.category);
       const territory = item.territory || item.zone || null;
       const official = item.official || isOfficialSource(item.source, item.link);
+      const effectiveCategory = item.category || inferred.category;
       const mergedItem: ApiItem = {
         ...item,
-        category: item.category || inferred.category,
+        category: effectiveCategory,
         tags: Array.from(new Set([...(item.tags || []), ...inferred.tags])).slice(0, 10),
         territory,
         zone: territory,
         official,
         importance: 0,
+        why_relevant: item.why_relevant || item.summary || null,
+        action_required: item.action_required || actionHintForCategory(effectiveCategory),
       };
       return {
         ...mergedItem,
@@ -762,6 +1018,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     items = filteredItems.slice(0, limit);
     updatedAt = items[0]?.publishedAt || null;
+    const access = await resolveTerritoryAccess({
+      req,
+      territory: filters.territory,
+      adminClient,
+    });
 
     res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=600");
 
@@ -786,9 +1047,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     res.setHeader("Content-Type", "application/json; charset=utf-8");
+    if (access.locked) {
+      const previewItems = items.slice(0, Math.min(items.length, 6));
+      res.status(200).json({
+        ok: true,
+        degraded: true,
+        locked: true,
+        territory: filters.territory,
+        topic: filters.topic,
+        from: filters.from,
+        to: filters.to,
+        official_only: filters.officialOnly,
+        official_fallback_used: officialFallbackUsed,
+        updatedAt,
+        items: previewItems,
+        preview_items: previewItems,
+        pack: {
+          tier: access.tier,
+          is_eu: access.isEu,
+          is_oecd: access.isOecd,
+          country_iso2: access.territory,
+          country_label: access.countryLabel,
+          entitled: access.entitled,
+        },
+        unlock: {
+          price: access.priceMonthly,
+          price_monthly: access.priceMonthly,
+          price_yearly: access.priceYearly,
+          benefits: [
+            `Veille detaillee pour ${access.countryLabel}`,
+            "Alertes pays + produit (priorisation impact)",
+            "Historique des changements reglementaires",
+          ],
+          cta_url: "/pricing#country-packs",
+        },
+        sources: sourcePlan.map((source) => source.name),
+        pinned: PERMANENT_SOURCES.map((source) => source.name),
+      });
+      return;
+    }
+
     res.status(200).json({
       ok: true,
       degraded,
+      locked: false,
       territory: filters.territory,
       topic: filters.topic,
       from: filters.from,
@@ -797,6 +1099,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       official_fallback_used: officialFallbackUsed,
       updatedAt,
       items,
+      pack: {
+        tier: access.tier,
+        is_eu: access.isEu,
+        is_oecd: access.isOecd,
+        country_iso2: access.territory,
+        country_label: access.countryLabel,
+        entitled: access.entitled,
+      },
       sources: sourcePlan.map((source) => source.name),
       pinned: PERMANENT_SOURCES.map((source) => source.name),
     });

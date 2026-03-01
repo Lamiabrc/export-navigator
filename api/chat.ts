@@ -945,6 +945,168 @@ function buildWatchLinks(params: { isAuthenticated: boolean; lang: Lang }): Sour
   ];
 }
 
+const EU_ISO2 = new Set([
+  "AT",
+  "BE",
+  "BG",
+  "HR",
+  "CY",
+  "CZ",
+  "DK",
+  "EE",
+  "FI",
+  "FR",
+  "DE",
+  "GR",
+  "HU",
+  "IE",
+  "IT",
+  "LV",
+  "LT",
+  "LU",
+  "MT",
+  "NL",
+  "PL",
+  "PT",
+  "RO",
+  "SK",
+  "SI",
+  "ES",
+  "SE",
+]);
+
+const OECD_ISO2 = new Set([
+  "AU",
+  "AT",
+  "BE",
+  "CA",
+  "CL",
+  "CO",
+  "CR",
+  "CZ",
+  "DK",
+  "EE",
+  "FI",
+  "FR",
+  "DE",
+  "GR",
+  "HU",
+  "IS",
+  "IE",
+  "IL",
+  "IT",
+  "JP",
+  "KR",
+  "LV",
+  "LT",
+  "LU",
+  "MX",
+  "NL",
+  "NZ",
+  "NO",
+  "PL",
+  "PT",
+  "SK",
+  "SI",
+  "ES",
+  "SE",
+  "CH",
+  "TR",
+  "GB",
+  "US",
+]);
+
+function inferPackTierForCountry(iso2: string | null): "base" | "free_oecd" | "paid_non_oecd" {
+  const code = String(iso2 || "").trim().toUpperCase();
+  if (!code) return "base";
+  if (code === "FR" || EU_ISO2.has(code)) return "base";
+  if (OECD_ISO2.has(code)) return "free_oecd";
+  return "paid_non_oecd";
+}
+
+async function shouldShowCountryPackUpsell(params: {
+  adminClient: SupabaseClient | null;
+  userId: string | null;
+  destination: string | null;
+}): Promise<{ show: boolean; iso2: string | null; priceMonthly: number | null }> {
+  const iso2 = String(params.destination || "").trim().toUpperCase();
+  if (!iso2 || !/^[A-Z]{2}$/.test(iso2)) {
+    return { show: false, iso2: null, priceMonthly: null };
+  }
+
+  const fallbackTier = inferPackTierForCountry(iso2);
+  if (fallbackTier !== "paid_non_oecd") {
+    return { show: false, iso2, priceMonthly: null };
+  }
+
+  let tier: "base" | "free_oecd" | "paid_non_oecd" = fallbackTier;
+  let priceMonthly: number | null = 1900;
+
+  if (params.adminClient) {
+    try {
+      const { data } = await params.adminClient
+        .from("territories")
+        .select("pack_tier,pack_price_monthly")
+        .eq("iso2", iso2)
+        .maybeSingle();
+
+      const candidate = String(data?.pack_tier || "").trim();
+      if (candidate === "base" || candidate === "free_oecd" || candidate === "paid_non_oecd") {
+        tier = candidate;
+      }
+      if (typeof data?.pack_price_monthly === "number") {
+        priceMonthly = data.pack_price_monthly;
+      }
+    } catch {
+      // keep fallback tier and price
+    }
+  }
+
+  if (tier !== "paid_non_oecd") {
+    return { show: false, iso2, priceMonthly: null };
+  }
+
+  if (!params.userId || !params.adminClient) {
+    return { show: true, iso2, priceMonthly };
+  }
+
+  try {
+    const nowIso = new Date().toISOString();
+    const { data } = await params.adminClient
+      .from("user_entitlements")
+      .select("id")
+      .eq("user_id", params.userId)
+      .eq("country_iso2", iso2)
+      .eq("active", true)
+      .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (data?.id) {
+      return { show: false, iso2, priceMonthly };
+    }
+  } catch {
+    // keep non-blocking behavior; fallback to upsell
+  }
+
+  return { show: true, iso2, priceMonthly };
+}
+
+function buildPackUpsellAction(params: { lang: Lang; iso2: string | null; priceMonthly: number | null }) {
+  const country = params.iso2 || "pays cible";
+  if (params.lang === "en") {
+    if (typeof params.priceMonthly === "number") {
+      return `Unlock country pack (${country}) for detailed rules: ${(params.priceMonthly / 100).toFixed(2)} EUR/month via /pricing#country-packs.`;
+    }
+    return `Unlock country pack (${country}) for detailed rules via /pricing#country-packs.`;
+  }
+
+  if (typeof params.priceMonthly === "number") {
+    return `Activer le Pack pays (${country}) pour les details reglementaires: ${(params.priceMonthly / 100).toFixed(2)} EUR/mois via /pricing#country-packs.`;
+  }
+  return `Activer le Pack pays (${country}) pour les details reglementaires via /pricing#country-packs.`;
+}
+
 function decisionFromChecks(params: { checks: CopilotCheck[]; hardStop: boolean; lang: Lang }): { status: DecisionStatus; reason: string } {
   const hasKo = params.checks.some((check) => check.status === "KO");
   const hasMissing = params.checks.some((check) => check.status === "MANQUANT");
@@ -1083,6 +1245,7 @@ function buildAnswerMarkdown(params: {
   sourceLinks: SourceLink[];
   globalTradeIntent: boolean;
   isAuthenticated: boolean;
+  packUpsellAction?: string | null;
 }) {
   const sorted = sortChecks(params.checks);
   const missing = sorted
@@ -1105,7 +1268,12 @@ function buildAnswerMarkdown(params: {
     .slice(0, 3)
     .map((item) => `- ${item}`);
 
-  const actions = Array.from(new Set(params.dossier.next_actions))
+  const actions = Array.from(
+    new Set([
+      ...params.dossier.next_actions,
+      ...(params.packUpsellAction ? [params.packUpsellAction] : []),
+    ])
+  )
     .slice(0, 3)
     .map((item) => `- ${item}`);
 
@@ -1306,8 +1474,23 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
       isAuthenticated: Boolean(userId),
       lang: preferredLang,
     });
+    const packUpsell = await shouldShowCountryPackUpsell({
+      adminClient,
+      userId,
+      destination: finalContext.destination,
+    });
 
-    const sourceLinks = dedupeSources(watchLinks);
+    const sourceLinks = dedupeSources([
+      ...watchLinks,
+      ...(packUpsell.show
+        ? [
+            {
+              title: preferredLang === "en" ? "Country packs" : "Packs pays",
+              url: "/pricing#country-packs",
+            },
+          ]
+        : []),
+    ]);
 
     const dossier = buildDossier({
       lang: preferredLang,
@@ -1329,6 +1512,13 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
       sourceLinks,
       globalTradeIntent,
       isAuthenticated: Boolean(userId),
+      packUpsellAction: packUpsell.show
+        ? buildPackUpsellAction({
+            lang: preferredLang,
+            iso2: packUpsell.iso2,
+            priceMonthly: packUpsell.priceMonthly,
+          })
+        : null,
     });
 
     const entities = toEntities(finalContext, message);
