@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { allowCors, json, supabaseAdmin } from "../../src/server/supabaseAdmin.js";
-import { getQuotaSnapshotForRequest } from "../../src/server/hsQuota.js";
+import { getDailyLimit, getQuotaSnapshotForRequest } from "../../src/server/hsQuota.js";
 
 export default allowCors(async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return json(res, 405, { ok: false, error: "Method not allowed" });
@@ -27,10 +27,14 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       detail: (quota as any).degradedReason || null,
     });
   } catch (err: any) {
-    return json(res, 500, {
-      ok: false,
-      error: "quota_resolve_failed",
-      detail: String(err?.message || "quota resolve failed"),
+    const limit = getDailyLimit();
+    return json(res, 200, {
+      ok: true,
+      limit,
+      used: 0,
+      remaining: limit,
+      degraded: true,
+      detail: `quota_resolve_failed:${String(err?.message || "unknown")}`,
     });
   }
 });

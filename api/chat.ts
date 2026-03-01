@@ -1,16 +1,12 @@
-import crypto from "crypto";
+import { randomUUID } from "crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { allowCors, json, readJson, supabaseAdmin } from "../src/server/supabaseAdmin.js";
-import { classifyProduct } from "../src/lib/copilot/classifier.js";
-import { evaluateControls } from "../src/lib/copilot/controlsEngine.js";
-import { buildMissingQuestions, resolveEntities } from "../src/lib/copilot/entityResolver.js";
-import { detectGlobalTradeIntent } from "../src/lib/copilot/officialLinks.js";
-import { retrievePolicyContext } from "../src/lib/copilot/policyRetriever.js";
 import type {
   CheckStatus,
+  ControlsResult,
   ClassificationResult,
   CopilotCheck,
   DecisionStatus,
@@ -114,6 +110,518 @@ const CHECK_SEVERITY: Record<CheckStatus, number> = {
   A_CONFIRMER: 2,
   OK: 1,
 };
+
+type ResolveEntitiesFn = (params: {
+  message: string;
+  overrides?: Record<string, unknown> | null;
+  lang: Lang;
+}) => {
+  context: ResolvedContext;
+  detectedCountries: string[];
+  normalizedMessage: string;
+};
+
+type BuildMissingQuestionsFn = (context: ResolvedContext, lang: Lang) => string[];
+type ClassifyProductFn = (params: { context: ResolvedContext; aliases: PolicyContext["aliases"] }) => ClassificationResult;
+type EvaluateControlsFn = (params: {
+  context: ResolvedContext;
+  classification: ClassificationResult;
+  policy: PolicyContext;
+}) => ControlsResult;
+type DetectGlobalTradeIntentFn = (params: { question?: string | null; product?: string | null }) => boolean;
+type RetrievePolicyContextFn = (params: { admin: SupabaseClient; context: ResolvedContext }) => Promise<PolicyContext>;
+
+type CopilotRuntime = {
+  resolveEntities: ResolveEntitiesFn;
+  buildMissingQuestions: BuildMissingQuestionsFn;
+  classifyProduct: ClassifyProductFn;
+  evaluateControls: EvaluateControlsFn;
+  detectGlobalTradeIntent: DetectGlobalTradeIntentFn;
+  retrievePolicyContext: RetrievePolicyContextFn;
+};
+
+const FALLBACK_COUNTRY_ALIASES: Record<string, string> = {
+  fr: "FR",
+  france: "FR",
+  uk: "GB",
+  gb: "GB",
+  "united kingdom": "GB",
+  "royaume uni": "GB",
+  angleterre: "GB",
+  us: "US",
+  usa: "US",
+  "etats unis": "US",
+  "united states": "US",
+  canada: "CA",
+  bresil: "BR",
+  brazil: "BR",
+  espagne: "ES",
+  spain: "ES",
+  italie: "IT",
+  italy: "IT",
+  allemagne: "DE",
+  germany: "DE",
+  chine: "CN",
+  china: "CN",
+  japon: "JP",
+  japan: "JP",
+  maroc: "MA",
+  algerie: "DZ",
+  tunisie: "TN",
+  emirats: "AE",
+  uae: "AE",
+  "emirats arabes unis": "AE",
+  arabie: "SA",
+  russie: "RU",
+  russia: "RU",
+};
+
+const FALLBACK_INCOTERMS = ["EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF"] as const;
+const FALLBACK_SANCTIONS_HARD_STOP = new Set(["RU", "IR", "KP", "SY"]);
+const FALLBACK_SANCTIONS_WARN = new Set(["BY", "CU"]);
+
+function normalizeFallback(value: string) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function readOverrideText(overrides: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const raw = String(overrides[key] ?? "").trim();
+    if (raw) return raw;
+  }
+  return null;
+}
+
+function parseFallbackBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  const normalized = normalizeFallback(String(value ?? ""));
+  if (!normalized) return null;
+  if (["true", "1", "yes", "oui", "pro", "taxable", "assujetti"].includes(normalized)) return true;
+  if (["false", "0", "no", "non", "not taxable", "non assujetti"].includes(normalized)) return false;
+  return null;
+}
+
+function resolveFallbackCountry(value: string | null | undefined): string | null {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const iso = raw.toUpperCase();
+  if (/^[A-Z]{2}$/.test(iso)) return iso;
+  return FALLBACK_COUNTRY_ALIASES[normalizeFallback(raw)] || null;
+}
+
+function detectFallbackCountries(message: string): string[] {
+  const normalized = normalizeFallback(message);
+  if (!normalized) return [];
+  const found: string[] = [];
+  const pushIfNew = (iso: string | null) => {
+    if (!iso || found.includes(iso)) return;
+    found.push(iso);
+  };
+
+  const directional = message.match(
+    /(?:from|depuis)\s+([a-zA-Z\u00C0-\u017F'\-\s]{2,50})\s+(?:to|vers)\s+([a-zA-Z\u00C0-\u017F'\-\s]{2,50})/i
+  );
+  if (directional) {
+    pushIfNew(resolveFallbackCountry(directional[1]));
+    pushIfNew(resolveFallbackCountry(directional[2]));
+  }
+
+  const toOnly = message.match(/(?:to|vers)\s+([a-zA-Z\u00C0-\u017F'\-\s]{2,50})/i);
+  if (toOnly) pushIfNew(resolveFallbackCountry(toOnly[1]));
+
+  for (const [alias, iso] of Object.entries(FALLBACK_COUNTRY_ALIASES)) {
+    if (normalized.includes(alias)) pushIfNew(iso);
+    if (found.length >= 3) break;
+  }
+
+  return found.slice(0, 3);
+}
+
+function fallbackResolveEntities(params: { message: string; overrides?: Record<string, unknown> | null }): {
+  context: ResolvedContext;
+  detectedCountries: string[];
+  normalizedMessage: string;
+} {
+  const message = String(params.message || "").trim();
+  const overrides = asObject(params.overrides);
+
+  const detectedCountries = detectFallbackCountries(message);
+  const originOverride = resolveFallbackCountry(readOverrideText(overrides, ["origin", "from", "seller_country", "sellerCountry"]));
+  const destinationOverride = resolveFallbackCountry(
+    readOverrideText(overrides, ["destination", "to", "buyer_country", "buyerCountry", "country"])
+  );
+
+  const flowOverride = normalizeFallback(String(overrides.flow ?? overrides.direction ?? ""));
+  const goodsOverride = normalizeFallback(String(overrides.goods_or_services ?? overrides.goodsOrServices ?? overrides.kind ?? ""));
+  const hsExplicit = String(overrides.hs6 ?? overrides.hs ?? overrides.hs_code ?? "").replace(/[^0-9]/g, "").slice(0, 6);
+  const hsFromMessage = message.match(/\b([0-9]{6,10})\b/)?.[1]?.slice(0, 6) || null;
+  const incotermExplicit = String(overrides.incoterm ?? "").trim().toUpperCase();
+  const incotermFromMessage =
+    FALLBACK_INCOTERMS.find((incoterm) => new RegExp(`\\b${incoterm}\\b`, "i").test(message)) || null;
+
+  const product =
+    readOverrideText(overrides, ["product", "product_text", "goods", "description", "item"]) ||
+    message.match(/(?:j[\s']*exporte|j[\s']*importe|nous exportons|nous importons)\s+(?:des|de|du|d')\s+([^\n.;,]{2,120})/i)?.[1]?.trim() ||
+    message.match(/(?:produit|product|marchandise)\s*[:=-]\s*([^\n.;,]{2,120})/i)?.[1]?.trim() ||
+    null;
+
+  const currencyExplicit = String(overrides.currency ?? "").trim().toUpperCase();
+  const currencyFromMessage = message.match(/\b(EUR|USD|GBP|CHF|CNY|JPY|MAD|CAD)\b/i)?.[1]?.toUpperCase() || null;
+  const transportExplicit = normalizeFallback(String(overrides.transport ?? overrides.transport_mode ?? ""));
+  const transportFromMessage = /\b(sea|maritime|mer)\b/i.test(message)
+    ? "sea"
+    : /\b(air|aerien|avion)\b/i.test(message)
+      ? "air"
+      : /\b(road|route|camion|truck)\b/i.test(message)
+        ? "road"
+        : /\b(rail|train|ferroviaire)\b/i.test(message)
+          ? "rail"
+          : null;
+
+  const explicitValue = String(overrides.value ?? overrides.amount ?? "").trim();
+  const parsedExplicitValue = explicitValue ? Number(explicitValue.replace(/,/g, ".").replace(/[^0-9.]/g, "")) : NaN;
+  const parsedMessageValue = Number(
+    String(message.match(/\b([0-9]{1,3}(?:[\s.,][0-9]{3})*(?:[.,][0-9]{1,2})?)\s*(?:eur|usd|gbp|chf|mad|cad|cny|jpy)?\b/i)?.[1] || "")
+      .replace(/\s/g, "")
+      .replace(/,/g, ".")
+  );
+
+  const origin = originOverride || detectedCountries[0] || null;
+  const destination = destinationOverride || (detectedCountries.length > 1 ? detectedCountries[1] : null);
+
+  const hasImport = /\b(import|importation|importer|importe)\b/i.test(message);
+  const hasExport = /\b(export|exportation|exporter|exporte)\b/i.test(message);
+  const flow =
+    flowOverride === "import"
+      ? "import"
+      : flowOverride === "export"
+        ? "export"
+        : hasImport && !hasExport
+          ? "import"
+          : hasExport && !hasImport
+            ? "export"
+            : origin === "FR" && destination && destination !== "FR"
+              ? "export"
+              : destination === "FR" && origin && origin !== "FR"
+                ? "import"
+                : "unknown";
+
+  const goodsOrServices =
+    ["goods", "biens", "marchandise", "marchandises"].includes(goodsOverride)
+      ? "goods"
+      : ["services", "service"].includes(goodsOverride)
+        ? "services"
+        : /\b(service|services|prestation|saas|consulting)\b/i.test(message)
+          ? "services"
+          : /\b(produit|marchandise|shipment|cargo)\b/i.test(message)
+            ? "goods"
+            : "unknown";
+
+  const context: ResolvedContext = {
+    flow,
+    goodsOrServices,
+    origin,
+    destination,
+    product: product ? product.slice(0, 180) : null,
+    hs6: hsExplicit.length === 6 ? hsExplicit : hsFromMessage,
+    incoterm: FALLBACK_INCOTERMS.includes(incotermExplicit as (typeof FALLBACK_INCOTERMS)[number]) ? incotermExplicit : incotermFromMessage,
+    value: Number.isFinite(parsedExplicitValue) && parsedExplicitValue > 0
+      ? parsedExplicitValue
+      : Number.isFinite(parsedMessageValue) && parsedMessageValue > 0
+        ? parsedMessageValue
+        : null,
+    currency: /^[A-Z]{3}$/.test(currencyExplicit) ? currencyExplicit : currencyFromMessage,
+    transport: transportExplicit || transportFromMessage,
+    usage: readOverrideText(overrides, ["usage", "end_use", "use_case"]),
+    buyer: readOverrideText(overrides, ["buyer", "buyer_name", "counterparty", "buyerName"]),
+    seller: readOverrideText(overrides, ["seller", "seller_name", "shipper", "sellerName"]),
+    buyerIsTaxable: parseFallbackBoolean(overrides.buyer_is_taxable ?? overrides.buyerIsTaxable),
+    buyerVat: readOverrideText(overrides, ["buyer_vat", "buyerVat", "vat", "vat_number"]),
+  };
+
+  return {
+    context,
+    detectedCountries,
+    normalizedMessage: normalizeFallback(message),
+  };
+}
+
+function fallbackBuildMissingQuestions(context: ResolvedContext, lang: Lang): string[] {
+  const questions: string[] = [];
+  if (!context.origin || !context.destination) {
+    questions.push(
+      lang === "en"
+        ? "What are origin and destination countries (ISO2 or full names)?"
+        : "Quels sont le pays d'origine et le pays de destination (ISO2 ou noms complets) ?"
+    );
+  }
+  if (context.flow === "unknown") {
+    questions.push(lang === "en" ? "Is this an import or export flow?" : "S'agit-il d'un flux import ou export ?");
+  }
+  if (context.goodsOrServices === "unknown") {
+    questions.push(lang === "en" ? "Is this goods or services?" : "Est-ce une operation de biens ou de services ?");
+  }
+  if (context.buyerIsTaxable === null) {
+    questions.push(
+      lang === "en"
+        ? "Is the buyer VAT-taxable (professional taxable entity)?"
+        : "L'acheteur est-il assujetti a la TVA (client professionnel) ?"
+    );
+  }
+  if (!context.incoterm) {
+    questions.push(
+      lang === "en"
+        ? "Which Incoterm do you plan to use (EXW, FCA, FOB, CIF, DAP, DDP)?"
+        : "Quel Incoterm est prevu (EXW, FCA, FOB, CIF, DAP, DDP) ?"
+    );
+  }
+  if (!context.product && !context.hs6) {
+    questions.push(
+      lang === "en"
+        ? "What is the product (commercial name + composition/use), and HS if known?"
+        : "Quel est le produit (nom commercial + composition/usage), et le code HS si connu ?"
+    );
+  }
+
+  const deduped = Array.from(new Set(questions));
+  if (deduped.length <= 1) return deduped;
+
+  const countryQuestion = deduped.find((item) => /pays|origin and destination/i.test(item));
+  const productQuestion = deduped.find((item) => /produit|product/i.test(item));
+  const ordered = deduped.filter((item) => item !== countryQuestion && item !== productQuestion);
+  if (countryQuestion) ordered.unshift(countryQuestion);
+  if (productQuestion) ordered.push(productQuestion);
+  return ordered;
+}
+
+function fallbackClassifyProduct(params: { context: ResolvedContext }): ClassificationResult {
+  const hs6 = String(params.context.hs6 || "").replace(/[^0-9]/g, "").slice(0, 6);
+  if (hs6.length === 6) {
+    return {
+      primary: {
+        hs6,
+        label: "HS fourni",
+        confidence: 0.99,
+        reason: "code HS fourni",
+      },
+      alternatives: [],
+      chips: [],
+      confidence: 0.99,
+      requiresRtcBti: false,
+    };
+  }
+
+  const chips = params.context.product
+    ? params.context.product
+        .split(/[,\s]+/)
+        .map((word) => word.trim())
+        .filter((word) => word.length >= 4)
+        .slice(0, 3)
+    : ["produit fini", "matiere premiere", "piece technique"];
+
+  return {
+    primary: null,
+    alternatives: [],
+    chips,
+    confidence: 0,
+    requiresRtcBti: true,
+  };
+}
+
+function fallbackEvaluateControls(params: {
+  context: ResolvedContext;
+  classification: ClassificationResult;
+}): ControlsResult {
+  const checks: CopilotCheck[] = [];
+  const risks: string[] = [];
+  const actions: string[] = [];
+  const sanctions: string[] = [];
+  const sourceLinks: SourceLink[] = [];
+  let hardStop = false;
+
+  if (!params.context.destination) {
+    checks.push({
+      id: "sanctions_country",
+      label: "Screening pays",
+      status: "MANQUANT",
+      explanation: "Le pays destination manque, screening sanctions incomplet.",
+      what_to_fix: "Renseigner le pays destination.",
+      fieldPath: "context.destination",
+    });
+  } else if (FALLBACK_SANCTIONS_HARD_STOP.has(params.context.destination)) {
+    hardStop = true;
+    sanctions.push("Pays destination sous sanctions fortes.");
+    sourceLinks.push({ title: "EU Sanctions Map", url: "https://www.sanctionsmap.eu/" });
+    checks.push({
+      id: "sanctions_country",
+      label: "Screening pays",
+      status: "KO",
+      explanation: "Pays destination sous sanctions fortes.",
+      what_to_fix: "Stopper la transaction et valider avec la compliance.",
+      fieldPath: "context.destination",
+      source_link: "https://www.sanctionsmap.eu/",
+    });
+  } else if (FALLBACK_SANCTIONS_WARN.has(params.context.destination)) {
+    sanctions.push("Pays destination avec restrictions sectorielles.");
+    sourceLinks.push({ title: "EU Sanctions Map", url: "https://www.sanctionsmap.eu/" });
+    checks.push({
+      id: "sanctions_country",
+      label: "Screening pays",
+      status: "A_CONFIRMER",
+      explanation: "Pays destination avec restrictions sectorielles.",
+      what_to_fix: "Completer le screening parties + paiement + transit.",
+      fieldPath: "context.destination",
+      source_link: "https://www.sanctionsmap.eu/",
+    });
+  } else {
+    checks.push({
+      id: "sanctions_country",
+      label: "Screening pays",
+      status: "OK",
+      explanation: "Pas de blocage pays critique detecte par le fallback.",
+      what_to_fix: "Conserver la preuve de screening.",
+    });
+  }
+
+  if (!params.classification.primary) {
+    checks.push({
+      id: "hs_classification",
+      label: "Classification HS",
+      status: "MANQUANT",
+      explanation: "Code HS absent.",
+      what_to_fix: "Renseigner le produit puis confirmer un HS6.",
+      fieldPath: "context.product",
+      source_link: "https://trade.ec.europa.eu/access-to-markets/en/home",
+    });
+  } else {
+    checks.push({
+      id: "hs_classification",
+      label: "Classification HS",
+      status: "OK",
+      explanation: `HS retenu: ${params.classification.primary.hs6}.`,
+      what_to_fix: "Conserver la justification de classification.",
+      source_link: "https://trade.ec.europa.eu/access-to-markets/en/home",
+    });
+  }
+
+  if (!params.context.incoterm) {
+    checks.push({
+      id: "incoterm_presence",
+      label: "Incoterm",
+      status: "A_CONFIRMER",
+      explanation: "Incoterm absent.",
+      what_to_fix: "Ajouter un Incoterm avec lieu.",
+      fieldPath: "context.incoterm",
+      source_link: "https://iccwbo.org/business-solutions/incoterms-rules/incoterms-2020/",
+    });
+  } else {
+    checks.push({
+      id: "incoterm_presence",
+      label: "Incoterm",
+      status: "OK",
+      explanation: `Incoterm declare: ${params.context.incoterm}.`,
+      what_to_fix: "Ajouter le lieu exact.",
+      source_link: "https://iccwbo.org/business-solutions/incoterms-rules/incoterms-2020/",
+    });
+  }
+
+  if (checks.some((item) => item.status !== "OK")) {
+    risks.push("Certains points de conformite restent a confirmer.");
+  }
+  if (!params.context.destination) {
+    risks.push("Sans pays destination, la decision reste provisoire.");
+  }
+  if (!params.context.product && !params.context.hs6) {
+    risks.push("Sans produit/HS, droits et restrictions ne sont pas fiabilises.");
+  }
+
+  actions.push(
+    "Confirmer pays destination et screening sanctions.",
+    "Valider HS6 et documents douane.",
+    "Confirmer Incoterm + lieu et mode transport."
+  );
+
+  return {
+    checks,
+    risks: Array.from(new Set(risks)).slice(0, 3),
+    actions: Array.from(new Set(actions)).slice(0, 3),
+    sanctions: Array.from(new Set(sanctions)).slice(0, 5),
+    sourceLinks: Array.from(new Map(sourceLinks.map((item) => [item.url, item])).values()),
+    dualUseQuestions: [],
+    hardStop,
+  };
+}
+
+function fallbackDetectGlobalTradeIntent(params: { question?: string | null; product?: string | null }) {
+  const text = `${String(params.question || "")} ${String(params.product || "")}`.trim();
+  return /\b(mondial|monde|global|world|commodity|bourse|trade flow|rss|who)\b/i.test(text);
+}
+
+async function fallbackRetrievePolicyContext(_: { admin: SupabaseClient; context: ResolvedContext }): Promise<PolicyContext> {
+  return fallbackPolicyContext();
+}
+
+const FALLBACK_RUNTIME: CopilotRuntime = {
+  resolveEntities: ({ message, overrides }) => ({
+    ...fallbackResolveEntities({ message, overrides }),
+    normalizedMessage: normalizeFallback(message),
+  }),
+  buildMissingQuestions: fallbackBuildMissingQuestions,
+  classifyProduct: ({ context }) => fallbackClassifyProduct({ context }),
+  evaluateControls: ({ context, classification }) => fallbackEvaluateControls({ context, classification }),
+  detectGlobalTradeIntent: fallbackDetectGlobalTradeIntent,
+  retrievePolicyContext: fallbackRetrievePolicyContext,
+};
+
+let copilotRuntimePromise: Promise<CopilotRuntime> | null = null;
+
+async function getCopilotRuntime(): Promise<CopilotRuntime> {
+  if (copilotRuntimePromise) return copilotRuntimePromise;
+
+  copilotRuntimePromise = (async () => {
+    try {
+      const [entityResolverModule, classifierModule, controlsModule, officialLinksModule, policyModule] = await Promise.all([
+        import("../src/lib/copilot/entityResolver.js"),
+        import("../src/lib/copilot/classifier.js"),
+        import("../src/lib/copilot/controlsEngine.js"),
+        import("../src/lib/copilot/officialLinks.js"),
+        import("../src/lib/copilot/policyRetriever.js"),
+      ]);
+
+      if (
+        typeof entityResolverModule.resolveEntities !== "function" ||
+        typeof entityResolverModule.buildMissingQuestions !== "function" ||
+        typeof classifierModule.classifyProduct !== "function" ||
+        typeof controlsModule.evaluateControls !== "function" ||
+        typeof officialLinksModule.detectGlobalTradeIntent !== "function" ||
+        typeof policyModule.retrievePolicyContext !== "function"
+      ) {
+        throw new Error("copilot_runtime_incomplete");
+      }
+
+      return {
+        resolveEntities: entityResolverModule.resolveEntities as ResolveEntitiesFn,
+        buildMissingQuestions: entityResolverModule.buildMissingQuestions as BuildMissingQuestionsFn,
+        classifyProduct: classifierModule.classifyProduct as ClassifyProductFn,
+        evaluateControls: controlsModule.evaluateControls as EvaluateControlsFn,
+        detectGlobalTradeIntent: officialLinksModule.detectGlobalTradeIntent as DetectGlobalTradeIntentFn,
+        retrievePolicyContext: policyModule.retrievePolicyContext as RetrievePolicyContextFn,
+      };
+    } catch (err) {
+      console.error("[chat] failed to load copilot runtime; using fallback mode", err);
+      return FALLBACK_RUNTIME;
+    }
+  })();
+
+  return copilotRuntimePromise;
+}
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -468,7 +976,7 @@ function buildDossier(params: {
   checks: CopilotCheck[];
   classification: ClassificationResult;
   policy: PolicyContext;
-  controls: ReturnType<typeof evaluateControls>;
+  controls: ControlsResult;
   missingQuestions: string[];
 }) {
   const summaryLines = [
@@ -636,7 +1144,7 @@ async function ensureThreadId(
     .insert({ user_id: userId, title: message.slice(0, 120) })
     .select("id")
     .single();
-  return String(created?.id || "") || crypto.randomUUID();
+  return String(created?.id || "") || randomUUID();
 }
 
 async function persistExchange(params: {
@@ -681,6 +1189,7 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const runtime = await getCopilotRuntime();
     const body = await readJson<ChatRequest>(req);
     const message = cleanMessage(body?.message);
     if (!message) {
@@ -697,17 +1206,17 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
     const token = getBearerToken(req);
     const userId = await resolveUserIdFromToken(token, adminClient);
     const threadId = await ensureThreadId(userId, body?.thread_id || null, message, adminClient);
-    const resolver = resolveEntities({
+    const resolver = runtime.resolveEntities({
       message,
       overrides: asObject(body?.overrides),
       lang: preferredLang,
     });
 
     const phaseOnePolicy = adminClient
-      ? await retrievePolicyContext({ admin: adminClient, context: resolver.context }).catch(() => fallbackPolicyContext())
+      ? await runtime.retrievePolicyContext({ admin: adminClient, context: resolver.context }).catch(() => fallbackPolicyContext())
       : fallbackPolicyContext();
 
-    const classification = classifyProduct({
+    const classification = runtime.classifyProduct({
       context: resolver.context,
       aliases: phaseOnePolicy.aliases,
     });
@@ -720,11 +1229,11 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
     const policy =
       finalContext.hs6 !== resolver.context.hs6
         ? adminClient
-          ? await retrievePolicyContext({ admin: adminClient, context: finalContext }).catch(() => phaseOnePolicy)
+          ? await runtime.retrievePolicyContext({ admin: adminClient, context: finalContext }).catch(() => phaseOnePolicy)
           : phaseOnePolicy
         : phaseOnePolicy;
 
-    const controls = evaluateControls({
+    const controls = runtime.evaluateControls({
       context: finalContext,
       classification,
       policy,
@@ -734,9 +1243,9 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
     const checks = sortChecks(mergeChecks([...baseChecks, ...controls.checks]));
     const decision = decisionFromChecks({ checks, hardStop: controls.hardStop, lang: preferredLang });
 
-    const missingQuestions = buildMissingQuestions(finalContext, preferredLang).slice(0, 5);
+    const missingQuestions = runtime.buildMissingQuestions(finalContext, preferredLang).slice(0, 5);
     const followUpQuestions = missingQuestions.slice(0, 3);
-    const globalTradeIntent = detectGlobalTradeIntent({
+    const globalTradeIntent = runtime.detectGlobalTradeIntent({
       question: message,
       product: finalContext.product,
     });

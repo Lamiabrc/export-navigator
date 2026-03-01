@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { allowCors, json, supabaseAdmin } from "../../src/server/supabaseAdmin.js";
-import { getQuotaSnapshotForRequest, insertHsSearchLog } from "../../src/server/hsQuota.js";
+import { getDailyLimit, getQuotaSnapshotForRequest, insertHsSearchLog } from "../../src/server/hsQuota.js";
 
 function queryParam(req: VercelRequest, key: string) {
   const value = req.query[key];
@@ -31,15 +31,24 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     });
   }
 
-  let quota;
+  let quota: {
+    limit: number;
+    used: number;
+    remaining: number;
+    degraded?: boolean;
+    degradedReason?: string | null;
+  };
   try {
     quota = await getQuotaSnapshotForRequest(admin, req);
   } catch (err: any) {
-    return json(res, 500, {
-      ok: false,
-      error: "quota_resolve_failed",
-      detail: String(err?.message || "quota resolve failed"),
-    });
+    const limit = getDailyLimit();
+    quota = {
+      limit,
+      used: 0,
+      remaining: limit,
+      degraded: true,
+      degradedReason: `quota_resolve_failed:${String(err?.message || "unknown")}`,
+    };
   }
 
   if (quota.remaining <= 0) {
@@ -56,6 +65,8 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       limit: quota.limit,
       used: quota.used,
       remaining: 0,
+      degraded: Boolean(quota.degraded),
+      detail: quota.degradedReason || null,
       items: [],
     });
   }
@@ -75,6 +86,8 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       limit: quota.limit,
       used,
       remaining: Math.max(0, quota.limit - used),
+      degraded: Boolean(quota.degraded),
+      detail: quota.degradedReason || null,
     });
   }
 
@@ -93,6 +106,8 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       limit: quota.limit,
       used,
       remaining: Math.max(0, quota.limit - used),
+      degraded: Boolean(quota.degraded),
+      detail: quota.degradedReason || null,
     });
   }
 
@@ -126,5 +141,7 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     limit: quota.limit,
     used,
     remaining: Math.max(0, quota.limit - used),
+    degraded: Boolean(quota.degraded),
+    detail: quota.degradedReason || null,
   });
 });
