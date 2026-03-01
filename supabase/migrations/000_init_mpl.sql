@@ -107,6 +107,10 @@ alter table if exists regulatory_feeds
   add column if not exists enabled boolean default true;
 
 alter table if exists regulatory_items
+  add column if not exists feed_id uuid,
+  add column if not exists title text,
+  add column if not exists summary text,
+  add column if not exists url text,
   add column if not exists published_at timestamptz,
   add column if not exists category text,
   add column if not exists zone text,
@@ -334,42 +338,40 @@ values
   ('OFAC - Alerts', 'https://home.treasury.gov', 'sanctions', 'US', true),
   ('ONU - Listes consolidees', 'https://www.un.org', 'sanctions', 'GLOBAL', true);
 
-insert into regulatory_items (feed_id, title, summary, url, published_at, category, zone, severity)
-select id, 'Mise a jour sanctions secteur energie', 'Nouvelles restrictions sur les exportations sensibles vers la Russie.', 'https://data.europa.eu', now() - interval '2 days', 'sanctions', 'EU', 'high'
-from regulatory_feeds where name = 'UE - Sanctions et restrictions'
-union all
-select id, 'Documents requis pour agroalimentaire', 'Certification sanitaire obligatoire pour certains HS 22xx.', 'https://data.europa.eu', now() - interval '5 days', 'docs', 'EU', 'medium'
-from regulatory_feeds where name = 'UE - Sanctions et restrictions'
-union all
-select id, 'OFAC - Alertes Iran', 'Nouvelles entites ajoutees a la SDN list.', 'https://home.treasury.gov', now() - interval '4 days', 'sanctions', 'US', 'high'
-from regulatory_feeds where name = 'OFAC - Alerts'
-union all
-select id, 'Taxes additionnelles sur electronics', 'Droits additionnels sur certains composants.', 'https://home.treasury.gov', now() - interval '8 days', 'taxes', 'US', 'medium'
-from regulatory_feeds where name = 'OFAC - Alerts'
-union all
-select id, 'ONU - Mise a jour liste export control', 'Nouveaux controles dual-use sur materiels telecom.', 'https://www.un.org', now() - interval '6 days', 'regulation', 'GLOBAL', 'medium'
-from regulatory_feeds where name = 'ONU - Listes consolidees'
-union all
-select id, 'Procedure douaniere renforcee', 'Double verification pour HS 8708.', 'https://data.europa.eu', now() - interval '9 days', 'douane', 'EU', 'low'
-from regulatory_feeds where name = 'UE - Sanctions et restrictions'
-union all
-select id, 'ONU - Focus sur documents d''origine', 'Renforcement des controles sur certificats d''origine.', 'https://www.un.org', now() - interval '10 days', 'docs', 'GLOBAL', 'low'
-from regulatory_feeds where name = 'ONU - Listes consolidees'
-union all
-select id, 'OFAC - Clarification transport maritime', 'Guidelines sur assurances et transporteurs.', 'https://home.treasury.gov', now() - interval '3 days', 'maritime', 'US', 'medium'
-from regulatory_feeds where name = 'OFAC - Alerts'
-union all
-select id, 'UE - Actualisation taxes carbone', 'Impact sur HS 7616 et 8504.', 'https://data.europa.eu', now() - interval '7 days', 'taxes', 'EU', 'medium'
-from regulatory_feeds where name = 'UE - Sanctions et restrictions'
-union all
-select id, 'ONU - Guide documentation transport', 'Nouvelles recommandations pour transport maritime.', 'https://www.un.org', now() - interval '12 days', 'maritime', 'GLOBAL', 'low'
-from regulatory_feeds where name = 'ONU - Listes consolidees'
-union all
-select id, 'US - Notices compliance export', 'Mise a jour des exigences de declaration.', 'https://home.treasury.gov', now() - interval '1 day', 'regulation', 'US', 'high'
-from regulatory_feeds where name = 'OFAC - Alerts'
-union all
-select id, 'UE - Focus documents pharma', 'Verification renforcee des dossiers CE.', 'https://data.europa.eu', now() - interval '11 days', 'docs', 'EU', 'medium'
-from regulatory_feeds where name = 'UE - Sanctions et restrictions';
+do $$
+begin
+  begin
+    with seed(feed_name, title, summary, url, published_at, category, zone, severity) as (
+      values
+        ('UE - Sanctions et restrictions', 'Mise a jour sanctions secteur energie', 'Nouvelles restrictions sur les exportations sensibles vers la Russie.', 'https://data.europa.eu', now() - interval '2 days', 'sanctions', 'EU', 'high'),
+        ('UE - Sanctions et restrictions', 'Documents requis pour agroalimentaire', 'Certification sanitaire obligatoire pour certains HS 22xx.', 'https://data.europa.eu', now() - interval '5 days', 'docs', 'EU', 'medium'),
+        ('OFAC - Alerts', 'OFAC - Alertes Iran', 'Nouvelles entites ajoutees a la SDN list.', 'https://home.treasury.gov', now() - interval '4 days', 'sanctions', 'US', 'high'),
+        ('OFAC - Alerts', 'Taxes additionnelles sur electronics', 'Droits additionnels sur certains composants.', 'https://home.treasury.gov', now() - interval '8 days', 'taxes', 'US', 'medium'),
+        ('ONU - Listes consolidees', 'ONU - Mise a jour liste export control', 'Nouveaux controles dual-use sur materiels telecom.', 'https://www.un.org', now() - interval '6 days', 'regulation', 'GLOBAL', 'medium'),
+        ('UE - Sanctions et restrictions', 'Procedure douaniere renforcee', 'Double verification pour HS 8708.', 'https://data.europa.eu', now() - interval '9 days', 'douane', 'EU', 'low'),
+        ('ONU - Listes consolidees', 'ONU - Focus sur documents d''origine', 'Renforcement des controles sur certificats d''origine.', 'https://www.un.org', now() - interval '10 days', 'docs', 'GLOBAL', 'low'),
+        ('OFAC - Alerts', 'OFAC - Clarification transport maritime', 'Guidelines sur assurances et transporteurs.', 'https://home.treasury.gov', now() - interval '3 days', 'maritime', 'US', 'medium'),
+        ('UE - Sanctions et restrictions', 'UE - Actualisation taxes carbone', 'Impact sur HS 7616 et 8504.', 'https://data.europa.eu', now() - interval '7 days', 'taxes', 'EU', 'medium'),
+        ('ONU - Listes consolidees', 'ONU - Guide documentation transport', 'Nouvelles recommandations pour transport maritime.', 'https://www.un.org', now() - interval '12 days', 'maritime', 'GLOBAL', 'low'),
+        ('OFAC - Alerts', 'US - Notices compliance export', 'Mise a jour des exigences de declaration.', 'https://home.treasury.gov', now() - interval '1 day', 'regulation', 'US', 'high'),
+        ('UE - Sanctions et restrictions', 'UE - Focus documents pharma', 'Verification renforcee des dossiers CE.', 'https://data.europa.eu', now() - interval '11 days', 'docs', 'EU', 'medium')
+    )
+    insert into regulatory_items (feed_id, title, summary, url, published_at, category, zone, severity)
+    select rf.id, s.title, s.summary, s.url, s.published_at, s.category, s.zone, s.severity
+    from seed s
+    join regulatory_feeds rf on rf.name = s.feed_name
+    where not exists (
+      select 1
+      from regulatory_items ri
+      where ri.feed_id = rf.id
+        and ri.title = s.title
+    );
+  exception
+    when undefined_column then
+      raise notice 'regulatory_items seed skipped due missing legacy columns.';
+  end;
+end
+$$;
 
 insert into alerts (title, message, severity, country_iso2, hs_prefix, source, detected_at)
 values
