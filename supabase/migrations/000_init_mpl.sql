@@ -1,4 +1,35 @@
 create extension if not exists "pgcrypto";
+create extension if not exists unaccent;
+
+-- Guard for environments where extension objects are in schema "extensions"
+-- and callers expect public.unaccent(text).
+do $$
+declare
+  ext_schema text;
+begin
+  if to_regprocedure('public.unaccent(text)') is null then
+    select n.nspname
+    into ext_schema
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where p.proname = 'unaccent'
+      and p.pronargs = 1
+      and p.proargtypes = '25'::oidvector
+      and n.nspname <> 'public'
+    order by case when n.nspname = 'extensions' then 0 else 1 end
+    limit 1;
+
+    if ext_schema is not null then
+      execute format(
+        'create function public.unaccent(text) returns text language sql immutable strict as $f$ select %I.unaccent($1) $f$',
+        ext_schema
+      );
+    else
+      execute 'create function public.unaccent(text) returns text language sql immutable strict as $f$ select $1 $f$';
+    end if;
+  end if;
+end
+$$;
 
 create table if not exists products (
   id uuid primary key default gen_random_uuid(),
