@@ -168,87 +168,165 @@ begin
   );
 
   if has_label_fr then
-    execute format(
-      $sql$
-        insert into public.hs_codes (%1$I, label_fr%2$s%3$s)
-        select
-          v.code,
-          v.label_fr%4$s%5$s
-        from (
-          values
-            ('3004', 'Preparations medicamenteuses', 'Medicaments and pharmaceutical products', '30'),
-            ('8708', 'Parties et accessoires de vehicules automobiles', 'Motor vehicle parts and accessories', '87'),
-            ('2204', 'Vins de raisins frais', 'Wine of fresh grapes', '22'),
-            ('3304', 'Produits de beaute, de maquillage et soins de la peau', 'Beauty, make-up and skin-care preparations', '33'),
-            ('9403', 'Autres meubles et leurs parties', 'Other furniture and parts thereof', '94'),
-            ('8504', 'Transformateurs electriques, convertisseurs statiques', 'Electrical transformers and static converters', '85'),
-            ('4202', 'Malles, valises, sacs et contenants similaires', 'Travel goods and similar containers', '42'),
-            ('8471', 'Machines automatiques de traitement de l''information', 'Automatic data-processing machines', '84'),
-            ('3923', 'Articles de transport ou d''emballage en matieres plastiques', 'Plastic packing and transport articles', '39'),
-            ('7616', 'Autres ouvrages en aluminium', 'Other articles of aluminium', '76')
-        ) as v(code, label_fr, label_en, chapter)
-        where not exists (
-          select 1
-          from public.hs_codes h
-          where h.%1$I = v.code
-        )
-      $sql$,
-      code_col,
-      case when has_label_en then ', label_en' else '' end,
-      case when has_chapter then ', chapter' else '' end,
-      case when has_label_en then ', v.label_en' else '' end,
-      case when has_chapter then ', v.chapter' else '' end
-    );
+    begin
+      execute format(
+        $sql$
+          insert into public.hs_codes (%1$I, label_fr%2$s%3$s)
+          select
+            v.code,
+            v.label_fr%4$s%5$s
+          from (
+            values
+              ('3004', 'Preparations medicamenteuses', 'Medicaments and pharmaceutical products', '30'),
+              ('8708', 'Parties et accessoires de vehicules automobiles', 'Motor vehicle parts and accessories', '87'),
+              ('2204', 'Vins de raisins frais', 'Wine of fresh grapes', '22'),
+              ('3304', 'Produits de beaute, de maquillage et soins de la peau', 'Beauty, make-up and skin-care preparations', '33'),
+              ('9403', 'Autres meubles et leurs parties', 'Other furniture and parts thereof', '94'),
+              ('8504', 'Transformateurs electriques, convertisseurs statiques', 'Electrical transformers and static converters', '85'),
+              ('4202', 'Malles, valises, sacs et contenants similaires', 'Travel goods and similar containers', '42'),
+              ('8471', 'Machines automatiques de traitement de l''information', 'Automatic data-processing machines', '84'),
+              ('3923', 'Articles de transport ou d''emballage en matieres plastiques', 'Plastic packing and transport articles', '39'),
+              ('7616', 'Autres ouvrages en aluminium', 'Other articles of aluminium', '76')
+          ) as v(code, label_fr, label_en, chapter)
+          where not exists (
+            select 1
+            from public.hs_codes h
+            where h.%1$I = v.code
+          )
+        $sql$,
+        code_col,
+        case when has_label_en then ', label_en' else '' end,
+        case when has_chapter then ', chapter' else '' end,
+        case when has_label_en then ', v.label_en' else '' end,
+        case when has_chapter then ', v.chapter' else '' end
+      );
+    exception
+      when undefined_function then
+        raise notice 'hs_codes seed skipped due undefined_function (likely unaccent on legacy trigger/index).';
+    end;
   else
-    execute format(
-      $sql$
-        insert into public.hs_codes (%1$I)
-        select v.code
-        from (
-          values
-            ('3004'),
-            ('8708'),
-            ('2204'),
-            ('3304'),
-            ('9403'),
-            ('8504'),
-            ('4202'),
-            ('8471'),
-            ('3923'),
-            ('7616')
-        ) as v(code)
-        where not exists (
-          select 1
-          from public.hs_codes h
-          where h.%1$I = v.code
-        )
-      $sql$,
-      code_col
-    );
+    begin
+      execute format(
+        $sql$
+          insert into public.hs_codes (%1$I)
+          select v.code
+          from (
+            values
+              ('3004'),
+              ('8708'),
+              ('2204'),
+              ('3304'),
+              ('9403'),
+              ('8504'),
+              ('4202'),
+              ('8471'),
+              ('3923'),
+              ('7616')
+          ) as v(code)
+          where not exists (
+            select 1
+            from public.hs_codes h
+            where h.%1$I = v.code
+          )
+        $sql$,
+        code_col
+      );
+    exception
+      when undefined_function then
+        raise notice 'hs_codes seed skipped due undefined_function (likely unaccent on legacy trigger/index).';
+    end;
   end if;
 end
 $$;
 
-insert into products (code, label, hs_code, tva, manufacturer)
-select v.code, v.label, v.hs_code, v.tva, v.manufacturer
-from (
-  values
-    ('P-3004', 'Gel dermique apaisant', '3004', 20::numeric, 'Laboratoires MPL'),
-    ('P-8708', 'Kit freinage premium', '8708', 20::numeric, 'MPL Auto'),
-    ('P-2204', 'Coffret vin rouge 2022', '2204', 20::numeric, 'Domaine Atlantique'),
-    ('P-3304', 'Soin hydratant visage', '3304', 20::numeric, 'MPL Cosmetique'),
-    ('P-9403', 'Chaise bureau ergonomique', '9403', 20::numeric, 'Atelier Nord'),
-    ('P-8504', 'Transformateur 220V industriel', '8504', 20::numeric, 'ElectroMPL'),
-    ('P-4202', 'Sac de transport textile', '4202', 20::numeric, 'MPL Bags'),
-    ('P-8471', 'Kit capteurs IoT export', '8471', 20::numeric, 'MPL Tech'),
-    ('P-3923', 'Emballage recyclable', '3923', 20::numeric, 'PackMPL'),
-    ('P-7616', 'Profil aluminium sur mesure', '7616', 20::numeric, 'MPL Metal')
-) as v(code, label, hs_code, tva, manufacturer)
-where not exists (
-  select 1
-  from products p
-  where p.code = v.code
-);
+do $$
+declare
+  hs_code_col text;
+begin
+  begin
+    insert into products (code, label, hs_code, tva, manufacturer)
+    select v.code, v.label, v.hs_code, v.tva, v.manufacturer
+    from (
+      values
+        ('P-3004', 'Gel dermique apaisant', '3004', 20::numeric, 'Laboratoires MPL'),
+        ('P-8708', 'Kit freinage premium', '8708', 20::numeric, 'MPL Auto'),
+        ('P-2204', 'Coffret vin rouge 2022', '2204', 20::numeric, 'Domaine Atlantique'),
+        ('P-3304', 'Soin hydratant visage', '3304', 20::numeric, 'MPL Cosmetique'),
+        ('P-9403', 'Chaise bureau ergonomique', '9403', 20::numeric, 'Atelier Nord'),
+        ('P-8504', 'Transformateur 220V industriel', '8504', 20::numeric, 'ElectroMPL'),
+        ('P-4202', 'Sac de transport textile', '4202', 20::numeric, 'MPL Bags'),
+        ('P-8471', 'Kit capteurs IoT export', '8471', 20::numeric, 'MPL Tech'),
+        ('P-3923', 'Emballage recyclable', '3923', 20::numeric, 'PackMPL'),
+        ('P-7616', 'Profil aluminium sur mesure', '7616', 20::numeric, 'MPL Metal')
+    ) as v(code, label, hs_code, tva, manufacturer)
+    where not exists (
+      select 1
+      from products p
+      where p.code = v.code
+    );
+  exception
+    when foreign_key_violation then
+      hs_code_col := null;
+      if to_regclass('public.hs_codes') is not null then
+        if exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'public' and table_name = 'hs_codes' and column_name = 'hs6'
+        ) then
+          hs_code_col := 'hs6';
+        elsif exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'public' and table_name = 'hs_codes' and column_name = 'hs_code'
+        ) then
+          hs_code_col := 'hs_code';
+        elsif exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'public' and table_name = 'hs_codes' and column_name = 'code'
+        ) then
+          hs_code_col := 'code';
+        end if;
+      end if;
+
+      if hs_code_col is not null then
+        execute format(
+          $sql$
+            insert into products (code, label, hs_code, tva, manufacturer)
+            select v.code, v.label, v.hs_code, v.tva, v.manufacturer
+            from (
+              values
+                ('P-3004', 'Gel dermique apaisant', '3004', 20::numeric, 'Laboratoires MPL'),
+                ('P-8708', 'Kit freinage premium', '8708', 20::numeric, 'MPL Auto'),
+                ('P-2204', 'Coffret vin rouge 2022', '2204', 20::numeric, 'Domaine Atlantique'),
+                ('P-3304', 'Soin hydratant visage', '3304', 20::numeric, 'MPL Cosmetique'),
+                ('P-9403', 'Chaise bureau ergonomique', '9403', 20::numeric, 'Atelier Nord'),
+                ('P-8504', 'Transformateur 220V industriel', '8504', 20::numeric, 'ElectroMPL'),
+                ('P-4202', 'Sac de transport textile', '4202', 20::numeric, 'MPL Bags'),
+                ('P-8471', 'Kit capteurs IoT export', '8471', 20::numeric, 'MPL Tech'),
+                ('P-3923', 'Emballage recyclable', '3923', 20::numeric, 'PackMPL'),
+                ('P-7616', 'Profil aluminium sur mesure', '7616', 20::numeric, 'MPL Metal')
+            ) as v(code, label, hs_code, tva, manufacturer)
+            where not exists (
+              select 1
+              from products p
+              where p.code = v.code
+            )
+              and exists (
+                select 1
+                from public.hs_codes h
+                where h.%1$I = v.hs_code
+              )
+          $sql$,
+          hs_code_col
+        );
+        raise notice 'products seed partially applied (filtered by existing hs_codes due FK).';
+      else
+        raise notice 'products seed skipped on FK violation: hs_codes code column not detected.';
+      end if;
+  end;
+end
+$$;
 
 insert into regulatory_feeds (name, source_url, category, zone, enabled)
 values
