@@ -1,4 +1,4 @@
-import type { Lang, SourceLink } from "./types";
+import type { Lang, SourceLink } from "./types.js";
 
 type BuildOfficialLinksParams = {
   question?: string | null;

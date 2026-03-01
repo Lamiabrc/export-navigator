@@ -1,5 +1,5 @@
-import type { Lang, GoodsKind, ResolvedContext, TradeFlow } from "./types";
-import { extractCountriesFromText as extractCountriesFromAnyText, resolveCountryIso2 } from "./officialLinks";
+import type { Lang, GoodsKind, ResolvedContext, TradeFlow } from "./types.js";
+import { extractCountriesFromText as extractCountriesFromAnyText, resolveCountryIso2 } from "./officialLinks.js";
 
 type ResolveParams = {
   message: string;

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { PolicyContext, PolicyRule, ProductAliasRecord, ResolvedContext, SanctionsMatch, SourceLink } from "./types";
+import type { PolicyContext, PolicyRule, ProductAliasRecord, ResolvedContext, SanctionsMatch, SourceLink } from "./types.js";
 
 type RetrieveParams = {
   admin: SupabaseClient;

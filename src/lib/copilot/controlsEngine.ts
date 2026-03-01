@@ -1,4 +1,4 @@
-import type { ClassificationResult, ControlsResult, CopilotCheck, PolicyContext, ResolvedContext, SourceLink } from "./types";
+import type { ClassificationResult, ControlsResult, CopilotCheck, PolicyContext, ResolvedContext, SourceLink } from "./types.js";
 
 type ControlsParams = {
   context: ResolvedContext;

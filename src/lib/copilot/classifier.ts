@@ -1,4 +1,4 @@
-import type { ClassificationResult, HsCandidate, ProductAliasRecord, ResolvedContext } from "./types";
+import type { ClassificationResult, HsCandidate, ProductAliasRecord, ResolvedContext } from "./types.js";
 
 type ClassifyParams = {
   context: ResolvedContext;
