@@ -140,59 +140,57 @@ begin
     execute format(
       $sql$
         insert into public.hs_codes (%1$I, label_fr%2$s%3$s)
-        values
-          ('3004', 'Preparations medicamenteuses'%4$s%5$s),
-          ('8708', 'Parties et accessoires de vehicules automobiles'%6$s%7$s),
-          ('2204', 'Vins de raisins frais'%8$s%9$s),
-          ('3304', 'Produits de beaute, de maquillage et soins de la peau'%10$s%11$s),
-          ('9403', 'Autres meubles et leurs parties'%12$s%13$s),
-          ('8504', 'Transformateurs electriques, convertisseurs statiques'%14$s%15$s),
-          ('4202', 'Malles, valises, sacs et contenants similaires'%16$s%17$s),
-          ('8471', 'Machines automatiques de traitement de l''information'%18$s%19$s),
-          ('3923', 'Articles de transport ou d''emballage en matieres plastiques'%20$s%21$s),
-          ('7616', 'Autres ouvrages en aluminium'%22$s%23$s)
-        on conflict (%1$I) do nothing
+        select
+          v.code,
+          v.label_fr%4$s%5$s
+        from (
+          values
+            ('3004', 'Preparations medicamenteuses', 'Medicaments and pharmaceutical products', '30'),
+            ('8708', 'Parties et accessoires de vehicules automobiles', 'Motor vehicle parts and accessories', '87'),
+            ('2204', 'Vins de raisins frais', 'Wine of fresh grapes', '22'),
+            ('3304', 'Produits de beaute, de maquillage et soins de la peau', 'Beauty, make-up and skin-care preparations', '33'),
+            ('9403', 'Autres meubles et leurs parties', 'Other furniture and parts thereof', '94'),
+            ('8504', 'Transformateurs electriques, convertisseurs statiques', 'Electrical transformers and static converters', '85'),
+            ('4202', 'Malles, valises, sacs et contenants similaires', 'Travel goods and similar containers', '42'),
+            ('8471', 'Machines automatiques de traitement de l''information', 'Automatic data-processing machines', '84'),
+            ('3923', 'Articles de transport ou d''emballage en matieres plastiques', 'Plastic packing and transport articles', '39'),
+            ('7616', 'Autres ouvrages en aluminium', 'Other articles of aluminium', '76')
+        ) as v(code, label_fr, label_en, chapter)
+        where not exists (
+          select 1
+          from public.hs_codes h
+          where h.%1$I = v.code
+        )
       $sql$,
       code_col,
       case when has_label_en then ', label_en' else '' end,
       case when has_chapter then ', chapter' else '' end,
-      case when has_label_en then ', ''Medicaments and pharmaceutical products''' else '' end,
-      case when has_chapter then ', ''30''' else '' end,
-      case when has_label_en then ', ''Motor vehicle parts and accessories''' else '' end,
-      case when has_chapter then ', ''87''' else '' end,
-      case when has_label_en then ', ''Wine of fresh grapes''' else '' end,
-      case when has_chapter then ', ''22''' else '' end,
-      case when has_label_en then ', ''Beauty, make-up and skin-care preparations''' else '' end,
-      case when has_chapter then ', ''33''' else '' end,
-      case when has_label_en then ', ''Other furniture and parts thereof''' else '' end,
-      case when has_chapter then ', ''94''' else '' end,
-      case when has_label_en then ', ''Electrical transformers and static converters''' else '' end,
-      case when has_chapter then ', ''85''' else '' end,
-      case when has_label_en then ', ''Travel goods and similar containers''' else '' end,
-      case when has_chapter then ', ''42''' else '' end,
-      case when has_label_en then ', ''Automatic data-processing machines''' else '' end,
-      case when has_chapter then ', ''84''' else '' end,
-      case when has_label_en then ', ''Plastic packing and transport articles''' else '' end,
-      case when has_chapter then ', ''39''' else '' end,
-      case when has_label_en then ', ''Other articles of aluminium''' else '' end,
-      case when has_chapter then ', ''76''' else '' end
+      case when has_label_en then ', v.label_en' else '' end,
+      case when has_chapter then ', v.chapter' else '' end
     );
   else
     execute format(
       $sql$
         insert into public.hs_codes (%1$I)
-        values
-          ('3004'),
-          ('8708'),
-          ('2204'),
-          ('3304'),
-          ('9403'),
-          ('8504'),
-          ('4202'),
-          ('8471'),
-          ('3923'),
-          ('7616')
-        on conflict (%1$I) do nothing
+        select v.code
+        from (
+          values
+            ('3004'),
+            ('8708'),
+            ('2204'),
+            ('3304'),
+            ('9403'),
+            ('8504'),
+            ('4202'),
+            ('8471'),
+            ('3923'),
+            ('7616')
+        ) as v(code)
+        where not exists (
+          select 1
+          from public.hs_codes h
+          where h.%1$I = v.code
+        )
       $sql$,
       code_col
     );
