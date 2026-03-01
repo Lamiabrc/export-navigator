@@ -5,6 +5,9 @@ import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { buildGuidedFallback, type GuidedFallback } from "@/lib/chatGuidance";
@@ -103,6 +106,16 @@ type CopilotFormContext = {
   buyerCountry: string;
 };
 
+type GuidedFormValues = {
+  flow: "export" | "import" | "unknown";
+  goodsOrServices: "goods" | "services" | "unknown";
+  origin: string;
+  destination: string;
+  productOrHs: string;
+  incoterm: string;
+  buyerIsTaxable: "yes" | "no" | "unknown";
+};
+
 const uid = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 const COUNTRY_FOLLOWUP_RE = /(quel est le pays|pays de destination|destination exact)/i;
 const COUNTRY_MISSING_RE = /(pays.*(a confirmer|manquant)|quel est le pays de destination|destination exacte)/i;
@@ -110,6 +123,9 @@ const COUNTRY_OVERRIDE_KEYS = {
   seller: ["sellerCountry", "seller_country", "origin", "from"],
   buyer: ["buyerCountry", "buyer_country", "destination", "to", "country"],
 } as const;
+
+const GENERAL_UNKNOWN_PROMPT =
+  "Je ne sais pas encore les details (pays/produit/incoterm). Donne une reponse generale import/export: regles de base TVA/douane, risques majeurs, documents standards et 3 prochaines actions simples.";
 
 function isUncertainAnswer(answer: string) {
   const txt = answer.trim().toLowerCase();
@@ -363,6 +379,31 @@ function fieldPathToDraft(fieldPath?: string) {
   }
 }
 
+function shouldShowGuidedForm(message: ChatMessage | undefined) {
+  if (!message || message.role !== "assistant") return false;
+  if (message.mainBlocker?.status === "MANQUANT") return true;
+  const checks = Array.isArray(message.checks) ? message.checks : [];
+  return checks.some((check) => check.status === "MANQUANT");
+}
+
+function buildPromptFromGuidedForm(values: GuidedFormValues) {
+  const lines: string[] = [];
+  lines.push("Analyse via formulaire guide:");
+  lines.push(`- Flux: ${values.flow === "unknown" ? "je ne sais pas" : values.flow}`);
+  lines.push(`- Nature: ${values.goodsOrServices === "unknown" ? "je ne sais pas" : values.goodsOrServices}`);
+  lines.push(`- Pays origine: ${values.origin.trim() || "je ne sais pas"}`);
+  lines.push(`- Pays destination: ${values.destination.trim() || "je ne sais pas"}`);
+  lines.push(`- Produit / HS: ${values.productOrHs.trim() || "je ne sais pas"}`);
+  lines.push(`- Incoterm: ${values.incoterm.trim() || "je ne sais pas"}`);
+  lines.push(
+    `- Acheteur assujetti TVA: ${
+      values.buyerIsTaxable === "yes" ? "oui" : values.buyerIsTaxable === "no" ? "non" : "je ne sais pas"
+    }`,
+  );
+  lines.push("Donne une decision provisoire, checklist, risques et actions.");
+  return lines.join("\n");
+}
+
 function decisionBadgeClass(status?: ChatDecision["status"]) {
   if (status === "NO_GO") return "bg-rose-100 text-rose-700 border-rose-200";
   if (status === "SOUS_CONDITIONS") return "bg-amber-100 text-amber-700 border-amber-200";
@@ -410,10 +451,24 @@ export default function Copilote() {
   const [destinationCountry, setDestinationCountry] = React.useState<string | null>(null);
   const [sellerCountry, setSellerCountry] = React.useState<string | null>(null);
   const [formContext] = React.useState<CopilotFormContext>(() => readFormContext());
+  const [guidedForm, setGuidedForm] = React.useState<GuidedFormValues>(() => ({
+    flow: "unknown",
+    goodsOrServices: "unknown",
+    origin: formContext.sellerCountry || "",
+    destination: formContext.buyerCountry || "",
+    productOrHs: "",
+    incoterm: "",
+    buyerIsTaxable: "unknown",
+  }));
   const [error, setError] = React.useState<string | null>(null);
 
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const latestAssistantMessage = React.useMemo(
+    () => [...messages].reverse().find((message) => message.role === "assistant"),
+    [messages],
+  );
+  const showGuidedForm = React.useMemo(() => shouldShowGuidedForm(latestAssistantMessage), [latestAssistantMessage]);
 
   React.useEffect(() => {
     const el = scrollRef.current;
@@ -423,6 +478,14 @@ export default function Copilote() {
     });
     return () => window.cancelAnimationFrame(raf);
   }, [messages, loading]);
+
+  React.useEffect(() => {
+    setGuidedForm((prev) => ({
+      ...prev,
+      origin: prev.origin || sellerCountry || formContext.sellerCountry || "",
+      destination: prev.destination || destinationCountry || formContext.buyerCountry || "",
+    }));
+  }, [destinationCountry, sellerCountry, formContext.buyerCountry, formContext.sellerCountry]);
 
   const refreshQuota = React.useCallback(async () => {
     try {
@@ -673,6 +736,22 @@ export default function Copilote() {
     }
   }, [draft, loading, destinationCountry, formContext.buyerCountry, formContext.sellerCountry, sellerCountry, sessionId]);
 
+  const updateGuidedFormField = React.useCallback(
+    <K extends keyof GuidedFormValues>(key: K, value: GuidedFormValues[K]) => {
+      setGuidedForm((prev) => ({ ...prev, [key]: value }));
+    },
+    [],
+  );
+
+  const sendGuidedForm = React.useCallback(() => {
+    const prompt = buildPromptFromGuidedForm(guidedForm);
+    void send(prompt);
+  }, [guidedForm, send]);
+
+  const sendGeneralUnknown = React.useCallback(() => {
+    void send(GENERAL_UNKNOWN_PROMPT);
+  }, [send]);
+
   return (
     <PublicLayout>
       <main className="mx-auto w-full max-w-[96rem] px-4 py-6 sm:px-6 lg:px-8">
@@ -836,6 +915,121 @@ export default function Copilote() {
             </div>
 
             {error ? <div className="text-xs text-rose-600">{error}</div> : null}
+
+            {showGuidedForm ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                <div className="mb-2 text-sm font-semibold text-amber-900">Formulaire rapide (si le Copilote manque des infos)</div>
+                <p className="mb-3 text-xs text-amber-800">
+                  Remplissez ce que vous savez. Utilisez "Je ne sais pas" pour recevoir une reponse generale import/export.
+                </p>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Flux</Label>
+                    <Select
+                      value={guidedForm.flow}
+                      onValueChange={(value) => updateGuidedFormField("flow", value as GuidedFormValues["flow"])}
+                    >
+                      <SelectTrigger className="h-9 bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="export">Export</SelectItem>
+                        <SelectItem value="import">Import</SelectItem>
+                        <SelectItem value="unknown">Je ne sais pas</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Biens / Services</Label>
+                    <Select
+                      value={guidedForm.goodsOrServices}
+                      onValueChange={(value) =>
+                        updateGuidedFormField("goodsOrServices", value as GuidedFormValues["goodsOrServices"])
+                      }
+                    >
+                      <SelectTrigger className="h-9 bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="goods">Biens</SelectItem>
+                        <SelectItem value="services">Services</SelectItem>
+                        <SelectItem value="unknown">Je ne sais pas</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Pays origine</Label>
+                    <Input
+                      value={guidedForm.origin}
+                      onChange={(e) => updateGuidedFormField("origin", e.target.value)}
+                      placeholder="FR / France..."
+                      className="h-9 bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Pays destination</Label>
+                    <Input
+                      value={guidedForm.destination}
+                      onChange={(e) => updateGuidedFormField("destination", e.target.value)}
+                      placeholder="IT / Italie..."
+                      className="h-9 bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-1 md:col-span-2">
+                    <Label className="text-xs">Produit / HS</Label>
+                    <Input
+                      value={guidedForm.productOrHs}
+                      onChange={(e) => updateGuidedFormField("productOrHs", e.target.value)}
+                      placeholder="ex: tomates fraiches / HS 070200"
+                      className="h-9 bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Incoterm (optionnel)</Label>
+                    <Input
+                      value={guidedForm.incoterm}
+                      onChange={(e) => updateGuidedFormField("incoterm", e.target.value)}
+                      placeholder="EXW, FCA, FOB..."
+                      className="h-9 bg-white"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Acheteur assujetti TVA ?</Label>
+                    <Select
+                      value={guidedForm.buyerIsTaxable}
+                      onValueChange={(value) =>
+                        updateGuidedFormField("buyerIsTaxable", value as GuidedFormValues["buyerIsTaxable"])
+                      }
+                    >
+                      <SelectTrigger className="h-9 bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">Oui</SelectItem>
+                        <SelectItem value="no">Non</SelectItem>
+                        <SelectItem value="unknown">Je ne sais pas</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" size="sm" onClick={sendGuidedForm} disabled={loading}>
+                    Analyser ce formulaire
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" onClick={sendGeneralUnknown} disabled={loading}>
+                    Je ne sais pas
+                  </Button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="flex items-end gap-2">
               <Textarea
