@@ -179,6 +179,7 @@ const FALLBACK_COUNTRY_ALIASES: Record<string, string> = {
 const FALLBACK_INCOTERMS = ["EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF"] as const;
 const FALLBACK_SANCTIONS_HARD_STOP = new Set(["RU", "IR", "KP", "SY"]);
 const FALLBACK_SANCTIONS_WARN = new Set(["BY", "CU"]);
+const DEFAULT_HOME_COUNTRY = "FR";
 
 function normalizeFallback(value: string) {
   return String(value || "")
@@ -293,8 +294,8 @@ function fallbackResolveEntities(params: { message: string; overrides?: Record<s
       .replace(/,/g, ".")
   );
 
-  const origin = originOverride || detectedCountries[0] || null;
-  const destination = destinationOverride || (detectedCountries.length > 1 ? detectedCountries[1] : null);
+  let origin = originOverride || null;
+  let destination = destinationOverride || null;
 
   const hasImport = /\b(import|importation|importer|importe)\b/i.test(message);
   const hasExport = /\b(export|exportation|exporter|exporte)\b/i.test(message);
@@ -313,6 +314,41 @@ function fallbackResolveEntities(params: { message: string; overrides?: Record<s
                 ? "import"
                 : "unknown";
 
+  if (!origin && !destination && detectedCountries.length === 1) {
+    if (flow === "import") {
+      origin = detectedCountries[0];
+    } else {
+      destination = detectedCountries[0];
+    }
+  } else {
+    if (!origin && flow === "import" && detectedCountries.length >= 1) {
+      origin = detectedCountries[0];
+    }
+    if (!destination && flow !== "import" && detectedCountries.length >= 1) {
+      destination = detectedCountries[0];
+    }
+    if (!origin && detectedCountries.length >= 2) {
+      origin = detectedCountries[0];
+    }
+    if (!destination && detectedCountries.length >= 2) {
+      destination = detectedCountries[1];
+    }
+  }
+
+  if (!origin && destination && flow === "export") {
+    origin = DEFAULT_HOME_COUNTRY;
+  }
+  if (!destination && origin && flow === "import") {
+    destination = DEFAULT_HOME_COUNTRY;
+  }
+  if (origin && destination && origin === destination && detectedCountries.length === 1) {
+    if (flow === "export") {
+      origin = DEFAULT_HOME_COUNTRY;
+    } else if (flow === "import") {
+      destination = DEFAULT_HOME_COUNTRY;
+    }
+  }
+
   const goodsOrServices =
     ["goods", "biens", "marchandise", "marchandises"].includes(goodsOverride)
       ? "goods"
@@ -322,7 +358,9 @@ function fallbackResolveEntities(params: { message: string; overrides?: Record<s
           ? "services"
           : /\b(produit|marchandise|shipment|cargo)\b/i.test(message)
             ? "goods"
-            : "unknown";
+            : flow === "export" || flow === "import"
+              ? "goods"
+              : "unknown";
 
   const context: ResolvedContext = {
     flow,
@@ -354,51 +392,45 @@ function fallbackResolveEntities(params: { message: string; overrides?: Record<s
 }
 
 function fallbackBuildMissingQuestions(context: ResolvedContext, lang: Lang): string[] {
-  const questions: string[] = [];
-  if (!context.origin || !context.destination) {
-    questions.push(
-      lang === "en"
-        ? "What are origin and destination countries (ISO2 or full names)?"
-        : "Quels sont le pays d'origine et le pays de destination (ISO2 ou noms complets) ?"
-    );
-  }
-  if (context.flow === "unknown") {
-    questions.push(lang === "en" ? "Is this an import or export flow?" : "S'agit-il d'un flux import ou export ?");
-  }
-  if (context.goodsOrServices === "unknown") {
-    questions.push(lang === "en" ? "Is this goods or services?" : "Est-ce une operation de biens ou de services ?");
-  }
-  if (context.buyerIsTaxable === null) {
-    questions.push(
-      lang === "en"
-        ? "Is the buyer VAT-taxable (professional taxable entity)?"
-        : "L'acheteur est-il assujetti a la TVA (client professionnel) ?"
-    );
-  }
-  if (!context.incoterm) {
-    questions.push(
-      lang === "en"
-        ? "Which Incoterm do you plan to use (EXW, FCA, FOB, CIF, DAP, DDP)?"
-        : "Quel Incoterm est prevu (EXW, FCA, FOB, CIF, DAP, DDP) ?"
-    );
-  }
-  if (!context.product && !context.hs6) {
-    questions.push(
-      lang === "en"
-        ? "What is the product (commercial name + composition/use), and HS if known?"
-        : "Quel est le produit (nom commercial + composition/usage), et le code HS si connu ?"
-    );
-  }
+  const destinationQuestion =
+    lang === "en"
+      ? "What is the destination country (ISO2 or country name)?"
+      : "Quel est le pays de destination (ISO2 ou nom) ?";
+  const originQuestion = lang === "en" ? "What is the origin country?" : "Quel est le pays d'origine ?";
+  const productQuestion =
+    lang === "en"
+      ? "What is the product (commercial name + composition/use), and HS if known?"
+      : "Quel est le produit (nom commercial + composition/usage), et le code HS si connu ?";
+  const incotermQuestion =
+    lang === "en"
+      ? "Which Incoterm do you plan to use (EXW, FCA, FOB, CIF, DAP, DDP)?"
+      : "Quel Incoterm est prevu (EXW, FCA, FOB, CIF, DAP, DDP) ?";
+  const flowQuestion = lang === "en" ? "Is this an import or export flow?" : "S'agit-il d'un flux import ou export ?";
+  const taxableQuestion =
+    lang === "en"
+      ? "Is the buyer VAT-taxable (professional taxable entity)?"
+      : "L'acheteur est-il assujetti a la TVA (client professionnel) ?";
 
-  const deduped = Array.from(new Set(questions));
-  if (deduped.length <= 1) return deduped;
+  const hasProduct = Boolean(context.product || context.hs6);
+  const hasDestination = Boolean(context.destination);
+  const hasOrigin = Boolean(context.origin);
+  const ranked: Array<{ question: string; priority: number }> = [];
 
-  const countryQuestion = deduped.find((item) => /pays|origin and destination/i.test(item));
-  const productQuestion = deduped.find((item) => /produit|product/i.test(item));
-  const ordered = deduped.filter((item) => item !== countryQuestion && item !== productQuestion);
-  if (countryQuestion) ordered.unshift(countryQuestion);
-  if (productQuestion) ordered.push(productQuestion);
-  return ordered;
+  if (hasDestination && !hasProduct) ranked.push({ question: productQuestion, priority: 1 });
+  if (!hasDestination && hasProduct) ranked.push({ question: destinationQuestion, priority: 1 });
+  if (!hasDestination && !hasProduct) {
+    ranked.push({ question: destinationQuestion, priority: 1 });
+    ranked.push({ question: productQuestion, priority: 2 });
+  }
+  if (!context.incoterm) ranked.push({ question: incotermQuestion, priority: 3 });
+  if (!hasOrigin && hasDestination) ranked.push({ question: originQuestion, priority: 4 });
+  if (context.flow === "unknown") ranked.push({ question: flowQuestion, priority: 5 });
+  if (context.buyerIsTaxable === null) ranked.push({ question: taxableQuestion, priority: 6 });
+
+  return ranked
+    .sort((a, b) => a.priority - b.priority)
+    .map((item) => item.question)
+    .filter((item, index, array) => array.indexOf(item) === index);
 }
 
 function fallbackClassifyProduct(params: { context: ResolvedContext }): ClassificationResult {
@@ -684,10 +716,11 @@ function checkPriority(id: string) {
     "flow_scope",
     "destination_presence",
     "origin_presence",
-    "goods_or_services",
+    "product_presence",
     "hs_classification",
     "dual_use_signal",
     "incoterm_presence",
+    "goods_or_services",
   ];
   const index = order.indexOf(id);
   return index === -1 ? order.length + 1 : index;
@@ -769,12 +802,16 @@ function buildBaseChecks(context: ResolvedContext, classification: Classificatio
   checks.push({
     id: "goods_or_services",
     label: lang === "en" ? "Goods or services" : "Biens ou services",
-    status: context.goodsOrServices === "unknown" ? "MANQUANT" : "OK",
+    status: context.goodsOrServices === "unknown" ? "A_CONFIRMER" : context.goodsOrServices === "goods" ? "A_CONFIRMER" : "OK",
     explanation:
       context.goodsOrServices === "unknown"
         ? lang === "en"
-          ? "Goods/services nature missing."
-          : "Nature biens/services manquante."
+          ? "Goods/services nature not explicitly stated; goods assumed by default."
+          : "Nature biens/services non explicite; biens supposes par defaut."
+        : context.goodsOrServices === "goods"
+          ? lang === "en"
+            ? "Goods inferred from import/export wording."
+            : "Biens infere via le wording import/export."
         : lang === "en"
           ? `Detected: ${context.goodsOrServices}.`
           : `Detecte: ${context.goodsOrServices}.`,
@@ -1048,66 +1085,58 @@ function buildAnswerMarkdown(params: {
   isAuthenticated: boolean;
 }) {
   const sorted = sortChecks(params.checks);
-  const checklist = sorted.slice(0, 10).map((check) => checklistLineForCheck(check.status, check.label));
-
-  const risks = sorted
-    .filter((check) => check.status === "KO" || check.status === "A_CONFIRMER")
-    .map((check) => `- ${check.explanation}`)
+  const missing = sorted
+    .filter((check) => check.status === "KO" || check.status === "MANQUANT" || check.status === "A_CONFIRMER")
+    .map((check) => {
+      const prefix = check.status === "KO" || check.status === "MANQUANT" ? "⛔" : "⚠️";
+      return `${prefix} ${check.label}: ${check.what_to_fix}`;
+    })
     .slice(0, 3);
 
-  const actions = params.dossier.next_actions.map((item) => `- ${item}`).slice(0, 3);
+  const checklist = sorted.slice(0, 5).map((check) => checklistLineForCheck(check.status, check.label));
 
-  const priorityQuestion = params.missingQuestions[0]
-    || (params.lang === "en"
+  const risks = Array.from(
+    new Set(
+      sorted
+        .filter((check) => check.status === "KO" || check.status === "A_CONFIRMER")
+        .map((check) => check.explanation)
+    )
+  )
+    .slice(0, 3)
+    .map((item) => `- ${item}`);
+
+  const actions = Array.from(new Set(params.dossier.next_actions))
+    .slice(0, 3)
+    .map((item) => `- ${item}`);
+
+  const priorityQuestion =
+    params.missingQuestions[0] ||
+    (params.lang === "en"
       ? "What is the destination country?"
       : "Quel est le pays de destination ?");
 
-  const productQuestion = params.lang === "en"
-    ? "To refine, provide product details (commercial name + composition/use) and HS if known."
-    : "Pour affiner: indiquez le produit (nom commercial + composition/usage) et le HS si connu.";
-
-  const globalMonitoringLine = params.globalTradeIntent
-    ? params.lang === "en"
-      ? params.isAuthenticated
-        ? "Global product-trade topic detected: choose country via watch list or map to activate monitoring."
-        : "Global product-trade topic detected: open watch page and sign up to activate monitoring."
-      : params.isAuthenticated
-        ? "Question sur activite mondiale detectee: choisissez un pays via la liste veille ou la carte."
-        : "Question sur activite mondiale detectee: ouvrez Veille puis inscrivez-vous pour activer le suivi."
-    : null;
-
-  const links = params.sourceLinks.length
-    ? params.sourceLinks.map((link) => `- [${link.title}](${link.url})`)
-    : [params.lang === "en" ? "- No official source link available yet." : "- Aucun lien officiel disponible pour le moment."];
-
   return [
-    `## ${params.lang === "en" ? "Provisional decision" : "Decision provisoire"}: ${params.decision.status}`,
-    `- ${params.decision.reason}`,
+    `## ${params.lang === "en" ? "Decision" : "Decision"}`,
+    `- ${params.decision.status}: ${params.decision.reason}`,
     "",
-    `## ${params.lang === "en" ? "Checklist" : "Checklist"}`,
-    ...checklist,
+    `## ${params.lang === "en" ? "Missing items (max 3)" : "Ce qu'il manque (max 3)"}`,
+    ...(missing.length
+      ? missing.map((item) => `- ${item}`)
+      : [params.lang === "en" ? "- ✅ Nothing critical missing." : "- ✅ Rien de critique ne manque."]),
+    "",
+    `## ${params.lang === "en" ? "Checklist (max 5)" : "Checklist (max 5)"}`,
+    ...(checklist.length ? checklist : [params.lang === "en" ? "- [OK] Base checks passed." : "- [OK] Verifications de base passees."]),
     "",
     `## ${params.lang === "en" ? "Risks (max 3)" : "Risques (max 3)"}`,
-    ...(risks.length ? risks : [params.lang === "en" ? "- No major risk flagged with current data." : "- Aucun risque majeur remonte avec les donnees actuelles."]),
+    ...(risks.length
+      ? risks
+      : [params.lang === "en" ? "- No major risk flagged with current data." : "- Aucun risque majeur avec les donnees actuelles."]),
     "",
     `## ${params.lang === "en" ? "Actions (max 3)" : "Actions (max 3)"}`,
-    ...(actions.length ? actions : [params.lang === "en" ? "- Complete missing fields to refine." : "- Completer les informations manquantes pour affiner."]),
+    ...(actions.length ? actions : [params.lang === "en" ? "- Complete one missing field to refine." : "- Completer un champ manquant pour affiner."]),
     "",
     `## ${params.lang === "en" ? "Priority question" : "Question prioritaire"}`,
     `- ${priorityQuestion}`,
-    "",
-    `## ${params.lang === "en" ? "Product question for refinement" : "Question produit pour affiner"}`,
-    `- ${productQuestion}`,
-    ...(globalMonitoringLine
-      ? [
-          "",
-          `## ${params.lang === "en" ? "Global monitoring" : "Veille mondiale"}`,
-          `- ${globalMonitoringLine}`,
-        ]
-      : []),
-    "",
-    `## ${params.lang === "en" ? "Watch orientation" : "Orientation veille"}`,
-    ...links,
   ].join("\n");
 }
 
@@ -1268,7 +1297,7 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
     const decision = decisionFromChecks({ checks, hardStop: controls.hardStop, lang: preferredLang });
 
     const missingQuestions = runtime.buildMissingQuestions(finalContext, preferredLang).slice(0, 5);
-    const followUpQuestions = missingQuestions.slice(0, 3);
+    const followUpQuestions = missingQuestions.slice(0, 1);
     const globalTradeIntent = runtime.detectGlobalTradeIntent({
       question: message,
       product: finalContext.product,

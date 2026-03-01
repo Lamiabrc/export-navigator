@@ -13,6 +13,8 @@ type ResolveResult = {
   normalizedMessage: string;
 };
 
+const DEFAULT_HOME_COUNTRY = "FR";
+
 const INCOTERMS = ["EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF"] as const;
 
 const TRANSPORT_PATTERNS: Array<{ mode: string; pattern: RegExp }> = [
@@ -85,7 +87,7 @@ function extractCountryByPattern(message: string, pattern: RegExp): string | nul
   return lookupCountry(m[1] || null);
 }
 
-function detectFlow(message: string, overrides: Record<string, unknown>, origin: string | null, destination: string | null): TradeFlow {
+function detectFlowHint(message: string, overrides: Record<string, unknown>): TradeFlow {
   const explicit = normalizeText(String(overrides.flow ?? overrides.direction ?? ""));
   if (explicit === "import") return "import";
   if (explicit === "export") return "export";
@@ -97,13 +99,25 @@ function detectFlow(message: string, overrides: Record<string, unknown>, origin:
   if (hasImport && !hasExport) return "import";
   if (hasExport && !hasImport) return "export";
 
+  return "unknown";
+}
+
+function detectFlow(
+  message: string,
+  overrides: Record<string, unknown>,
+  origin: string | null,
+  destination: string | null
+): TradeFlow {
+  const hint = detectFlowHint(message, overrides);
+  if (hint !== "unknown") return hint;
+
   if (origin === "FR" && destination && destination !== "FR") return "export";
   if (destination === "FR" && origin && origin !== "FR") return "import";
 
   return "unknown";
 }
 
-function detectGoodsOrServices(message: string, overrides: Record<string, unknown>): GoodsKind {
+function detectGoodsOrServices(message: string, overrides: Record<string, unknown>, flowHint: TradeFlow): GoodsKind {
   const explicit = normalizeText(String(overrides.goods_or_services ?? overrides.goodsOrServices ?? overrides.kind ?? ""));
   if (["goods", "biens", "marchandise", "marchandises"].includes(explicit)) return "goods";
   if (["services", "service"].includes(explicit)) return "services";
@@ -111,6 +125,7 @@ function detectGoodsOrServices(message: string, overrides: Record<string, unknow
   const normalized = normalizeText(message);
   if (/\b(service|services|prestation|consulting|saas|software service)\b/.test(normalized)) return "services";
   if (/\b(produit|produits|marchandise|marchandises|shipment|cargo)\b/.test(normalized)) return "goods";
+  if (flowHint === "export" || flowHint === "import") return "goods";
   return "unknown";
 }
 
@@ -206,23 +221,72 @@ function parseBoolean(value: unknown): boolean | null {
 function deduceCountries(
   message: string,
   overrides: Record<string, unknown>,
-  fallbackDetected: string[]
+  fallbackDetected: string[],
+  flowHint: TradeFlow
 ): { origin: string | null; destination: string | null; detected: string[] } {
   const originOverride = lookupCountry(firstText(overrides, ["origin", "from", "seller_country", "sellerCountry"]));
   const destinationOverride = lookupCountry(firstText(overrides, ["destination", "to", "buyer_country", "buyerCountry", "country"]));
 
-  const fromPattern =
-    extractCountryByPattern(message, /(?:from|depuis|de)\s+([a-zA-Z\s\-']{2,40})\s+(?:to|vers)\s+[a-zA-Z\s\-']{2,40}/i) ||
-    extractCountryByPattern(message, /vendeur\s*[:=-]\s*([a-zA-Z\s\-']{2,40})/i);
+  const directionalPattern = message.match(
+    /(?:from|depuis)\s+([a-zA-Z\u00C0-\u017F\s\-']{2,40})\s+(?:to|vers|en)\s+([a-zA-Z\u00C0-\u017F\s\-']{2,40})/i
+  );
 
-  const toPattern =
-    extractCountryByPattern(message, /(?:from|depuis|de)\s+[a-zA-Z\s\-']{2,40}\s+(?:to|vers)\s+([a-zA-Z\s\-']{2,40})/i) ||
-    extractCountryByPattern(message, /acheteur\s*[:=-]\s*([a-zA-Z\s\-']{2,40})/i);
+  const sellerPattern = extractCountryByPattern(message, /vendeur\s*[:=-]\s*([a-zA-Z\u00C0-\u017F\s\-']{2,40})/i);
+  const buyerPattern = extractCountryByPattern(message, /acheteur\s*[:=-]\s*([a-zA-Z\u00C0-\u017F\s\-']{2,40})/i);
+  const exportToPattern = extractCountryByPattern(
+    message,
+    /(?:export(?:er|e|ons|ation)?|exped(?:ier|ie|ions)?|vendre)\s+(?:en|vers|to)\s+([a-zA-Z\u00C0-\u017F\s\-']{2,40})/i
+  );
+  const importFromPattern = extractCountryByPattern(
+    message,
+    /(?:import(?:er|e|ons|ation)?|acheter)\s+(?:de|depuis|from)\s+([a-zA-Z\u00C0-\u017F\s\-']{2,40})/i
+  );
 
-  const detected = Array.from(new Set([...(originOverride ? [originOverride] : []), ...(destinationOverride ? [destinationOverride] : []), ...fallbackDetected]));
+  const fromPattern = lookupCountry(directionalPattern?.[1] || null) || sellerPattern || importFromPattern;
+  const toPattern = lookupCountry(directionalPattern?.[2] || null) || buyerPattern || exportToPattern;
 
-  const origin = originOverride || fromPattern || detected[0] || null;
-  const destination = destinationOverride || toPattern || (detected.length > 1 ? detected[1] : null);
+  const detected = Array.from(
+    new Set([...(originOverride ? [originOverride] : []), ...(destinationOverride ? [destinationOverride] : []), ...fallbackDetected])
+  );
+
+  let origin = originOverride || fromPattern || null;
+  let destination = destinationOverride || toPattern || null;
+
+  if (!origin && !destination && detected.length === 1) {
+    if (flowHint === "import") {
+      origin = detected[0];
+    } else {
+      destination = detected[0];
+    }
+  } else {
+    if (!origin && detected.length >= 1 && flowHint === "import") {
+      origin = detected[0];
+    }
+    if (!destination && detected.length >= 1 && flowHint !== "import") {
+      destination = detected[0];
+    }
+    if (!origin && detected.length >= 2) {
+      origin = detected[0];
+    }
+    if (!destination && detected.length >= 2) {
+      destination = detected[1];
+    }
+  }
+
+  if (!origin && destination && flowHint === "export") {
+    origin = DEFAULT_HOME_COUNTRY;
+  }
+  if (!destination && origin && flowHint === "import") {
+    destination = DEFAULT_HOME_COUNTRY;
+  }
+
+  if (origin && destination && origin === destination && detected.length === 1) {
+    if (flowHint === "export") {
+      origin = DEFAULT_HOME_COUNTRY;
+    } else if (flowHint === "import") {
+      destination = DEFAULT_HOME_COUNTRY;
+    }
+  }
 
   return { origin, destination, detected };
 }
@@ -230,12 +294,13 @@ function deduceCountries(
 export function resolveEntities(params: ResolveParams): ResolveResult {
   const message = String(params.message || "").trim();
   const overrides = asObject(params.overrides);
+  const flowHint = detectFlowHint(message, overrides);
   const detectedCountries = extractCountriesFromText(message);
-  const countries = deduceCountries(message, overrides, detectedCountries);
+  const countries = deduceCountries(message, overrides, detectedCountries, flowHint);
 
   const context: ResolvedContext = {
     flow: "unknown",
-    goodsOrServices: detectGoodsOrServices(message, overrides),
+    goodsOrServices: detectGoodsOrServices(message, overrides, flowHint),
     origin: countries.origin,
     destination: countries.destination,
     product: detectProduct(message, overrides),
@@ -261,12 +326,14 @@ export function resolveEntities(params: ResolveParams): ResolveResult {
 }
 
 export function buildMissingQuestions(context: ResolvedContext, lang: Lang): string[] {
-  const questions: string[] = [];
-
-  const countryQuestion =
+  const destinationQuestion =
     lang === "en"
-      ? "What are origin and destination countries (ISO2 or country names)?"
-      : "Quels sont le pays d'origine et le pays de destination (ISO2 ou noms) ?";
+      ? "What is the destination country (ISO2 or country name)?"
+      : "Quel est le pays de destination (ISO2 ou nom) ?";
+  const originQuestion =
+    lang === "en"
+      ? "What is the origin country?"
+      : "Quel est le pays d'origine ?";
   const flowQuestion =
     lang === "en"
       ? "Is this an import or an export operation?"
@@ -284,24 +351,39 @@ export function buildMissingQuestions(context: ResolvedContext, lang: Lang): str
       ? "Which Incoterm do you plan to use (EXW, FCA, FOB, CIF, DAP, DDP)?"
       : "Quel Incoterm est prevu (EXW, FCA, FOB, CIF, DAP, DDP) ?";
 
-  if (!context.origin || !context.destination) questions.push(countryQuestion);
-  if (context.flow === "unknown") questions.push(flowQuestion);
-  if (context.buyerIsTaxable === null) questions.push(taxableQuestion);
-  if (!context.incoterm) questions.push(incotermQuestion);
+  const hasProduct = Boolean(context.product || context.hs6);
+  const hasDestination = Boolean(context.destination);
+  const hasOrigin = Boolean(context.origin);
 
-  if (!context.product && !context.hs6) {
-    questions.push(productQuestion);
+  const ranked: Array<{ question: string; priority: number }> = [];
+
+  if (hasDestination && !hasProduct) {
+    ranked.push({ question: productQuestion, priority: 1 });
+  }
+  if (!hasDestination && hasProduct) {
+    ranked.push({ question: destinationQuestion, priority: 1 });
+  }
+  if (!hasDestination && !hasProduct) {
+    ranked.push({ question: destinationQuestion, priority: 1 });
+    ranked.push({ question: productQuestion, priority: 2 });
+  }
+  if (!context.incoterm) {
+    ranked.push({ question: incotermQuestion, priority: 3 });
+  }
+  if (!hasOrigin && hasDestination) {
+    ranked.push({ question: originQuestion, priority: 4 });
+  }
+  if (context.flow === "unknown") {
+    ranked.push({ question: flowQuestion, priority: 5 });
+  }
+  if (context.buyerIsTaxable === null) {
+    ranked.push({ question: taxableQuestion, priority: 6 });
   }
 
-  const deduped = Array.from(new Set(questions));
-  if (deduped.length <= 1) return deduped;
-
-  const countryIndex = deduped.findIndex((question) => question === countryQuestion);
-  const productIndex = deduped.findIndex((question) => question === productQuestion);
-
-  const ordered = deduped.filter((_, index) => index !== countryIndex && index !== productIndex);
-  if (countryIndex >= 0) ordered.unshift(countryQuestion);
-  if (productIndex >= 0) ordered.push(productQuestion);
+  const ordered = ranked
+    .sort((a, b) => a.priority - b.priority)
+    .map((item) => item.question)
+    .filter((item, index, array) => array.indexOf(item) === index);
 
   return ordered;
 }
