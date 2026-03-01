@@ -1,181 +1,281 @@
 -- =====================================================
--- Watch / RSS - Tables et RLS pour la veille export
+-- Watch / RSS - Base schema and RLS (idempotent)
 -- =====================================================
 
--- 1) ENUM pour les catégories de veille
-CREATE TYPE public.watch_category AS ENUM (
-  'customs',
-  'trade',
-  'sanctions',
-  'tax_vat',
-  'standards',
-  'logistics',
-  'general'
+create extension if not exists "pgcrypto";
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_type t
+    join pg_namespace n on n.oid = t.typnamespace
+    where n.nspname = 'public'
+      and t.typname = 'watch_category'
+  ) then
+    create type public.watch_category as enum (
+      'customs',
+      'trade',
+      'sanctions',
+      'tax_vat',
+      'standards',
+      'logistics',
+      'general'
+    );
+  end if;
+exception
+  when duplicate_object then
+    null;
+end
+$$;
+
+create table if not exists public.watch_sources (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  url text not null,
+  format text not null default 'rss' check (format in ('rss', 'web', 'api')),
+  type text not null default 'regulatory' check (type in ('regulatory', 'commercial', 'sanctions', 'logistics')),
+  country text,
+  category public.watch_category not null default 'general',
+  is_enabled boolean not null default true,
+  last_checked_at timestamptz,
+  last_error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (url)
 );
 
--- 2) Table watch_sources - Sources RSS/web à scanner
-CREATE TABLE public.watch_sources (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  url TEXT NOT NULL,
-  format TEXT NOT NULL DEFAULT 'rss' CHECK (format IN ('rss', 'web', 'api')),
-  type TEXT NOT NULL DEFAULT 'regulatory' CHECK (type IN ('regulatory', 'commercial', 'sanctions', 'logistics')),
-  country TEXT,
-  category public.watch_category NOT NULL DEFAULT 'general',
-  is_enabled BOOLEAN NOT NULL DEFAULT true,
-  last_checked_at TIMESTAMPTZ,
-  last_error TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(url)
-);
-
--- 3) Table watch_items - Articles/items récupérés
-CREATE TABLE public.watch_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  source_id UUID NOT NULL REFERENCES public.watch_sources(id) ON DELETE CASCADE,
-  type TEXT NOT NULL DEFAULT 'regulatory',
-  title TEXT,
-  summary TEXT,
-  url TEXT,
-  guid TEXT NOT NULL,
-  published_at TIMESTAMPTZ,
-  country TEXT,
+create table if not exists public.watch_items (
+  id uuid primary key default gen_random_uuid(),
+  source_id uuid not null references public.watch_sources(id) on delete cascade,
+  type text not null default 'regulatory',
+  title text,
+  summary text,
+  url text,
+  guid text not null,
+  published_at timestamptz,
+  country text,
   category public.watch_category,
-  impact TEXT CHECK (impact IS NULL OR impact IN ('LOW', 'MED', 'HIGH')),
-  tags TEXT[],
-  raw JSONB,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(source_id, guid)
+  impact text check (impact is null or impact in ('LOW', 'MED', 'HIGH')),
+  tags text[],
+  raw jsonb,
+  created_at timestamptz not null default now(),
+  unique (source_id, guid)
 );
 
--- 4) Table watch_prefs - Préférences utilisateur pour la veille
-CREATE TABLE public.watch_prefs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  countries TEXT[] DEFAULT '{}',
-  categories public.watch_category[] DEFAULT '{}',
-  keywords TEXT[] DEFAULT '{}',
-  enabled_digest BOOLEAN NOT NULL DEFAULT false,
-  digest_frequency TEXT DEFAULT 'weekly' CHECK (digest_frequency IN ('daily', 'weekly', 'monthly')),
-  last_digest_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(user_id)
+create table if not exists public.watch_prefs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  countries text[] default '{}',
+  categories public.watch_category[] default '{}',
+  keywords text[] default '{}',
+  enabled_digest boolean not null default false,
+  digest_frequency text default 'weekly' check (digest_frequency in ('daily', 'weekly', 'monthly')),
+  last_digest_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id)
 );
 
--- 5) Table watch_digest_log - Historique des digests envoyés
-CREATE TABLE public.watch_digest_log (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  items_count INTEGER NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'failed', 'skipped')),
-  error TEXT
+create table if not exists public.watch_digest_log (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  sent_at timestamptz not null default now(),
+  items_count integer not null default 0,
+  status text not null default 'sent' check (status in ('sent', 'failed', 'skipped')),
+  error text
 );
 
--- =====================================================
--- Indexes pour performances
--- =====================================================
-CREATE INDEX idx_watch_items_source_id ON public.watch_items(source_id);
-CREATE INDEX idx_watch_items_published_at ON public.watch_items(published_at DESC);
-CREATE INDEX idx_watch_items_country ON public.watch_items(country) WHERE country IS NOT NULL;
-CREATE INDEX idx_watch_items_category ON public.watch_items(category) WHERE category IS NOT NULL;
-CREATE INDEX idx_watch_items_impact ON public.watch_items(impact) WHERE impact IS NOT NULL;
-CREATE INDEX idx_watch_sources_enabled ON public.watch_sources(is_enabled) WHERE is_enabled = true;
-CREATE INDEX idx_watch_prefs_user_id ON public.watch_prefs(user_id);
+-- Compatibility with legacy watch schema used in other pending migrations.
+alter table public.watch_sources
+  add column if not exists source_name text,
+  add column if not exists source_url text,
+  add column if not exists kind text,
+  add column if not exists enabled boolean,
+  add column if not exists last_status integer,
+  add column if not exists name text,
+  add column if not exists url text,
+  add column if not exists format text,
+  add column if not exists type text,
+  add column if not exists is_enabled boolean,
+  add column if not exists created_at timestamptz,
+  add column if not exists updated_at timestamptz;
 
--- =====================================================
--- Fonction pour updated_at automatique
--- =====================================================
-CREATE OR REPLACE FUNCTION public.set_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SET search_path = public;
+alter table public.watch_items
+  add column if not exists source_id uuid,
+  add column if not exists type text,
+  add column if not exists title text,
+  add column if not exists summary text,
+  add column if not exists url text,
+  add column if not exists guid text,
+  add column if not exists published_at timestamptz,
+  add column if not exists country text,
+  add column if not exists category text,
+  add column if not exists impact text,
+  add column if not exists tags text[],
+  add column if not exists raw jsonb,
+  add column if not exists link text,
+  add column if not exists hash text,
+  add column if not exists created_at timestamptz,
+  add column if not exists updated_at timestamptz;
 
--- Triggers updated_at
-CREATE TRIGGER trg_watch_sources_updated_at
-  BEFORE UPDATE ON public.watch_sources
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+alter table public.watch_prefs
+  add column if not exists id uuid default gen_random_uuid(),
+  add column if not exists user_id uuid,
+  add column if not exists countries text[] default '{}',
+  add column if not exists categories text[] default '{}',
+  add column if not exists keywords text[] default '{}',
+  add column if not exists enabled_digest boolean default false,
+  add column if not exists digest_frequency text default 'weekly',
+  add column if not exists last_digest_at timestamptz,
+  add column if not exists created_at timestamptz default now(),
+  add column if not exists updated_at timestamptz default now();
 
-CREATE TRIGGER trg_watch_prefs_updated_at
-  BEFORE UPDATE ON public.watch_prefs
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+alter table public.watch_digest_log
+  add column if not exists user_id uuid,
+  add column if not exists sent_at timestamptz default now(),
+  add column if not exists items_count integer default 0,
+  add column if not exists status text default 'sent',
+  add column if not exists error text;
 
--- =====================================================
--- RLS - Row Level Security
--- =====================================================
+update public.watch_sources
+set
+  name = coalesce(nullif(name, ''), nullif(source_name, '')),
+  source_name = coalesce(nullif(source_name, ''), nullif(name, '')),
+  url = coalesce(nullif(url, ''), nullif(source_url, '')),
+  source_url = coalesce(nullif(source_url, ''), nullif(url, '')),
+  format = coalesce(nullif(format, ''), nullif(kind, ''), 'rss'),
+  kind = coalesce(nullif(kind, ''), nullif(format, ''), 'rss'),
+  type = coalesce(nullif(type, ''), 'regulatory'),
+  is_enabled = coalesce(is_enabled, enabled, true),
+  enabled = coalesce(enabled, is_enabled, true),
+  created_at = coalesce(created_at, now()),
+  updated_at = coalesce(updated_at, now());
 
--- watch_sources : lecture publique (tout le monde peut voir les sources)
-ALTER TABLE public.watch_sources ENABLE ROW LEVEL SECURITY;
+update public.watch_items
+set
+  url = coalesce(nullif(url, ''), nullif(link, '')),
+  link = coalesce(nullif(link, ''), nullif(url, '')),
+  guid = coalesce(nullif(guid, ''), nullif(hash, ''), md5(coalesce(nullif(link, ''), nullif(url, ''), coalesce(id::text, gen_random_uuid()::text)))),
+  hash = coalesce(nullif(hash, ''), md5(coalesce(nullif(link, ''), nullif(url, ''), coalesce(id::text, gen_random_uuid()::text)))),
+  type = coalesce(nullif(type, ''), 'regulatory'),
+  created_at = coalesce(created_at, now()),
+  updated_at = coalesce(updated_at, now());
 
-CREATE POLICY "Tout le monde peut lire les sources actives"
-  ON public.watch_sources FOR SELECT
-  USING (is_enabled = true);
+create unique index if not exists uq_watch_sources_url_normalized
+  on public.watch_sources ((lower(coalesce(url, source_url))))
+  where coalesce(url, source_url) is not null;
 
--- watch_items : lecture publique (articles publics)
-ALTER TABLE public.watch_items ENABLE ROW LEVEL SECURITY;
+create index if not exists idx_watch_items_source_id on public.watch_items(source_id);
+create index if not exists idx_watch_items_published_at on public.watch_items(published_at desc);
+create index if not exists idx_watch_items_country on public.watch_items(country) where country is not null;
+create index if not exists idx_watch_items_category on public.watch_items(category) where category is not null;
+create index if not exists idx_watch_items_impact on public.watch_items(impact) where impact is not null;
+create index if not exists idx_watch_sources_enabled on public.watch_sources(enabled) where enabled = true;
+create index if not exists idx_watch_prefs_user_id on public.watch_prefs(user_id);
 
-CREATE POLICY "Tout le monde peut lire les items"
-  ON public.watch_items FOR SELECT
-  USING (true);
+create or replace function public.set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql set search_path = public;
 
--- watch_prefs : privé par utilisateur
-ALTER TABLE public.watch_prefs ENABLE ROW LEVEL SECURITY;
+drop trigger if exists trg_watch_sources_updated_at on public.watch_sources;
+create trigger trg_watch_sources_updated_at
+  before update on public.watch_sources
+  for each row execute function public.set_updated_at();
 
-CREATE POLICY "Utilisateurs voient leurs propres prefs"
-  ON public.watch_prefs FOR SELECT
-  USING (auth.uid() = user_id);
+drop trigger if exists trg_watch_prefs_updated_at on public.watch_prefs;
+create trigger trg_watch_prefs_updated_at
+  before update on public.watch_prefs
+  for each row execute function public.set_updated_at();
 
-CREATE POLICY "Utilisateurs peuvent créer leurs prefs"
-  ON public.watch_prefs FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+alter table public.watch_sources enable row level security;
+alter table public.watch_items enable row level security;
+alter table public.watch_prefs enable row level security;
+alter table public.watch_digest_log enable row level security;
 
-CREATE POLICY "Utilisateurs peuvent modifier leurs prefs"
-  ON public.watch_prefs FOR UPDATE
-  USING (auth.uid() = user_id);
+drop policy if exists "Tout le monde peut lire les sources actives" on public.watch_sources;
+create policy "Tout le monde peut lire les sources actives"
+  on public.watch_sources for select
+  using (coalesce(is_enabled, enabled, true) = true);
 
-CREATE POLICY "Utilisateurs peuvent supprimer leurs prefs"
-  ON public.watch_prefs FOR DELETE
-  USING (auth.uid() = user_id);
+drop policy if exists "Tout le monde peut lire les items" on public.watch_items;
+create policy "Tout le monde peut lire les items"
+  on public.watch_items for select
+  using (true);
 
--- watch_digest_log : privé par utilisateur
-ALTER TABLE public.watch_digest_log ENABLE ROW LEVEL SECURITY;
+drop policy if exists "Utilisateurs voient leurs propres prefs" on public.watch_prefs;
+create policy "Utilisateurs voient leurs propres prefs"
+  on public.watch_prefs for select
+  using (auth.uid() = user_id);
 
-CREATE POLICY "Utilisateurs voient leur historique digest"
-  ON public.watch_digest_log FOR SELECT
-  USING (auth.uid() = user_id);
+drop policy if exists "Utilisateurs peuvent creer leurs prefs" on public.watch_prefs;
+drop policy if exists "Utilisateurs peuvent cr�er leurs prefs" on public.watch_prefs;
+create policy "Utilisateurs peuvent creer leurs prefs"
+  on public.watch_prefs for insert
+  with check (auth.uid() = user_id);
 
--- =====================================================
--- Seed initial - Sources RSS fiables
--- =====================================================
-INSERT INTO public.watch_sources (name, url, format, type, country, category, is_enabled) VALUES
-  -- France
-  ('Economie.gouv.fr - Actualités', 'https://www.economie.gouv.fr/rss/toutesactualites', 'rss', 'regulatory', 'FR', 'customs', true),
-  ('Service-Public Pro - Actualités', 'https://www.service-public.fr/professionnels-entreprises/actualites/rss', 'rss', 'regulatory', 'FR', 'customs', true),
-  ('Douanes FR - Actualités', 'https://www.douane.gouv.fr/rss/actualites.xml', 'rss', 'regulatory', 'FR', 'customs', true),
-  
-  -- EU
-  ('EUR-Lex - Nouveaux actes', 'https://eur-lex.europa.eu/rss/new-oj-daily.xml', 'rss', 'regulatory', 'EU', 'customs', true),
-  ('EU Commission - Trade News', 'https://trade.ec.europa.eu/rss/press-releases.xml', 'rss', 'regulatory', 'EU', 'trade', true),
-  
-  -- UK
-  ('UK GOV - HMRC News', 'https://www.gov.uk/government/organisations/hm-revenue-customs.atom', 'rss', 'regulatory', 'GB', 'customs', true),
-  ('UK GOV - Trade Policy', 'https://www.gov.uk/government/organisations/department-for-international-trade.atom', 'rss', 'regulatory', 'GB', 'trade', true),
-  
-  -- International
-  ('WTO - Latest News', 'https://www.wto.org/english/news_e/news_rss_e.xml', 'rss', 'regulatory', 'INT', 'trade', true),
-  ('UNCTAD - News', 'https://unctad.org/rss/news.xml', 'rss', 'regulatory', 'INT', 'trade', true),
-  
-  -- Sanctions
-  ('OFAC - Sanctions Updates', 'https://ofac.treasury.gov/news-and-sanctions/sanctions-list-updates', 'web', 'sanctions', 'US', 'sanctions', true),
-  ('EU Sanctions Map', 'https://www.sanctionsmap.eu/feed', 'rss', 'sanctions', 'EU', 'sanctions', true),
-  
-  -- Logistics
-  ('Freight Waves - News', 'https://www.freightwaves.com/feed', 'rss', 'logistics', 'INT', 'logistics', true),
-  ('JOC - Maritime News', 'https://www.joc.com/rss/all', 'rss', 'logistics', 'INT', 'logistics', true)
+drop policy if exists "Utilisateurs peuvent modifier leurs prefs" on public.watch_prefs;
+create policy "Utilisateurs peuvent modifier leurs prefs"
+  on public.watch_prefs for update
+  using (auth.uid() = user_id);
 
-ON CONFLICT (url) DO NOTHING;
+drop policy if exists "Utilisateurs peuvent supprimer leurs prefs" on public.watch_prefs;
+create policy "Utilisateurs peuvent supprimer leurs prefs"
+  on public.watch_prefs for delete
+  using (auth.uid() = user_id);
+
+drop policy if exists "Utilisateurs voient leur historique digest" on public.watch_digest_log;
+create policy "Utilisateurs voient leur historique digest"
+  on public.watch_digest_log for select
+  using (auth.uid() = user_id);
+
+insert into public.watch_sources (
+  name,
+  source_name,
+  url,
+  source_url,
+  format,
+  kind,
+  type,
+  country,
+  category,
+  is_enabled,
+  enabled
+)
+select
+  v.name,
+  v.name,
+  v.url,
+  v.url,
+  v.format,
+  case when v.format in ('rss', 'web') then v.format else 'rss' end,
+  v.type,
+  v.country,
+  v.category,
+  true,
+  true
+from (
+  values
+    ('Economie.gouv.fr - Actualites', 'https://www.economie.gouv.fr/rss/toutesactualites', 'rss', 'regulatory', 'FR', 'customs'),
+    ('Service-Public Pro - Actualites', 'https://www.service-public.fr/professionnels-entreprises/actualites/rss', 'rss', 'regulatory', 'FR', 'customs'),
+    ('Douanes FR - Actualites', 'https://www.douane.gouv.fr/rss/actualites.xml', 'rss', 'regulatory', 'FR', 'customs'),
+    ('EUR-Lex - Nouveaux actes', 'https://eur-lex.europa.eu/rss/new-oj-daily.xml', 'rss', 'regulatory', 'EU', 'customs'),
+    ('EU Commission - Trade News', 'https://trade.ec.europa.eu/rss/press-releases.xml', 'rss', 'regulatory', 'EU', 'trade'),
+    ('UK GOV - HMRC News', 'https://www.gov.uk/government/organisations/hm-revenue-customs.atom', 'rss', 'regulatory', 'GB', 'customs'),
+    ('UK GOV - Trade Policy', 'https://www.gov.uk/government/organisations/department-for-international-trade.atom', 'rss', 'regulatory', 'GB', 'trade'),
+    ('WTO - Latest News', 'https://www.wto.org/english/news_e/news_rss_e.xml', 'rss', 'regulatory', 'INT', 'trade'),
+    ('UNCTAD - News', 'https://unctad.org/rss/news.xml', 'rss', 'regulatory', 'INT', 'trade'),
+    ('OFAC - Sanctions Updates', 'https://ofac.treasury.gov/news-and-sanctions/sanctions-list-updates', 'web', 'sanctions', 'US', 'sanctions'),
+    ('EU Sanctions Map', 'https://www.sanctionsmap.eu/feed', 'rss', 'sanctions', 'EU', 'sanctions'),
+    ('Freight Waves - News', 'https://www.freightwaves.com/feed', 'rss', 'logistics', 'INT', 'logistics'),
+    ('JOC - Maritime News', 'https://www.joc.com/rss/all', 'rss', 'logistics', 'INT', 'logistics')
+) as v(name, url, format, type, country, category)
+where not exists (
+  select 1
+  from public.watch_sources ws
+  where lower(coalesce(ws.url, ws.source_url, '')) = lower(v.url)
+);
