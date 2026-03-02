@@ -13,6 +13,7 @@ import type { LanguageCode } from "@/i18n/translations";
 import { footerNav, isPathActive, publicNav } from "@/config/navigation";
 import { getBannerContent } from "@/config/bannerContent";
 import SupportChatWidget from "@/components/support/SupportChatWidget";
+import { CallbackLeadModal } from "@/components/marketing/CallbackLeadModal";
 
 type PublicLayoutProps = {
   children?: React.ReactNode;
@@ -108,6 +109,7 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
   const registerLabel = isFr ? "Creer un compte gratuit" : "Create free account";
   const loginLabel = isFr ? "Connexion" : "Sign in";
   const appLabel = isFr ? "Tour de controle" : "Control Tower";
+  const callbackLabel = isFr ? "Etre rappelee" : "Request callback";
 
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
@@ -208,6 +210,13 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
               ))}
             </div>
 
+            <CallbackLeadModal
+              triggerLabel={callbackLabel}
+              triggerVariant="outline"
+              triggerSize="sm"
+              triggerClassName="rounded-full border-slate-500/70 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-900 hover:bg-slate-50"
+            />
+
             {isAuthenticated ? (
               <Link to="/app/control-tower" className="inline-flex rounded-full border border-slate-500/60 bg-[#0a1d3a] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#0d2a54]">
                 {appLabel}
@@ -275,6 +284,15 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
             </div>
 
             <nav className="grid grid-cols-1 gap-2">
+              <div className="mb-1">
+                <CallbackLeadModal
+                  triggerLabel={callbackLabel}
+                  triggerVariant="outline"
+                  triggerSize="default"
+                  triggerClassName="w-full border-[#cdbda4] bg-white text-slate-900 hover:bg-slate-50"
+                />
+              </div>
+
               {publicNav.map((link) => {
                 const active = isPathActive(location.pathname, link.to);
                 const label = resolvePublicLabel(link);
@@ -347,6 +365,17 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
         >
           {isFr ? "Retour tour de controle" : "Back to Control Tower"}
         </Link>
+      ) : null}
+
+      {!isAuthenticated ? (
+        <div className="fixed bottom-6 left-4 z-[85] md:hidden">
+          <CallbackLeadModal
+            triggerLabel={callbackLabel}
+            triggerVariant="default"
+            triggerSize="sm"
+            triggerClassName="rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-white shadow-lg shadow-black/25 hover:bg-[#B0231D]"
+          />
+        </div>
       ) : null}
 
       {hideFooter ? null : (

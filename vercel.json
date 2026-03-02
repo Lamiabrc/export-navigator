@@ -71,6 +71,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/lead-callback", "destination": "/api/contact?mode=lead-callback" },
     { "source": "/api/lead", "destination": "/api/lead-magnet?mode=lead" },
     { "source": "/api/pdf", "destination": "/api/lead-magnet?mode=pdf" },
     { "source": "/api/alerts", "destination": "/api/lead-magnet?mode=alerts" },

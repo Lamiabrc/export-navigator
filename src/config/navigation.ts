@@ -258,6 +258,17 @@ export const appNav: AppNavSection[] = [
         },
         adminOnly: true,
       },
+      {
+        id: "admin-realtime",
+        to: "/app/admin/realtime",
+        icon: Activity,
+        labels: { fr: "Realtime debug", en: "Realtime debug" },
+        descriptions: {
+          fr: "Tester postgres_changes en direct sur les tables cles.",
+          en: "Test live postgres_changes on key tables.",
+        },
+        adminOnly: true,
+      },
     ],
   },
 ];

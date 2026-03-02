@@ -65,6 +65,7 @@ import VipRentability from "@/pages/VipRentability";
 import Legal from "@/pages/Legal";
 import AdminKbDocs from "@/pages/AdminKbDocs";
 import AdminData from "@/pages/AdminData";
+import AdminRealtimeTest from "@/pages/AdminRealtimeTest";
 import TaxesOm from "@/pages/TaxesOm";
 import Prospection from "@/pages/Prospection";
 import Copilote from "@/pages/Copilote";
@@ -436,6 +437,15 @@ export default function App() {
                         />
 
                         <Route
+                          path="/app/admin/realtime"
+                          element={
+                            <ProtectedRoute>
+                              <AdminRealtimeTest />
+                            </ProtectedRoute>
+                          }
+                        />
+
+                        <Route
                           path="/app/settings"
                           element={
                             <ProtectedRoute>
@@ -483,6 +493,7 @@ export default function App() {
                         <Route path="/assistant" element={<Navigate to="/app/assistant" replace />} />
                         <Route path="/expert" element={<Navigate to="/app/expert" replace />} />
                         <Route path="/admin" element={<Navigate to="/app/admin" replace />} />
+                        <Route path="/admin/realtime" element={<Navigate to="/app/admin/realtime" replace />} />
                         <Route path="/app/centre-conformite" element={<Navigate to="/app/audit-interne" replace />} />
                         <Route path="/app/controls" element={<Navigate to="/app/audit-interne" replace />} />
                         <Route path="/app/sanctions" element={<Navigate to="/app/audit-interne" replace />} />

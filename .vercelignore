@@ -24,6 +24,7 @@ coverage
 # Legacy wrappers replaced by /api/lead-magnet rewrites
 api/alerts.ts
 api/lead.ts
+api/lead-callback.ts
 api/pdf.ts
 api/prefs.ts
 api/export/brief.ts
