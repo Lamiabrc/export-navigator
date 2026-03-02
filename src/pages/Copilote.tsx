@@ -96,9 +96,12 @@ type ChatMessage = {
   decision?: ChatDecision;
 };
 
+type GuidedField = keyof GuidedFormValues;
+
 type FollowUpAction = {
   label: string;
   value: string;
+  guidedField?: GuidedField;
 };
 
 type CopilotFormContext = {
@@ -124,7 +127,44 @@ const COUNTRY_OVERRIDE_KEYS = {
 } as const;
 
 const GENERAL_UNKNOWN_PROMPT =
-  "Je ne sais pas encore les details (pays/produit/incoterm). Donne une reponse generale import/export courte: douane/incoterm/documents/risques, puis TVA seulement si applicable.";
+  "Je ne sais pas encore les détails (pays/produit/incoterm). Donne une réponse générale import/export courte: douane/incoterm/documents/risques, puis TVA seulement si applicable.";
+
+const COUNTRY_SELECT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "unknown", label: "Je ne sais pas" },
+  { value: "FR", label: "France (FR)" },
+  { value: "DE", label: "Allemagne (DE)" },
+  { value: "IT", label: "Italie (IT)" },
+  { value: "ES", label: "Espagne (ES)" },
+  { value: "BE", label: "Belgique (BE)" },
+  { value: "NL", label: "Pays-Bas (NL)" },
+  { value: "GB", label: "Royaume-Uni (GB)" },
+  { value: "US", label: "États-Unis (US)" },
+  { value: "CA", label: "Canada (CA)" },
+  { value: "CN", label: "Chine (CN)" },
+  { value: "JP", label: "Japon (JP)" },
+  { value: "KR", label: "Corée du Sud (KR)" },
+  { value: "IN", label: "Inde (IN)" },
+  { value: "BR", label: "Brésil (BR)" },
+  { value: "MX", label: "Mexique (MX)" },
+  { value: "TR", label: "Turquie (TR)" },
+  { value: "MA", label: "Maroc (MA)" },
+  { value: "AE", label: "Émirats arabes unis (AE)" },
+  { value: "AU", label: "Australie (AU)" },
+];
+
+const INCOTERM_SELECT_OPTIONS = [
+  "unknown",
+  "EXW",
+  "FCA",
+  "FOB",
+  "CFR",
+  "CIF",
+  "CPT",
+  "CIP",
+  "DAP",
+  "DPU",
+  "DDP",
+] as const;
 
 function isUncertainAnswer(answer: string) {
   const txt = answer.trim().toLowerCase();
@@ -141,10 +181,22 @@ function statusLabel(status: ChatCheck["status"]) {
     case "MANQUANT":
       return "Manquant";
     case "A_CONFIRMER":
-      return "A confirmer";
+      return "À confirmer";
     default:
       return "OK";
   }
+}
+
+function normalizeAssistantAnswer(value: string) {
+  const lines = String(value || "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.replace(/^#{1,6}\s*/, "").trimEnd());
+
+  return lines
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function normalizePrompt(value: string) {
@@ -259,6 +311,10 @@ function normalizeCountryOverride(value: string | null | undefined): string | nu
   return resolveCountryIso2(detected);
 }
 
+function toCountrySelectValue(value: string | null | undefined) {
+  return normalizeCountryOverride(value) || "unknown";
+}
+
 function pickObjectText(value: unknown, keys: readonly string[]) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "";
   const object = value as Record<string, unknown>;
@@ -327,7 +383,7 @@ function withPriorityFollowUp(params: {
     return [countryQuestion, ...base.filter((q) => q !== countryQuestion)];
   }
   if (params.countryKnown && !params.productKnown) {
-    return [...base.filter((q) => q !== productQuestion), productQuestion];
+    return [productQuestion, ...base.filter((q) => q !== productQuestion)];
   }
   return base;
 }
@@ -335,16 +391,16 @@ function withPriorityFollowUp(params: {
 function followUpToAction(question: string): FollowUpAction {
   const normalized = normalizePrompt(question);
   if (/\b(pays|destination|transit|origin|origine)\b/.test(normalized)) {
-    return { label: "Renseigner le pays", value: "Pays destination: " };
+    return { label: "Choisir le pays", value: "Pays destination: ", guidedField: "destination" };
   }
   if (/\b(produit|marchandise|usage|composition)\b/.test(normalized)) {
-    return { label: "Renseigner le produit", value: "Produit (nom + usage): " };
+    return { label: "Renseigner le produit", value: "Produit (nom + usage): ", guidedField: "productOrHs" };
   }
   if (/\b(code hs|hs)\b/.test(normalized)) {
-    return { label: "Renseigner le code HS", value: "Code HS (6 chiffres): " };
+    return { label: "Renseigner le code HS", value: "Code HS (6 chiffres): ", guidedField: "productOrHs" };
   }
   if (/\bincoterm\b/.test(normalized)) {
-    return { label: "Renseigner l'Incoterm", value: "Incoterm + lieu: " };
+    return { label: "Choisir l'Incoterm", value: "Incoterm + lieu: ", guidedField: "incoterm" };
   }
   if (/\btransport\b/.test(normalized)) {
     return { label: "Renseigner le transport", value: "Transport: " };
@@ -352,7 +408,16 @@ function followUpToAction(question: string): FollowUpAction {
   if (/\bpayment|paiement|reglement\b/.test(normalized)) {
     return { label: "Renseigner le paiement", value: "Mode de paiement: " };
   }
-  return { label: "Repondre", value: "Reponse: " };
+  if (/\b(biens|services)\b/.test(normalized)) {
+    return { label: "Choisir biens/services", value: "Biens ou services: ", guidedField: "goodsOrServices" };
+  }
+  if (/\b(flux|import|export)\b/.test(normalized)) {
+    return { label: "Choisir le flux", value: "Flux: ", guidedField: "flow" };
+  }
+  if (/\b(tva|assujetti|b2b|b2c)\b/.test(normalized)) {
+    return { label: "Choisir statut TVA", value: "Acheteur assujetti TVA: ", guidedField: "buyerIsTaxable" };
+  }
+  return { label: "Répondre", value: "Réponse: " };
 }
 
 function fieldPathToDraft(fieldPath?: string) {
@@ -380,14 +445,15 @@ function fieldPathToDraft(fieldPath?: string) {
 
 function shouldShowGuidedForm(message: ChatMessage | undefined) {
   if (!message || message.role !== "assistant") return false;
+  if (Array.isArray(message.followUpQuestions) && message.followUpQuestions.length > 0) return true;
   if (message.mainBlocker?.status === "MANQUANT") return true;
   const checks = Array.isArray(message.checks) ? message.checks : [];
-  return checks.some((check) => check.status === "MANQUANT");
+  return checks.some((check) => check.status === "MANQUANT" || check.status === "A_CONFIRMER");
 }
 
 function buildPromptFromGuidedForm(values: GuidedFormValues) {
   const lines: string[] = [];
-  lines.push("Analyse via formulaire guide:");
+  lines.push("Analyse via formulaire guidé:");
   lines.push(`- Flux: ${values.flow === "unknown" ? "je ne sais pas" : values.flow}`);
   lines.push(`- Nature: ${values.goodsOrServices === "unknown" ? "je ne sais pas" : values.goodsOrServices}`);
   lines.push(`- Pays origine: ${values.origin.trim() || "je ne sais pas"}`);
@@ -399,7 +465,7 @@ function buildPromptFromGuidedForm(values: GuidedFormValues) {
       values.buyerIsTaxable === "yes" ? "oui" : values.buyerIsTaxable === "no" ? "non" : "je ne sais pas"
     }`,
   );
-  lines.push("Donne une decision provisoire, checklist, risques et actions.");
+  lines.push("Donne une décision provisoire, checklist, risques et actions.");
   return lines.join("\n");
 }
 
@@ -430,7 +496,7 @@ export default function Copilote() {
     {
       id: uid(),
       role: "assistant",
-      content: "Bonjour. Donnez votre cas export/import en une phrase. Je reponds avec decision provisoire, checklist, risques et actions.",
+      content: "Bonjour. Donnez votre cas export/import en une phrase. Je réponds avec décision provisoire, checklist, risques et actions.",
     },
   ]);
 
@@ -456,6 +522,7 @@ export default function Copilote() {
 
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const guidedFormRef = React.useRef<HTMLDivElement | null>(null);
   const latestAssistantMessage = React.useMemo(
     () => [...messages].reverse().find((message) => message.role === "assistant"),
     [messages],
@@ -510,6 +577,16 @@ export default function Copilote() {
     setDraft(value);
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }, []);
+
+  const applyFollowUpAction = React.useCallback(
+    (action: FollowUpAction) => {
+      if (action.guidedField && guidedFormRef.current) {
+        guidedFormRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      applyDraftAndFocus(action.value);
+    },
+    [applyDraftAndFocus],
+  );
 
   const send = React.useCallback(async (preset?: string) => {
     const question = (preset ?? draft).trim();
@@ -603,7 +680,7 @@ export default function Copilote() {
         throw new Error(data?.detail || data?.error || `chat_failed_${resp.status}`);
       }
 
-      const answerRaw = String(data?.answer_markdown || data?.answer || "").trim();
+      const answerRaw = normalizeAssistantAnswer(String(data?.answer_markdown || data?.answer || "").trim());
       const guidanceSeed = [
         question,
         finalSellerCountry ? `origine ${finalSellerCountry}` : "",
@@ -636,7 +713,7 @@ export default function Copilote() {
         followUps: followUpQuestions,
         countryKnown,
         productKnown: productKnownFromPrompt,
-      }).slice(0, 3);
+      }).slice(0, 1);
 
       const blocks = buildAssistantBlocks(data?.dossier) || guidedBlocks;
       const uncertain = isUncertainAnswer(answerRaw);
@@ -692,7 +769,7 @@ export default function Copilote() {
       const answer = guided.answer;
       const blocks = buildAssistantBlocksFromGuided(guided);
 
-      setError("Serveur temporairement indisponible. Mode guide active avec plan d'action.");
+      setError("Serveur temporairement indisponible. Mode guide activé avec plan d'action.");
       setMessages((prev) => [
         ...prev,
         {
@@ -751,7 +828,7 @@ export default function Copilote() {
               <CardTitle>Copilote IA export</CardTitle>
               <Badge variant="secondary">Gratuit</Badge>
             </div>
-            <p className="text-sm text-slate-600">Decision provisoire, checklist, risques, documents et actions en une reponse.</p>
+            <p className="text-sm text-slate-600">Décision provisoire, checklist, risques et actions dans une réponse courte.</p>
             <p className="text-xs text-slate-500">Quota restant: {quotaLabel}</p>
           </CardHeader>
 
@@ -827,7 +904,7 @@ export default function Copilote() {
 
                         {m.blocks.checklist.length ? (
                           <div className="rounded-lg border bg-muted/30 p-2">
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Documents</div>
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Checklist</div>
                             <ul className="mt-1 space-y-1 text-xs">
                               {m.blocks.checklist.map((item) => (
                                 <li key={`${m.id}-chk-${item.label}`}>{item.required ? "[x]" : "[ ]"} {item.label}</li>
@@ -884,7 +961,7 @@ export default function Copilote() {
                               size="sm"
                               variant="outline"
                               className="h-7 rounded-full px-2 text-[11px]"
-                              onClick={() => applyDraftAndFocus(action.value)}
+                              onClick={() => applyFollowUpAction(action)}
                             >
                               {action.label}
                             </Button>
@@ -907,10 +984,10 @@ export default function Copilote() {
             {error ? <div className="text-xs text-rose-600">{error}</div> : null}
 
             {showGuidedForm ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+              <div ref={guidedFormRef} className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
                 <div className="mb-2 text-sm font-semibold text-amber-900">Formulaire rapide (si le Copilote manque des infos)</div>
                 <p className="mb-3 text-xs text-amber-800">
-                  Remplissez ce que vous savez. Utilisez "Je ne sais pas" pour recevoir une reponse generale import/export.
+                  Remplissez ce que vous savez. Utilisez "Je ne sais pas" pour recevoir une réponse générale import/export.
                 </p>
 
                 <div className="grid gap-3 md:grid-cols-2">
@@ -951,23 +1028,41 @@ export default function Copilote() {
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs">Pays origine</Label>
-                    <Input
-                      value={guidedForm.origin}
-                      onChange={(e) => updateGuidedFormField("origin", e.target.value)}
-                      placeholder="FR / France..."
-                      className="h-9 bg-white"
-                    />
+                    <Label className="text-xs">Pays d'origine</Label>
+                    <Select
+                      value={toCountrySelectValue(guidedForm.origin)}
+                      onValueChange={(value) => updateGuidedFormField("origin", value === "unknown" ? "" : value)}
+                    >
+                      <SelectTrigger className="h-9 bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COUNTRY_SELECT_OPTIONS.map((country) => (
+                          <SelectItem key={`origin-${country.value}`} value={country.value}>
+                            {country.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-1">
                     <Label className="text-xs">Pays destination</Label>
-                    <Input
-                      value={guidedForm.destination}
-                      onChange={(e) => updateGuidedFormField("destination", e.target.value)}
-                      placeholder="IT / Italie..."
-                      className="h-9 bg-white"
-                    />
+                    <Select
+                      value={toCountrySelectValue(guidedForm.destination)}
+                      onValueChange={(value) => updateGuidedFormField("destination", value === "unknown" ? "" : value)}
+                    >
+                      <SelectTrigger className="h-9 bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COUNTRY_SELECT_OPTIONS.map((country) => (
+                          <SelectItem key={`destination-${country.value}`} value={country.value}>
+                            {country.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-1 md:col-span-2">
@@ -982,12 +1077,22 @@ export default function Copilote() {
 
                   <div className="space-y-1">
                     <Label className="text-xs">Incoterm (optionnel)</Label>
-                    <Input
-                      value={guidedForm.incoterm}
-                      onChange={(e) => updateGuidedFormField("incoterm", e.target.value)}
-                      placeholder="EXW, FCA, FOB..."
-                      className="h-9 bg-white"
-                    />
+                    <Select
+                      value={guidedForm.incoterm || "unknown"}
+                      onValueChange={(value) => updateGuidedFormField("incoterm", value === "unknown" ? "" : value)}
+                    >
+                      <SelectTrigger className="h-9 bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unknown">Je ne sais pas</SelectItem>
+                        {INCOTERM_SELECT_OPTIONS.filter((item) => item !== "unknown").map((incoterm) => (
+                          <SelectItem key={incoterm} value={incoterm}>
+                            {incoterm}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-1">
@@ -1026,7 +1131,7 @@ export default function Copilote() {
                 ref={inputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="Ecrivez votre question export ici..."
+                placeholder="Écrivez votre question export ici..."
                 className="min-h-[96px] flex-1 resize-none"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -1042,7 +1147,7 @@ export default function Copilote() {
               </Button>
             </div>
 
-            <p className="text-[11px] text-slate-500">Entree = envoyer, Shift+Entree = nouvelle ligne.</p>
+            <p className="text-[11px] text-slate-500">Entrée = envoyer, Shift+Entrée = nouvelle ligne.</p>
           </CardContent>
         </Card>
       </main>

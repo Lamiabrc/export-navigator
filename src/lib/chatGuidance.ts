@@ -139,8 +139,8 @@ function formatObjective(params: {
   country: string | null;
 }) {
   const flowLabel = params.flow === "export" ? "export" : params.flow === "import" ? "import" : "operation internationale";
-  const productLabel = params.product || (params.hs ? `produit HS ${params.hs}` : "produit a preciser");
-  const destinationLabel = params.country ? `vers ${params.country}` : "destination a confirmer";
+  const productLabel = params.product || (params.hs ? `produit HS ${params.hs}` : "produit à préciser");
+  const destinationLabel = params.country ? `vers ${params.country}` : "destination à confirmer";
   return `${flowLabel} ${productLabel} (${destinationLabel})`;
 }
 
@@ -154,8 +154,8 @@ export function buildGuidedFallback(question: string): GuidedFallback {
 
   const countryQuestion = "Quel est le pays de destination exact (et pays de transit si applicable) ?";
   const productQuestion = "Quel est le produit exact (nom commercial + composition/usage) ?";
-  const hsQuestion = "Avez-vous deja un code HS (6 ou 8 chiffres) ?";
-  const incotermQuestion = "Quel Incoterm est prevu (EXW, FCA, FOB, CIF, DAP, DDP...) ?";
+  const hsQuestion = "Avez-vous déjà un code HS (6 ou 8 chiffres) ?";
+  const incotermQuestion = "Quel Incoterm est prévu (EXW, FCA, FOB, CIF, DAP, DDP...) ?";
   const transportQuestion = "Quel est le mode de transport et la valeur approximative de l'envoi ?";
   const paymentQuestion = "Quel mode de paiement client est prevu (avance, CAD, credoc, OA) ?";
 
@@ -187,10 +187,10 @@ export function buildGuidedFallback(question: string): GuidedFallback {
 
   const summary = uniqueList([
     `Contexte pris en compte: ${objective}.`,
-    country ? `Pays detecte: ${country}.` : "Pays non detecte: sans destination, les regles TVA/douane restent indicatives.",
+    country ? `Pays détecté: ${country}.` : "Pays non détecté: sans destination, les règles restent indicatives.",
     product || hs
-      ? `Produit detecte: ${product || `HS ${hs}`}.`
-      : "Produit non detecte: la classification HS reste a confirmer.",
+      ? `Produit détecté: ${product || `HS ${hs}`}.`
+      : "Produit non détecté: la classification HS reste à confirmer.",
   ]).slice(0, 3);
 
   const checklist = [
@@ -211,20 +211,20 @@ export function buildGuidedFallback(question: string): GuidedFallback {
   ]).slice(0, 4);
 
   const actions = uniqueList([
-    firstQuestion ? `Repondez d'abord: ${firstQuestion}` : "",
+    firstQuestion ? `Répondez d'abord: ${firstQuestion}` : "",
     extraQuestions[0] ? `Puis: ${extraQuestions[0]}` : "",
     extraQuestions[1] ? `Ensuite: ${extraQuestions[1]}` : "",
-    "Des reception des infos, je fournis checklist documentaire + risques + prochaines actions.",
+    "Dès réception des infos, je fournis une réponse exploitable (checklist, risques, actions).",
   ]).slice(0, 4);
 
   const answer = [
     `Demande comprise: ${objective}.`,
     country
-      ? `Decision provisoire: sous conditions. Priorite douane/Incoterm puis classification HS pour ${country}.`
-      : "Decision provisoire: sous conditions. Donnez d'abord le pays destination pour fiabiliser la reponse.",
+      ? `Décision provisoire: sous conditions.`
+      : "Décision provisoire: sous conditions.",
     `Question prioritaire: ${firstQuestion}`,
-    extraQuestions.length ? `Puis:\n- ${extraQuestions.join("\n- ")}` : null,
-    isGlobalIntent ? "Option: activez la veille pays si vous suivez le marche mondial du produit." : null,
+    extraQuestions.length ? `Puis: ${extraQuestions[0]}` : null,
+    isGlobalIntent ? "Option: activez la veille pays pour le suivi marché." : null,
   ]
     .filter(Boolean)
     .join("\n\n");

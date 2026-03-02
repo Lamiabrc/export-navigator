@@ -1232,7 +1232,7 @@ function buildDossier(params: {
 }
 
 function checklistLineForCheck(status: CheckStatus, label: string) {
-  const marker = status === "OK" ? "[OK]" : status === "A_CONFIRMER" ? "[A confirmer]" : status === "MANQUANT" ? "[Manquant]" : "[KO]";
+  const marker = status === "OK" ? "[OK]" : status === "A_CONFIRMER" ? "[À confirmer]" : status === "MANQUANT" ? "[Manquant]" : "[KO]";
   return `- ${marker} ${label}`;
 }
 
@@ -1248,11 +1248,12 @@ function buildAnswerMarkdown(params: {
   packUpsellAction?: string | null;
 }) {
   const sorted = sortChecks(params.checks);
+
   const missing = sorted
     .filter((check) => check.status === "KO" || check.status === "MANQUANT" || check.status === "A_CONFIRMER")
     .map((check) => {
-      const prefix = check.status === "KO" || check.status === "MANQUANT" ? "⛔" : "⚠️";
-      return `${prefix} ${check.label}: ${check.what_to_fix}`;
+      const prefix = check.status === "KO" || check.status === "MANQUANT" ? "[Bloquant]" : "[À confirmer]";
+      return `- ${prefix} ${check.label}: ${check.what_to_fix}`;
     })
     .slice(0, 3);
 
@@ -1283,31 +1284,37 @@ function buildAnswerMarkdown(params: {
       ? "What is the destination country?"
       : "Quel est le pays de destination ?");
 
+  const fr = params.lang !== "en";
+  const decisionLabel = fr ? "Décision" : "Decision";
+  const missingLabel = fr ? "Ce qu'il manque (max 3)" : "Missing items (max 3)";
+  const checklistLabel = "Checklist (max 5)";
+  const risksLabel = fr ? "Risques (max 3)" : "Risks (max 3)";
+  const actionsLabel = "Actions (max 3)";
+  const questionLabel = fr ? "Question prioritaire" : "Priority question";
+
   return [
-    `## ${params.lang === "en" ? "Decision" : "Decision"}`,
-    `- ${params.decision.status}: ${params.decision.reason}`,
+    `${decisionLabel}: ${params.decision.status} - ${params.decision.reason}`,
     "",
-    `## ${params.lang === "en" ? "Missing items (max 3)" : "Ce qu'il manque (max 3)"}`,
+    `${missingLabel}:`,
     ...(missing.length
-      ? missing.map((item) => `- ${item}`)
-      : [params.lang === "en" ? "- ✅ Nothing critical missing." : "- ✅ Rien de critique ne manque."]),
+      ? missing
+      : [params.lang === "en" ? "- [OK] Nothing critical missing." : "- [OK] Rien de critique ne manque."]),
     "",
-    `## ${params.lang === "en" ? "Checklist (max 5)" : "Checklist (max 5)"}`,
-    ...(checklist.length ? checklist : [params.lang === "en" ? "- [OK] Base checks passed." : "- [OK] Verifications de base passees."]),
+    `${checklistLabel}:`,
+    ...(checklist.length ? checklist : [params.lang === "en" ? "- [OK] Base checks passed." : "- [OK] Vérifications de base passées."]),
     "",
-    `## ${params.lang === "en" ? "Risks (max 3)" : "Risques (max 3)"}`,
+    `${risksLabel}:`,
     ...(risks.length
       ? risks
-      : [params.lang === "en" ? "- No major risk flagged with current data." : "- Aucun risque majeur avec les donnees actuelles."]),
+      : [params.lang === "en" ? "- No major risk flagged with current data." : "- Aucun risque majeur avec les données actuelles."]),
     "",
-    `## ${params.lang === "en" ? "Actions (max 3)" : "Actions (max 3)"}`,
-    ...(actions.length ? actions : [params.lang === "en" ? "- Complete one missing field to refine." : "- Completer un champ manquant pour affiner."]),
+    `${actionsLabel}:`,
+    ...(actions.length ? actions : [params.lang === "en" ? "- Complete one missing field to refine." : "- Compléter un champ manquant pour affiner."]),
     "",
-    `## ${params.lang === "en" ? "Priority question" : "Question prioritaire"}`,
+    `${questionLabel}:`,
     `- ${priorityQuestion}`,
   ].join("\n");
 }
-
 function getBearerToken(req: VercelRequest) {
   const header = String(req.headers.authorization || "");
   const match = header.match(/^Bearer\s+(.+)$/i);
@@ -1575,3 +1582,4 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
 }
 
 export default allowCors(chatHandler);
+
