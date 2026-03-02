@@ -1,4 +1,4 @@
-﻿-- Go/No-Go + RAG + retention (2026-02-11)
+-- Go/No-Go + RAG + retention (2026-02-11)
 
 create extension if not exists "pgcrypto";
 create extension if not exists "vector";
@@ -188,24 +188,32 @@ drop policy if exists "kb_documents_admin_insert" on public.kb_documents;
 drop policy if exists "kb_documents_admin_update" on public.kb_documents;
 drop policy if exists "kb_documents_admin_delete" on public.kb_documents;
 
+drop policy if exists "kb_documents_admin_select" on public.kb_documents;
 create policy "kb_documents_admin_select" on public.kb_documents
   for select using (public.is_admin() or auth.role() = 'service_role');
+drop policy if exists "kb_documents_admin_insert" on public.kb_documents;
 create policy "kb_documents_admin_insert" on public.kb_documents
   for insert with check (public.is_admin() or auth.role() = 'service_role');
+drop policy if exists "kb_documents_admin_update" on public.kb_documents;
 create policy "kb_documents_admin_update" on public.kb_documents
   for update using (public.is_admin() or auth.role() = 'service_role')
   with check (public.is_admin() or auth.role() = 'service_role');
+drop policy if exists "kb_documents_admin_delete" on public.kb_documents;
 create policy "kb_documents_admin_delete" on public.kb_documents
   for delete using (public.is_admin() or auth.role() = 'service_role');
 
 -- Admin-only RLS for kb_chunks
+drop policy if exists "kb_chunks_admin_select" on public.kb_chunks;
 create policy "kb_chunks_admin_select" on public.kb_chunks
   for select using (public.is_admin() or auth.role() = 'service_role');
+drop policy if exists "kb_chunks_admin_insert" on public.kb_chunks;
 create policy "kb_chunks_admin_insert" on public.kb_chunks
   for insert with check (public.is_admin() or auth.role() = 'service_role');
+drop policy if exists "kb_chunks_admin_update" on public.kb_chunks;
 create policy "kb_chunks_admin_update" on public.kb_chunks
   for update using (public.is_admin() or auth.role() = 'service_role')
   with check (public.is_admin() or auth.role() = 'service_role');
+drop policy if exists "kb_chunks_admin_delete" on public.kb_chunks;
 create policy "kb_chunks_admin_delete" on public.kb_chunks
   for delete using (public.is_admin() or auth.role() = 'service_role');
 

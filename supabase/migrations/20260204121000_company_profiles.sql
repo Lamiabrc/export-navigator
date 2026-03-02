@@ -14,6 +14,7 @@ create table if not exists company_profiles (
 
 alter table company_profiles enable row level security;
 
+drop policy if exists "company_profiles_owner" on company_profiles;
 create policy "company_profiles_owner" on company_profiles
   for all
   using (auth.role() = 'service_role' OR auth.uid() = user_id)

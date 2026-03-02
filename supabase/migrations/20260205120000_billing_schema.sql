@@ -46,19 +46,23 @@ alter table public.billing_customers enable row level security;
 alter table public.billing_subscriptions enable row level security;
 
 -- Customers: owner can read/update. Inserts are handled by service role only.
+drop policy if exists "billing_customers_owner_read" on public.billing_customers;
 create policy "billing_customers_owner_read"
   on public.billing_customers for select
   using (auth.uid() = user_id);
 
+drop policy if exists "billing_customers_owner_insert" on public.billing_customers;
 create policy "billing_customers_owner_insert"
   on public.billing_customers for insert
   with check (auth.uid() = user_id);
 
+drop policy if exists "billing_customers_owner_update" on public.billing_customers;
 create policy "billing_customers_owner_update"
   on public.billing_customers for update
   using (auth.uid() = user_id);
 
 -- Subscriptions: owner can read. Updates via service role (no client update policy).
+drop policy if exists "billing_subscriptions_owner_read" on public.billing_subscriptions;
 create policy "billing_subscriptions_owner_read"
   on public.billing_subscriptions for select
   using (auth.uid() = user_id);

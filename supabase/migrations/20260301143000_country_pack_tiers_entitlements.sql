@@ -1,4 +1,4 @@
-﻿-- Offer tiers for watch access: base (FR+EU), free OECD packs, paid non-OECD packs.
+-- Offer tiers for watch access: base (FR+EU), free OECD packs, paid non-OECD packs.
 -- Date: 2026-03-01
 
 create extension if not exists pgcrypto;
@@ -77,7 +77,8 @@ begin
       and tablename = 'user_entitlements'
       and policyname = 'user_entitlements_read_own'
   ) then
-    create policy user_entitlements_read_own
+    drop policy if exists user_entitlements_read_own on public.user_entitlements;
+create policy user_entitlements_read_own
       on public.user_entitlements
       for select
       to authenticated
@@ -90,7 +91,8 @@ begin
       and tablename = 'user_entitlements'
       and policyname = 'user_entitlements_service_write'
   ) then
-    create policy user_entitlements_service_write
+    drop policy if exists user_entitlements_service_write on public.user_entitlements;
+create policy user_entitlements_service_write
       on public.user_entitlements
       for all
       to service_role

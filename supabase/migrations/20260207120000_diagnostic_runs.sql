@@ -17,6 +17,7 @@ create index if not exists user_consents_user_id_idx on user_consents(user_id);
 
 alter table user_consents enable row level security;
 
+drop policy if exists "user_consents_owner" on user_consents;
 create policy "user_consents_owner" on user_consents
   for all
   using (auth.role() = 'service_role' OR auth.uid() = user_id)
@@ -45,6 +46,7 @@ create index if not exists diagnostic_runs_created_at_idx on diagnostic_runs(cre
 
 alter table diagnostic_runs enable row level security;
 
+drop policy if exists "diagnostic_runs_owner" on diagnostic_runs;
 create policy "diagnostic_runs_owner" on diagnostic_runs
   for all
   using (auth.role() = 'service_role' OR auth.uid() = user_id)

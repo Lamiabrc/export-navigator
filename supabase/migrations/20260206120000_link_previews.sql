@@ -18,6 +18,7 @@ create trigger link_previews_updated_at
 
 alter table public.link_previews enable row level security;
 
+drop policy if exists "link_previews_service_role" on public.link_previews;
 create policy "link_previews_service_role"
   on public.link_previews for all
   using (auth.role() = 'service_role');

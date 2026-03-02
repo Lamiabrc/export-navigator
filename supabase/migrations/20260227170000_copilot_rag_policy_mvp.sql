@@ -153,44 +153,56 @@ alter table public.sanctions_entities enable row level security;
 do $$
 begin
   execute 'drop policy if exists territories_read_all on public.territories';
-  execute 'create policy territories_read_all on public.territories for select to anon, authenticated using (true)';
+  execute 'drop policy if exists territories_read_all on public.territories;
+create policy territories_read_all on public.territories for select to anon, authenticated using (true)';
 
   execute 'drop policy if exists product_aliases_read_all on public.product_aliases';
-  execute 'create policy product_aliases_read_all on public.product_aliases for select to anon, authenticated using (true)';
+  execute 'drop policy if exists product_aliases_read_all on public.product_aliases;
+create policy product_aliases_read_all on public.product_aliases for select to anon, authenticated using (true)';
 
   execute 'drop policy if exists hs_rules_read_all on public.hs_rules';
-  execute 'create policy hs_rules_read_all on public.hs_rules for select to anon, authenticated using (true)';
+  execute 'drop policy if exists hs_rules_read_all on public.hs_rules;
+create policy hs_rules_read_all on public.hs_rules for select to anon, authenticated using (true)';
 
   execute 'drop policy if exists country_rules_read_all on public.country_rules';
-  execute 'create policy country_rules_read_all on public.country_rules for select to anon, authenticated using (true)';
+  execute 'drop policy if exists country_rules_read_all on public.country_rules;
+create policy country_rules_read_all on public.country_rules for select to anon, authenticated using (true)';
 
   execute 'drop policy if exists sanctions_sources_read_all on public.sanctions_sources';
-  execute 'create policy sanctions_sources_read_all on public.sanctions_sources for select to anon, authenticated using (true)';
+  execute 'drop policy if exists sanctions_sources_read_all on public.sanctions_sources;
+create policy sanctions_sources_read_all on public.sanctions_sources for select to anon, authenticated using (true)';
 
   execute 'drop policy if exists sanctions_entities_read_all on public.sanctions_entities';
-  execute 'create policy sanctions_entities_read_all on public.sanctions_entities for select to anon, authenticated using (true)';
+  execute 'drop policy if exists sanctions_entities_read_all on public.sanctions_entities;
+create policy sanctions_entities_read_all on public.sanctions_entities for select to anon, authenticated using (true)';
 end $$;
 
 -- service write policies
 do $$
 begin
   execute 'drop policy if exists territories_write_service on public.territories';
-  execute 'create policy territories_write_service on public.territories for all to service_role using (true) with check (true)';
+  execute 'drop policy if exists territories_write_service on public.territories;
+create policy territories_write_service on public.territories for all to service_role using (true) with check (true)';
 
   execute 'drop policy if exists product_aliases_write_service on public.product_aliases';
-  execute 'create policy product_aliases_write_service on public.product_aliases for all to service_role using (true) with check (true)';
+  execute 'drop policy if exists product_aliases_write_service on public.product_aliases;
+create policy product_aliases_write_service on public.product_aliases for all to service_role using (true) with check (true)';
 
   execute 'drop policy if exists hs_rules_write_service on public.hs_rules';
-  execute 'create policy hs_rules_write_service on public.hs_rules for all to service_role using (true) with check (true)';
+  execute 'drop policy if exists hs_rules_write_service on public.hs_rules;
+create policy hs_rules_write_service on public.hs_rules for all to service_role using (true) with check (true)';
 
   execute 'drop policy if exists country_rules_write_service on public.country_rules';
-  execute 'create policy country_rules_write_service on public.country_rules for all to service_role using (true) with check (true)';
+  execute 'drop policy if exists country_rules_write_service on public.country_rules;
+create policy country_rules_write_service on public.country_rules for all to service_role using (true) with check (true)';
 
   execute 'drop policy if exists sanctions_sources_write_service on public.sanctions_sources';
-  execute 'create policy sanctions_sources_write_service on public.sanctions_sources for all to service_role using (true) with check (true)';
+  execute 'drop policy if exists sanctions_sources_write_service on public.sanctions_sources;
+create policy sanctions_sources_write_service on public.sanctions_sources for all to service_role using (true) with check (true)';
 
   execute 'drop policy if exists sanctions_entities_write_service on public.sanctions_entities';
-  execute 'create policy sanctions_entities_write_service on public.sanctions_entities for all to service_role using (true) with check (true)';
+  execute 'drop policy if exists sanctions_entities_write_service on public.sanctions_entities;
+create policy sanctions_entities_write_service on public.sanctions_entities for all to service_role using (true) with check (true)';
 end $$;
 
 grant select on public.territories to anon, authenticated;

@@ -99,14 +99,16 @@ begin
       and p.proname = 'is_admin'
   ) then
     execute $sql$
-      create policy lead_select_admin_only
+      drop policy if exists lead_select_admin_only on public.lead;
+create policy lead_select_admin_only
         on public.lead
         for select
         using (public.is_admin() or auth.role() = 'service_role')
     $sql$;
   else
     execute $sql$
-      create policy lead_select_admin_only
+      drop policy if exists lead_select_admin_only on public.lead;
+create policy lead_select_admin_only
         on public.lead
         for select
         using (auth.role() = 'service_role')

@@ -1,4 +1,4 @@
-﻿-- Fix SECURITY DEFINER views flagged by Supabase linter
+-- Fix SECURITY DEFINER views flagged by Supabase linter
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_views WHERE schemaname = 'public' AND viewname = 'mpl_alerts') THEN
@@ -19,12 +19,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'countries' AND policyname = 'rls_fix_countries_select_public'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_countries_select_public" ON public.countries FOR SELECT USING (true)';
+      EXECUTE 'drop policy if exists "rls_fix_countries_select_public" on public.countries;
+CREATE POLICY "rls_fix_countries_select_public" ON public.countries FOR SELECT USING (true)';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'countries' AND policyname = 'rls_fix_countries_write_admin'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_countries_write_admin" ON public.countries FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_countries_write_admin" on public.countries;
+CREATE POLICY "rls_fix_countries_write_admin" ON public.countries FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -33,12 +35,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'destinations' AND policyname = 'rls_fix_destinations_select_public'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_destinations_select_public" ON public.destinations FOR SELECT USING (true)';
+      EXECUTE 'drop policy if exists "rls_fix_destinations_select_public" on public.destinations;
+CREATE POLICY "rls_fix_destinations_select_public" ON public.destinations FOR SELECT USING (true)';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'destinations' AND policyname = 'rls_fix_destinations_write_admin'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_destinations_write_admin" ON public.destinations FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_destinations_write_admin" on public.destinations;
+CREATE POLICY "rls_fix_destinations_write_admin" ON public.destinations FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -47,12 +51,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'hs_chapters' AND policyname = 'rls_fix_hs_chapters_select_public'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_hs_chapters_select_public" ON public.hs_chapters FOR SELECT USING (true)';
+      EXECUTE 'drop policy if exists "rls_fix_hs_chapters_select_public" on public.hs_chapters;
+CREATE POLICY "rls_fix_hs_chapters_select_public" ON public.hs_chapters FOR SELECT USING (true)';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'hs_chapters' AND policyname = 'rls_fix_hs_chapters_write_admin'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_hs_chapters_write_admin" ON public.hs_chapters FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_hs_chapters_write_admin" on public.hs_chapters;
+CREATE POLICY "rls_fix_hs_chapters_write_admin" ON public.hs_chapters FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -61,12 +67,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'sectors' AND policyname = 'rls_fix_sectors_select_public'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_sectors_select_public" ON public.sectors FOR SELECT USING (true)';
+      EXECUTE 'drop policy if exists "rls_fix_sectors_select_public" on public.sectors;
+CREATE POLICY "rls_fix_sectors_select_public" ON public.sectors FOR SELECT USING (true)';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'sectors' AND policyname = 'rls_fix_sectors_write_admin'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_sectors_write_admin" ON public.sectors FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_sectors_write_admin" on public.sectors;
+CREATE POLICY "rls_fix_sectors_write_admin" ON public.sectors FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -76,12 +84,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'clients' AND policyname = 'rls_fix_clients_select_auth'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_clients_select_auth" ON public.clients FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
+      EXECUTE 'drop policy if exists "rls_fix_clients_select_auth" on public.clients;
+CREATE POLICY "rls_fix_clients_select_auth" ON public.clients FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'clients' AND policyname = 'rls_fix_clients_write_auth'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_clients_write_auth" ON public.clients FOR ALL USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin()) WITH CHECK (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
+      EXECUTE 'drop policy if exists "rls_fix_clients_write_auth" on public.clients;
+CREATE POLICY "rls_fix_clients_write_auth" ON public.clients FOR ALL USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin()) WITH CHECK (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
     END IF;
   END IF;
 
@@ -90,12 +100,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'products' AND policyname = 'rls_fix_products_select_auth'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_products_select_auth" ON public.products FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
+      EXECUTE 'drop policy if exists "rls_fix_products_select_auth" on public.products;
+CREATE POLICY "rls_fix_products_select_auth" ON public.products FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'products' AND policyname = 'rls_fix_products_write_auth'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_products_write_auth" ON public.products FOR ALL USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin()) WITH CHECK (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
+      EXECUTE 'drop policy if exists "rls_fix_products_write_auth" on public.products;
+CREATE POLICY "rls_fix_products_write_auth" ON public.products FOR ALL USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin()) WITH CHECK (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
     END IF;
   END IF;
 
@@ -104,12 +116,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'sales' AND policyname = 'rls_fix_sales_select_auth'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_sales_select_auth" ON public.sales FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
+      EXECUTE 'drop policy if exists "rls_fix_sales_select_auth" on public.sales;
+CREATE POLICY "rls_fix_sales_select_auth" ON public.sales FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'sales' AND policyname = 'rls_fix_sales_write_auth'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_sales_write_auth" ON public.sales FOR ALL USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin()) WITH CHECK (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
+      EXECUTE 'drop policy if exists "rls_fix_sales_write_auth" on public.sales;
+CREATE POLICY "rls_fix_sales_write_auth" ON public.sales FOR ALL USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin()) WITH CHECK (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
     END IF;
   END IF;
 
@@ -118,12 +132,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'sales_invoices' AND policyname = 'rls_fix_sales_invoices_select_auth'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_sales_invoices_select_auth" ON public.sales_invoices FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
+      EXECUTE 'drop policy if exists "rls_fix_sales_invoices_select_auth" on public.sales_invoices;
+CREATE POLICY "rls_fix_sales_invoices_select_auth" ON public.sales_invoices FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'sales_invoices' AND policyname = 'rls_fix_sales_invoices_write_auth'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_sales_invoices_write_auth" ON public.sales_invoices FOR ALL USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin()) WITH CHECK (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
+      EXECUTE 'drop policy if exists "rls_fix_sales_invoices_write_auth" on public.sales_invoices;
+CREATE POLICY "rls_fix_sales_invoices_write_auth" ON public.sales_invoices FOR ALL USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin()) WITH CHECK (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
     END IF;
   END IF;
 
@@ -133,12 +149,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'vat_rates' AND policyname = 'rls_fix_vat_rates_select_auth'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_vat_rates_select_auth" ON public.vat_rates FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
+      EXECUTE 'drop policy if exists "rls_fix_vat_rates_select_auth" on public.vat_rates;
+CREATE POLICY "rls_fix_vat_rates_select_auth" ON public.vat_rates FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'vat_rates' AND policyname = 'rls_fix_vat_rates_write_admin'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_vat_rates_write_admin" ON public.vat_rates FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_vat_rates_write_admin" on public.vat_rates;
+CREATE POLICY "rls_fix_vat_rates_write_admin" ON public.vat_rates FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -147,12 +165,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'tax_rules_extra' AND policyname = 'rls_fix_tax_rules_extra_select_auth'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_tax_rules_extra_select_auth" ON public.tax_rules_extra FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
+      EXECUTE 'drop policy if exists "rls_fix_tax_rules_extra_select_auth" on public.tax_rules_extra;
+CREATE POLICY "rls_fix_tax_rules_extra_select_auth" ON public.tax_rules_extra FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'tax_rules_extra' AND policyname = 'rls_fix_tax_rules_extra_write_admin'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_tax_rules_extra_write_admin" ON public.tax_rules_extra FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_tax_rules_extra_write_admin" on public.tax_rules_extra;
+CREATE POLICY "rls_fix_tax_rules_extra_write_admin" ON public.tax_rules_extra FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -161,12 +181,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'transport_rate_lines' AND policyname = 'rls_fix_transport_rate_lines_select_auth'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_transport_rate_lines_select_auth" ON public.transport_rate_lines FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
+      EXECUTE 'drop policy if exists "rls_fix_transport_rate_lines_select_auth" on public.transport_rate_lines;
+CREATE POLICY "rls_fix_transport_rate_lines_select_auth" ON public.transport_rate_lines FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'transport_rate_lines' AND policyname = 'rls_fix_transport_rate_lines_write_admin'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_transport_rate_lines_write_admin" ON public.transport_rate_lines FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_transport_rate_lines_write_admin" on public.transport_rate_lines;
+CREATE POLICY "rls_fix_transport_rate_lines_write_admin" ON public.transport_rate_lines FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -175,12 +197,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'pricing_coefficients' AND policyname = 'rls_fix_pricing_coefficients_select_auth'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_pricing_coefficients_select_auth" ON public.pricing_coefficients FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
+      EXECUTE 'drop policy if exists "rls_fix_pricing_coefficients_select_auth" on public.pricing_coefficients;
+CREATE POLICY "rls_fix_pricing_coefficients_select_auth" ON public.pricing_coefficients FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'pricing_coefficients' AND policyname = 'rls_fix_pricing_coefficients_write_admin'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_pricing_coefficients_write_admin" ON public.pricing_coefficients FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_pricing_coefficients_write_admin" on public.pricing_coefficients;
+CREATE POLICY "rls_fix_pricing_coefficients_write_admin" ON public.pricing_coefficients FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -189,12 +213,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'trade_flows' AND policyname = 'rls_fix_trade_flows_select_auth'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_trade_flows_select_auth" ON public.trade_flows FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
+      EXECUTE 'drop policy if exists "rls_fix_trade_flows_select_auth" on public.trade_flows;
+CREATE POLICY "rls_fix_trade_flows_select_auth" ON public.trade_flows FOR SELECT USING (auth.role() = ''authenticated'' OR auth.role() = ''service_role'' OR public.is_admin())';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'trade_flows' AND policyname = 'rls_fix_trade_flows_write_admin'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_trade_flows_write_admin" ON public.trade_flows FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_trade_flows_write_admin" on public.trade_flows;
+CREATE POLICY "rls_fix_trade_flows_write_admin" ON public.trade_flows FOR ALL USING (public.is_admin() OR auth.role() = ''service_role'') WITH CHECK (public.is_admin() OR auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -204,12 +230,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'watch_sources' AND policyname = 'rls_fix_watch_sources_select_admin'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_watch_sources_select_admin" ON public.watch_sources FOR SELECT USING (public.is_admin() OR auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_watch_sources_select_admin" on public.watch_sources;
+CREATE POLICY "rls_fix_watch_sources_select_admin" ON public.watch_sources FOR SELECT USING (public.is_admin() OR auth.role() = ''service_role'')';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'watch_sources' AND policyname = 'rls_fix_watch_sources_write_service'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_watch_sources_write_service" ON public.watch_sources FOR ALL USING (auth.role() = ''service_role'') WITH CHECK (auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_watch_sources_write_service" on public.watch_sources;
+CREATE POLICY "rls_fix_watch_sources_write_service" ON public.watch_sources FOR ALL USING (auth.role() = ''service_role'') WITH CHECK (auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -218,12 +246,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'watch_items' AND policyname = 'rls_fix_watch_items_select_admin'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_watch_items_select_admin" ON public.watch_items FOR SELECT USING (public.is_admin() OR auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_watch_items_select_admin" on public.watch_items;
+CREATE POLICY "rls_fix_watch_items_select_admin" ON public.watch_items FOR SELECT USING (public.is_admin() OR auth.role() = ''service_role'')';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'watch_items' AND policyname = 'rls_fix_watch_items_write_service'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_watch_items_write_service" ON public.watch_items FOR ALL USING (auth.role() = ''service_role'') WITH CHECK (auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_watch_items_write_service" on public.watch_items;
+CREATE POLICY "rls_fix_watch_items_write_service" ON public.watch_items FOR ALL USING (auth.role() = ''service_role'') WITH CHECK (auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -232,12 +262,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'watch_digests' AND policyname = 'rls_fix_watch_digests_select_owner'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_watch_digests_select_owner" ON public.watch_digests FOR SELECT USING (auth.role() = ''service_role'' OR auth.uid() = user_id)';
+      EXECUTE 'drop policy if exists "rls_fix_watch_digests_select_owner" on public.watch_digests;
+CREATE POLICY "rls_fix_watch_digests_select_owner" ON public.watch_digests FOR SELECT USING (auth.role() = ''service_role'' OR auth.uid() = user_id)';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'watch_digests' AND policyname = 'rls_fix_watch_digests_write_service'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_watch_digests_write_service" ON public.watch_digests FOR ALL USING (auth.role() = ''service_role'') WITH CHECK (auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_watch_digests_write_service" on public.watch_digests;
+CREATE POLICY "rls_fix_watch_digests_write_service" ON public.watch_digests FOR ALL USING (auth.role() = ''service_role'') WITH CHECK (auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -246,12 +278,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'regulatory_feeds' AND policyname = 'rls_fix_regulatory_feeds_select_admin'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_regulatory_feeds_select_admin" ON public.regulatory_feeds FOR SELECT USING (public.is_admin() OR auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_regulatory_feeds_select_admin" on public.regulatory_feeds;
+CREATE POLICY "rls_fix_regulatory_feeds_select_admin" ON public.regulatory_feeds FOR SELECT USING (public.is_admin() OR auth.role() = ''service_role'')';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'regulatory_feeds' AND policyname = 'rls_fix_regulatory_feeds_write_service'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_regulatory_feeds_write_service" ON public.regulatory_feeds FOR ALL USING (auth.role() = ''service_role'') WITH CHECK (auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_regulatory_feeds_write_service" on public.regulatory_feeds;
+CREATE POLICY "rls_fix_regulatory_feeds_write_service" ON public.regulatory_feeds FOR ALL USING (auth.role() = ''service_role'') WITH CHECK (auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -260,12 +294,14 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'regulatory_items' AND policyname = 'rls_fix_regulatory_items_select_admin'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_regulatory_items_select_admin" ON public.regulatory_items FOR SELECT USING (public.is_admin() OR auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_regulatory_items_select_admin" on public.regulatory_items;
+CREATE POLICY "rls_fix_regulatory_items_select_admin" ON public.regulatory_items FOR SELECT USING (public.is_admin() OR auth.role() = ''service_role'')';
     END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'regulatory_items' AND policyname = 'rls_fix_regulatory_items_write_service'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_regulatory_items_write_service" ON public.regulatory_items FOR ALL USING (auth.role() = ''service_role'') WITH CHECK (auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_regulatory_items_write_service" on public.regulatory_items;
+CREATE POLICY "rls_fix_regulatory_items_write_service" ON public.regulatory_items FOR ALL USING (auth.role() = ''service_role'') WITH CHECK (auth.role() = ''service_role'')';
     END IF;
   END IF;
 
@@ -274,7 +310,8 @@ BEGIN
     IF NOT EXISTS (
       SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'link_previews' AND policyname = 'rls_fix_link_previews_write_service'
     ) THEN
-      EXECUTE 'CREATE POLICY "rls_fix_link_previews_write_service" ON public.link_previews FOR ALL USING (auth.role() = ''service_role'') WITH CHECK (auth.role() = ''service_role'')';
+      EXECUTE 'drop policy if exists "rls_fix_link_previews_write_service" on public.link_previews;
+CREATE POLICY "rls_fix_link_previews_write_service" ON public.link_previews FOR ALL USING (auth.role() = ''service_role'') WITH CHECK (auth.role() = ''service_role'')';
     END IF;
   END IF;
 END $$;

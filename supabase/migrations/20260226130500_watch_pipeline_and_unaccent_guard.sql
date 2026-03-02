@@ -191,7 +191,8 @@ begin
       and tablename = 'feed_fetch_logs'
       and policyname = 'feed_fetch_logs_service_role'
   ) then
-    create policy feed_fetch_logs_service_role
+    drop policy if exists feed_fetch_logs_service_role on public.feed_fetch_logs;
+create policy feed_fetch_logs_service_role
       on public.feed_fetch_logs
       for all
       using (auth.role() = 'service_role')
