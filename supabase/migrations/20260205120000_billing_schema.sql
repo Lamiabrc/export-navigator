@@ -33,10 +33,12 @@ create table if not exists public.billing_subscriptions (
 create index if not exists billing_customers_user_id_idx on public.billing_customers(user_id);
 create index if not exists billing_subscriptions_user_id_idx on public.billing_subscriptions(user_id);
 
+drop trigger if exists billing_customers_updated_at on public.billing_customers;
 create trigger billing_customers_updated_at
   before update on public.billing_customers
   for each row execute function public.set_updated_at();
 
+drop trigger if exists billing_subscriptions_updated_at on public.billing_subscriptions;
 create trigger billing_subscriptions_updated_at
   before update on public.billing_subscriptions
   for each row execute function public.set_updated_at();

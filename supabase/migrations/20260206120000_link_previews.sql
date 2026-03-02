@@ -12,6 +12,7 @@ create table if not exists public.link_previews (
 create unique index if not exists link_previews_url_hash_idx on public.link_previews(url_hash);
 create index if not exists link_previews_updated_at_idx on public.link_previews(updated_at);
 
+drop trigger if exists link_previews_updated_at on public.link_previews;
 create trigger link_previews_updated_at
   before update on public.link_previews
   for each row execute function public.set_updated_at();
