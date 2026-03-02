@@ -213,7 +213,6 @@ create policy "Utilisateurs voient leurs propres prefs"
   using (auth.uid() = user_id);
 
 drop policy if exists "Utilisateurs peuvent creer leurs prefs" on public.watch_prefs;
-drop policy if exists "Utilisateurs peuvent créer leurs prefs" on public.watch_prefs;
 create policy "Utilisateurs peuvent creer leurs prefs"
   on public.watch_prefs for insert
   with check (auth.uid() = user_id);
