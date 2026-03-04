@@ -52,7 +52,7 @@ export function VideoBanner({ isEn }: Props) {
   return (
     <section className="w-full">
       <div className="w-full overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 shadow-sm">
-        <div className="relative h-[220px] w-full max-h-[260px] sm:h-[240px] lg:h-[320px]">
+        <div className="relative h-[170px] w-full max-h-[220px] sm:h-[190px] lg:h-[240px]">
           {useImageFallback ? (
             <img
               src="/videos/hero-export.jpg"

@@ -53,8 +53,20 @@ type TerritoryAccess = {
 const PERMANENT_SOURCES: RssSource[] = [
   { name: "Le Moci", url: "https://www.lemoci.com/feed/" },
   { name: "WHO News", url: "https://www.who.int/rss-feeds/news-english.xml" },
+  {
+    name: "Google Alert Export",
+    url: "https://news.google.com/rss/search?q=alerte+export+union+europeenne+douane&hl=fr&gl=FR&ceid=FR:fr",
+  },
   { name: "Douane francaise", url: "https://www.douane.gouv.fr/meteo/prodouane/pages/rss" },
   { name: "UE DG Trade", url: "https://policy.trade.ec.europa.eu/node/2/rss_en" },
+  {
+    name: "EU Sanctions Updates",
+    url: "https://finance.ec.europa.eu/single-market-economy/eu-rules-sanctions/russian-invasion-ukraine_en?format=rss",
+  },
+  {
+    name: "EU Sanctions FAQ",
+    url: "https://finance.ec.europa.eu/single-market-economy/eu-rules-sanctions/russian-invasion-ukraine/sanctions-related-faqs_en?format=rss",
+  },
 ];
 
 const WORLD_SOURCES: RssSource[] = [
