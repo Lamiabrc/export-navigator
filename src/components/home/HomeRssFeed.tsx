@@ -26,6 +26,17 @@ type HomeRssApiPayload = {
   pinned?: string[];
 };
 
+type LinkPreview = {
+  title?: string | null;
+  description?: string | null;
+  imageUrl?: string | null;
+  siteName?: string | null;
+};
+
+type LinkPreviewPayload = {
+  items?: Record<string, LinkPreview>;
+};
+
 const SOURCE_PRIORITY_HINTS = [
   "moci",
   "who",
@@ -173,6 +184,8 @@ function RssArticlePreviewImage({ src, alt, isEn }: { src?: string | null; alt: 
 export function HomeRssFeed({ isEn }: HomeRssFeedProps) {
   const [items, setItems] = React.useState<HomeRssItem[]>([]);
   const [pinnedLabels, setPinnedLabels] = React.useState<string[]>(FALLBACK_PINNED_LABELS);
+  const [linkPreviews, setLinkPreviews] = React.useState<Record<string, LinkPreview>>({});
+  const requestedPreviewLinksRef = React.useRef<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [refreshTick, setRefreshTick] = React.useState(0);
@@ -206,6 +219,8 @@ export function HomeRssFeed({ isEn }: HomeRssFeedProps) {
         const nextPinned = nextPinnedRaw.map((label) => cleanText(label)).filter(Boolean);
 
         setItems(nextItems);
+        setLinkPreviews({});
+        requestedPreviewLinksRef.current = new Set();
         setPinnedLabels(nextPinned);
         setError(null);
       } catch (err) {
@@ -213,6 +228,8 @@ export function HomeRssFeed({ isEn }: HomeRssFeedProps) {
         const anyErr = err as { name?: string; message?: string };
         if (anyErr?.name === "AbortError") return;
         setItems([]);
+        setLinkPreviews({});
+        requestedPreviewLinksRef.current = new Set();
         setPinnedLabels(FALLBACK_PINNED_LABELS);
         setError(
           anyErr?.message ||
@@ -248,6 +265,60 @@ export function HomeRssFeed({ isEn }: HomeRssFeedProps) {
       })
       .slice(0, 9);
   }, [items]);
+
+  React.useEffect(() => {
+    const candidates = prioritizedItems
+      .filter((item) => {
+        const link = safeExternalUrl(item.link);
+        if (!link) return false;
+        if (safeImageUrl(item.imageUrl)) return false;
+        if (requestedPreviewLinksRef.current.has(link)) return false;
+        return !safeImageUrl(linkPreviews[link]?.imageUrl);
+      })
+      .map((item) => safeExternalUrl(item.link))
+      .filter((value): value is string => Boolean(value))
+      .slice(0, 9);
+
+    if (!candidates.length) return;
+
+    const controller = new AbortController();
+    let mounted = true;
+    for (const link of candidates) {
+      requestedPreviewLinksRef.current.add(link);
+    }
+
+    const loadPreviews = async () => {
+      try {
+        const response = await fetch("/api/link-preview", {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            "content-type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ urls: candidates }),
+        });
+
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as LinkPreviewPayload;
+        if (!mounted) return;
+        const incoming = payload?.items || {};
+        if (!Object.keys(incoming).length) return;
+        setLinkPreviews((prev) => ({ ...prev, ...incoming }));
+      } catch (err) {
+        const anyErr = err as { name?: string };
+        if (anyErr?.name === "AbortError") return;
+      }
+    };
+
+    loadPreviews();
+
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [prioritizedItems, linkPreviews]);
 
   const hasItems = prioritizedItems.length > 0;
 
@@ -319,19 +390,30 @@ export function HomeRssFeed({ isEn }: HomeRssFeedProps) {
                 const href = safeExternalUrl(item.link);
                 const source = sourceLabel(item);
                 const publishedLabel = formatDate(item.publishedAt || item.pubDate, isEn);
-                const title = cleanText(item.title || "") || (isEn ? "Article" : "Article");
+                const preview = href ? linkPreviews[href] : undefined;
+                const title =
+                  cleanText(item.title || "") ||
+                  cleanText(preview?.title || "") ||
+                  (isEn ? "Article" : "Article");
+                const image = safeImageUrl(item.imageUrl) || safeImageUrl(preview?.imageUrl || "");
+                const summaryCandidate =
+                  cleanText(preview?.description || "") ||
+                  cleanText(item.summary || item.why_relevant || item.description || "");
+                const summary = summaryCandidate
+                  ? compactText(summaryCandidate, 190)
+                  : previewText(item, isEn);
                 const key = String(item.id || item.link || title || Math.random().toString(36));
 
                 return (
                   <article key={key} className="rounded-xl border border-slate-200 bg-white p-3">
-                    <RssArticlePreviewImage src={item.imageUrl} alt={title} isEn={isEn} />
+                    <RssArticlePreviewImage src={image} alt={title} isEn={isEn} />
 
                     <div className="mt-3 flex min-h-[66px] items-start justify-between gap-2">
                       <h3 className="line-clamp-2 text-sm font-semibold text-slate-900">{title}</h3>
                       {href ? <ExternalLink className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" /> : null}
                     </div>
 
-                    <p className="mt-2 line-clamp-3 text-xs text-slate-600">{previewText(item, isEn)}</p>
+                    <p className="mt-2 line-clamp-3 text-xs text-slate-600">{summary}</p>
 
                     <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                       <Badge variant="outline" className="h-5 px-2 text-[11px]">
