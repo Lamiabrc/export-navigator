@@ -29,10 +29,19 @@ function getBearerToken(req: VercelRequest) {
   return match?.[1]?.trim() || null;
 }
 
+function trySupabaseAdmin() {
+  try {
+    return supabaseAdmin();
+  } catch {
+    return null;
+  }
+}
+
 async function resolveOptionalUserId(req: VercelRequest) {
   const token = getBearerToken(req);
   if (!token) return null;
-  const admin = supabaseAdmin();
+  const admin = trySupabaseAdmin();
+  if (!admin) return null;
   const { data, error } = await admin.auth.getUser(token);
   if (error || !data?.user?.id) return null;
   return String(data.user.id);
@@ -62,7 +71,11 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
         : {};
 
     const userId = await resolveOptionalUserId(req);
-    const admin = supabaseAdmin();
+    const admin = trySupabaseAdmin();
+    if (!admin) {
+      return json(res, 200, { ok: true, ingested: false, reason: "supabase_unavailable" });
+    }
+
     const { error } = await admin.from("chat_events").insert({
       user_id: userId,
       channel,
@@ -75,11 +88,21 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     });
 
     if (error) {
-      return json(res, 500, { ok: false, error: error.message });
+      return json(res, 200, {
+        ok: true,
+        ingested: false,
+        reason: "insert_failed",
+        error: String(error.message || "chat_events_insert_failed"),
+      });
     }
 
-    return json(res, 200, { ok: true });
+    return json(res, 200, { ok: true, ingested: true });
   } catch (err: any) {
-    return json(res, 500, { ok: false, error: err?.message || "chat_ingest_failed" });
+    return json(res, 200, {
+      ok: true,
+      ingested: false,
+      reason: "chat_ingest_failed",
+      error: String(err?.message || "chat_ingest_failed"),
+    });
   }
 });
