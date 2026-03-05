@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Info, MessageCircle, Package, PhoneCall, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, Info, MessageCircle, Package, PhoneCall, Sparkles } from "lucide-react";
 import heroExportVideo from "@/assets/hero-export.mp4";
 import { useI18n } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
@@ -17,10 +17,12 @@ export function ArrivalGuide({ className }: { className?: string }) {
   const navigate = useNavigate();
   const { lang } = useI18n();
   const isFr = lang !== "en";
+  const [menuExpanded, setMenuExpanded] = useState(true);
   const bgVideoRef = useRef<HTMLVideoElement | null>(null);
   const orbVideoRef = useRef<HTMLVideoElement | null>(null);
   const videoTailLoopSeconds = 5;
   const videoLoopEndPadding = 0.08;
+  const actionsPanelId = "arrival-guide-actions";
 
   const actions: ActionItem[] = isFr
     ? [
@@ -263,28 +265,48 @@ export function ArrivalGuide({ className }: { className?: string }) {
                 ? "Tu veux des informations sur des operations de commerce international liees a la France. Choisis ton point de depart."
                 : "You need guidance on international trade operations connected to France. Choose your starting point."}
             </p>
-            <p className="mt-2 text-sm font-semibold text-white sm:text-base">{isFr ? "Tu veux faire quoi ?" : "What do you want to do?"}</p>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-white sm:text-base">{isFr ? "Tu veux faire quoi ?" : "What do you want to do?"}</p>
+              <button
+                type="button"
+                aria-expanded={menuExpanded}
+                aria-controls={actionsPanelId}
+                onClick={() => setMenuExpanded((prev) => !prev)}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-400/35 bg-[#071124]/78 px-3 py-1 text-xs font-semibold text-white transition hover:border-sky-300/55 hover:bg-[#0b1f3c]/84"
+              >
+                {menuExpanded ? (isFr ? "Replier le menu" : "Collapse menu") : (isFr ? "Deplier le menu" : "Expand menu")}
+                {menuExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
+            </div>
 
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {actions.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => navigate(item.to)}
-                    className="group flex items-center rounded-2xl border border-slate-600/70 bg-[#081326]/72 px-3 py-3 text-left transition duration-300 hover:-translate-y-0.5 hover:border-sky-300/55 hover:bg-[#0b1f3c]/84"
-                  >
-                    <span className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-sky-100">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span className="flex flex-col">
-                      <span className="text-sm font-semibold text-white">{item.title}</span>
-                      <span className="text-xs font-normal text-white group-hover:text-white">{item.subtitle}</span>
-                    </span>
-                  </button>
-                );
-              })}
+            <div
+              id={actionsPanelId}
+              className={cn(
+                "overflow-hidden transition-all duration-300",
+                menuExpanded ? "mt-4 max-h-96 opacity-100" : "max-h-0 opacity-0"
+              )}
+            >
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {actions.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => navigate(item.to)}
+                      className="group flex items-center rounded-2xl border border-slate-600/70 bg-[#081326]/72 px-3 py-3 text-left transition duration-300 hover:-translate-y-0.5 hover:border-sky-300/55 hover:bg-[#0b1f3c]/84"
+                    >
+                      <span className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-500/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-sky-100">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="flex flex-col">
+                        <span className="text-sm font-semibold text-white">{item.title}</span>
+                        <span className="text-xs font-normal text-white group-hover:text-white">{item.subtitle}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
