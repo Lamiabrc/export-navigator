@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "seed:export-expert": "node scripts/seed-export-expert.mjs",
+    "import:trade-flows": "node scripts/import-trade-flows.mjs",
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:8080 && electron electron/main.js\"",
     "electron:build": "vite build --mode electron && npx electron-builder --win --config electron-builder.config.js"
