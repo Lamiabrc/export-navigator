@@ -36,6 +36,17 @@ import { sanitizeOptionalComment } from "@/lib/textSanitizer";
 type NeedValue = "guide" | "watch" | "invoice" | "landed_cost" | "tower" | "advisory";
 type FeedbackValue = "yes" | "no" | null;
 
+type LiveWatchSignal = {
+  title: string;
+  link: string;
+  source?: string | null;
+  publishedAt?: string | null;
+};
+
+type LiveWatchPayload = {
+  items?: LiveWatchSignal[];
+};
+
 type WizardState = {
   operationType: string;
   need: NeedValue | "";
@@ -319,11 +330,321 @@ function getFieldOptions(key: QuestionKey, lang: UiLang) {
   return list.map((option) => ({ value: option.value, label: localizeOption(option, lang) }));
 }
 
-function buildResponseSections(state: WizardState, lang: UiLang) {
+type ResultSection = {
+  title: string;
+  items: string[];
+};
+
+type ResultLink = {
+  label: string;
+  url: string;
+};
+
+type ResultPayload = {
+  summary: string;
+  thanks: string;
+  sections: ResultSection[];
+  links: ResultLink[];
+  ctaPath: string;
+  watchTopic?: string;
+};
+
+type TagRule = {
+  watch: {
+    fr: string[];
+    en: string[];
+  };
+  controls: {
+    fr: string[];
+    en: string[];
+  };
+  links: ResultLink[];
+  topic: "sanctions" | "douane" | "taxes" | "documents" | "logistics" | "sante" | "trade";
+};
+
+const TAG_RULES: Record<string, TagRule> = {
+  food: {
+    watch: {
+      fr: [
+        "Verifier les exigences d'etiquetage local (ingredients, allergenes, langue).",
+        "Controler les certificats sanitaires et obligations de tracabilite produit.",
+      ],
+      en: [
+        "Validate local labeling requirements (ingredients, allergens, language).",
+        "Check sanitary certificates and traceability obligations.",
+      ],
+    },
+    controls: {
+      fr: ["Conformite ingredients/additifs autorises", "Date limite / conservation conforme au marche cible"],
+      en: ["Compliance of allowed ingredients/additives", "Shelf-life and storage aligned with destination market"],
+    },
+    links: [
+      { label: "Access2Markets", url: OFFICIAL_LINKS.access2markets },
+      { label: "TARIC", url: OFFICIAL_LINKS.taric },
+      { label: "Douane", url: OFFICIAL_LINKS.douane_fr },
+    ],
+    topic: "douane",
+  },
+  cold_chain: {
+    watch: {
+      fr: [
+        "Confirmer les conditions de chaine du froid sur tout le trajet (stockage, transit, livraison).",
+        "Verifier les exigences d'emballage isotherme et de preuve de temperature.",
+      ],
+      en: [
+        "Confirm cold-chain conditions across the full route (storage, transit, delivery).",
+        "Check insulated packaging and temperature-evidence requirements.",
+      ],
+    },
+    controls: {
+      fr: ["Validation des temps de transit", "Plan de contingence en cas de rupture de temperature"],
+      en: ["Transit-time validation", "Contingency plan in case of temperature excursion"],
+    },
+    links: [
+      { label: "ICC Incoterms", url: OFFICIAL_LINKS.incoterms_icc },
+      { label: "Douane", url: OFFICIAL_LINKS.douane_fr },
+    ],
+    topic: "logistics",
+  },
+  phytosanitary: {
+    watch: {
+      fr: [
+        "Verifier les certificats phytosanitaires et les exigences de quarantaine a l'arrivee.",
+        "Controler la conformite des semences/plants selon les regles du pays de destination.",
+      ],
+      en: [
+        "Check phytosanitary certificates and quarantine requirements on arrival.",
+        "Validate seed/plant compliance with destination-country rules.",
+      ],
+    },
+    controls: {
+      fr: ["Documents phytosanitaires valides", "Identification lot/variete et traçabilite"],
+      en: ["Valid phytosanitary documents", "Lot/variety identification and traceability"],
+    },
+    links: [
+      { label: "Access2Markets", url: OFFICIAL_LINKS.access2markets },
+      { label: "Douane", url: OFFICIAL_LINKS.douane_fr },
+    ],
+    topic: "documents",
+  },
+  medical: {
+    watch: {
+      fr: [
+        "Verifier le statut reglementaire du produit medical (autorisation, enregistrement local).",
+        "Controler les exigences de documentation technique et de securite patient.",
+      ],
+      en: [
+        "Validate medical regulatory status (authorization, local registration).",
+        "Check technical documentation and patient-safety requirements.",
+      ],
+    },
+    controls: {
+      fr: ["Conformite marquage et notices", "Verification distributeur/acheteur et usage final"],
+      en: ["Marking and instruction-leaflet compliance", "Distributor/buyer and end-use verification"],
+    },
+    links: [
+      { label: "Access2Markets", url: OFFICIAL_LINKS.access2markets },
+      { label: "EU Sanctions", url: OFFICIAL_LINKS.eu_sanctions },
+      { label: "UN Sanctions", url: OFFICIAL_LINKS.un_sanctions },
+    ],
+    topic: "sante",
+  },
+  regulated: {
+    watch: {
+      fr: [
+        "Verifier les licences/autorites competentes avant engagement commercial.",
+        "Suivre les mises a jour de reglementation sectorielle sur le produit.",
+      ],
+      en: [
+        "Check licensing/competent-authority requirements before commercial commitment.",
+        "Track sector regulation updates for the selected product.",
+      ],
+    },
+    controls: {
+      fr: ["Validation des autorisations prealables", "Dossier documentaire complet avant expedition"],
+      en: ["Pre-authorization validation", "Complete documentary file before shipment"],
+    },
+    links: [
+      { label: "Access2Markets", url: OFFICIAL_LINKS.access2markets },
+      { label: "TARIC", url: OFFICIAL_LINKS.taric },
+    ],
+    topic: "documents",
+  },
+  dangerous_goods: {
+    watch: {
+      fr: [
+        "Verifier la classification marchandise dangereuse et les restrictions transporteur.",
+        "Controler marquage, emballage et declaration conformes au mode de transport.",
+      ],
+      en: [
+        "Validate dangerous-goods classification and carrier restrictions.",
+        "Check marking, packaging and declarations for the selected transport mode.",
+      ],
+    },
+    controls: {
+      fr: ["Conformite documents de transport DG", "Preuve de formation/consignes securite operateur"],
+      en: ["DG transport-document compliance", "Operator training/safety-instruction evidence"],
+    },
+    links: [
+      { label: "ICC Incoterms", url: OFFICIAL_LINKS.incoterms_icc },
+      { label: "Douane", url: OFFICIAL_LINKS.douane_fr },
+    ],
+    topic: "logistics",
+  },
+  cosmetics: {
+    watch: {
+      fr: [
+        "Verifier exigences d'etiquetage INCI et mentions obligatoires du marche cible.",
+        "Controler restrictions ingredients/substances selon la zone de destination.",
+      ],
+      en: [
+        "Validate INCI labeling and mandatory mentions for the destination market.",
+        "Check ingredient/substance restrictions for destination jurisdiction.",
+      ],
+    },
+    controls: {
+      fr: ["Conformite claims marketing", "Verification responsable local / importateur"],
+      en: ["Marketing-claim compliance", "Local responsible party / importer verification"],
+    },
+    links: [
+      { label: "Access2Markets", url: OFFICIAL_LINKS.access2markets },
+      { label: "TARIC", url: OFFICIAL_LINKS.taric },
+    ],
+    topic: "documents",
+  },
+  electronics: {
+    watch: {
+      fr: [
+        "Verifier exigences de conformite technique et normes applicables au materiel.",
+        "Controler restrictions d'export eventuelles pour composants sensibles.",
+      ],
+      en: [
+        "Check technical-compliance requirements and applicable standards.",
+        "Validate potential export restrictions for sensitive components.",
+      ],
+    },
+    controls: {
+      fr: ["Classement HS confirme", "Verification acheteur final et usage final"],
+      en: ["HS classification confirmed", "End-buyer and end-use verification"],
+    },
+    links: [
+      { label: "Access2Markets", url: OFFICIAL_LINKS.access2markets },
+      { label: "EU Sanctions", url: OFFICIAL_LINKS.eu_sanctions },
+    ],
+    topic: "trade",
+  },
+};
+
+function dedupeStrings(values: string[]) {
+  return Array.from(new Set(values.map((value) => String(value || "").trim()).filter(Boolean)));
+}
+
+function dedupeLinks(links: ResultLink[]) {
+  const map = new Map<string, ResultLink>();
+  for (const link of links) {
+    if (!link?.url) continue;
+    if (!map.has(link.url)) map.set(link.url, link);
+  }
+  return Array.from(map.values());
+}
+
+function topicFromHs(hs6: string) {
+  const hs2 = String(hs6 || "").replace(/[^0-9]/g, "").slice(0, 2);
+  if (!hs2) return "sanctions" as const;
+  if (["03", "04", "07", "08", "09", "18", "19", "20", "22"].includes(hs2)) return "douane" as const;
+  if (["30", "38", "90"].includes(hs2)) return "sante" as const;
+  if (["84", "85", "87"].includes(hs2)) return "trade" as const;
+  if (["33", "34"].includes(hs2)) return "documents" as const;
+  return "sanctions" as const;
+}
+
+function buildGoogleNewsLink(params: { destinationLabel: string; productLabel: string; lang: UiLang }) {
+  const locale = params.lang === "en" ? { hl: "en", ceid: "US:en" } : { hl: "fr", ceid: "FR:fr" };
+  const query = `${params.productLabel} ${params.destinationLabel} export customs regulation`;
+  return {
+    label: params.lang === "en" ? "Google News (targeted)" : "Google News (cible)",
+    url: `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${locale.hl}&gl=FR&ceid=${locale.ceid}`,
+  };
+}
+
+function getWatchProfile(state: WizardState, lang: UiLang, destinationLabel: string, productLabel: string) {
+  const product = getProductByCode(state.productCode);
+  const tags = product?.tags || [];
+
+  const watchItems = [
+    lang === "en"
+      ? `Run sanctions screening for destination ${destinationLabel}.`
+      : `Lancer un screening sanctions pour la destination ${destinationLabel}.`,
+    lang === "en"
+      ? `Confirm product classification ${state.hs6 || product?.hs6 || "-"} before shipment.`
+      : `Confirmer le classement produit ${state.hs6 || product?.hs6 || "-"} avant expedition.`,
+    lang === "en"
+      ? "Track legal updates before shipment confirmation."
+      : "Suivre les mises a jour reglementaires avant confirmation d'expedition.",
+  ];
+
+  const controls = [
+    lang === "en" ? "Restricted parties" : "Parties restreintes",
+    lang === "en" ? "Contract compliance clause" : "Clause contractuelle de conformite",
+  ];
+
+  const links: ResultLink[] = [
+    { label: "EU Sanctions", url: OFFICIAL_LINKS.eu_sanctions },
+    { label: "OFAC", url: OFFICIAL_LINKS.ofac },
+    { label: "UN Sanctions", url: OFFICIAL_LINKS.un_sanctions },
+    { label: "Access2Markets", url: OFFICIAL_LINKS.access2markets },
+  ];
+
+  let topic: TagRule["topic"] = topicFromHs(state.hs6 || product?.hs6 || "");
+  for (const tag of tags) {
+    const rule = TAG_RULES[tag];
+    if (!rule) continue;
+    watchItems.push(...(lang === "en" ? rule.watch.en : rule.watch.fr));
+    controls.push(...(lang === "en" ? rule.controls.en : rule.controls.fr));
+    links.push(...rule.links);
+    topic = rule.topic;
+  }
+
+  if (state.transitCountry && state.transitCountry !== "none") {
+    watchItems.push(
+      lang === "en"
+        ? `Add transit-country checks (${getCountryLabel(state.transitCountry, lang)}) for customs and sanctions.`
+        : `Ajouter un controle pays de transit (${getCountryLabel(state.transitCountry, lang)}) pour douane et sanctions.`
+    );
+  }
+
+  if (state.incoterm === "DDP") {
+    controls.push(
+      lang === "en"
+        ? "DDP responsibility check: importer-of-record obligations and local taxes."
+        : "Controle responsabilite DDP : obligations importateur enregistre et taxes locales."
+    );
+  }
+
+  if (state.paymentTerm === "open_account") {
+    controls.push(
+      lang === "en"
+        ? "Open-account risk control: define credit limit and payment safeguards."
+        : "Controle risque open account : fixer plafond de credit et garanties de paiement."
+    );
+  }
+
+  links.push(buildGoogleNewsLink({ destinationLabel, productLabel, lang }));
+
+  return {
+    watchItems: dedupeStrings(watchItems).slice(0, 6),
+    controls: dedupeStrings(controls).slice(0, 6),
+    links: dedupeLinks(links).slice(0, 6),
+    topic,
+  };
+}
+
+function buildResponseSections(state: WizardState, lang: UiLang): ResultPayload {
   const product = getProductByCode(state.productCode);
   const productLabel = product ? (lang === "en" ? product.label_en : product.label_fr) : state.productCode;
   const destinationLabel = getCountryLabel(state.destination, lang);
   const need = state.need;
+  const watchProfile = getWatchProfile(state, lang, destinationLabel, productLabel || (lang === "en" ? "selected product" : "produit selectionne"));
 
   const common = {
     summary:
@@ -374,32 +695,20 @@ function buildResponseSections(state: WizardState, lang: UiLang) {
       ...common,
       sections: [
         {
-          title: lang === "en" ? "Sanctions and compliance watch" : "Veille sanctions et conformite",
-          items: lang === "en"
-            ? [
-                `Run sanctions screening for destination ${destinationLabel}.`,
-                "Verify product-specific restrictions and licensing obligations.",
-                "Track legal updates before shipment confirmation.",
-              ]
-            : [
-                `Lancer un screening sanctions pour la destination ${destinationLabel}.`,
-                "Verifier les restrictions produit et obligations de licence.",
-                "Suivre les mises a jour reglementaires avant expédition.",
-              ],
+          title:
+            lang === "en"
+              ? `Sanctions and compliance watch - ${productLabel || "selected product"}`
+              : `Veille sanctions et conformite - ${productLabel || "produit selectionne"}`,
+          items: watchProfile.watchItems,
         },
         {
           title: lang === "en" ? "Priority controls" : "Points de controle prioritaires",
-          items: lang === "en"
-            ? ["Restricted parties", "Dual-use exposure", "Contract compliance clause"]
-            : ["Parties restreintes", "Exposition dual-use", "Clause contractuelle de conformite"],
+          items: watchProfile.controls,
         },
       ],
-      links: [
-        { label: "EU Sanctions", url: OFFICIAL_LINKS.eu_sanctions },
-        { label: "OFAC", url: OFFICIAL_LINKS.ofac },
-        { label: "UN Sanctions", url: OFFICIAL_LINKS.un_sanctions },
-      ],
+      links: watchProfile.links,
       ctaPath: "/veille",
+      watchTopic: watchProfile.topic,
     };
   }
 
@@ -530,6 +839,9 @@ export function GuidedAssistantWizard({ inApp = false }: { inApp?: boolean }) {
   const [step, setStep] = React.useState<1 | 2 | 3 | 4 | 5>(1);
   const [questionIndex, setQuestionIndex] = React.useState(0);
   const [feedback, setFeedback] = React.useState<FeedbackValue>(null);
+  const [liveSignals, setLiveSignals] = React.useState<LiveWatchSignal[]>([]);
+  const [liveSignalsLoading, setLiveSignalsLoading] = React.useState(false);
+  const [liveSignalsError, setLiveSignalsError] = React.useState<string | null>(null);
 
   const questionFlow = React.useMemo(() => getFlowByNeed(state.need), [state.need]);
   const currentKey = questionFlow[questionIndex] || null;
@@ -539,6 +851,63 @@ export function GuidedAssistantWizard({ inApp = false }: { inApp?: boolean }) {
     if (step < 5) return null;
     return buildResponseSections(state, lang);
   }, [lang, state, step]);
+
+  React.useEffect(() => {
+    if (step !== 5 || state.need !== "watch" || !resultPayload) {
+      setLiveSignals([]);
+      setLiveSignalsError(null);
+      setLiveSignalsLoading(false);
+      return;
+    }
+
+    const territory = state.destination || "WORLD";
+    const topic = resultPayload.watchTopic || "sanctions";
+    const controller = new AbortController();
+    let mounted = true;
+
+    const loadLiveSignals = async () => {
+      setLiveSignalsLoading(true);
+      setLiveSignalsError(null);
+      try {
+        const response = await fetch(
+          `/api/rss?limit=3&territory=${encodeURIComponent(territory)}&topic=${encodeURIComponent(topic)}&official=1`,
+          {
+            signal: controller.signal,
+            headers: { Accept: "application/json" },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(isEn ? "Unable to load live sources." : "Impossible de charger les sources en direct.");
+        }
+
+        const payload = (await response.json()) as LiveWatchPayload;
+        if (!mounted) return;
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        setLiveSignals(
+          items
+            .filter((item): item is LiveWatchSignal => Boolean(item && item.title && item.link))
+            .slice(0, 3)
+        );
+      } catch (error) {
+        if (!mounted) return;
+        const err = error as { name?: string; message?: string };
+        if (err.name === "AbortError") return;
+        setLiveSignals([]);
+        setLiveSignalsError(
+          err.message || (isEn ? "Live sources unavailable for now." : "Sources en direct indisponibles pour le moment.")
+        );
+      } finally {
+        if (mounted) setLiveSignalsLoading(false);
+      }
+    };
+
+    loadLiveSignals();
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [isEn, resultPayload, state.destination, state.need, step]);
 
   const nextDisabled = React.useMemo(() => {
     if (!currentKey) return true;
@@ -797,6 +1166,50 @@ export function GuidedAssistantWizard({ inApp = false }: { inApp?: boolean }) {
                 ))}
               </div>
             </div>
+
+            {state.need === "watch" ? (
+              <div className="rounded-xl border bg-muted/20 p-4">
+                <p className="text-sm font-semibold">
+                  {isEn ? "Live targeted sources" : "Sources ciblees en direct"}
+                </p>
+                {liveSignalsLoading ? (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {isEn ? "Loading latest items..." : "Chargement des derniers signaux..."}
+                  </p>
+                ) : liveSignalsError ? (
+                  <p className="mt-2 text-sm text-amber-700">{liveSignalsError}</p>
+                ) : liveSignals.length ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                    {liveSignals.map((item) => {
+                      const dt = item.publishedAt ? new Date(item.publishedAt) : null;
+                      const dateLabel = dt && !Number.isNaN(dt.getTime())
+                        ? dt.toLocaleDateString(isEn ? "en-GB" : "fr-FR", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : null;
+                      return (
+                        <li key={`${item.link}-${item.title}`}>
+                          <a href={item.link} target="_blank" rel="noreferrer" className="font-medium hover:underline">
+                            {item.title}
+                          </a>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {[item.source || null, dateLabel].filter(Boolean).join(" - ")}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {isEn
+                      ? "No live item found for this product right now."
+                      : "Aucun signal en direct trouve pour ce produit pour l'instant."}
+                  </p>
+                )}
+              </div>
+            ) : null}
 
             <div className="rounded-xl border bg-card p-4">
               <p className="text-sm font-semibold">
