@@ -28,11 +28,17 @@ export function matchesDateRange(dateValue: Nullable<string>, start?: string, en
 export function isMissingTableError(error: unknown): boolean {
   if (!error) return false;
   const code = (error as any)?.code;
-  if (code === "42P01") return true; // relation does not exist
+  if (code === "42P01" || code === "PGRST205") return true; // relation/table missing
 
   const message = (error as any)?.message || "";
   const normalized = String(message).toLowerCase();
-  return normalized.includes("does not exist") || normalized.includes("missing") && normalized.includes("relation");
+  return (
+    normalized.includes("does not exist") ||
+    normalized.includes("not found") ||
+    normalized.includes("could not find") ||
+    normalized.includes("schema cache") ||
+    (normalized.includes("missing") && normalized.includes("relation"))
+  );
 }
 
 export function summarizeWarning(label: string, reason?: string): string {

@@ -152,7 +152,11 @@ function markCrmTablesPresent() {
 function isMissingTableError(err: unknown) {
   const message = String((err as { message?: string } | null)?.message || "");
   const code = String((err as { code?: string } | null)?.code || "");
-  return code === "42P01" || /not found|does not exist/i.test(message);
+  return (
+    code === "42P01" ||
+    code === "PGRST205" ||
+    /not found|could not find|does not exist|schema cache/i.test(message)
+  );
 }
 
 function asNumber(value: unknown, fallback = 0) {

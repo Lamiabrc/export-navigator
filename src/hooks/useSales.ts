@@ -34,7 +34,7 @@ const ENABLE_TERRITORIES = import.meta.env.VITE_ENABLE_TERRITORIES === "true";
 function isMissingTableError(err: unknown) {
   const message = String((err as any)?.message || "");
   const code = (err as any)?.code;
-  return code === "42P01" || /not found|does not exist/i.test(message);
+  return code === "42P01" || code === "PGRST205" || /not found|could not find|does not exist|schema cache/i.test(message);
 }
 
 export function useSales() {
