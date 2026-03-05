@@ -1236,6 +1236,42 @@ function checklistLineForCheck(status: CheckStatus, label: string) {
   return `- ${marker} ${label}`;
 }
 
+function questionFromFieldPath(fieldPath: string | undefined, lang: Lang): string | null {
+  if (!fieldPath) return null;
+  const fr = lang !== "en";
+  if (fieldPath === "context.flow") {
+    return fr
+      ? "Confirmez-vous un flux export ou import ?"
+      : "Can you confirm whether this is an export or import flow?";
+  }
+  if (fieldPath === "context.destination") {
+    return fr
+      ? "Quel est le pays de destination exact (ISO2 ou nom complet) ?"
+      : "What is the exact destination country (ISO2 or full name)?";
+  }
+  if (fieldPath === "context.origin") {
+    return fr
+      ? "Quel est le pays d'origine exact (ISO2 ou nom complet) ?"
+      : "What is the exact origin country (ISO2 or full name)?";
+  }
+  if (fieldPath === "context.product" || fieldPath === "context.hs6") {
+    return fr
+      ? "Quel est le produit exact (nom commercial + composition/usage), et le code HS si vous l'avez ?"
+      : "What is the exact product (commercial name + composition/use), and HS code if available?";
+  }
+  if (fieldPath === "context.incoterm") {
+    return fr
+      ? "Quel Incoterm est prevu (EXW, FCA, FOB, CIF, DAP, DDP...) ?"
+      : "Which Incoterm is planned (EXW, FCA, FOB, CIF, DAP, DDP...)?";
+  }
+  if (fieldPath === "context.buyerIsTaxable") {
+    return fr
+      ? "Le client est-il assujetti a la TVA (oui/non) ?"
+      : "Is the buyer VAT-taxable (yes/no)?";
+  }
+  return null;
+}
+
 function buildAnswerMarkdown(params: {
   lang: Lang;
   decision: { status: DecisionStatus; reason: string };
@@ -1252,14 +1288,23 @@ function buildAnswerMarkdown(params: {
     (check) => check.status === "KO" || check.status === "MANQUANT" || check.status === "A_CONFIRMER"
   );
   const primaryMissing = missingChecks[0] || null;
+  const fr = params.lang !== "en";
 
-  const checklist = sorted.slice(0, 5).map((check) => checklistLineForCheck(check.status, check.label));
+  const fallbackPriorityQuestion =
+    params.missingQuestions[0] ||
+    (params.lang === "en"
+      ? "What is the destination country?"
+      : "Quel est le pays de destination ?");
+
+  const blockerQuestion = questionFromFieldPath(primaryMissing?.fieldPath, params.lang);
+  const priorityQuestion = blockerQuestion || fallbackPriorityQuestion;
 
   const risks = Array.from(
     new Set(
       sorted
         .filter((check) => check.status === "KO" || check.status === "A_CONFIRMER")
         .map((check) => check.explanation)
+        .filter(Boolean)
     )
   )
     .slice(0, 3)
@@ -1269,82 +1314,69 @@ function buildAnswerMarkdown(params: {
     new Set([
       ...params.dossier.next_actions,
       ...(params.packUpsellAction ? [params.packUpsellAction] : []),
-    ])
+    ].filter(Boolean))
   )
     .slice(0, 3)
     .map((item) => `- ${item}`);
 
-  const priorityQuestion =
-    params.missingQuestions[0] ||
-    (params.lang === "en"
-      ? "What is the destination country?"
-      : "Quel est le pays de destination ?");
-
-  const fr = params.lang !== "en";
-  const decisionLabel = "Decision";
-  const contextLabel = fr ? "Contexte retenu" : "Context used";
-  const checklistLabel = "Checklist (max 5)";
-  const risksLabel = fr ? "Risques (max 3)" : "Risks (max 3)";
-  const actionsLabel = "Actions (max 3)";
-  const questionLabel = fr ? "Question unique (etape suivante)" : "Single next question";
   const hasPendingInput = Boolean(primaryMissing || params.missingQuestions.length);
 
   if (hasPendingInput) {
-    const blockingPrefix =
-      primaryMissing?.status === "KO" || primaryMissing?.status === "MANQUANT"
-        ? (fr ? "[Bloquant]" : "[Blocking]")
-        : (fr ? "[A confirmer]" : "[To confirm]");
-    const blockingLine = primaryMissing
-      ? `- ${blockingPrefix} ${primaryMissing.label}: ${primaryMissing.what_to_fix}`
-      : `- ${fr ? "[Bloquant] Informations critiques manquantes." : "[Blocking] Critical information is missing."}`;
-
     return [
       fr
-        ? "Merci, vous etes sur la bonne voie. Pour securiser la decision, on avance une information a la fois."
-        : "Thanks, you are on the right track. To secure the decision, we move forward one missing item at a time.",
+        ? "Merci pour votre message. On avance simplement, une information a la fois."
+        : "Thanks for your message. We will move forward simply, one item at a time.",
       "",
-      `${decisionLabel}: ${params.decision.status} - ${params.decision.reason}`,
-      "",
-      fr ? "Point a completer maintenant:" : "Item to complete now:",
-      blockingLine,
-      "",
-      `${questionLabel}:`,
+      fr
+        ? "Pour vous repondre precisement, j'ai besoin de cette information:"
+        : "To answer precisely, I need this information:",
       `- ${priorityQuestion}`,
       "",
       fr
-        ? "Repondez uniquement a cette question et je vous donne la suite precise."
-        : "Reply only to this question and I will provide the next precise step.",
+        ? "Repondez a cette seule question et je vous donne immediatement la suite, de facon claire."
+        : "Reply to this single question and I will immediately provide the next clear step.",
     ].join("\n");
   }
+
+  const decisionNatural =
+    params.decision.status === "GO"
+      ? fr
+        ? "favorable (GO provisoire)"
+        : "favorable (provisional GO)"
+      : params.decision.status === "SOUS_CONDITIONS"
+        ? fr
+          ? "favorable sous conditions"
+          : "favorable with conditions"
+        : fr
+          ? "non favorable en l'etat (NO GO provisoire)"
+          : "not favorable at this stage (provisional NO GO)";
 
   const summaryLines = String(params.dossier.summary || "")
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
-  const contextFlowLine = summaryLines[1] || "-";
-  const contextProductLine = summaryLines[2] || "-";
+  const flowContext = summaryLines[1] || "";
+  const productContext = summaryLines[2] || "";
 
   return [
     fr
-      ? "Merci. Dossier suffisamment complet: voici une reponse precise et exploitable."
-      : "Thanks. Dossier sufficiently complete: here is a precise and actionable answer.",
+      ? "Merci, j'ai maintenant les informations essentielles."
+      : "Thanks, I now have the essential information.",
+    fr ? `Avis provisoire: ${decisionNatural}.` : `Provisional assessment: ${decisionNatural}.`,
     "",
-    `${decisionLabel}: ${params.decision.status} - ${params.decision.reason}`,
+    fr ? "Contexte confirme:" : "Confirmed context:",
+    `- ${flowContext || (fr ? "Flux non precise" : "Flow not specified")}`,
+    `- ${productContext || (fr ? "Produit/HS non precise" : "Product/HS not specified")}`,
     "",
-    `${contextLabel}:`,
-    `- ${contextFlowLine.replace(/^Flux:\s*/i, "")}`,
-    `- ${contextProductLine.replace(/^HS:\s*/i, "")}`,
-    "",
-    `${checklistLabel}:`,
-    ...(checklist.length ? checklist : [params.lang === "en" ? "- [OK] Base checks passed." : "- [OK] Verifications de base passees."]),
-    "",
-    `${risksLabel}:`,
+    fr ? "Points de vigilance:" : "Watch-outs:",
     ...(risks.length
       ? risks
-      : [params.lang === "en" ? "- No major risk flagged with current data." : "- Aucun risque majeur avec les donnees actuelles."]),
+      : [fr ? "- Aucun risque majeur detecte a ce stade." : "- No major risk detected at this stage."]),
     "",
-    `${actionsLabel}:`,
-    ...(actions.length ? actions : [params.lang === "en" ? "- Continue monitoring regulatory updates." : "- Continuer la veille reglementaire."]),
+    fr ? "Actions recommandees maintenant:" : "Recommended actions now:",
+    ...(actions.length
+      ? actions
+      : [fr ? "- Poursuivre avec la validation operationnelle et documentaire." : "- Continue with operational and documentary validation."]),
   ].join("\n");
 }
 function getBearerToken(req: VercelRequest) {

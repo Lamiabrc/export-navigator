@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AlertTriangle, Bot, ExternalLink, Loader2, Send } from "lucide-react";
+import { Bot, ExternalLink, Loader2, Send } from "lucide-react";
 
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Badge } from "@/components/ui/badge";
@@ -172,19 +172,6 @@ function isUncertainAnswer(answer: string) {
   if (txt.length < 20) return true;
   if (/(pas de reponse|indisponible|erreur|vide|reessaye|reessaie)/i.test(txt)) return true;
   return false;
-}
-
-function statusLabel(status: ChatCheck["status"]) {
-  switch (status) {
-    case "KO":
-      return "KO";
-    case "MANQUANT":
-      return "Manquant";
-    case "A_CONFIRMER":
-      return "À confirmer";
-    default:
-      return "OK";
-  }
 }
 
 function normalizeAssistantAnswer(value: string) {
@@ -420,29 +407,6 @@ function followUpToAction(question: string): FollowUpAction {
   return { label: "Répondre", value: "Réponse: " };
 }
 
-function fieldPathToDraft(fieldPath?: string) {
-  switch (fieldPath) {
-    case "context.destination":
-      return "Pays destination (ISO2 ou nom): ";
-    case "context.origin":
-      return "Pays origine (ISO2 ou nom): ";
-    case "context.product":
-      return "Produit (nom commercial + composition/usage): ";
-    case "context.hs6":
-      return "Code HS6: ";
-    case "context.flow":
-      return "Flux: export ou import ? ";
-    case "context.incoterm":
-      return "Incoterm + lieu (ex: FCA Lyon): ";
-    case "context.buyerIsTaxable":
-      return "Acheteur assujetti TVA ? (oui/non): ";
-    case "context.goodsOrServices":
-      return "Operation sur biens ou services ? ";
-    default:
-      return "Correction: ";
-  }
-}
-
 function shouldShowGuidedForm(message: ChatMessage | undefined) {
   if (!message || message.role !== "assistant") return false;
   if (Array.isArray(message.followUpQuestions) && message.followUpQuestions.length > 0) return true;
@@ -467,12 +431,6 @@ function buildPromptFromGuidedForm(values: GuidedFormValues) {
   );
   lines.push("Donne une décision provisoire, checklist, risques et actions.");
   return lines.join("\n");
-}
-
-function decisionBadgeClass(status?: ChatDecision["status"]) {
-  if (status === "NO_GO") return "bg-rose-100 text-rose-700 border-rose-200";
-  if (status === "SOUS_CONDITIONS") return "bg-amber-100 text-amber-700 border-amber-200";
-  return "bg-emerald-100 text-emerald-700 border-emerald-200";
 }
 
 function buildWatchLinks(isAuthenticated: boolean) {
@@ -527,7 +485,8 @@ export default function Copilote() {
     () => [...messages].reverse().find((message) => message.role === "assistant"),
     [messages],
   );
-  const showGuidedForm = React.useMemo(() => shouldShowGuidedForm(latestAssistantMessage), [latestAssistantMessage]);
+  const needsGuidedForm = React.useMemo(() => shouldShowGuidedForm(latestAssistantMessage), [latestAssistantMessage]);
+  const [quickFormOpen, setQuickFormOpen] = React.useState(false);
 
   React.useEffect(() => {
     const el = scrollRef.current;
@@ -545,6 +504,10 @@ export default function Copilote() {
       destination: prev.destination || destinationCountry || formContext.buyerCountry || "",
     }));
   }, [destinationCountry, sellerCountry, formContext.buyerCountry, formContext.sellerCountry]);
+
+  React.useEffect(() => {
+    if (!needsGuidedForm) setQuickFormOpen(false);
+  }, [needsGuidedForm]);
 
   const refreshQuota = React.useCallback(async () => {
     try {
@@ -580,6 +543,9 @@ export default function Copilote() {
 
   const applyFollowUpAction = React.useCallback(
     (action: FollowUpAction) => {
+      if (action.guidedField) {
+        setQuickFormOpen(true);
+      }
       if (action.guidedField && guidedFormRef.current) {
         guidedFormRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
       }
@@ -842,96 +808,8 @@ export default function Copilote() {
                     </div>
                   ) : null}
 
-                  <div className={`max-w-[88%] rounded-xl border px-3 py-2 text-sm ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-white"}`}>
-                    {m.role === "assistant" && m.decision ? (
-                      <div className="mb-2 flex items-center gap-2 border-b border-border/70 pb-2">
-                        <Badge className={`border ${decisionBadgeClass(m.decision.status)}`}>{m.decision.status}</Badge>
-                        <span className="text-xs text-slate-600">{m.decision.reason}</span>
-                      </div>
-                    ) : null}
-
-                    {m.role === "assistant" && m.mainBlocker ? (
-                      <div className="mb-2 rounded-lg border border-rose-200 bg-rose-50 p-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1 text-xs font-semibold text-rose-700">
-                            <AlertTriangle className="h-3.5 w-3.5" />
-                            Point bloquant principal
-                          </div>
-                          <Badge variant="outline" className="border-rose-200 text-rose-700">
-                            {statusLabel(m.mainBlocker.status)}
-                          </Badge>
-                        </div>
-                        <p className="mt-1 text-xs font-medium text-slate-900">{m.mainBlocker.label}</p>
-                        <p className="mt-1 text-xs text-slate-700">{m.mainBlocker.explanation}</p>
-                        <p className="mt-1 text-xs text-slate-700">Action: {m.mainBlocker.what_to_fix}</p>
-                        <div className="mt-2 flex items-center gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-7 px-2 text-[11px]"
-                            onClick={() => applyDraftAndFocus(fieldPathToDraft(m.mainBlocker?.fieldPath))}
-                          >
-                            Corriger
-                          </Button>
-                          {m.mainBlocker.source_link ? (
-                            <a
-                              href={m.mainBlocker.source_link}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] text-slate-600 underline"
-                            >
-                              Source
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          ) : null}
-                        </div>
-                      </div>
-                    ) : null}
-
+                  <div className={`max-w-[88%] rounded-2xl border px-3 py-2 text-sm ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-white"}`}>
                     <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
-
-                    {m.role === "assistant" && m.blocks ? (
-                      <div className="mt-3 grid gap-3 border-t border-border/70 pt-3 md:grid-cols-2">
-                        {m.blocks.summary.length ? (
-                          <div className="rounded-lg border bg-muted/30 p-2">
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Resume</div>
-                            <ul className="mt-1 list-disc space-y-1 pl-4 text-xs">
-                              {m.blocks.summary.map((line) => <li key={`${m.id}-sum-${line}`}>{line}</li>)}
-                            </ul>
-                          </div>
-                        ) : null}
-
-                        {m.blocks.checklist.length ? (
-                          <div className="rounded-lg border bg-muted/30 p-2">
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Checklist</div>
-                            <ul className="mt-1 space-y-1 text-xs">
-                              {m.blocks.checklist.map((item) => (
-                                <li key={`${m.id}-chk-${item.label}`}>{item.required ? "[x]" : "[ ]"} {item.label}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        ) : null}
-
-                        {m.blocks.risks.length ? (
-                          <div className="rounded-lg border bg-rose-50 p-2">
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-rose-700">Risques</div>
-                            <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-rose-800">
-                              {m.blocks.risks.map((item) => <li key={`${m.id}-risk-${item}`}>{item}</li>)}
-                            </ul>
-                          </div>
-                        ) : null}
-
-                        {m.blocks.actions.length ? (
-                          <div className="rounded-lg border bg-emerald-50 p-2">
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Actions</div>
-                            <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-emerald-800">
-                              {m.blocks.actions.map((item) => <li key={`${m.id}-act-${item}`}>{item}</li>)}
-                            </ul>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
 
                     {m.role === "assistant" && m.links?.length ? (
                       <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/70 pt-2">
@@ -963,7 +841,7 @@ export default function Copilote() {
                               className="h-7 rounded-full px-2 text-[11px]"
                               onClick={() => applyFollowUpAction(action)}
                             >
-                              {action.label}
+                              {action.label || "Repondre"}
                             </Button>
                           );
                         })}
@@ -983,7 +861,20 @@ export default function Copilote() {
 
             {error ? <div className="text-xs text-rose-600">{error}</div> : null}
 
-            {showGuidedForm ? (
+            {needsGuidedForm ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-slate-700">
+                    Si vous preferez, vous pouvez remplir un mini formulaire au lieu de repondre dans le chat.
+                  </p>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setQuickFormOpen((v) => !v)}>
+                    {quickFormOpen ? "Masquer le formulaire" : "Ouvrir le formulaire rapide"}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {needsGuidedForm && quickFormOpen ? (
               <div ref={guidedFormRef} className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
                 <div className="mb-2 text-sm font-semibold text-amber-900">Formulaire rapide (si le Copilote manque des infos)</div>
                 <p className="mb-3 text-xs text-amber-800">
