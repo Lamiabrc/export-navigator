@@ -100,9 +100,53 @@ export type DashboardMetrics = {
 };
 
 const DEAL_STAGES: DealStage[] = ["new", "qualified", "proposal", "negotiation", "won", "lost"];
+const CRM_TABLES_MISSING_KEY = "export_navigator.crm_tables_missing";
+const CRM_TABLES_MISSING_TTL_MS = 15 * 60 * 1000;
+
+let crmTablesMissingUntil: number = (() => {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = window.localStorage.getItem(CRM_TABLES_MISSING_KEY);
+    const until = Number(raw || 0);
+    if (!Number.isFinite(until) || until <= 0) return 0;
+    if (until <= Date.now()) {
+      window.localStorage.removeItem(CRM_TABLES_MISSING_KEY);
+      return 0;
+    }
+    return until;
+  } catch {
+    return 0;
+  }
+})();
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function shouldUseCrmDemo() {
+  if (DEMO_MODE) return true;
+  return crmTablesMissingUntil > Date.now();
+}
+
+function markCrmTablesMissing() {
+  crmTablesMissingUntil = Date.now() + CRM_TABLES_MISSING_TTL_MS;
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(CRM_TABLES_MISSING_KEY, String(crmTablesMissingUntil));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function markCrmTablesPresent() {
+  if (DEMO_MODE) return;
+  crmTablesMissingUntil = 0;
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(CRM_TABLES_MISSING_KEY);
+  } catch {
+    // ignore storage failures
+  }
 }
 
 function isMissingTableError(err: unknown) {
@@ -238,22 +282,24 @@ const demoTasks: DealTask[] = [
 export const dealStageOrder: DealStage[] = DEAL_STAGES;
 
 export async function listDeals() {
-  if (DEMO_MODE) {
+  if (shouldUseCrmDemo()) {
     return { deals: [...demoDeals], warning: "DEMO_MODE active: donnees locales." };
   }
 
   const { data, error } = await supabase
     .from("deals")
-    .select("id,title,stage,amount,currency,probability,expected_close_date,from_country,to_country,product_text,incoterm,notes,account_id,contact_id,created_at,updated_at,account:account_id(name)")
+    .select("id,title,stage,amount,currency,probability,expected_close_date,from_country,to_country,product_text,incoterm,notes,account_id,contact_id,created_at,updated_at,account:accounts(name)")
     .order("updated_at", { ascending: false })
     .limit(300);
 
   if (error) {
     if (isMissingTableError(error)) {
+      markCrmTablesMissing();
       return { deals: [...demoDeals], warning: "Tables CRM absentes: affichage demo." };
     }
     throw error;
   }
+  markCrmTablesPresent();
 
   const deals = (data || []).map((row: Record<string, unknown>) => {
     const stageRaw = String(row.stage || "new").toLowerCase() as DealStage;
@@ -321,7 +367,7 @@ export async function createDeal(input: {
     return created;
   };
 
-  if (DEMO_MODE) {
+  if (shouldUseCrmDemo()) {
     return createDemoDeal();
   }
 
@@ -341,9 +387,13 @@ export async function createDeal(input: {
 
   const { data, error } = await supabase.from("deals").insert(payload).select("*").single();
   if (error) {
-    if (isMissingTableError(error)) return createDemoDeal();
+    if (isMissingTableError(error)) {
+      markCrmTablesMissing();
+      return createDemoDeal();
+    }
     throw error;
   }
+  markCrmTablesPresent();
   return {
     id: String(data.id),
     title: String(data.title || ""),
@@ -416,7 +466,7 @@ export async function createDealItems(dealId: string, items: CreateDealItemInput
     return created;
   };
 
-  if (DEMO_MODE) {
+  if (shouldUseCrmDemo()) {
     return createDemoItems();
   }
 
@@ -438,9 +488,13 @@ export async function createDealItems(dealId: string, items: CreateDealItemInput
     .order("line_no", { ascending: true });
 
   if (error) {
-    if (isMissingTableError(error)) return createDemoItems();
+    if (isMissingTableError(error)) {
+      markCrmTablesMissing();
+      return createDemoItems();
+    }
     throw error;
   }
+  markCrmTablesPresent();
 
   return (data || []).map((row: Record<string, unknown>) => ({
     id: String(row.id),
@@ -460,7 +514,7 @@ export async function updateDeal(
   dealId: string,
   patch: Partial<Pick<CrmDeal, "title" | "stage" | "amount" | "currency" | "probability" | "from_country" | "to_country" | "product_text" | "incoterm" | "notes">>
 ) {
-  if (DEMO_MODE) {
+  if (shouldUseCrmDemo()) {
     demoDeals = demoDeals.map((deal) =>
       deal.id === dealId
         ? {
@@ -474,7 +528,14 @@ export async function updateDeal(
   }
 
   const { data, error } = await supabase.from("deals").update(patch).eq("id", dealId).select("*").single();
-  if (error) throw error;
+  if (error) {
+    if (isMissingTableError(error)) {
+      markCrmTablesMissing();
+      return demoDeals.find((deal) => deal.id === dealId) || null;
+    }
+    throw error;
+  }
+  markCrmTablesPresent();
   return {
     id: String(data.id),
     title: String(data.title || ""),
@@ -496,7 +557,7 @@ export async function updateDeal(
 }
 
 export async function getDealDetail(dealId: string): Promise<DealDetailData> {
-  if (DEMO_MODE) {
+  if (shouldUseCrmDemo()) {
     const deal = demoDeals.find((entry) => entry.id === dealId) || null;
     const account = deal?.account_id ? demoAccounts.find((entry) => entry.id === deal.account_id) || null : null;
     return {
@@ -511,7 +572,7 @@ export async function getDealDetail(dealId: string): Promise<DealDetailData> {
   const [dealRes, itemRes, activityRes, taskRes] = await Promise.all([
     supabase
       .from("deals")
-      .select("id,title,stage,amount,currency,probability,expected_close_date,from_country,to_country,product_text,incoterm,notes,account_id,contact_id,created_at,updated_at,account:account_id(*)")
+      .select("id,title,stage,amount,currency,probability,expected_close_date,from_country,to_country,product_text,incoterm,notes,account_id,contact_id,created_at,updated_at,account:accounts(*)")
       .eq("id", dealId)
       .maybeSingle(),
     supabase.from("deal_items").select("id,deal_id,line_no,product_text,hs6,quantity,unit_price,total_value,currency,created_at").eq("deal_id", dealId).order("line_no", { ascending: true }),
@@ -521,6 +582,7 @@ export async function getDealDetail(dealId: string): Promise<DealDetailData> {
 
   if (dealRes.error) {
     if (isMissingTableError(dealRes.error)) {
+      markCrmTablesMissing();
       const deal = demoDeals.find((entry) => entry.id === dealId) || null;
       const account = deal?.account_id ? demoAccounts.find((entry) => entry.id === deal.account_id) || null : null;
       return {
@@ -536,6 +598,7 @@ export async function getDealDetail(dealId: string): Promise<DealDetailData> {
   if (itemRes.error && !isMissingTableError(itemRes.error)) throw itemRes.error;
   if (activityRes.error && !isMissingTableError(activityRes.error)) throw activityRes.error;
   if (taskRes.error && !isMissingTableError(taskRes.error)) throw taskRes.error;
+  markCrmTablesPresent();
 
   const dealRow = dealRes.data as Record<string, unknown> | null;
   const account = (dealRow?.account as CrmAccount | null) || null;
@@ -661,12 +724,16 @@ export function buildDashboardMetrics(deals: CrmDeal[]): DashboardMetrics {
 }
 
 export async function listAccountsForSelect() {
-  if (DEMO_MODE) return [...demoAccounts];
+  if (shouldUseCrmDemo()) return [...demoAccounts];
   const { data, error } = await supabase.from("accounts").select("id,name,country_iso2,industry,website,status,notes,created_at,updated_at").order("updated_at", { ascending: false }).limit(200);
   if (error) {
-    if (isMissingTableError(error)) return [...demoAccounts];
+    if (isMissingTableError(error)) {
+      markCrmTablesMissing();
+      return [...demoAccounts];
+    }
     throw error;
   }
+  markCrmTablesPresent();
   return (data || []).map((row: Record<string, unknown>) => ({
     id: String(row.id),
     name: String(row.name || ""),
