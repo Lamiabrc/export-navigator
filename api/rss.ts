@@ -58,6 +58,8 @@ const PERMANENT_SOURCES: RssSource[] = [
     url: "https://news.google.com/rss/search?q=alerte+export+union+europeenne+douane&hl=fr&gl=FR&ceid=FR:fr",
   },
   { name: "Douane francaise", url: "https://www.douane.gouv.fr/meteo/prodouane/pages/rss" },
+  { name: "DG Tresor (International)", url: "https://www.tresor.economie.gouv.fr/Flux/Atom/PagesInternationales" },
+  { name: "Service-Public Pro", url: "https://www.service-public.gouv.fr/abonnements/rss/actu-actu-pro.rss" },
   { name: "UE DG Trade", url: "https://policy.trade.ec.europa.eu/node/2/rss_en" },
   {
     name: "EU Sanctions Updates",
@@ -71,6 +73,8 @@ const PERMANENT_SOURCES: RssSource[] = [
 
 const WORLD_SOURCES: RssSource[] = [
   { name: "OMC (WTO)", url: "https://www.wto.org/library/rss/latest_news_e.xml" },
+  { name: "OMC (WTO) FR", url: "https://www.wto.org/library/rss/latest_news_f.xml" },
+  { name: "UK OFSI", url: "https://ofsi.blog.gov.uk/feed/" },
 ];
 
 const COUNTRY_SOURCES: Record<string, RssSource[]> = {

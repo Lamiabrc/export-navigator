@@ -42,9 +42,15 @@ const SOURCE_PRIORITY_HINTS = [
   "who",
   "google alert",
   "google news",
+  "wto",
+  "omc",
+  "uk ofsi",
+  "ofsi",
   "ue dg trade",
   "eu sanctions",
   "douane",
+  "economie.gouv",
+  "service-public",
 ];
 
 const FALLBACK_PINNED_LABELS = [
@@ -53,6 +59,8 @@ const FALLBACK_PINNED_LABELS = [
   "Google Alert Export",
   "UE DG Trade",
   "EU Sanctions Updates",
+  "OMC (WTO)",
+  "UK OFSI",
 ];
 
 function safeExternalUrl(url?: string) {
@@ -123,6 +131,64 @@ function sourcePriority(label: string) {
   const text = normalizeText(label);
   const index = SOURCE_PRIORITY_HINTS.findIndex((hint) => text.includes(hint));
   return index === -1 ? SOURCE_PRIORITY_HINTS.length + 1 : index;
+}
+
+function selectDiverseItems(items: HomeRssItem[], maxItems: number) {
+  const dedup = new Map<string, HomeRssItem>();
+  for (const item of items) {
+    const link = safeExternalUrl(item.link) || cleanText(item.link);
+    if (!link) continue;
+    if (!dedup.has(link)) dedup.set(link, { ...item, link });
+  }
+
+  const grouped = new Map<string, HomeRssItem[]>();
+  for (const item of dedup.values()) {
+    const source = sourceLabel(item);
+    const list = grouped.get(source) || [];
+    list.push(item);
+    grouped.set(source, list);
+  }
+
+  for (const [source, list] of grouped.entries()) {
+    grouped.set(
+      source,
+      [...list].sort(
+        (a, b) =>
+          toTimestamp(b.publishedAt || b.pubDate) - toTimestamp(a.publishedAt || a.pubDate)
+      )
+    );
+  }
+
+  const orderedSources = Array.from(grouped.keys()).sort((a, b) => {
+    const prio = sourcePriority(a) - sourcePriority(b);
+    if (prio !== 0) return prio;
+    const aTop = toTimestamp(grouped.get(a)?.[0]?.publishedAt || grouped.get(a)?.[0]?.pubDate);
+    const bTop = toTimestamp(grouped.get(b)?.[0]?.publishedAt || grouped.get(b)?.[0]?.pubDate);
+    return bTop - aTop;
+  });
+
+  const maxPerSource = 3;
+  const pickedPerSource = new Map<string, number>();
+  const selected: HomeRssItem[] = [];
+  let progress = true;
+
+  while (selected.length < maxItems && progress) {
+    progress = false;
+    for (const source of orderedSources) {
+      if (selected.length >= maxItems) break;
+      const list = grouped.get(source);
+      if (!list?.length) continue;
+      const used = pickedPerSource.get(source) || 0;
+      if (used >= maxPerSource) continue;
+      const next = list.shift();
+      if (!next) continue;
+      selected.push(next);
+      pickedPerSource.set(source, used + 1);
+      progress = true;
+    }
+  }
+
+  return selected;
 }
 
 function toTimestamp(value?: string | null) {
@@ -250,20 +316,7 @@ export function HomeRssFeed({ isEn }: HomeRssFeedProps) {
   }, [isEn, refreshTick]);
 
   const prioritizedItems = React.useMemo(() => {
-    const dedup = new Map<string, HomeRssItem>();
-    for (const item of items) {
-      const link = safeExternalUrl(item.link) || cleanText(item.link);
-      if (!link) continue;
-      if (!dedup.has(link)) dedup.set(link, { ...item, link });
-    }
-
-    return Array.from(dedup.values())
-      .sort((a, b) => {
-        const sourceDiff = sourcePriority(sourceLabel(a)) - sourcePriority(sourceLabel(b));
-        if (sourceDiff !== 0) return sourceDiff;
-        return toTimestamp(b.publishedAt || b.pubDate) - toTimestamp(a.publishedAt || a.pubDate);
-      })
-      .slice(0, 9);
+    return selectDiverseItems(items, 9);
   }, [items]);
 
   React.useEffect(() => {
