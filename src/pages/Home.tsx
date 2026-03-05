@@ -2,9 +2,9 @@ import { PublicLayout } from "@/components/layout/PublicLayout";
 import { ArrivalGuide } from "@/components/home/ArrivalGuide";
 import { VideoBanner } from "@/components/home/VideoBanner";
 import { HomeCtas } from "@/components/home/HomeCtas";
+import { HomeRssFeed } from "@/components/home/HomeRssFeed";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { RecentDossiers } from "@/components/dashboard/RecentDossiers";
-import { MarketAlerts } from "@/components/dashboard/MarketAlerts";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { useI18n } from "@/contexts/LanguageContext";
 
@@ -26,7 +26,7 @@ export default function Home() {
         <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-4 pt-6 sm:gap-8 sm:px-6 lg:gap-10 lg:px-10">
           <QuickActions isEn={isEn} />
           <RecentDossiers isEn={isEn} />
-          <MarketAlerts isEn={isEn} />
+          <HomeRssFeed isEn={isEn} />
           <VideoBanner isEn={isEn} />
           <HomeCtas isEn={isEn} />
         </div>
