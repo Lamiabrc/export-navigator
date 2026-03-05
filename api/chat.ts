@@ -1324,17 +1324,17 @@ function buildAnswerMarkdown(params: {
   if (hasPendingInput) {
     return [
       fr
-        ? "Merci pour votre message. On avance simplement, une information a la fois."
-        : "Thanks for your message. We will move forward simply, one item at a time.",
+        ? "Merci pour votre message."
+        : "Thank you for your message.",
       "",
       fr
-        ? "Pour vous repondre precisement, j'ai besoin de cette information:"
-        : "To answer precisely, I need this information:",
-      `- ${priorityQuestion}`,
+        ? "Pour avancer clairement, j'ai besoin d'une seule precision:"
+        : "To move forward clearly, I need one detail:",
+      priorityQuestion,
       "",
       fr
-        ? "Repondez a cette seule question et je vous donne immediatement la suite, de facon claire."
-        : "Reply to this single question and I will immediately provide the next clear step.",
+        ? "Des que vous me repondez, je vous donne la suite precise."
+        : "As soon as you reply, I will give you the precise next step.",
     ].join("\n");
   }
 
@@ -1537,7 +1537,6 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
 
     const allMissingQuestions = runtime.buildMissingQuestions(finalContext, preferredLang).slice(0, 5);
     const missingQuestions = allMissingQuestions.slice(0, 1);
-    const followUpQuestions = missingQuestions;
     const globalTradeIntent = runtime.detectGlobalTradeIntent({
       question: message,
       product: finalContext.product,
@@ -1595,6 +1594,9 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
 
     const entities = toEntities(finalContext, message);
     const mainBlocker = findMainBlocker(checks);
+    const followUpQuestions = [
+      questionFromFieldPath(mainBlocker?.fieldPath, preferredLang) || missingQuestions[0] || null,
+    ].filter((item): item is string => Boolean(item));
 
     const payload = ChatResponseSchema.parse({
       ok: true,

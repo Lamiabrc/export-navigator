@@ -347,34 +347,6 @@ function readFormContext(): CopilotFormContext {
   };
 }
 
-function detectProductOrHsInPrompt(question: string) {
-  const normalized = normalizePrompt(question);
-  if (!normalized) return false;
-  if (/\b\d{6,10}\b/.test(normalized)) return true;
-  if (/\b(exportateur|importateur)\s+(de|d)\s+[a-z0-9]/.test(normalized)) return true;
-  if (/\b(produit|marchandise)\b/.test(normalized)) return true;
-  if (/\b(banane|acier|ferraille|drone|logiciel|chiffrement|cacao|textile|pharma)\b/.test(normalized)) return true;
-  return false;
-}
-
-function withPriorityFollowUp(params: {
-  followUps: string[];
-  countryKnown: boolean;
-  productKnown: boolean;
-}) {
-  const countryQuestion = "Quel est le pays de destination exact (et pays de transit si applicable) ?";
-  const productQuestion = "Quel est le produit exact (nom commercial + composition/usage) ?";
-
-  const base = Array.from(new Set(params.followUps.filter(Boolean)));
-  if (params.productKnown && !params.countryKnown) {
-    return [countryQuestion, ...base.filter((q) => q !== countryQuestion)];
-  }
-  if (params.countryKnown && !params.productKnown) {
-    return [productQuestion, ...base.filter((q) => q !== productQuestion)];
-  }
-  return base;
-}
-
 function followUpToAction(question: string): FollowUpAction {
   const normalized = normalizePrompt(question);
   if (/\b(pays|destination|transit|origin|origine)\b/.test(normalized)) {
@@ -431,6 +403,19 @@ function buildPromptFromGuidedForm(values: GuidedFormValues) {
   );
   lines.push("Donne une décision provisoire, checklist, risques et actions.");
   return lines.join("\n");
+}
+
+function buildGuidedFormDisplayMessage(values: GuidedFormValues) {
+  const parts: string[] = [];
+  if (values.flow !== "unknown") parts.push(`flux ${values.flow}`);
+  if (values.destination.trim()) parts.push(`destination ${values.destination.trim()}`);
+  if (values.productOrHs.trim()) parts.push(`produit/HS ${values.productOrHs.trim()}`);
+
+  if (!parts.length) {
+    return "J'ai rempli le formulaire rapide. Pouvez-vous poursuivre l'analyse ?";
+  }
+
+  return `J'ai rempli le formulaire rapide (${parts.join(", ")}). Pouvez-vous poursuivre l'analyse ?`;
 }
 
 function buildWatchLinks(isAuthenticated: boolean) {
@@ -536,29 +521,12 @@ export default function Copilote() {
         ? "indisponible"
         : `${Math.max(0, Number(remaining ?? 0))}/${quotaLimit}`;
 
-  const applyDraftAndFocus = React.useCallback((value: string) => {
-    setDraft(value);
-    window.setTimeout(() => inputRef.current?.focus(), 0);
-  }, []);
-
-  const applyFollowUpAction = React.useCallback(
-    (action: FollowUpAction) => {
-      if (action.guidedField) {
-        setQuickFormOpen(true);
-      }
-      if (action.guidedField && guidedFormRef.current) {
-        guidedFormRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-      applyDraftAndFocus(action.value);
-    },
-    [applyDraftAndFocus],
-  );
-
-  const send = React.useCallback(async (preset?: string) => {
+  const send = React.useCallback(async (preset?: string, options?: { displayMessage?: string }) => {
     const question = (preset ?? draft).trim();
     if (!question || loading) return;
 
-    const userMsg: ChatMessage = { id: uid(), role: "user", content: question };
+    const displayMessage = String(options?.displayMessage || question).trim() || question;
+    const userMsg: ChatMessage = { id: uid(), role: "user", content: displayMessage };
     setMessages((prev) => [...prev, userMsg]);
     setDraft("");
     setLoading(true);
@@ -612,7 +580,6 @@ export default function Copilote() {
       if (finalBuyerCountry) setDestinationCountry(finalBuyerCountry);
       const countryKnown = Boolean(finalBuyerCountry || finalSellerCountry);
       const resolvedDestination = finalBuyerCountry;
-      const productKnownFromPrompt = detectProductOrHsInPrompt(question);
 
       const questionForApi = resolvedDestination && isLikelyCountryOnlyPrompt(question, resolvedDestination)
         ? `Destination: ${resolvedDestination}. Je n'ai donne que le pays. Donne d'abord les regles generales puis demande le produit pour affiner.`
@@ -675,11 +642,7 @@ export default function Copilote() {
         ? filteredModelFollowUps.slice(0, 3)
         : (filteredGuidedFollowUps.length ? filteredGuidedFollowUps.slice(0, 3) : guided.followUpQuestions.slice(0, 3));
 
-      const prioritizedFollowUpQuestions = withPriorityFollowUp({
-        followUps: followUpQuestions,
-        countryKnown,
-        productKnown: productKnownFromPrompt,
-      }).slice(0, 1);
+      const prioritizedFollowUpQuestions = followUpQuestions.slice(0, 1);
 
       const blocks = buildAssistantBlocks(data?.dossier) || guidedBlocks;
       const uncertain = isUncertainAnswer(answerRaw);
@@ -778,7 +741,9 @@ export default function Copilote() {
 
   const sendGuidedForm = React.useCallback(() => {
     const prompt = buildPromptFromGuidedForm(guidedForm);
-    void send(prompt);
+    const displayMessage = buildGuidedFormDisplayMessage(guidedForm);
+    setQuickFormOpen(false);
+    void send(prompt, { displayMessage });
   }, [guidedForm, send]);
 
   const sendGeneralUnknown = React.useCallback(() => {
@@ -828,25 +793,6 @@ export default function Copilote() {
                       </div>
                     ) : null}
 
-                    {m.role === "assistant" && m.followUpQuestions?.length ? (
-                      <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/70 pt-2">
-                        {m.followUpQuestions.map((q) => {
-                          const action = followUpToAction(q);
-                          return (
-                            <Button
-                              key={`${m.id}-${q}`}
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-7 rounded-full px-2 text-[11px]"
-                              onClick={() => applyFollowUpAction(action)}
-                            >
-                              {action.label || "Repondre"}
-                            </Button>
-                          );
-                        })}
-                      </div>
-                    ) : null}
                   </div>
                 </div>
               ))}

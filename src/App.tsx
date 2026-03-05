@@ -372,6 +372,14 @@ export default function App() {
                             </ProtectedRoute>
                           }
                         />
+                        <Route
+                          path="/app/veille"
+                          element={
+                            <ProtectedRoute>
+                              <Navigate to="/app/centre-veille/reglementation" replace />
+                            </ProtectedRoute>
+                          }
+                        />
 
                         <Route
                           path="/app/centre-veille/secteurs"
