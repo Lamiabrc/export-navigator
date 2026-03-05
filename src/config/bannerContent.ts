@@ -81,6 +81,9 @@ export function getBannerContent(pathname: string): BannerContent {
     if (path.includes("sales-dashboard")) {
       return { title: "Dashboard ventes", question: "Quels deals accelerer cette semaine ?" };
     }
+    if (path.includes("/app/dossiers")) {
+      return { title: "Dossiers export", question: "Quel dossier faut-il securiser maintenant ?" };
+    }
     if (path.includes("/app/deals")) {
       return { title: "Pipeline deals", question: "Quel deal faut-il securiser maintenant ?" };
     }

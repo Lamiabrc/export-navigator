@@ -18,6 +18,7 @@ type HomeRssItem = {
   why_relevant?: string | null;
   publishedAt?: string | null;
   pubDate?: string | null;
+  imageUrl?: string | null;
 };
 
 type HomeRssApiPayload = {
@@ -44,17 +45,67 @@ const FALLBACK_PINNED_LABELS = [
 ];
 
 function safeExternalUrl(url?: string) {
-  if (!url) return null;
-  if (!/^https?:\/\//i.test(url)) return null;
-  return url;
+  const raw = cleanText(url);
+  if (!raw) return null;
+  if (!/^https?:\/\//i.test(raw)) return null;
+  return raw;
+}
+
+const NAMED_HTML_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+};
+
+function decodeHtmlEntities(input?: string | null) {
+  const toSafeCodePoint = (value: number, fallback: string) => {
+    if (!Number.isFinite(value) || value < 0 || value > 0x10ffff) return fallback;
+    try {
+      return String.fromCodePoint(value);
+    } catch {
+      return fallback;
+    }
+  };
+
+  let text = String(input || "");
+  for (let i = 0; i < 2; i += 1) {
+    const decoded = text
+      .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => {
+        const code = Number.parseInt(hex, 16);
+        return toSafeCodePoint(code, _);
+      })
+      .replace(/&#([0-9]+);?/g, (_, dec: string) => {
+        const code = Number.parseInt(dec, 10);
+        return toSafeCodePoint(code, _);
+      })
+      .replace(/&([a-zA-Z]+);/g, (_, name: string) => NAMED_HTML_ENTITIES[name] ?? _);
+    if (decoded === text) break;
+    text = decoded;
+  }
+  return text;
+}
+
+function cleanText(input?: string | null) {
+  return decodeHtmlEntities(input).replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function safeImageUrl(url?: string | null) {
+  const raw = cleanText(url);
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("//")) return `https:${raw}`;
+  return null;
 }
 
 function normalizeText(value?: string | null) {
-  return String(value || "").trim().toLowerCase();
+  return cleanText(value).toLowerCase();
 }
 
 function sourceLabel(item: HomeRssItem) {
-  return String(item.sourceName || item.source || "").trim() || "Source";
+  return cleanText(item.sourceName || item.source || "") || "Source";
 }
 
 function sourcePriority(label: string) {
@@ -81,18 +132,42 @@ function formatDate(value: string | null | undefined, isEn: boolean) {
 }
 
 function compactText(input: string, max = 180) {
-  const text = input.replace(/\s+/g, " ").trim();
+  const text = cleanText(input);
   if (!text) return "";
   if (text.length <= max) return text;
   return `${text.slice(0, max - 1).trimEnd()}...`;
 }
 
 function previewText(item: HomeRssItem, isEn: boolean) {
-  const candidate = String(item.summary || item.why_relevant || item.description || "").trim();
+  const candidate = cleanText(item.summary || item.why_relevant || item.description || "");
   if (candidate) return compactText(candidate, 190);
   return isEn
     ? "Open the article for a full summary and operational impact."
     : "Ouvrir l'article pour voir le resume complet et son impact operationnel.";
+}
+
+function RssArticlePreviewImage({ src, alt, isEn }: { src?: string | null; alt: string; isEn: boolean }) {
+  const [hasError, setHasError] = React.useState(false);
+  const safeSrc = !hasError ? safeImageUrl(src) : null;
+
+  if (!safeSrc) {
+    return (
+      <div className="flex aspect-[16/9] w-full items-center justify-center rounded-lg border border-slate-200 bg-slate-100 text-[11px] font-medium text-slate-500">
+        {isEn ? "No preview image" : "Apercu image indisponible"}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={safeSrc}
+      alt={alt}
+      className="aspect-[16/9] w-full rounded-lg border border-slate-200 object-cover"
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setHasError(true)}
+    />
+  );
 }
 
 export function HomeRssFeed({ isEn }: HomeRssFeedProps) {
@@ -126,7 +201,9 @@ export function HomeRssFeed({ isEn }: HomeRssFeedProps) {
         if (!mounted) return;
 
         const nextItems = Array.isArray(payload.items) ? payload.items : [];
-        const nextPinned = Array.isArray(payload.pinned) && payload.pinned.length ? payload.pinned : FALLBACK_PINNED_LABELS;
+        const nextPinnedRaw =
+          Array.isArray(payload.pinned) && payload.pinned.length ? payload.pinned : FALLBACK_PINNED_LABELS;
+        const nextPinned = nextPinnedRaw.map((label) => cleanText(label)).filter(Boolean);
 
         setItems(nextItems);
         setPinnedLabels(nextPinned);
@@ -158,9 +235,9 @@ export function HomeRssFeed({ isEn }: HomeRssFeedProps) {
   const prioritizedItems = React.useMemo(() => {
     const dedup = new Map<string, HomeRssItem>();
     for (const item of items) {
-      const link = String(item.link || "").trim();
+      const link = safeExternalUrl(item.link) || cleanText(item.link);
       if (!link) continue;
-      if (!dedup.has(link)) dedup.set(link, item);
+      if (!dedup.has(link)) dedup.set(link, { ...item, link });
     }
 
     return Array.from(dedup.values())
@@ -242,14 +319,15 @@ export function HomeRssFeed({ isEn }: HomeRssFeedProps) {
                 const href = safeExternalUrl(item.link);
                 const source = sourceLabel(item);
                 const publishedLabel = formatDate(item.publishedAt || item.pubDate, isEn);
-                const key = String(item.id || item.link || item.title || Math.random().toString(36));
+                const title = cleanText(item.title || "") || (isEn ? "Article" : "Article");
+                const key = String(item.id || item.link || title || Math.random().toString(36));
 
                 return (
                   <article key={key} className="rounded-xl border border-slate-200 bg-white p-3">
-                    <div className="flex min-h-[66px] items-start justify-between gap-2">
-                      <h3 className="line-clamp-2 text-sm font-semibold text-slate-900">
-                        {item.title || (isEn ? "Article" : "Article")}
-                      </h3>
+                    <RssArticlePreviewImage src={item.imageUrl} alt={title} isEn={isEn} />
+
+                    <div className="mt-3 flex min-h-[66px] items-start justify-between gap-2">
+                      <h3 className="line-clamp-2 text-sm font-semibold text-slate-900">{title}</h3>
                       {href ? <ExternalLink className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" /> : null}
                     </div>
 

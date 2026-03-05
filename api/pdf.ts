@@ -1,8 +1,179 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { allowCors, readJson } from "../src/server/supabaseAdmin.js";
+import { allowCors, json, readJson } from "../src/server/supabaseAdmin.js";
+
+type PdfExtractLine = {
+  description?: string | null;
+  product_text?: string | null;
+  hsCode?: string | null;
+  hs6?: string | null;
+  quantity?: number | string | null;
+  amountHT?: number | string | null;
+  unit_price?: number | string | null;
+  total_value?: number | string | null;
+};
+
+type PdfExtractParsed = {
+  invoiceNumber?: string | null;
+  supplier?: string | null;
+  date?: string | null;
+  totalHT?: number | string | null;
+  totalTTC?: number | string | null;
+  billingCountry?: string | null;
+  rawText?: string | null;
+  lineItems?: PdfExtractLine[];
+};
+
+type PdfExtractPayload = {
+  mode?: string | null;
+  parsed?: PdfExtractParsed | null;
+  to_country?: string | null;
+  product_desc?: string | null;
+  currency?: string | null;
+};
 
 function toText(v: any) {
   return String(v ?? "").trim();
+}
+
+function toNumberOrNull(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toCurrencyCode(v: unknown) {
+  const code = String(v || "").trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(code) ? code : null;
+}
+
+function detectCurrency(rawText: string) {
+  const text = String(rawText || "").toUpperCase();
+  if (/\bUSD\b|\$/i.test(text)) return "USD";
+  if (/\bGBP\b|£/.test(text)) return "GBP";
+  if (/\bCHF\b/.test(text)) return "CHF";
+  if (/\bCAD\b/.test(text)) return "CAD";
+  if (/\bJPY\b|¥/.test(text)) return "JPY";
+  if (/\bCNY\b|RMB/.test(text)) return "CNY";
+  return "EUR";
+}
+
+function normalizeCountryIso2(input: unknown) {
+  const raw = String(input || "").trim().toUpperCase();
+  if (!raw) return null;
+  if (/^[A-Z]{2}$/.test(raw)) return raw;
+
+  const key = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z]/g, "");
+
+  const map: Record<string, string> = {
+    FRANCE: "FR",
+    FRENCH: "FR",
+    ALLEMAGNE: "DE",
+    GERMANY: "DE",
+    ESPAGNE: "ES",
+    SPAIN: "ES",
+    ITALIE: "IT",
+    ITALY: "IT",
+    BELGIQUE: "BE",
+    BELGIUM: "BE",
+    PAYSBAS: "NL",
+    NETHERLANDS: "NL",
+    SUISSE: "CH",
+    SWITZERLAND: "CH",
+    ROYAUMEUNI: "GB",
+    UNITEDKINGDOM: "GB",
+    ETATSUNIS: "US",
+    UNITEDSTATES: "US",
+    USA: "US",
+    CANADA: "CA",
+    CHINE: "CN",
+    CHINA: "CN",
+    JAPON: "JP",
+    JAPAN: "JP",
+    MAROC: "MA",
+    MOROCCO: "MA",
+  };
+  return map[key] || null;
+}
+
+function normalizeHs6(input: unknown) {
+  const digits = String(input || "").replace(/[^0-9]/g, "");
+  if (digits.length < 4) return null;
+  return digits.slice(0, 6);
+}
+
+function extractFromParsed(payload: PdfExtractPayload) {
+  const parsed = (payload.parsed || {}) as PdfExtractParsed;
+  const linesRaw = Array.isArray(parsed.lineItems) ? parsed.lineItems : [];
+  const inferredCurrency =
+    toCurrencyCode(payload.currency) ||
+    detectCurrency(String(parsed.rawText || ""));
+
+  const items = linesRaw
+    .map((line, idx) => {
+      const quantity = toNumberOrNull(line.quantity);
+      const totalValue =
+        toNumberOrNull(line.total_value) ??
+        toNumberOrNull(line.amountHT);
+
+      let unitPrice = toNumberOrNull(line.unit_price);
+      if (unitPrice === null && totalValue !== null && quantity !== null && quantity > 0) {
+        unitPrice = Number((totalValue / quantity).toFixed(4));
+      }
+
+      const productText =
+        toText(line.description) ||
+        toText(line.product_text) ||
+        `Ligne ${idx + 1}`;
+
+      return {
+        line_no: idx + 1,
+        product_text: productText,
+        hs6: normalizeHs6(line.hs6 || line.hsCode),
+        quantity,
+        unit_price: unitPrice,
+        total_value: totalValue,
+        currency: inferredCurrency,
+      };
+    })
+    .filter((line) => line.product_text || line.total_value !== null);
+
+  const summedAmount = Number(
+    items.reduce((acc, line) => acc + Number(line.total_value || 0), 0).toFixed(2)
+  );
+
+  const valueAmount =
+    toNumberOrNull(parsed.totalHT) ??
+    toNumberOrNull(parsed.totalTTC) ??
+    (summedAmount > 0 ? summedAmount : null);
+
+  const firstProduct = items.find((line) => toText(line.product_text));
+  const productDesc = toText(payload.product_desc) || firstProduct?.product_text || null;
+
+  const toCountry =
+    normalizeCountryIso2(payload.to_country) ||
+    normalizeCountryIso2(parsed.billingCountry);
+
+  return {
+    source_type: "invoice_pdf",
+    to_country: toCountry,
+    currency: inferredCurrency,
+    value_amount: valueAmount,
+    product_desc: productDesc,
+    items,
+    metadata: {
+      invoice_number: toText(parsed.invoiceNumber) || null,
+      supplier: toText(parsed.supplier) || null,
+      invoice_date: toText(parsed.date) || null,
+    },
+    title_suggestion:
+      toText(parsed.invoiceNumber)
+        ? `Dossier ${toText(parsed.invoiceNumber)}`
+        : productDesc
+          ? `Dossier ${productDesc}`
+          : "Nouveau dossier export",
+  };
 }
 
 export default allowCors(async function handler(req: any, res: any) {
@@ -14,8 +185,15 @@ export default allowCors(async function handler(req: any, res: any) {
 
   try {
     const payload = await readJson<any>(req);
+    const mode = toText(payload?.mode).toLowerCase();
 
-    const title = toText(payload?.title) || "Rapport de contrôle export";
+    if (mode === "extract") {
+      const extracted = extractFromParsed(payload as PdfExtractPayload);
+      json(res, 200, { ok: true, mode: "extract", extracted });
+      return;
+    }
+
+    const title = toText(payload?.title) || "Rapport de controle export";
     const email = toText(payload?.email);
     const destination = toText(payload?.destination);
     const incoterm = toText(payload?.incoterm);
@@ -53,7 +231,7 @@ export default allowCors(async function handler(req: any, res: any) {
     }
 
     y -= 10;
-    page.drawText("Synthèse estimation (indicative)", { x, y, size: 12, font: bold });
+    page.drawText("Synthese estimation (indicative)", { x, y, size: 12, font: bold });
     y -= 18;
 
     if (landed) {
@@ -64,11 +242,11 @@ export default allowCors(async function handler(req: any, res: any) {
       page.drawText(`Total : ${Number(landed.total || 0).toFixed(0)} ${landed.currency || currency}`, { x, y, size: 12, font: bold });
       y -= 18;
     } else {
-      page.drawText("Aucune donnée de coût fournie.", { x, y, size: 11, font });
+      page.drawText("Aucune donnee de cout fournie.", { x, y, size: 11, font });
       y -= 16;
     }
 
-    page.drawText("Note : ce rapport est informatif. Validation humaine recommandée.", {
+    page.drawText("Note : ce rapport est informatif. Validation humaine recommandee.", {
       x,
       y: 60,
       size: 9,
@@ -78,7 +256,7 @@ export default allowCors(async function handler(req: any, res: any) {
 
     const bytes = await pdf.save();
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="mpl-rapport-export.pdf"`);
+    res.setHeader("Content-Disposition", 'attachment; filename="mpl-rapport-export.pdf"');
     res.statusCode = 200;
     res.end(Buffer.from(bytes));
   } catch (e: any) {

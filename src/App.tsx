@@ -41,6 +41,7 @@ import ExportSimulator from "@/pages/ExportSimulator";
 import Simulator from "@/pages/Simulator";
 import DealsBoard from "@/pages/DealsBoard";
 import DealDetail from "@/pages/DealDetail";
+import DossierWizard from "@/pages/DossierWizard";
 import DashboardVentes from "@/pages/DashboardVentes";
 import MarketFinder from "@/pages/MarketFinder";
 import LeadTemplates from "@/pages/LeadTemplates";
@@ -243,7 +244,7 @@ export default function App() {
                           path="/app/deals"
                           element={
                             <ProtectedRoute>
-                              <DealsBoard />
+                              <DealsBoard mode="deals" />
                             </ProtectedRoute>
                           }
                         />
@@ -252,7 +253,34 @@ export default function App() {
                           path="/app/deals/:dealId"
                           element={
                             <ProtectedRoute>
-                              <DealDetail />
+                              <DealDetail mode="deals" />
+                            </ProtectedRoute>
+                          }
+                        />
+
+                        <Route
+                          path="/app/dossiers"
+                          element={
+                            <ProtectedRoute>
+                              <DealsBoard mode="dossiers" />
+                            </ProtectedRoute>
+                          }
+                        />
+
+                        <Route
+                          path="/app/dossiers/new"
+                          element={
+                            <ProtectedRoute>
+                              <DossierWizard />
+                            </ProtectedRoute>
+                          }
+                        />
+
+                        <Route
+                          path="/app/dossiers/:dealId"
+                          element={
+                            <ProtectedRoute>
+                              <DealDetail mode="dossiers" />
                             </ProtectedRoute>
                           }
                         />
@@ -473,6 +501,7 @@ export default function App() {
                         <Route path="/explore" element={<Navigate to="/app/explore" replace />} />
                         <Route path="/sales" element={<Navigate to="/app/sales-dashboard" replace />} />
                         <Route path="/deals" element={<Navigate to="/app/deals" replace />} />
+                        <Route path="/dossiers" element={<Navigate to="/app/dossiers" replace />} />
                         <Route path="/deal/:dealId" element={<LegacyDealRedirect />} />
                         <Route path="/market-finder" element={<Navigate to="/app/market-finder" replace />} />
                         <Route path="/lead-finder" element={<Navigate to="/app/lead-templates" replace />} />

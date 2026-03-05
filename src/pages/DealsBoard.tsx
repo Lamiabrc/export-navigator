@@ -65,10 +65,16 @@ function money(value: number, currency: string, lang: "fr" | "en") {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
-export default function DealsBoard() {
+type DealsBoardProps = {
+  mode?: "deals" | "dossiers";
+};
+
+export default function DealsBoard({ mode = "deals" }: DealsBoardProps) {
   const { lang } = useI18n();
   const uiLang = lang === "en" ? "en" : "fr";
   const location = useLocation();
+  const isDossierMode = mode === "dossiers" || location.pathname.startsWith("/app/dossiers");
+  const detailBasePath = isDossierMode ? "/app/dossiers" : "/app/deals";
 
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -82,11 +88,14 @@ export default function DealsBoard() {
     () =>
       uiLang === "en"
         ? {
-            title: "Deals Pipeline",
-            subtitle: "Light CRM for sales + compliance. Create a deal and secure it in one click.",
-            create: "Create deal",
+            title: isDossierMode ? "Export Dossiers" : "Deals Pipeline",
+            subtitle: isDossierMode
+              ? "Operational dossiers linked to compliance and documentation."
+              : "Light CRM for sales + compliance. Create a deal and secure it in one click.",
+            create: isDossierMode ? "Create dossier" : "Create deal",
             reset: "Reset",
-            secure: "Secure deal",
+            secure: isDossierMode ? "Open dossier" : "Secure deal",
+            wizard: "New dossier (Wizard)",
             account: "Account",
             amount: "Amount",
             currency: "Currency",
@@ -95,15 +104,18 @@ export default function DealsBoard() {
             product: "Product",
             incoterm: "Incoterm",
             notes: "Notes",
-            titleField: "Deal title",
-            empty: "No deals in this stage yet.",
+            titleField: isDossierMode ? "Dossier title" : "Deal title",
+            empty: isDossierMode ? "No dossier in this stage yet." : "No deals in this stage yet.",
           }
         : {
-            title: "Pipeline des deals",
-            subtitle: "CRM leger ventes + conformite. Creez un deal puis securisez-le en un clic.",
-            create: "Creer le deal",
+            title: isDossierMode ? "Dossiers export" : "Pipeline des deals",
+            subtitle: isDossierMode
+              ? "Dossiers operationnels relies a la conformite et aux documents."
+              : "CRM leger ventes + conformite. Creez un deal puis securisez-le en un clic.",
+            create: isDossierMode ? "Creer le dossier" : "Creer le deal",
             reset: "Reinitialiser",
-            secure: "Securiser le deal",
+            secure: isDossierMode ? "Ouvrir le dossier" : "Securiser le deal",
+            wizard: "Nouveau dossier (Wizard)",
             account: "Compte",
             amount: "Montant",
             currency: "Devise",
@@ -112,10 +124,10 @@ export default function DealsBoard() {
             product: "Produit",
             incoterm: "Incoterm",
             notes: "Notes",
-            titleField: "Titre du deal",
-            empty: "Aucun deal dans cette etape.",
+            titleField: isDossierMode ? "Titre du dossier" : "Titre du deal",
+            empty: isDossierMode ? "Aucun dossier dans cette etape." : "Aucun deal dans cette etape.",
           },
-    [uiLang]
+    [isDossierMode, uiLang]
   );
 
   const load = React.useCallback(async () => {
@@ -191,6 +203,14 @@ export default function DealsBoard() {
             <CardDescription>{copy.subtitle}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="flex justify-end">
+              <Button asChild>
+                <Link to="/app/dossiers/new">
+                  <Plus className="mr-2 h-4 w-4" />
+                  {copy.wizard}
+                </Link>
+              </Button>
+            </div>
             {warning ? <p className="text-xs text-amber-700">{warning}</p> : null}
             {error ? <p className="text-xs text-rose-700">{error}</p> : null}
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -331,7 +351,7 @@ export default function DealsBoard() {
                         <span>{getCountryLabel(deal.to_country, uiLang)}</span>
                       </div>
                       <Button asChild size="sm" className="w-full">
-                        <Link to={`/app/deals/${deal.id}`}>
+                        <Link to={`${detailBasePath}/${deal.id}`}>
                           <ShieldCheck className="mr-2 h-4 w-4" />
                           {copy.secure}
                         </Link>

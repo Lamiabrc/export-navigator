@@ -250,6 +250,44 @@ function truncate(s: string, n: number) {
   return `${t.slice(0, n - 1).trimEnd()}...`;
 }
 
+const NAMED_HTML_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+};
+
+function decodeHtmlEntities(input: string) {
+  const toSafeCodePoint = (value: number, fallback: string) => {
+    if (!Number.isFinite(value) || value < 0 || value > 0x10ffff) return fallback;
+    try {
+      return String.fromCodePoint(value);
+    } catch {
+      return fallback;
+    }
+  };
+
+  let text = String(input || "");
+  for (let i = 0; i < 2; i += 1) {
+    const decoded = text
+      .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => {
+        const code = Number.parseInt(hex, 16);
+        return toSafeCodePoint(code, _);
+      })
+      .replace(/&#([0-9]+);?/g, (_, dec: string) => {
+        const code = Number.parseInt(dec, 10);
+        return toSafeCodePoint(code, _);
+      })
+      .replace(/&([a-zA-Z]+);/g, (_, name: string) => NAMED_HTML_ENTITIES[name] ?? _);
+
+    if (decoded === text) break;
+    text = decoded;
+  }
+  return text;
+}
+
 function toIsoDate(value: any): string | null {
   if (!value) return null;
   try {
@@ -466,14 +504,16 @@ function toUtcDate(value?: string | null) {
 }
 
 function stripHtml(html: string) {
-  return (html || "")
+  const plain = (html || "")
     .replace(/<!\[CDATA\[/g, "")
     .replace(/\]\]>/g, "")
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<[^>]+>/g, " ")
+    .replace(/\u00a0/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  return decodeHtmlEntities(plain);
 }
 
 function extractTag(block: string, tag: string) {
@@ -485,18 +525,26 @@ function extractTag(block: string, tag: string) {
 function extractAttr(block: string, tag: string, attr: string) {
   const re = new RegExp(`<${tag}[^>]*\\s${attr}="([^"]+)"[^>]*\\/?>(?:<\\/${tag}>)?`, "i");
   const m = block.match(re);
-  return m?.[1]?.trim() || "";
+  return decodeHtmlEntities(m?.[1]?.trim() || "");
 }
 
 function extractFirstImgSrc(html: string) {
   const m = (html || "").match(/<img[^>]+src=["']([^"']+)["']/i);
-  return m?.[1]?.trim() || "";
+  return decodeHtmlEntities(m?.[1]?.trim() || "");
 }
 
 function normalizeLink(link: string) {
-  const l = (link || "").trim();
+  const l = decodeHtmlEntities(link || "").trim();
   if (!l) return "";
   return l.replace(/\s+/g, "");
+}
+
+function normalizeImageUrl(raw: string | null | undefined) {
+  const value = decodeHtmlEntities(String(raw || "")).trim();
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith("//")) return `https:${value}`;
+  return null;
 }
 
 function isAtom(xml: string) {
@@ -532,7 +580,7 @@ function parseRssItems(xml: string) {
       link,
       description: summary,
       pubDate: publishedAt,
-      imageUrl: mediaImg || imgFromDesc || null,
+      imageUrl: normalizeImageUrl(mediaImg || imgFromDesc || null),
     });
   }
 
@@ -568,7 +616,7 @@ function parseAtomItems(xml: string) {
       link,
       description: summary,
       pubDate: publishedAt,
-      imageUrl: mediaImg || imgFromSummary || null,
+      imageUrl: normalizeImageUrl(mediaImg || imgFromSummary || null),
     });
   }
 
@@ -684,24 +732,29 @@ function mapRowToItem(row: any): ApiItem | null {
   const feedPublic = feed?.is_public;
   if (feedEnabled === false || feedPublic === false) return null;
 
-  const link = String(row.link || "").trim();
+  const link = normalizeLink(String(row.link || ""));
   if (!link) return null;
 
-  const title = String(row.title || "").trim() || "Sans titre";
-  const summary = row.summary ? truncate(String(row.summary), 320) : null;
+  const title = decodeHtmlEntities(String(row.title || "").trim()) || "Sans titre";
+  const summaryRaw = row.summary ? decodeHtmlEntities(String(row.summary || "")) : "";
+  const summary = summaryRaw ? truncate(summaryRaw, 320) : null;
   const publishedAt = toIsoDate(row.published_at) || toIsoDate(row.created_at);
 
-  const source = (feed?.source_name || feed?.name || row.source || null) as string | null;
+  const sourceRaw = decodeHtmlEntities(String(feed?.source_name || feed?.name || row.source || "").trim());
+  const source = sourceRaw || null;
   const zone = (row.territory || feed?.territory || null) as string | null;
   const territory = zone;
-  const category = (row.category || feed?.category || null) as string | null;
+  const categoryRaw = decodeHtmlEntities(String(row.category || feed?.category || "").trim());
+  const category = categoryRaw || null;
   const tags = Array.isArray(row.tags) ? row.tags : Array.isArray(feed?.tags) ? feed.tags : [];
   const official = isOfficialSource(source, feed?.source_url || null);
   const inferred = inferCategoryAndTags(`${title} ${summary || ""}`, source, category);
 
-  const imageUrl = (row.image_url || row.imageUrl || feed?.logo_url || null) as string | null;
-  const whyRelevant = String(row.why_relevant || "").trim() || summary || null;
-  const actionRequired = String(row.action_required || "").trim() || actionHintForCategory(category || inferred.category);
+  const imageUrl = normalizeImageUrl(row.image_url || row.imageUrl || feed?.logo_url || null);
+  const whyRelevantRaw = decodeHtmlEntities(String(row.why_relevant || "").trim());
+  const whyRelevant = whyRelevantRaw || summary || null;
+  const actionRequiredRaw = decodeHtmlEntities(String(row.action_required || "").trim());
+  const actionRequired = actionRequiredRaw || actionHintForCategory(category || inferred.category);
   return {
     title,
     link,
@@ -713,7 +766,9 @@ function mapRowToItem(row: any): ApiItem | null {
     category: category || inferred.category,
     tags: Array.from(
       new Set([
-        ...tags.map((tag: unknown) => String(tag || "").trim()).filter(Boolean),
+        ...tags
+          .map((tag: unknown) => decodeHtmlEntities(String(tag || "")).trim())
+          .filter(Boolean),
         ...inferred.tags,
       ])
     ),

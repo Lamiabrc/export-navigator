@@ -47,6 +47,16 @@ export type DealItem = {
   created_at: string;
 };
 
+export type CreateDealItemInput = {
+  line_no?: number;
+  product_text: string;
+  hs6?: string | null;
+  quantity?: number | null;
+  unit_price?: number | null;
+  total_value?: number | null;
+  currency?: string | null;
+};
+
 export type DealActivity = {
   id: string;
   deal_id: string;
@@ -104,6 +114,18 @@ function isMissingTableError(err: unknown) {
 function asNumber(value: unknown, fallback = 0) {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
+}
+
+function asNullableNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function asCurrencyCode(value: unknown, fallback = "EUR") {
+  const code = String(value || "").trim().toUpperCase();
+  if (/^[A-Z]{3}$/.test(code)) return code;
+  return fallback;
 }
 
 const demoAccounts: CrmAccount[] = [
@@ -274,7 +296,7 @@ export async function createDeal(input: {
   account_id?: string | null;
   notes?: string | null;
 }) {
-  if (DEMO_MODE) {
+  const createDemoDeal = () => {
     const id = `demo-deal-${Math.random().toString(36).slice(2, 10)}`;
     const created: CrmDeal = {
       id,
@@ -297,6 +319,10 @@ export async function createDeal(input: {
     };
     demoDeals = [created, ...demoDeals];
     return created;
+  };
+
+  if (DEMO_MODE) {
+    return createDemoDeal();
   }
 
   const payload = {
@@ -314,7 +340,10 @@ export async function createDeal(input: {
   };
 
   const { data, error } = await supabase.from("deals").insert(payload).select("*").single();
-  if (error) throw error;
+  if (error) {
+    if (isMissingTableError(error)) return createDemoDeal();
+    throw error;
+  }
   return {
     id: String(data.id),
     title: String(data.title || ""),
@@ -333,6 +362,98 @@ export async function createDeal(input: {
     created_at: String(data.created_at || nowIso()),
     updated_at: String(data.updated_at || nowIso()),
   } satisfies CrmDeal;
+}
+
+export async function createDealItems(dealId: string, items: CreateDealItemInput[]) {
+  const normalized = (items || [])
+    .map((item, index) => {
+      const quantity = asNullableNumber(item.quantity);
+      const unitPrice = asNullableNumber(item.unit_price);
+      const totalValueRaw = asNullableNumber(item.total_value);
+      const totalValue =
+        totalValueRaw !== null
+          ? totalValueRaw
+          : quantity !== null && unitPrice !== null
+          ? Number((quantity * unitPrice).toFixed(2))
+          : null;
+
+      const lineNo = Number.isFinite(Number(item.line_no))
+        ? Math.max(1, Math.trunc(Number(item.line_no)))
+        : index + 1;
+
+      const productText = String(item.product_text || "").trim();
+      const hs6Raw = String(item.hs6 || "").replace(/[^0-9]/g, "");
+
+      return {
+        line_no: lineNo,
+        product_text: productText,
+        hs6: hs6Raw ? hs6Raw.slice(0, 6) : null,
+        quantity,
+        unit_price: unitPrice,
+        total_value: totalValue,
+        currency: asCurrencyCode(item.currency || "EUR", "EUR"),
+      };
+    })
+    .filter((item) => item.product_text.length > 0 || item.total_value !== null);
+
+  if (!normalized.length) return [] as DealItem[];
+
+  const createDemoItems = () => {
+    const now = nowIso();
+    const created = normalized.map((item, index) => ({
+      id: `demo-item-${Math.random().toString(36).slice(2, 10)}-${index}`,
+      deal_id: dealId,
+      line_no: item.line_no,
+      product_text: item.product_text || "-",
+      hs6: item.hs6,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      total_value: item.total_value,
+      currency: item.currency,
+      created_at: now,
+    })) satisfies DealItem[];
+    demoItems.push(...created);
+    return created;
+  };
+
+  if (DEMO_MODE) {
+    return createDemoItems();
+  }
+
+  const payload = normalized.map((item) => ({
+    deal_id: dealId,
+    line_no: item.line_no,
+    product_text: item.product_text || "-",
+    hs6: item.hs6,
+    quantity: item.quantity,
+    unit_price: item.unit_price,
+    total_value: item.total_value,
+    currency: item.currency,
+  }));
+
+  const { data, error } = await supabase
+    .from("deal_items")
+    .insert(payload)
+    .select("id,deal_id,line_no,product_text,hs6,quantity,unit_price,total_value,currency,created_at")
+    .order("line_no", { ascending: true });
+
+  if (error) {
+    if (isMissingTableError(error)) return createDemoItems();
+    throw error;
+  }
+
+  return (data || []).map((row: Record<string, unknown>) => ({
+    id: String(row.id),
+    deal_id: String(row.deal_id),
+    line_no: asNumber(row.line_no, 1),
+    product_text: String(row.product_text || ""),
+    hs6: row.hs6 ? String(row.hs6) : null,
+    quantity: row.quantity === null ? null : asNumber(row.quantity),
+    unit_price: row.unit_price === null ? null : asNumber(row.unit_price),
+    total_value: row.total_value === null ? null : asNumber(row.total_value),
+    currency: row.currency ? String(row.currency) : null,
+    created_at: String(row.created_at || nowIso()),
+  })) as DealItem[];
 }
 
 export async function updateDeal(
@@ -398,10 +519,23 @@ export async function getDealDetail(dealId: string): Promise<DealDetailData> {
     supabase.from("tasks").select("id,deal_id,account_id,title,description,priority,status,due_at,completed_at,created_at").eq("deal_id", dealId).order("created_at", { ascending: false }).limit(40),
   ]);
 
-  if (dealRes.error) throw dealRes.error;
-  if (itemRes.error) throw itemRes.error;
-  if (activityRes.error) throw activityRes.error;
-  if (taskRes.error) throw taskRes.error;
+  if (dealRes.error) {
+    if (isMissingTableError(dealRes.error)) {
+      const deal = demoDeals.find((entry) => entry.id === dealId) || null;
+      const account = deal?.account_id ? demoAccounts.find((entry) => entry.id === deal.account_id) || null : null;
+      return {
+        deal,
+        account,
+        items: demoItems.filter((item) => item.deal_id === dealId),
+        activities: demoActivities.filter((activity) => activity.deal_id === dealId),
+        tasks: demoTasks.filter((task) => task.deal_id === dealId),
+      };
+    }
+    throw dealRes.error;
+  }
+  if (itemRes.error && !isMissingTableError(itemRes.error)) throw itemRes.error;
+  if (activityRes.error && !isMissingTableError(activityRes.error)) throw activityRes.error;
+  if (taskRes.error && !isMissingTableError(taskRes.error)) throw taskRes.error;
 
   const dealRow = dealRes.data as Record<string, unknown> | null;
   const account = (dealRow?.account as CrmAccount | null) || null;
@@ -427,7 +561,11 @@ export async function getDealDetail(dealId: string): Promise<DealDetailData> {
       } satisfies CrmDeal)
     : null;
 
-  const items: DealItem[] = (itemRes.data || []).map((row: Record<string, unknown>) => ({
+  const safeItems = isMissingTableError(itemRes.error) ? [] : itemRes.data || [];
+  const safeActivities = isMissingTableError(activityRes.error) ? [] : activityRes.data || [];
+  const safeTasks = isMissingTableError(taskRes.error) ? [] : taskRes.data || [];
+
+  const items: DealItem[] = safeItems.map((row: Record<string, unknown>) => ({
     id: String(row.id),
     deal_id: String(row.deal_id),
     line_no: asNumber(row.line_no, 1),
@@ -440,7 +578,7 @@ export async function getDealDetail(dealId: string): Promise<DealDetailData> {
     created_at: String(row.created_at || nowIso()),
   }));
 
-  const activities: DealActivity[] = (activityRes.data || []).map((row: Record<string, unknown>) => ({
+  const activities: DealActivity[] = safeActivities.map((row: Record<string, unknown>) => ({
     id: String(row.id),
     deal_id: String(row.deal_id),
     activity_type: String(row.activity_type || "note"),
@@ -449,7 +587,7 @@ export async function getDealDetail(dealId: string): Promise<DealDetailData> {
     created_at: String(row.created_at || nowIso()),
   }));
 
-  const tasks: DealTask[] = (taskRes.data || []).map((row: Record<string, unknown>) => ({
+  const tasks: DealTask[] = safeTasks.map((row: Record<string, unknown>) => ({
     id: String(row.id),
     deal_id: row.deal_id ? String(row.deal_id) : null,
     account_id: row.account_id ? String(row.account_id) : null,
@@ -541,4 +679,3 @@ export async function listAccountsForSelect() {
     updated_at: String(row.updated_at || nowIso()),
   })) as CrmAccount[];
 }
-
