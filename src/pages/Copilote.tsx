@@ -496,7 +496,7 @@ export default function Copilote() {
     {
       id: uid(),
       role: "assistant",
-      content: "Bonjour. Donnez votre cas export/import en une phrase. Je réponds avec décision provisoire, checklist, risques et actions.",
+      content: "Bonjour. Je vous accompagne pas a pas. Decrivez votre cas export/import en une phrase: je poserai les informations manquantes une par une, puis je donnerai une reponse precise.",
     },
   ]);
 
@@ -777,7 +777,7 @@ export default function Copilote() {
           role: "assistant",
           content: answer,
           links,
-          followUpQuestions: guided.followUpQuestions,
+          followUpQuestions: guided.followUpQuestions.slice(0, 1),
           blocks,
         },
       ]);
@@ -792,7 +792,7 @@ export default function Copilote() {
           session_id: sessionId || null,
           error: String(err?.message || "api_chat_error"),
           source_links_count: links.length,
-          follow_up_questions_count: guided.followUpQuestions.length,
+          follow_up_questions_count: Math.min(1, guided.followUpQuestions.length),
           destination_country: destinationCountry || formContext.buyerCountry || null,
           origin_country: sellerCountry || formContext.sellerCountry || null,
           has_structured_blocks: Boolean(blocks),
@@ -828,7 +828,7 @@ export default function Copilote() {
               <CardTitle>Copilote IA export</CardTitle>
               <Badge variant="secondary">Gratuit</Badge>
             </div>
-            <p className="text-sm text-slate-600">Décision provisoire, checklist, risques et actions dans une réponse courte.</p>
+            <p className="text-sm text-slate-600">Decision provisoire, checklist, risques et actions. Si des donnees manquent, je vous les demande une par une.</p>
             <p className="text-xs text-slate-500">Quota restant: {quotaLabel}</p>
           </CardHeader>
 

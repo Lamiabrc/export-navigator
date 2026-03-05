@@ -1248,14 +1248,10 @@ function buildAnswerMarkdown(params: {
   packUpsellAction?: string | null;
 }) {
   const sorted = sortChecks(params.checks);
-
-  const missing = sorted
-    .filter((check) => check.status === "KO" || check.status === "MANQUANT" || check.status === "A_CONFIRMER")
-    .map((check) => {
-      const prefix = check.status === "KO" || check.status === "MANQUANT" ? "[Bloquant]" : "[À confirmer]";
-      return `- ${prefix} ${check.label}: ${check.what_to_fix}`;
-    })
-    .slice(0, 3);
+  const missingChecks = sorted.filter(
+    (check) => check.status === "KO" || check.status === "MANQUANT" || check.status === "A_CONFIRMER"
+  );
+  const primaryMissing = missingChecks[0] || null;
 
   const checklist = sorted.slice(0, 5).map((check) => checklistLineForCheck(check.status, check.label));
 
@@ -1285,34 +1281,70 @@ function buildAnswerMarkdown(params: {
       : "Quel est le pays de destination ?");
 
   const fr = params.lang !== "en";
-  const decisionLabel = fr ? "Décision" : "Decision";
-  const missingLabel = fr ? "Ce qu'il manque (max 3)" : "Missing items (max 3)";
+  const decisionLabel = "Decision";
+  const contextLabel = fr ? "Contexte retenu" : "Context used";
   const checklistLabel = "Checklist (max 5)";
   const risksLabel = fr ? "Risques (max 3)" : "Risks (max 3)";
   const actionsLabel = "Actions (max 3)";
-  const questionLabel = fr ? "Question prioritaire" : "Priority question";
+  const questionLabel = fr ? "Question unique (etape suivante)" : "Single next question";
+  const hasPendingInput = Boolean(primaryMissing || params.missingQuestions.length);
+
+  if (hasPendingInput) {
+    const blockingPrefix =
+      primaryMissing?.status === "KO" || primaryMissing?.status === "MANQUANT"
+        ? (fr ? "[Bloquant]" : "[Blocking]")
+        : (fr ? "[A confirmer]" : "[To confirm]");
+    const blockingLine = primaryMissing
+      ? `- ${blockingPrefix} ${primaryMissing.label}: ${primaryMissing.what_to_fix}`
+      : `- ${fr ? "[Bloquant] Informations critiques manquantes." : "[Blocking] Critical information is missing."}`;
+
+    return [
+      fr
+        ? "Merci, vous etes sur la bonne voie. Pour securiser la decision, on avance une information a la fois."
+        : "Thanks, you are on the right track. To secure the decision, we move forward one missing item at a time.",
+      "",
+      `${decisionLabel}: ${params.decision.status} - ${params.decision.reason}`,
+      "",
+      fr ? "Point a completer maintenant:" : "Item to complete now:",
+      blockingLine,
+      "",
+      `${questionLabel}:`,
+      `- ${priorityQuestion}`,
+      "",
+      fr
+        ? "Repondez uniquement a cette question et je vous donne la suite precise."
+        : "Reply only to this question and I will provide the next precise step.",
+    ].join("\n");
+  }
+
+  const summaryLines = String(params.dossier.summary || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const contextFlowLine = summaryLines[1] || "-";
+  const contextProductLine = summaryLines[2] || "-";
 
   return [
+    fr
+      ? "Merci. Dossier suffisamment complet: voici une reponse precise et exploitable."
+      : "Thanks. Dossier sufficiently complete: here is a precise and actionable answer.",
+    "",
     `${decisionLabel}: ${params.decision.status} - ${params.decision.reason}`,
     "",
-    `${missingLabel}:`,
-    ...(missing.length
-      ? missing
-      : [params.lang === "en" ? "- [OK] Nothing critical missing." : "- [OK] Rien de critique ne manque."]),
+    `${contextLabel}:`,
+    `- ${contextFlowLine.replace(/^Flux:\s*/i, "")}`,
+    `- ${contextProductLine.replace(/^HS:\s*/i, "")}`,
     "",
     `${checklistLabel}:`,
-    ...(checklist.length ? checklist : [params.lang === "en" ? "- [OK] Base checks passed." : "- [OK] Vérifications de base passées."]),
+    ...(checklist.length ? checklist : [params.lang === "en" ? "- [OK] Base checks passed." : "- [OK] Verifications de base passees."]),
     "",
     `${risksLabel}:`,
     ...(risks.length
       ? risks
-      : [params.lang === "en" ? "- No major risk flagged with current data." : "- Aucun risque majeur avec les données actuelles."]),
+      : [params.lang === "en" ? "- No major risk flagged with current data." : "- Aucun risque majeur avec les donnees actuelles."]),
     "",
     `${actionsLabel}:`,
-    ...(actions.length ? actions : [params.lang === "en" ? "- Complete one missing field to refine." : "- Compléter un champ manquant pour affiner."]),
-    "",
-    `${questionLabel}:`,
-    `- ${priorityQuestion}`,
+    ...(actions.length ? actions : [params.lang === "en" ? "- Continue monitoring regulatory updates." : "- Continuer la veille reglementaire."]),
   ].join("\n");
 }
 function getBearerToken(req: VercelRequest) {
@@ -1471,8 +1503,9 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
     const checks = sortChecks(mergeChecks([...baseChecks, ...controls.checks]));
     const decision = decisionFromChecks({ checks, hardStop: controls.hardStop, lang: preferredLang });
 
-    const missingQuestions = runtime.buildMissingQuestions(finalContext, preferredLang).slice(0, 5);
-    const followUpQuestions = missingQuestions.slice(0, 1);
+    const allMissingQuestions = runtime.buildMissingQuestions(finalContext, preferredLang).slice(0, 5);
+    const missingQuestions = allMissingQuestions.slice(0, 1);
+    const followUpQuestions = missingQuestions;
     const globalTradeIntent = runtime.detectGlobalTradeIntent({
       question: message,
       product: finalContext.product,
@@ -1507,7 +1540,7 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
       classification,
       policy,
       controls,
-      missingQuestions,
+      missingQuestions: allMissingQuestions,
     });
 
     const answerMarkdown = buildAnswerMarkdown({
@@ -1515,7 +1548,7 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
       decision,
       checks,
       dossier,
-      missingQuestions,
+      missingQuestions: allMissingQuestions,
       sourceLinks,
       globalTradeIntent,
       isAuthenticated: Boolean(userId),

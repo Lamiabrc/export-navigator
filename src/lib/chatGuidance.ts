@@ -179,18 +179,18 @@ export function buildGuidedFallback(question: string): GuidedFallback {
   if (followUps.length < 3) {
     followUps.push(paymentQuestion);
   }
-  const prioritizedFollowUps = uniqueList(followUps).slice(0, 3);
+    const prioritizedFollowUps = uniqueList(followUps).slice(0, 3);
 
   const objective = formatObjective({ flow, product, hs, country });
   const firstQuestion = prioritizedFollowUps[0];
-  const extraQuestions = prioritizedFollowUps.slice(1, 3);
+  const singleFollowUp = firstQuestion ? [firstQuestion] : [];
 
   const summary = uniqueList([
     `Contexte pris en compte: ${objective}.`,
-    country ? `Pays détecté: ${country}.` : "Pays non détecté: sans destination, les règles restent indicatives.",
+    country ? `Pays detecte: ${country}.` : "Pays non detecte: sans destination, les regles restent indicatives.",
     product || hs
-      ? `Produit détecté: ${product || `HS ${hs}`}.`
-      : "Produit non détecté: la classification HS reste à confirmer.",
+      ? `Produit detecte: ${product || `HS ${hs}`}.`
+      : "Produit non detecte: la classification HS reste a confirmer.",
   ]).slice(0, 3);
 
   const checklist = [
@@ -211,27 +211,24 @@ export function buildGuidedFallback(question: string): GuidedFallback {
   ]).slice(0, 4);
 
   const actions = uniqueList([
-    firstQuestion ? `Répondez d'abord: ${firstQuestion}` : "",
-    extraQuestions[0] ? `Puis: ${extraQuestions[0]}` : "",
-    extraQuestions[1] ? `Ensuite: ${extraQuestions[1]}` : "",
-    "Dès réception des infos, je fournis une réponse exploitable (checklist, risques, actions).",
-  ]).slice(0, 4);
+    firstQuestion ? `Repondez d'abord a cette question: ${firstQuestion}` : "",
+    "Des reception de cette information, je donne une reponse precise (checklist, risques, actions).",
+  ]).slice(0, 3);
 
   const answer = [
-    `Demande comprise: ${objective}.`,
-    country
-      ? `Décision provisoire: sous conditions.`
-      : "Décision provisoire: sous conditions.",
-    `Question prioritaire: ${firstQuestion}`,
-    extraQuestions.length ? `Puis: ${extraQuestions[0]}` : null,
-    isGlobalIntent ? "Option: activez la veille pays pour le suivi marché." : null,
+    "Merci, j'ai bien pris votre demande.",
+    `Contexte compris: ${objective}.`,
+    "Decision provisoire: sous conditions.",
+    firstQuestion ? `Question unique (etape suivante): ${firstQuestion}` : null,
+    "Ne vous inquietez pas: on avance etape par etape.",
+    isGlobalIntent ? "Option: activez la veille pays pour le suivi marche." : null,
   ]
     .filter(Boolean)
     .join("\n\n");
 
   return {
     answer,
-    followUpQuestions: prioritizedFollowUps,
+    followUpQuestions: singleFollowUp,
     blocks: {
       summary,
       checklist,
