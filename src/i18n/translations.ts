@@ -38,7 +38,7 @@ const fr = {
     menu: {
       home: "Accueil",
       tool: "Outil",
-      services: "Offre",
+      services: "Offre gratuite",
       watch: "Veille",
       guides: "Guides",
       methodologie: "Méthodologie",
@@ -462,7 +462,7 @@ const en = {
     menu: {
       home: "Home",
       tool: "Tool",
-      services: "Plans",
+      services: "Free offer",
       watch: "Insights",
       guides: "Guides",
       methodologie: "Methodology",

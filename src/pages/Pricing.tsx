@@ -1,272 +1,237 @@
-import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
-import { Check, Sparkles, Users, Shield, BellRing } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Check, Sparkles, Users } from "lucide-react";
 
 import { PremiumMarketingLayout } from "@/components/marketing/PremiumMarketingLayout";
 import { SectionPremium } from "@/components/marketing/SectionPremium";
 import { CTAStripPremium } from "@/components/marketing/CTAStripPremium";
-import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/LanguageContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { usePlan } from "@/auth/PlanContext";
-import { useResolvedPricing, TierSlug } from "@/hooks/useResolvedPricing";
-import { startOnlineCheckout } from "@/lib/billing";
-import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
 
 export default function Pricing() {
-  const { t, lang } = useI18n();
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
-  const { plan } = usePlan();
-  const { isFR, resolved, tierKeys } = useResolvedPricing(t);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-
+  const { lang } = useI18n();
   const isFr = lang === "fr";
 
-  const handleOnlineCheckout = async () => {
-    if (!isAuthenticated) {
-      navigate("/login");
-      return;
-    }
-
-    try {
-      setCheckoutLoading(true);
-      await startOnlineCheckout();
-    } catch (err: any) {
-      toast({
-        title: isFr ? "Paiement indisponible" : "Checkout unavailable",
-        description: err?.message ?? (isFr ? "Impossible de démarrer le paiement." : "Unable to start checkout."),
-      });
-    } finally {
-      setCheckoutLoading(false);
-    }
-  };
+  const heroCopy = isFr
+    ? {
+        headline: "Une offre simple : tout est gratuit",
+        subhead:
+          "Accedez a l'outil complet (simulation, verification, veille) sans abonnement ni paiement.",
+        description:
+          "Si vous avez besoin de plus d'accompagnement humain, utilisez la demande de devis sur la page contact.",
+        toolCta: "Acceder gratuitement a l'outil",
+        quoteCta: "Demander un devis",
+      }
+    : {
+        headline: "One simple offer: everything is free",
+        subhead:
+          "Access the full tool (simulation, verification, watch) with no subscription and no payment.",
+        description:
+          "If you need more hands-on support, use the quote request on the contact page.",
+        toolCta: "Open the free tool",
+        quoteCta: "Request a quote",
+      };
 
   const roiPoints = isFr
     ? [
-        { title: "Coût fixe mensuel + charges", side: "hire" },
-        { title: "Montée en compétence + turnover", side: "hire" },
-        { title: "Contrôles facture non outillés", side: "hire" },
-        { title: "Simulateur + vérification facture", side: "tool" },
-        { title: "Visio mensuelle ou audit sur site", side: "tool" },
-        { title: "Veille incluse dès l'offre en ligne", side: "tool" },
+        { title: "Cout fixe mensuel + charges", side: "hire" },
+        { title: "Montee en competence + turnover", side: "hire" },
+        { title: "Controles facture peu outilles", side: "hire" },
+        { title: "Simulateur + verification facture", side: "tool" },
+        { title: "Veille reglementaire integree", side: "tool" },
+        { title: "Accompagnement sur devis si necessaire", side: "tool" },
       ]
     : [
         { title: "Fixed monthly cost + overhead", side: "hire" },
         { title: "Ramp-up time + turnover risk", side: "hire" },
         { title: "Invoice controls often not tooled", side: "hire" },
         { title: "Simulator + invoice verification", side: "tool" },
-        { title: "Monthly video or on-site audit", side: "tool" },
-        { title: "Watch included from online plan", side: "tool" },
+        { title: "Integrated regulatory watch", side: "tool" },
+        { title: "Dedicated support available via quote", side: "tool" },
+      ];
+
+  const freeFeatures = isFr
+    ? [
+        "Simulateur complet (Incoterms, transport, frais)",
+        "Verification facture et coherence",
+        "Watch Center, filtres et historique",
+        "Checklists documentaires et rapports PDF",
+        "Acces immediat sans paiement",
+      ]
+    : [
+        "Full simulator (Incoterms, transport, fees)",
+        "Invoice and consistency checks",
+        "Watch Center, filters and history",
+        "Document checklists and PDF reports",
+        "Immediate access without payment",
+      ];
+
+  const supportFeatures = isFr
+    ? [
+        "Audit de vos flux import/export",
+        "Priorisation des risques TVA, douane, documents",
+        "Plan d'actions personnalise",
+        "Restitution et suivi selon vos besoins",
+      ]
+    : [
+        "Audit of your import/export flows",
+        "Prioritization of VAT, customs and document risks",
+        "Customized action plan",
+        "Follow-up aligned with your needs",
       ];
 
   return (
     <PremiumMarketingLayout>
-      {/* Hero */}
       <section className="mkt-section-dark mkt-section-hero mkt-radial-glow relative overflow-hidden">
         <div className="mkt-container relative z-10">
           <div className="mx-auto max-w-3xl text-center">
             <p className="mkt-eyebrow" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
               Export Navigator
             </p>
-            <h1 className="mkt-display mkt-display-xl mt-4 text-white">
-              {resolved.headline}
-            </h1>
+            <h1 className="mkt-display mkt-display-xl mt-4 text-white">{heroCopy.headline}</h1>
             <p className="mt-6 text-lg" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
-              {resolved.subhead}
+              {heroCopy.subhead}
             </p>
             <p className="mt-2 text-sm" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-              {resolved.description}
+              {heroCopy.description}
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-              <Link to="/contact" className="mkt-btn mkt-btn-primary">
-                {resolved.cta}
+              <Link to="/analyse" className="mkt-btn mkt-btn-primary">
+                {heroCopy.toolCta}
               </Link>
-              <Link to="/analyse" className="mkt-btn mkt-btn-light">
-                {isFr ? "Essayer l'outil" : "Try the tool"}
+              <Link to="/contact" className="mkt-btn mkt-btn-light">
+                {heroCopy.quoteCta}
               </Link>
             </div>
 
             <p className="mt-4 text-xs" style={{ color: "rgba(255, 255, 255, 0.4)" }}>
               {isFr
-                ? "Nous signalons les incohérences et risques. La validation finale reste sous votre responsabilité."
+                ? "Nous signalons les incoherences et risques. La validation finale reste sous votre responsabilite."
                 : "We flag inconsistencies and risks. Final validation remains your responsibility."}
             </p>
           </div>
         </div>
       </section>
 
-      {/* ROI Comparison */}
       <SectionPremium
         eyebrow={isFr ? "ROI" : "ROI"}
-        title={isFr ? "Pourquoi ça remplace souvent un recrutement" : "Why this often replaces a hire"}
+        title={isFr ? "Pourquoi ca remplace souvent un recrutement" : "Why this often replaces a hire"}
         description={
           isFr
-            ? "Remplacez un coût fixe par un outil + un suivi régulier, focalisé sur les erreurs qui coûtent cher."
-            : "Replace fixed cost with a tool + regular follow-up focused on costly mistakes."
+            ? "Remplacez un cout fixe par un outil gratuit et un suivi sur devis seulement si necessaire."
+            : "Replace fixed cost with a free tool and quote-based support only when needed."
         }
       >
         <div className="grid gap-6 md:grid-cols-2">
           <div className="mkt-card p-6">
-            <div className="flex items-center gap-3 mb-4">
+            <div className="mb-4 flex items-center gap-3">
               <Users className="h-5 w-5 text-[hsl(var(--mkt-ink-muted))]" />
               <h3 className="font-semibold text-[hsl(var(--mkt-ink))]">
-                {isFr ? "Recruter (coût fixe)" : "Hire (fixed cost)"}
+                {isFr ? "Recruter (cout fixe)" : "Hire (fixed cost)"}
               </h3>
             </div>
             <ul className="space-y-3">
-              {roiPoints.filter((p) => p.side === "hire").map((point) => (
-                <li key={point.title} className="flex items-start gap-3 text-sm text-[hsl(var(--mkt-ink-muted))]">
-                  <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[hsl(var(--mkt-ink-muted))] shrink-0" />
-                  {point.title}
-                </li>
-              ))}
+              {roiPoints
+                .filter((point) => point.side === "hire")
+                .map((point) => (
+                  <li key={point.title} className="flex items-start gap-3 text-sm text-[hsl(var(--mkt-ink-muted))]">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--mkt-ink-muted))]" />
+                    {point.title}
+                  </li>
+                ))}
             </ul>
           </div>
 
           <div className="mkt-card border-[hsl(var(--mkt-primary)/0.3)] p-6">
-            <div className="flex items-center gap-3 mb-4">
+            <div className="mb-4 flex items-center gap-3">
               <Sparkles className="h-5 w-5 text-[hsl(var(--mkt-primary))]" />
               <h3 className="font-semibold text-[hsl(var(--mkt-ink))]">
-                {isFr ? "Outil + suivi (flexible)" : "Tool + follow-up (flexible)"}
+                {isFr ? "Outil gratuit + support optionnel" : "Free tool + optional support"}
               </h3>
             </div>
             <ul className="space-y-3">
-              {roiPoints.filter((p) => p.side === "tool").map((point) => (
-                <li key={point.title} className="flex items-start gap-3 text-sm text-[hsl(var(--mkt-ink))]">
-                  <Check className="h-4 w-4 text-[hsl(var(--mkt-primary))] shrink-0 mt-0.5" />
-                  {point.title}
-                </li>
-              ))}
+              {roiPoints
+                .filter((point) => point.side === "tool")
+                .map((point) => (
+                  <li key={point.title} className="flex items-start gap-3 text-sm text-[hsl(var(--mkt-ink))]">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mkt-primary))]" />
+                    {point.title}
+                  </li>
+                ))}
             </ul>
           </div>
         </div>
       </SectionPremium>
 
-      {/* Pricing Tiers */}
       <SectionPremium
-        eyebrow={isFr ? "Tarifs" : "Pricing"}
-        title={isFr ? "Choisissez votre niveau d'accompagnement" : "Choose your support level"}
+        eyebrow={isFr ? "Offre" : "Offer"}
+        title={isFr ? "Tout l'outil est gratuit" : "The full tool is free"}
         description={
           isFr
-            ? "En ligne = outils + veille. Visio = 1 rdv/mois. Audit = audit physique + suivi hebdo."
-            : "Online = tools + watch. Video = 1 call/month. Audit = on-site + weekly follow-up."
+            ? "Une seule offre gratuite pour tous. Pour un accompagnement dedie, faites une demande de devis."
+            : "One free offer for everyone. For dedicated support, request a quote."
         }
         variant="muted"
       >
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {tierKeys.map((key: TierSlug) => {
-            const tier = resolved.tiers[key];
-            const isPrimary = key === "PRO_ONLINE";
-            const isOnlinePlan = key === "PRO_ONLINE";
-            const isActiveOnline = plan === "PRO_ONLINE";
-            const isProspection = key === "PROSPECTION";
-
-            return (
-              <article
-                key={key}
-                id={key.toLowerCase()}
-                className={cn(
-                  "mkt-card flex flex-col p-6 scroll-mt-24",
-                  isPrimary && "border-[hsl(var(--mkt-primary)/0.4)] ring-2 ring-[hsl(var(--mkt-primary)/0.1)]"
-                )}
-              >
-                <div className="flex items-start justify-between gap-2 mb-4">
-                  <p className="mkt-label">{tier.name}</p>
-                  {isPrimary && (
-                    <span className="mkt-badge">{isFr ? "Recommandé" : "Recommended"}</span>
-                  )}
-                </div>
-
-                <p className="mkt-display text-3xl font-semibold text-[hsl(var(--mkt-ink))]">
-                  {tier.price}
-                </p>
-
-                <p className="mt-3 text-sm text-[hsl(var(--mkt-ink-muted))] flex-1">
-                  {tier.description}
-                </p>
-
-                <ul className="mt-6 space-y-2 mb-6">
-                  {tier.features.map((feature: string) => (
-                    <li key={feature} className="flex items-start gap-2 text-sm">
-                      <Check className="h-4 w-4 text-[hsl(var(--mkt-primary))] shrink-0 mt-0.5" />
-                      <span className="text-[hsl(var(--mkt-ink))]">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {isOnlinePlan ? (
-                  isActiveOnline ? (
-                    <Link to="/account" className="mkt-btn mkt-btn-secondary text-xs">
-                      {isFr ? "Gérer mon abonnement" : "Manage subscription"}
-                    </Link>
-                  ) : (
-                    <Button
-                      className="mkt-btn mkt-btn-secondary w-full text-xs"
-                      onClick={handleOnlineCheckout}
-                      disabled={checkoutLoading}
-                    >
-                      {checkoutLoading
-                        ? isFr ? "Ouverture..." : "Opening..."
-                        : isFr ? "S'abonner" : "Subscribe"}
-                    </Button>
-                  )
-                ) : isProspection ? (
-                  <Link
-                    to="/prospection"
-                    className={cn(
-                      "mkt-btn text-xs",
-                      isPrimary ? "mkt-btn-primary" : "mkt-btn-outline"
-                    )}
-                  >
-                    {isFr ? "Voir le contrat" : "View contract"}
-                  </Link>
-                ) : (
-                  <Link
-                    to="/contact"
-                    className={cn(
-                      "mkt-btn text-xs",
-                      isPrimary ? "mkt-btn-primary" : "mkt-btn-outline"
-                    )}
-                  >
-                    {resolved.cta}
-                  </Link>
-                )}
-              </article>
-            );
-          })}
-        </div>
-
-        {/* VIP Note */}
-        <div id="vip" className="mt-10 rounded-2xl border border-[hsl(var(--mkt-blue-100))] bg-white p-6 scroll-mt-24">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <BellRing className="h-5 w-5 text-[hsl(var(--mkt-primary))]" />
-              <div>
-                <p className="font-semibold text-[hsl(var(--mkt-ink))]">
-                  {isFr ? "Veille personnalisée dans l'outil" : "Personalized watch in the tool"}
-                </p>
-                <p className="text-sm text-[hsl(var(--mkt-ink-muted))]">
-                  {isFr
-                    ? "Alertes ciblées sur vos marchés et codes HS = réservé VIP"
-                    : "Targeted alerts on your markets and HS codes = VIP only"}
-                </p>
-              </div>
+        <div id="plans" className="grid scroll-mt-24 gap-6 lg:grid-cols-[1.25fr_0.75fr]">
+          <article className="mkt-card flex flex-col border-[hsl(var(--mkt-primary)/0.4)] p-6 ring-2 ring-[hsl(var(--mkt-primary)/0.1)]">
+            <div className="mb-4 flex items-start justify-between gap-2">
+              <p className="mkt-label">{isFr ? "Acces plateforme" : "Platform access"}</p>
+              <span className="mkt-badge">{isFr ? "100% gratuit" : "100% free"}</span>
             </div>
-            <Link to="/contact?offer=vip" className="mkt-btn mkt-btn-primary text-xs shrink-0">
-              {isFr ? "Demander l'offre VIP" : "Request VIP offer"}
+
+            <p className="mkt-display text-3xl font-semibold text-[hsl(var(--mkt-ink))]">
+              {isFr ? "Gratuit" : "Free"}
+            </p>
+            <p className="mt-3 flex-1 text-sm text-[hsl(var(--mkt-ink-muted))]">
+              {isFr
+                ? "Vous utilisez l'outil complet sans abonnement."
+                : "Use the full platform with no subscription."}
+            </p>
+
+            <ul className="mb-6 mt-6 space-y-2">
+              {freeFeatures.map((feature) => (
+                <li key={feature} className="flex items-start gap-2 text-sm">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mkt-primary))]" />
+                  <span className="text-[hsl(var(--mkt-ink))]">{feature}</span>
+                </li>
+              ))}
+            </ul>
+
+            <Link to="/analyse" className="mkt-btn mkt-btn-secondary text-xs">
+              {isFr ? "Acceder a l'outil" : "Open the tool"}
             </Link>
-          </div>
+          </article>
+
+          <article className="mkt-card flex flex-col p-6">
+            <p className="mkt-label">{isFr ? "Accompagnement" : "Support"}</p>
+            <h3 className="mt-2 text-xl font-semibold text-[hsl(var(--mkt-ink))]">
+              {isFr ? "Besoin d'un accompagnement dedie ?" : "Need dedicated support?"}
+            </h3>
+            <p className="mt-3 text-sm text-[hsl(var(--mkt-ink-muted))]">
+              {isFr
+                ? "Demandez un devis via la page contact pour un accompagnement adapte."
+                : "Request a quote from the contact page for tailored support."}
+            </p>
+
+            <ul className="mb-6 mt-6 space-y-2">
+              {supportFeatures.map((feature) => (
+                <li key={feature} className="flex items-start gap-2 text-sm">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mkt-primary))]" />
+                  <span className="text-[hsl(var(--mkt-ink))]">{feature}</span>
+                </li>
+              ))}
+            </ul>
+
+            <Link to="/contact" className="mkt-btn mkt-btn-primary text-xs">
+              {isFr ? "Demander un devis" : "Request a quote"}
+            </Link>
+          </article>
         </div>
       </SectionPremium>
 
-      {/* FAQ Note */}
       <SectionPremium
         eyebrow={isFr ? "Important" : "Important"}
-        title={isFr ? "Ce que comprend chaque offre" : "What each plan includes"}
+        title={isFr ? "Ce que comprend l'offre gratuite" : "What the free offer includes"}
       >
         <div className="grid gap-6 md:grid-cols-3">
           <div className="mkt-card p-6">
@@ -275,26 +240,26 @@ export default function Pricing() {
             </h3>
             <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">
               {isFr
-                ? "Coût rendu / landed cost, frais, surcharges, minimums."
+                ? "Cout rendu / landed cost, frais, surcharges, minimums."
                 : "Landed cost, fees, surcharges, minimums."}
             </p>
           </div>
           <div className="mkt-card p-6">
             <h3 className="font-semibold text-[hsl(var(--mkt-ink))]">
-              {isFr ? "Vérification facture" : "Invoice verification"}
+              {isFr ? "Verification facture" : "Invoice verification"}
             </h3>
             <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">
               {isFr
-                ? "Incoterm, devise, totaux, frais, cohérences, alertes."
+                ? "Incoterm, devise, totaux, frais, coherences, alertes."
                 : "Incoterms, currency, totals, fees, consistency alerts."}
             </p>
           </div>
           <div className="mkt-card p-6">
             <h3 className="font-semibold text-[hsl(var(--mkt-ink))]">
-              {isFr ? "Suivi opération" : "Ops tracking"}
+              {isFr ? "Suivi operation" : "Ops tracking"}
             </h3>
             <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">
-              {isFr ? "Docs, tâches, jalons, checklists." : "Docs, tasks, milestones, checklists."}
+              {isFr ? "Docs, taches, jalons, checklists." : "Docs, tasks, milestones, checklists."}
             </p>
           </div>
         </div>
@@ -302,22 +267,21 @@ export default function Pricing() {
         <div className="mt-8 rounded-2xl border border-[hsl(var(--mkt-blue-100))] bg-[hsl(var(--mkt-surface-muted))] p-6">
           <p className="text-sm text-[hsl(var(--mkt-ink-muted))]">
             {isFr
-              ? "Nous signalons des incohérences et risques opérationnels. La validation finale reste sous votre responsabilité (ou celle de vos conseils). Visio incluse. Visite sur site possible selon zone, frais de déplacement éventuels."
-              : "We flag inconsistencies and operational risks. Final validation remains your responsibility (or your advisors'). Video included. On-site possible depending on location; travel costs may apply."}
+              ? "Nous signalons des incoherences et risques operationnels. La validation finale reste sous votre responsabilite (ou celle de vos conseils)."
+              : "We flag inconsistencies and operational risks. Final validation remains your responsibility (or your advisors')."}
           </p>
         </div>
       </SectionPremium>
 
-      {/* CTA */}
       <CTAStripPremium
-        eyebrow={isFr ? "Prêt à commencer ?" : "Ready to start?"}
-        title={isFr ? "Essayez l'outil ou demandez une démo" : "Try the tool or request a demo"}
+        eyebrow={isFr ? "Besoin de plus d'accompagnement ?" : "Need more support?"}
+        title={isFr ? "Demandez un devis pour un accompagnement dedie" : "Request a quote for dedicated support"}
         primaryCta={{
           label: isFr ? "Demander un devis" : "Get a quote",
           to: "/contact",
         }}
         secondaryCta={{
-          label: isFr ? "Essayer l'analyse" : "Try analysis",
+          label: isFr ? "Acceder gratuitement a l'outil" : "Open the free tool",
           to: "/analyse",
         }}
         note="contact@exportfrancefacile.com | 06 76 43 55 51"

@@ -101,7 +101,7 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
       { to: "/prospection", label: isFr ? "Prospection" : "Prospection" },
       { to: "/services", label: isFr ? "Offre" : "Offer" },
       { to: "/about", label: isFr ? "A propos" : "About" },
-      { to: "/pricing#plans", label: isFr ? "Payer en ligne" : "Pay online" },
+      { to: "/pricing#plans", label: isFr ? "Offre gratuite" : "Free offer" },
     ],
     [isFr]
   );
