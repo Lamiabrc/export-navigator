@@ -1,6 +1,4 @@
-# =========================
 # Logs
-# =========================
 logs
 *.log
 npm-debug.log*
@@ -9,47 +7,47 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# =========================
 # Dependencies
-# =========================
 node_modules/
 
-# =========================
 # Build outputs
-# =========================
 dist/
 dist-ssr/
 build/
 out/
 .vercel/
 
-# =========================
-# Local / env
-# =========================
+# Local env and secrets
 .env
 .env.*
 !.env.example
 *.local
+.envrc
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+secrets/
+credentials/
+*.secret
 
-# =========================
-# Editor / OS files
-# =========================
-.vscode/*
-!.vscode/extensions.json
-.idea/
-.DS_Store
-Thumbs.db
+# Export dumps and local databases
+*.dump
+*.sql.dump
+*.bak
+*.backup
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+exports/
 
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# =========================
-# Import / Data (LPPR, DBF, ZIP…)
-# =========================
-data/
+# Imported data files
+data/*
+!data/seed/
+!data/seed/**
 !src/data/
 !src/data/**
 *.zip
@@ -57,13 +55,19 @@ data/
 *.DBF
 *.crdownload
 
-# =========================
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
 # Optional caches
-# =========================
 .cache/
 .tmp/
 temp/
-
-!data/seed/
-!data/seed/**
-!data/

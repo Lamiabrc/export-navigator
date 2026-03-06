@@ -11,7 +11,7 @@ type MetaOptions = {
   hsCode?: string | null;
 
   /**
-   * Optionnel : suffix marque (sinon fallback sur MPL Export Conseil)
+   * Optionnel : suffix marque (sinon fallback sur Export Navigator)
    */
   brandSuffix?: string;
 
@@ -62,7 +62,7 @@ export const usePageMeta = (titleKey: string, descriptionKey: string, options: M
   const {
     countryCode,
     hsCode,
-    brandSuffix = "MPL Export Conseil",
+    brandSuffix = "Export Navigator",
     canonicalUrl,
   } = options;
 

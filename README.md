@@ -1,192 +1,105 @@
-﻿# Export Navigator
+# Export Navigator
 
-**Propriete exclusive de Lamia Brechet**
-*Tous droits reserves*
-
----
-
-## Description
-
-**Export Navigator** est un outil professionnel de controle et de coherence pour les operations d'export a l'international. Il permet de gerer, suivre et analyser l'ensemble des flux d'exportation avec une vision complete sur les couts, marges et conformite reglementaire.
-
----
-
-## Mission
-
-Assurer la maitrise et la coherence des operations d'export en centralisant :
-- La gestion des **Incoterms** (EXW, FCA, CIF, DAP, DDP, etc.)
-- Le controle **TVA import/DDP** et taxes de douane
-- Le suivi des **couts** (transport, douane, transit, assurance)
-- L'analyse des **marges** et de la rentabilite
-- La verification de la **conformite documentaire**
-
----
+Export Navigator est un outil SaaS d'aide a la decision import/export pour PME, ETI et equipes operations.
+Il centralise des controles de conformite, des simulations de couts et des workflows de pilotage commercial/reglementaire.
+Le produit est concu pour un usage bilingue FR/EN avec une mise en route rapide en environnement de test.
+L'objectif: reduire les erreurs operationnelles et accelerer les decisions terrain.
 
 ## Fonctionnalites principales
 
-### Dashboard directionnelle
-- KPIs en temps reel (flux actifs, valeur marchandise, couts totaux, flux a risque)
-- Graphiques de repartition par Incoterm et destination
-- Tableau des flux recents avec statuts
+- Cockpit export/import: vues de suivi, alertes, historique et priorisation des actions.
+- Simulateurs et aides de calcul: couts, marges, taxes, incoterms, estimations de landed cost.
+- Controles conformite: checks documentaires, screening de risques, parcours de verification.
+- Veille et intelligence operationnelle: flux reglementaires/commerciaux et centre de veille.
+- Copilot export (FR/EN): assistance conversationnelle et parcours guides.
 
-### Catalogue des circuits d'export
-- Visualisation en mind-map des circuits par zone geographique
-- Detail des etapes et jalons par circuit
-- Export de la cartographie
+## Cas d'usage
 
-### Suivi logistique
-- Checklists documentaires par flux
-- Suivi des etapes (commande, douane, transport, livraison)
-- Gestion des transitaires et prestataires
+- Evaluer rapidement la faisabilite d'une operation export vers un pays cible.
+- Preparer une proposition commerciale avec estimation de marge et points de vigilance.
+- Verifier une facture/import avant validation interne.
+- Suivre un portefeuille de dossiers export avec priorites quotidiennes.
+- Partager des recommandations actionnables entre direction, commerce et operations.
 
-### Analyse financiere
-- Calcul automatique du prix de revient
-- Analyse de marge estimee vs realisee
-- Suivi de la deductibilite TVA
-- Rapprochement factures et couts reels
+## Stack technique
 
-### Verification factures PDF
-- Upload et analyse de factures PDF
-- Extraction des donnees (montant, reference, fournisseur)
-- Controle de coherence avec les documents de cout
-- Alertes sur ecarts de marge
+- Frontend: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui.
+- Backend: Vercel Functions (Node/TypeScript) + integrations Stripe/Supabase.
+- Data: Supabase (auth, base de donnees, fonctions), avec certains fallbacks locaux en mode test.
+- Outils: ESLint, TypeScript, scripts Node pour seed/import.
 
-### Simulateur de couts
-- Simulation complete par destination et Incoterm
-- Calcul des frais de transport, douane, droits de douane
-- Estimation du prix de vente et marge previsionnelle
+## Installation locale
 
-### Bibliotheque de reference
-- Taux de change, taux de droits de douane par zone
-- Documents reglementaires (CDU, guides douane, DEB)
-- Donnees de reference (destinations, Incoterms)
+Prerequis:
 
----
+- Node.js 20+
+- npm 10+
 
-## Technologies
-
-| Technologie | Usage |
-|-------------|-------|
-| **React 18** | Framework UI |
-| **TypeScript** | Typage statique |
-| **Vite** | Build et developpement |
-| **Tailwind CSS** | Styles et design system |
-| **shadcn/ui** | Composants UI |
-| **Recharts** | Graphiques et visualisations |
-| **Electron** | Application desktop |
-| **localStorage** | Persistance locale des donnees |
-
----
-
-## Installation et lancement
-
-### Mode Web (Developpement)
+Etapes:
 
 ```bash
-# Installer les dependances (registre npm public force via .npmrc pour eviter les 403)
 npm install
-
-# Lancer le serveur de developpement
+cp .env.example .env.local
 npm run dev
 ```
 
-### Mode Desktop (Electron)
+Build de verification:
 
 ```bash
-# Lancer l'application desktop
-npm run electron:dev
-
-# Construire l'application pour distribution
-npm run electron:build
+npm run build
 ```
 
----
+## Variables d'environnement requises
 
-## Structure du projet
+Le fichier de reference est `.env.example`.
 
-```
-src/
-|-- components/        # Composants React reutilisables
-|   |-- dashboard/     # Composants du tableau de bord
-|   |-- flows/         # Gestion des flux
-|   |-- layout/        # Layout et navigation
-|   `-- ui/            # Composants UI (shadcn)
-|-- data/              # Donnees de reference et mock
-|-- hooks/             # Hooks personnalises
-|-- lib/               # Logique metier pure
-|-- pages/             # Pages de l'application
-|-- types/             # Types TypeScript
-`-- utils/             # Utilitaires
-```
+Variables minimales pour un fonctionnement connecte:
 
----
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
 
-## Export Expert Chatbot (FR/EN)
+Variables backend frequentes selon modules:
 
-### Variables d'environnement (serveur)
+- `OPENAI_API_KEY`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `APP_URL`
+- `EMAIL_TRANSPORT_URL` (ou provider equivalent)
+- `CRON_SECRET`
 
-Necessaires pour `api/chat.ts` et scripts seed :
+Notes de coherence:
+
+- Certaines vues peuvent utiliser des donnees locales/de demonstration si Supabase n'est pas configure.
+- Plusieurs modules API (billing, ingest, email) exigent des variables serveur pour etre operationnels.
+- Des composants restent en cours de stabilisation; ils sont utilisables en mode test mais pas tous finalises pour production critique.
+
+## Deploiement Vercel
+
+1. Importer le repo dans Vercel.
+2. Configurer les variables d'environnement depuis `Settings > Environment Variables` (Development, Preview, Production).
+3. Verifier que les routes `api/*` sont bien deployees.
+4. Lancer un deploiement Preview puis Production.
+
+Commandes utiles locales avant push:
 
 ```bash
-SUPABASE_URL=...
-SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
+npm run typecheck
+npm run build
 ```
 
-### Migration et seed minimal
+## Securite et bonnes pratiques
 
-```bash
-# appliquer les migrations Supabase (inclut export_expert_v1)
-supabase db push
+- Ne jamais commiter de secrets (`.env`, cles API, certificats).
+- Conserver uniquement des placeholders dans `.env.example`.
+- Utiliser les variables d'environnement Vercel et Supabase pour tous les secrets.
+- Regenerer immediatement toute cle exposee accidentellement.
+- Voir `SECURITY.md` pour la procedure minimale.
 
-# seed minimal referentiels/playbooks/documents
-node scripts/seed-export-expert.mjs
-```
+## Statut produit
 
-### Endpoint backend
+Version de test gratuite.
 
-- `POST /api/chat`
-- body: `{ message, thread_id?, lang?, overrides? }`
-- response: `{ assistant_message, entities, dossier, thread_id }`
-
-### Tests d'acceptation rapides
-
-1. Hors sujet: `recette de cuisine`
-   - attendu: recadrage + liste de capacites import/export.
-2. Cas simple: `export fraises chili`
-   - attendu: questions manquantes simples + docs + risques + contrat + fiscalite.
-3. EN: `export strawberries to chile`
-   - attendu: meme logique en anglais.
-4. RLS:
-   - un utilisateur A ne voit pas les `chat_threads/chat_messages` de B.
-
----
-
-## Avertissement legal
-
-**Export Navigator** est un outil d'aide a la decision et de controle de coherence. Il ne remplace en aucun cas :
-- Un conseil fiscal ou juridique professionnel
-- Une validation par un commissionnaire en douane agree
-- Les obligations declaratives officielles
-
-Les calculs et controles effectues sont indicatifs et doivent etre verifies aupres des autorites competentes.
-
----
-
-## Licence
-
-**Propriete exclusive et confidentielle**
-
-(c) 2024 Lamia Brechet - Tous droits reserves
-
-Ce logiciel et sa documentation sont la propriete exclusive de Lamia Brechet. Toute reproduction, distribution, modification ou utilisation non autorisee est strictement interdite.
-
----
-
-## Contact
-
-Pour toute question relative a cet outil, veuillez contacter directement la proprietaire.
-
----
-
-*Export Navigator - Maitrisez vos exports en toute confiance*
+Le produit est deja exploitable pour evaluation fonctionnelle, avec plusieurs modules metier actifs.
+Certaines briques (notamment quelques parcours avances et integrations) sont en cours de stabilisation.
