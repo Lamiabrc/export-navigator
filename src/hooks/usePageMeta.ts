@@ -96,6 +96,8 @@ export const usePageMeta = (titleKey: string, descriptionKey: string, options: M
   }, [brandSuffix, countryCode, descriptionKey, hsCode, t, titleKey]);
 
   useEffect(() => {
+    const socialImage = `${window.location.origin}/videos/hero-export.jpg`;
+
     // Title
     if (computed.title) document.title = computed.title;
 
@@ -116,10 +118,18 @@ export const usePageMeta = (titleKey: string, descriptionKey: string, options: M
     ensureMetaProperty("og:type").setAttribute("content", "website");
     ensureMetaProperty("og:locale").setAttribute("content", lang === "fr" ? "fr_FR" : "en_US");
     ensureMetaProperty("og:url").setAttribute("content", canonicalUrl || window.location.href);
+    ensureMetaProperty("og:image").setAttribute("content", socialImage);
+    ensureMetaProperty("og:image:secure_url").setAttribute("content", socialImage);
+    ensureMetaProperty("og:image:type").setAttribute("content", "image/jpeg");
+    ensureMetaProperty("og:image:width").setAttribute("content", "1024");
+    ensureMetaProperty("og:image:height").setAttribute("content", "1024");
+    ensureMetaProperty("og:image:alt").setAttribute("content", "Apercu Export Navigator");
 
     // Twitter
-    ensureMeta("twitter:card").setAttribute("content", "summary");
+    ensureMeta("twitter:card").setAttribute("content", "summary_large_image");
     ensureMeta("twitter:title").setAttribute("content", computed.title);
     ensureMeta("twitter:description").setAttribute("content", computed.description || "");
+    ensureMeta("twitter:image").setAttribute("content", socialImage);
+    ensureMeta("twitter:image:alt").setAttribute("content", "Apercu Export Navigator");
   }, [canonicalUrl, computed.description, computed.title, lang]);
 };
