@@ -61,11 +61,17 @@ async function openaiEmbedBatch(inputs: string[]) {
 }
 
 async function extractTextFromPdf(bytes: Uint8Array) {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const [pdfjs, pdfWorker] = await Promise.all([
+    import("pdfjs-dist/legacy/build/pdf.mjs"),
+    import("pdfjs-dist/legacy/build/pdf.worker.mjs"),
+  ]);
+
+  // In Node/Vercel, pdfjs tries to lazily import workerSrc.
+  // Registering WorkerMessageHandler directly avoids fragile runtime imports.
+  (globalThis as any).pdfjsWorker = pdfWorker;
+
   const loadingTask = (pdfjs as any).getDocument({
     data: bytes,
-    // Vercel serverless: worker file may be absent at runtime.
-    disableWorker: true,
     useWorkerFetch: false,
     isEvalSupported: false,
     useSystemFonts: true,

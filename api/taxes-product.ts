@@ -128,9 +128,21 @@ async function extractTextFromPdfBase64(base64: string) {
   const clean = String(base64 || "").replace(/^data:application\/pdf;base64,/i, "").trim();
   if (!clean) throw new Error("missing_pdf_payload");
 
-  const bytes = Buffer.from(clean, "base64");
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const loadingTask = (pdfjs as any).getDocument({ data: bytes });
+  const bytes = new Uint8Array(Buffer.from(clean, "base64"));
+  const [pdfjs, pdfWorker] = await Promise.all([
+    import("pdfjs-dist/legacy/build/pdf.mjs"),
+    import("pdfjs-dist/legacy/build/pdf.worker.mjs"),
+  ]);
+
+  // Same runtime strategy as kb ingestion: keep worker on main thread in Node/Vercel.
+  (globalThis as any).pdfjsWorker = pdfWorker;
+
+  const loadingTask = (pdfjs as any).getDocument({
+    data: bytes,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
   const pdf = await loadingTask.promise;
 
   const lines: string[] = [];
