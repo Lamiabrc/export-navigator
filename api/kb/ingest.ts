@@ -60,9 +60,9 @@ async function openaiEmbedBatch(inputs: string[]) {
   return (data?.data || []).map((d: any) => d.embedding) as number[][];
 }
 
-async function extractTextFromPdf(buffer: Buffer) {
+async function extractTextFromPdf(bytes: Uint8Array) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const loadingTask = pdfjs.getDocument({ data: buffer });
+  const loadingTask = pdfjs.getDocument({ data: bytes });
   const pdf = await loadingTask.promise;
   let fullText = "";
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
@@ -145,14 +145,14 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
     }
 
     const arrayBuffer = await fileData.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const bytes = new Uint8Array(arrayBuffer);
 
     let text = "";
     const mime = String(doc.mime_type || "").toLowerCase();
     if (mime.includes("pdf") || path.toLowerCase().endsWith(".pdf")) {
-      text = await extractTextFromPdf(buffer);
+      text = await extractTextFromPdf(bytes);
     } else {
-      text = buffer.toString("utf-8");
+      text = Buffer.from(bytes).toString("utf-8");
     }
 
     const chunks = chunkText(text, 800);
