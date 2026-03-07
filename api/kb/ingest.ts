@@ -62,7 +62,14 @@ async function openaiEmbedBatch(inputs: string[]) {
 
 async function extractTextFromPdf(bytes: Uint8Array) {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const loadingTask = pdfjs.getDocument({ data: bytes });
+  const loadingTask = (pdfjs as any).getDocument({
+    data: bytes,
+    // Vercel serverless: worker file may be absent at runtime.
+    disableWorker: true,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
   const pdf = await loadingTask.promise;
   let fullText = "";
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {

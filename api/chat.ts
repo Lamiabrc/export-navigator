@@ -34,6 +34,22 @@ type DetectedEntities = {
   contract_type: string | null;
 };
 
+type KbDocMatch = {
+  id: string;
+  documentId: string;
+  title: string;
+  language: string | null;
+  chunkIndex: number;
+  content: string;
+  similarity: number;
+  createdAt: string | null;
+};
+
+const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || "").trim();
+const OPENAI_EMBED_MODEL = (process.env.OPENAI_EMBED_MODEL || "text-embedding-3-small").trim();
+const KB_MATCH_COUNT = 6;
+const KB_MIN_SIMILARITY = 0.15;
+
 const PAYMENT_PATTERNS: Array<{ code: string; pattern: RegExp }> = [
   { code: "LC", pattern: /\b(lc|l\/c|letter of credit|credit documentaire|credoc)\b/i },
   { code: "CAD", pattern: /\b(cad|documents against payment|remise documentaire)\b/i },
@@ -945,6 +961,172 @@ function buildWatchLinks(params: { isAuthenticated: boolean; lang: Lang }): Sour
   ];
 }
 
+function isMissingKbStatusColumn(message: string) {
+  return /status/i.test(message) && /kb_documents/i.test(message);
+}
+
+function normalizeSnippet(text: string, maxLen = 220) {
+  const normalized = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return "";
+  if (normalized.length <= maxLen) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLen - 3)).trim()}...`;
+}
+
+function kbDocSourceLink(match: KbDocMatch, lang: Lang): SourceLink {
+  return {
+    title: `${lang === "en" ? "Indexed doc" : "Doc indexe"}: ${match.title}`,
+    url: `/app/admin/kb-docs?doc=${encodeURIComponent(match.documentId)}`,
+  };
+}
+
+async function embedQueryForKb(question: string): Promise<number[] | null> {
+  if (!OPENAI_API_KEY) return null;
+
+  const resp = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: OPENAI_EMBED_MODEL,
+      input: question,
+    }),
+  });
+
+  if (!resp.ok) {
+    const details = await resp.text().catch(() => "");
+    console.warn("[chat] kb embedding failed", resp.status, details);
+    return null;
+  }
+
+  const data = (await resp.json().catch(() => ({}))) as { data?: Array<{ embedding?: number[] }> };
+  const embedding = data?.data?.[0]?.embedding;
+  return Array.isArray(embedding) ? embedding : null;
+}
+
+async function retrieveKbDocMatches(params: {
+  adminClient: SupabaseClient;
+  question: string;
+  lang: Lang;
+  matchCount?: number;
+}): Promise<KbDocMatch[]> {
+  const queryEmbedding = await embedQueryForKb(params.question);
+  if (!queryEmbedding) return [];
+
+  const safeCount = Math.max(1, Math.min(Number(params.matchCount || KB_MATCH_COUNT), 12));
+
+  const rpcPayloads: Array<Record<string, unknown>> = [
+    { query_embedding: queryEmbedding, match_count: safeCount, min_similarity: KB_MIN_SIMILARITY },
+    { query_embedding: queryEmbedding, match_count: safeCount },
+    { query_embedding: queryEmbedding, match_count: safeCount, filter_universe: null },
+  ];
+
+  let rows: Array<Record<string, unknown>> = [];
+  for (const payload of rpcPayloads) {
+    const { data, error } = await params.adminClient.rpc("match_kb_chunks", payload);
+    if (!error && Array.isArray(data)) {
+      rows = data as Array<Record<string, unknown>>;
+      break;
+    }
+  }
+
+  if (!rows.length) return [];
+
+  const docIds = Array.from(
+    new Set(
+      rows
+        .map((row) => String(row.document_id || "").trim())
+        .filter(Boolean)
+    )
+  );
+  if (!docIds.length) return [];
+
+  let docsById = new Map<string, { title: string; language: string | null; created_at: string | null }>();
+
+  const withStatus = await params.adminClient
+    .from("kb_documents")
+    .select("id,title,language,created_at,enabled,status")
+    .in("id", docIds)
+    .eq("enabled", true)
+    .eq("status", "ready");
+
+  if (!withStatus.error && Array.isArray(withStatus.data)) {
+    docsById = new Map(
+      withStatus.data.map((row: any) => [
+        String(row.id),
+        {
+          title: String(row.title || "Document KB"),
+          language: row.language ? String(row.language) : null,
+          created_at: row.created_at ? String(row.created_at) : null,
+        },
+      ])
+    );
+  } else if (isMissingKbStatusColumn(withStatus.error?.message || "")) {
+    const withoutStatus = await params.adminClient
+      .from("kb_documents")
+      .select("id,title,language,created_at,enabled")
+      .in("id", docIds)
+      .eq("enabled", true);
+
+    if (!withoutStatus.error && Array.isArray(withoutStatus.data)) {
+      docsById = new Map(
+        withoutStatus.data.map((row: any) => [
+          String(row.id),
+          {
+            title: String(row.title || "Document KB"),
+            language: row.language ? String(row.language) : null,
+            created_at: row.created_at ? String(row.created_at) : null,
+          },
+        ])
+      );
+    }
+  }
+
+  if (!docsById.size) return [];
+
+  const matches = rows
+    .map((row) => {
+      const documentId = String(row.document_id || "").trim();
+      const doc = docsById.get(documentId);
+      if (!documentId || !doc) return null;
+
+      const similarityRaw = Number(row.similarity ?? 0);
+      const similarity = Number.isFinite(similarityRaw) ? similarityRaw : 0;
+      const chunkIndexRaw = Number(row.chunk_index ?? 0);
+      const chunkIndex = Number.isFinite(chunkIndexRaw) ? chunkIndexRaw : 0;
+      const content = String(row.content || "").trim();
+
+      if (!content) return null;
+
+      return {
+        id: String(row.id || `${documentId}:${chunkIndex}`),
+        documentId,
+        title: doc.title,
+        language: doc.language,
+        chunkIndex,
+        content,
+        similarity,
+        createdAt: doc.created_at,
+      } satisfies KbDocMatch;
+    })
+    .filter((item): item is KbDocMatch => Boolean(item));
+
+  const sameLang = matches.filter((item) => !item.language || item.language === params.lang);
+  const languageScoped = sameLang.length ? sameLang : matches;
+
+  const deduped = new Map<string, KbDocMatch>();
+  for (const item of languageScoped.sort((a, b) => b.similarity - a.similarity)) {
+    const key = `${item.documentId}:${item.chunkIndex}`;
+    if (!deduped.has(key)) deduped.set(key, item);
+    if (deduped.size >= safeCount) break;
+  }
+
+  return Array.from(deduped.values());
+}
+
 const EU_ISO2 = new Set([
   "AT",
   "BE",
@@ -1145,7 +1327,7 @@ function decisionFromChecks(params: { checks: CopilotCheck[]; hardStop: boolean;
   };
 }
 
-function buildDocuments(context: ResolvedContext, policy: PolicyContext) {
+function buildDocuments(context: ResolvedContext, policy: PolicyContext, kbDocMatches: KbDocMatch[] = []) {
   const docs = new Map<string, { name: string; required: boolean; source_url: string | null }>();
 
   const add = (name: string, required: boolean, sourceUrl: string | null) => {
@@ -1171,6 +1353,10 @@ function buildDocuments(context: ResolvedContext, policy: PolicyContext) {
     }
   }
 
+  for (const match of kbDocMatches.slice(0, 6)) {
+    add(`Reference KB: ${match.title}`, false, `/app/admin/kb-docs?doc=${encodeURIComponent(match.documentId)}`);
+  }
+
   return Array.from(docs.values()).slice(0, 10);
 }
 
@@ -1183,6 +1369,7 @@ function buildDossier(params: {
   policy: PolicyContext;
   controls: ControlsResult;
   missingQuestions: string[];
+  kbDocMatches?: KbDocMatch[];
 }) {
   const summaryLines = [
     `Decision: ${params.decision.status} - ${params.decision.reason}`,
@@ -1221,7 +1408,7 @@ function buildDossier(params: {
 
   return {
     summary: summaryLines.join("\n"),
-    documents: buildDocuments(params.context, params.policy),
+    documents: buildDocuments(params.context, params.policy, params.kbDocMatches || []),
     restrictions,
     sanctions: params.controls.sanctions.slice(0, 8),
     taxes,
@@ -1282,6 +1469,7 @@ function buildAnswerMarkdown(params: {
   globalTradeIntent: boolean;
   isAuthenticated: boolean;
   packUpsellAction?: string | null;
+  kbDocMatches?: KbDocMatch[];
 }) {
   const sorted = sortChecks(params.checks);
   const missingChecks = sorted.filter(
@@ -1320,6 +1508,9 @@ function buildAnswerMarkdown(params: {
     .map((item) => `- ${item}`);
 
   const hasPendingInput = Boolean(primaryMissing || params.missingQuestions.length);
+  const kbEvidence = (params.kbDocMatches || [])
+    .slice(0, 3)
+    .map((match) => `- [${match.title}] ${normalizeSnippet(match.content, 200)}`);
 
   if (hasPendingInput) {
     return [
@@ -1377,6 +1568,13 @@ function buildAnswerMarkdown(params: {
     ...(actions.length
       ? actions
       : [fr ? "- Poursuivre avec la validation operationnelle et documentaire." : "- Continue with operational and documentary validation."]),
+    ...(kbEvidence.length
+      ? [
+          "",
+          fr ? "Appui documentaire indexe:" : "Indexed document support:",
+          ...kbEvidence,
+        ]
+      : []),
   ].join("\n");
 }
 function getBearerToken(req: VercelRequest) {
@@ -1545,6 +1743,15 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
       isAuthenticated: Boolean(userId),
       lang: preferredLang,
     });
+    const kbDocMatches = adminClient
+      ? await retrieveKbDocMatches({
+          adminClient,
+          question: message,
+          lang: preferredLang,
+          matchCount: KB_MATCH_COUNT,
+        }).catch(() => [])
+      : [];
+    const kbDocLinks = kbDocMatches.map((match) => kbDocSourceLink(match, preferredLang));
     const packUpsell = await shouldShowCountryPackUpsell({
       adminClient,
       userId,
@@ -1553,6 +1760,7 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
 
     const sourceLinks = dedupeSources([
       ...watchLinks,
+      ...kbDocLinks,
       ...(packUpsell.show
         ? [
             {
@@ -1572,6 +1780,7 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
       policy,
       controls,
       missingQuestions: allMissingQuestions,
+      kbDocMatches,
     });
 
     const answerMarkdown = buildAnswerMarkdown({
@@ -1590,6 +1799,7 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
             priceMonthly: packUpsell.priceMonthly,
           })
         : null,
+      kbDocMatches,
     });
 
     const entities = toEntities(finalContext, message);
@@ -1639,6 +1849,7 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
       },
       decision_status: payload.decision.status,
       retrieval_at: policy.retrievalAt,
+      kb_matches_count: kbDocMatches.length,
     });
   } catch (err: any) {
     return json(res, 500, {
