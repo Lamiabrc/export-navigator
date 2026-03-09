@@ -19,6 +19,13 @@ type MetaOptions = {
    * Optionnel : url canonique (sinon on met window.location.href)
    */
   canonicalUrl?: string;
+
+  /**
+   * Optionnel : image de partage (sinon fallback sur l'image home par defaut)
+   */
+  socialImageUrl?: string;
+
+  socialImageAlt?: string;
 };
 
 function ensureMeta(name: string) {
@@ -64,6 +71,8 @@ export const usePageMeta = (titleKey: string, descriptionKey: string, options: M
     hsCode,
     brandSuffix = "Export Navigator",
     canonicalUrl,
+    socialImageUrl,
+    socialImageAlt = "Apercu Export Navigator",
   } = options;
 
   const computed = useMemo(() => {
@@ -96,7 +105,8 @@ export const usePageMeta = (titleKey: string, descriptionKey: string, options: M
   }, [brandSuffix, countryCode, descriptionKey, hsCode, t, titleKey]);
 
   useEffect(() => {
-    const socialImage = `${window.location.origin}/videos/hero-export.jpg`;
+    const socialImage = socialImageUrl || `${window.location.origin}/images/og-home.jpg`;
+    const finalCanonicalUrl = canonicalUrl || window.location.href;
 
     // Title
     if (computed.title) document.title = computed.title;
@@ -110,26 +120,28 @@ export const usePageMeta = (titleKey: string, descriptionKey: string, options: M
 
     // Canonical
     const canon = ensureLink("canonical");
-    canon.setAttribute("href", canonicalUrl || window.location.href);
+    canon.setAttribute("href", finalCanonicalUrl);
 
     // Open Graph (partage LinkedIn / WhatsApp)
     ensureMetaProperty("og:title").setAttribute("content", computed.title);
     ensureMetaProperty("og:description").setAttribute("content", computed.description || "");
     ensureMetaProperty("og:type").setAttribute("content", "website");
     ensureMetaProperty("og:locale").setAttribute("content", lang === "fr" ? "fr_FR" : "en_US");
-    ensureMetaProperty("og:url").setAttribute("content", canonicalUrl || window.location.href);
+    ensureMetaProperty("og:url").setAttribute("content", finalCanonicalUrl);
     ensureMetaProperty("og:image").setAttribute("content", socialImage);
+    ensureMetaProperty("og:image:url").setAttribute("content", socialImage);
     ensureMetaProperty("og:image:secure_url").setAttribute("content", socialImage);
     ensureMetaProperty("og:image:type").setAttribute("content", "image/jpeg");
-    ensureMetaProperty("og:image:width").setAttribute("content", "1024");
-    ensureMetaProperty("og:image:height").setAttribute("content", "1024");
-    ensureMetaProperty("og:image:alt").setAttribute("content", "Apercu Export Navigator");
+    ensureMetaProperty("og:image:width").setAttribute("content", "1200");
+    ensureMetaProperty("og:image:height").setAttribute("content", "630");
+    ensureMetaProperty("og:image:alt").setAttribute("content", socialImageAlt);
 
     // Twitter
     ensureMeta("twitter:card").setAttribute("content", "summary_large_image");
     ensureMeta("twitter:title").setAttribute("content", computed.title);
     ensureMeta("twitter:description").setAttribute("content", computed.description || "");
+    ensureMeta("twitter:url").setAttribute("content", finalCanonicalUrl);
     ensureMeta("twitter:image").setAttribute("content", socialImage);
-    ensureMeta("twitter:image:alt").setAttribute("content", "Apercu Export Navigator");
-  }, [canonicalUrl, computed.description, computed.title, lang]);
+    ensureMeta("twitter:image:alt").setAttribute("content", socialImageAlt);
+  }, [canonicalUrl, computed.description, computed.title, lang, socialImageAlt, socialImageUrl]);
 };

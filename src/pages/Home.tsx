@@ -16,6 +16,9 @@ export default function Home() {
 
   usePageMeta("meta.home.title", "meta.home.description", {
     brandSuffix: "Export Navigator",
+    canonicalUrl: "https://www.exportfrancefacile.com/",
+    socialImageUrl: "https://www.exportfrancefacile.com/images/og-home.jpg",
+    socialImageAlt: "Page d'accueil Export Navigator",
   });
 
   return (
