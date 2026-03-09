@@ -45,7 +45,14 @@ type KbDocMatch = {
   createdAt: string | null;
 };
 
-const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || "").trim();
+function readSecret(raw: string | undefined) {
+  return String(raw || "")
+    .trim()
+    .replace(/^['"]+|['"]+$/g, "")
+    .trim();
+}
+
+const OPENAI_API_KEY = readSecret(process.env.OPENAI_API_KEY);
 const OPENAI_EMBED_MODEL = (process.env.OPENAI_EMBED_MODEL || "text-embedding-3-small").trim();
 const KB_MATCH_COUNT = 6;
 const KB_MIN_SIMILARITY = 0.15;

@@ -1,7 +1,14 @@
 ﻿import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { allowCors, json, readJson, supabaseAdmin } from "../../src/server/supabaseAdmin.js";
 
-const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || "").trim();
+function readSecret(raw: string | undefined) {
+  return String(raw || "")
+    .trim()
+    .replace(/^['"]+|['"]+$/g, "")
+    .trim();
+}
+
+const OPENAI_API_KEY = readSecret(process.env.OPENAI_API_KEY);
 const EMBED_MODEL = (process.env.OPENAI_EMBED_MODEL || "text-embedding-3-small").trim();
 
 const ADMIN_EMAILS = new Set(
@@ -54,6 +61,12 @@ async function openaiEmbedBatch(inputs: string[]) {
   });
   if (!resp.ok) {
     const err = await resp.text().catch(() => "");
+    if (resp.status === 401) {
+      throw new Error("openai_auth_failed");
+    }
+    if (resp.status === 429) {
+      throw new Error("openai_rate_limited");
+    }
     throw new Error(`openai_embeddings_failed: ${resp.status} ${err}`);
   }
   const data = (await resp.json()) as any;

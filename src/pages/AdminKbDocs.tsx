@@ -22,6 +22,12 @@ const normalizeUploadError = (message: string) => {
   if (/OPENAI_API_KEY manquant/i.test(message)) {
     return "Le service IA n'est pas configuré (OPENAI_API_KEY manquante).";
   }
+  if (/openai_auth_failed|openai_embeddings_failed:\s*401/i.test(message)) {
+    return "Cle OpenAI invalide cote serveur (Vercel). Mettez a jour OPENAI_API_KEY puis redeployez.";
+  }
+  if (/openai_rate_limited|openai_embeddings_failed:\s*429/i.test(message)) {
+    return "Quota OpenAI atteint. Reessayez plus tard ou augmentez le quota API.";
+  }
   return message;
 };
 

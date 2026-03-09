@@ -19,6 +19,13 @@ type InvoiceAnalyzePayload = {
   optional_comment?: string;
 };
 
+function readSecret(raw: string | undefined) {
+  return String(raw || "")
+    .trim()
+    .replace(/^['"]+|['"]+$/g, "")
+    .trim();
+}
+
 function norm(v: string) {
   return v
     .toLowerCase()
@@ -273,7 +280,7 @@ function buildInvoiceAnalyzeResult(text: string, payload: InvoiceAnalyzePayload)
 }
 
 async function openaiSuggestHs(product: string, options: string[]) {
-  const key = (process.env.OPENAI_API_KEY || "").trim();
+  const key = readSecret(process.env.OPENAI_API_KEY);
   if (!key || !options.length) return null;
 
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -386,7 +393,7 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
       taxes_rate: parsePercent((selected as any)?.om_rate) + parsePercent((selected as any)?.omr_rate),
       source: selected?.source || null,
       note: selected?.notes || null,
-      openai_enabled: Boolean((process.env.OPENAI_API_KEY || "").trim()),
+      openai_enabled: Boolean(readSecret(process.env.OPENAI_API_KEY)),
     });
   } catch (e: any) {
     if (mode === "invoice-analyze") {

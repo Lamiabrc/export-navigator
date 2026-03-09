@@ -73,6 +73,7 @@ Notes de coherence:
 
 - Certaines vues peuvent utiliser des donnees locales/de demonstration si Supabase n'est pas configure.
 - Plusieurs modules API (billing, ingest, email) exigent des variables serveur pour etre operationnels.
+- Les cles API doivent etre renseignees sans guillemets dans Vercel (ex: `sk-proj-...`).
 - Des composants restent en cours de stabilisation; ils sont utilisables en mode test mais pas tous finalises pour production critique.
 
 ## Deploiement Vercel
