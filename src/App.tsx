@@ -71,6 +71,7 @@ import TaxesOm from "@/pages/TaxesOm";
 import Prospection from "@/pages/Prospection";
 import Copilote from "@/pages/Copilote";
 import BusinessCorner from "@/pages/BusinessCorner";
+import BusinessRelations from "@/pages/BusinessRelations";
 
 const queryClient = new QueryClient();
 const LazyFallback = () => <div className="p-6 text-sm text-muted-foreground">Chargement…</div>;
@@ -305,6 +306,17 @@ export default function App() {
                             </ProtectedRoute>
                           }
                         />
+
+                        <Route
+                          path="/app/mise-en-relation"
+                          element={
+                            <ProtectedRoute>
+                              <BusinessRelations />
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route path="/app/business" element={<Navigate to="/app/mise-en-relation" replace />} />
+                        <Route path="/app/business-relations" element={<Navigate to="/app/mise-en-relation" replace />} />
 
                         <Route
                           path="/app/invoices/:invoiceNumber"

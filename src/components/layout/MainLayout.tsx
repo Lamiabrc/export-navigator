@@ -1,7 +1,7 @@
 ﻿import * as React from "react";
 import { Sidebar } from "./Sidebar";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Search, FileCheck2, Bot, LogOut, Newspaper, Calculator } from "lucide-react";
+import { Search, FileCheck2, Bot, Handshake, LogOut, Newspaper, Calculator } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
@@ -173,6 +173,15 @@ export function MainLayout({
               >
                 <Bot className="h-4 w-4" />
                 IA Export
+              </Link>
+
+              <Link
+                to="/app/mise-en-relation"
+                className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-muted transition shrink-0"
+                title="Mise en relation business, opportunites et demandes de contact"
+              >
+                <Handshake className="h-4 w-4" />
+                Business
               </Link>
 
               <Link
