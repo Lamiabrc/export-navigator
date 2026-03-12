@@ -70,6 +70,7 @@ import AdminRealtimeTest from "@/pages/AdminRealtimeTest";
 import TaxesOm from "@/pages/TaxesOm";
 import Prospection from "@/pages/Prospection";
 import Copilote from "@/pages/Copilote";
+import BusinessCorner from "@/pages/BusinessCorner";
 
 const queryClient = new QueryClient();
 const LazyFallback = () => <div className="p-6 text-sm text-muted-foreground">Chargement…</div>;
@@ -118,6 +119,8 @@ export default function App() {
                         <Route path="/about" element={<AboutPage />} />
                         <Route path="/pricing" element={<Pricing />} />
                         <Route path="/prospection" element={<Prospection />} />
+                        <Route path="/coin-business" element={<BusinessCorner />} />
+                        <Route path="/business" element={<Navigate to="/coin-business" replace />} />
 
                         {/* ✅ pages publiques */}
                         <Route path="/analyse" element={<PublicAppGate mode="analyse" />} />

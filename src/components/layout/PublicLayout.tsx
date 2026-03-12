@@ -99,6 +99,7 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
       { to: "/methodologie", label: isFr ? "Methodologie" : "Methodology" },
       { to: "/veille", label: isFr ? "Veille" : "Watch" },
       { to: "/prospection", label: isFr ? "Prospection" : "Prospection" },
+      { to: "/coin-business", label: isFr ? "Coin business" : "Business corner" },
       { to: "/services", label: isFr ? "Offre" : "Offer" },
       { to: "/about", label: isFr ? "A propos" : "About" },
       { to: "/pricing#plans", label: isFr ? "Offre gratuite" : "Free offer" },

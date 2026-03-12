@@ -3,6 +3,7 @@ import { ArrivalGuide } from "@/components/home/ArrivalGuide";
 import { VideoBanner } from "@/components/home/VideoBanner";
 import { HomeCtas } from "@/components/home/HomeCtas";
 import { HomeRssFeed } from "@/components/home/HomeRssFeed";
+import { HomeBusinessSpotlight } from "@/components/home/HomeBusinessSpotlight";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { RecentDossiers } from "@/components/dashboard/RecentDossiers";
 import { usePageMeta } from "@/hooks/usePageMeta";
@@ -29,7 +30,8 @@ export default function Home() {
         </section>
 
         <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-4 pt-6 sm:gap-8 sm:px-6 lg:gap-10 lg:px-10">
-          <QuickActions isEn={isEn} />
+          <QuickActions isEn={isEn} isAuthenticated={isAuthenticated} />
+          <HomeBusinessSpotlight isEn={isEn} isAuthenticated={isAuthenticated} />
           {isAuthenticated ? <RecentDossiers isEn={isEn} /> : null}
           <HomeRssFeed isEn={isEn} />
           <VideoBanner isEn={isEn} />

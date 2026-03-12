@@ -66,6 +66,12 @@ export const publicNav: PublicNavItem[] = [
     labels: { fr: "Offre gratuite", en: "Free offer" },
   },
   {
+    id: "business",
+    to: "/coin-business",
+    labels: { fr: "Coin business", en: "Business corner" },
+    badge: { fr: "Nouveau", en: "New" },
+  },
+  {
     id: "about",
     to: "/about",
     tKey: "header.menu.about",

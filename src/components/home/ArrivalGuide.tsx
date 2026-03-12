@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronUp, Info, MessageCircle, Package, PhoneCall, Sparkles } from "lucide-react";
+import { BriefcaseBusiness, ChevronDown, ChevronUp, LayoutDashboard, Package, Sparkles, UserPlus, type LucideIcon } from "lucide-react";
 import heroExportVideo from "@/assets/hero-export.mp4";
+import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
 
@@ -10,11 +11,12 @@ type ActionItem = {
   title: string;
   subtitle: string;
   to: string;
-  icon: typeof MessageCircle;
+  icon: LucideIcon;
 };
 
 export function ArrivalGuide({ className }: { className?: string }) {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const { lang } = useI18n();
   const isFr = lang !== "en";
   const [menuExpanded, setMenuExpanded] = useState(true);
@@ -23,52 +25,53 @@ export function ArrivalGuide({ className }: { className?: string }) {
   const videoTailLoopSeconds = 5;
   const videoLoopEndPadding = 0.08;
   const actionsPanelId = "arrival-guide-actions";
+  const businessPublishLink = `/register?next=${encodeURIComponent("/coin-business#publier")}`;
 
   const actions: ActionItem[] = isFr
     ? [
         {
-          key: "products",
-          title: "Voir nos produits",
-          subtitle: "Services et solutions export",
-          to: "/services",
+          key: "offer",
+          title: "Voir l'offre gratuite",
+          subtitle: "Services, outils et entree dans l'ecosysteme",
+          to: "/pricing#plans",
           icon: Package,
         },
         {
-          key: "about",
-          title: "A propos de MPL",
-          subtitle: "Vision, mission et methodologie",
-          to: "/about",
-          icon: Info,
+          key: "business",
+          title: "Le coin business",
+          subtitle: "Consulter ou publier des propositions d'affaires",
+          to: "/coin-business",
+          icon: BriefcaseBusiness,
         },
         {
-          key: "contact",
-          title: "Contact",
-          subtitle: "Parler a un expert export",
-          to: "/contact",
-          icon: PhoneCall,
+          key: isAuthenticated ? "app" : "register",
+          title: isAuthenticated ? "Ouvrir mon espace" : "Creer un compte gratuit",
+          subtitle: isAuthenticated ? "Acceder a la tour de controle export" : "Publier et acceder aux outils gratuits",
+          to: isAuthenticated ? "/app/control-tower" : businessPublishLink,
+          icon: isAuthenticated ? LayoutDashboard : UserPlus,
         },
       ]
     : [
         {
-          key: "products",
-          title: "Discover our products",
-          subtitle: "Export services and solutions",
-          to: "/services",
+          key: "offer",
+          title: "See the free offer",
+          subtitle: "Services, tools and platform entry point",
+          to: "/pricing#plans",
           icon: Package,
         },
         {
-          key: "about",
-          title: "About MPL",
-          subtitle: "Vision, mission and method",
-          to: "/about",
-          icon: Info,
+          key: "business",
+          title: "Business corner",
+          subtitle: "Browse or publish business opportunities",
+          to: "/coin-business",
+          icon: BriefcaseBusiness,
         },
         {
-          key: "contact",
-          title: "Contact",
-          subtitle: "Talk to an export expert",
-          to: "/contact",
-          icon: PhoneCall,
+          key: isAuthenticated ? "app" : "register",
+          title: isAuthenticated ? "Open my workspace" : "Create free account",
+          subtitle: isAuthenticated ? "Access the export control tower" : "Publish and unlock the free tools",
+          to: isAuthenticated ? "/app/control-tower" : businessPublishLink,
+          icon: isAuthenticated ? LayoutDashboard : UserPlus,
         },
       ];
 
