@@ -1,30 +1,18 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
-import {
-  ArrowRight,
-  ArrowUpRight,
-  BriefcaseBusiness,
-  Building2,
-  CheckCircle2,
-  Globe2,
-  Handshake,
-  Mail,
-  PhoneCall,
-  Send,
-  ShieldCheck,
-  Sparkles,
-  Users,
-} from "lucide-react";
+import { Bot, BriefcaseBusiness, Building2, Globe2, Handshake, Loader2, Mail, PhoneCall, Send, Users } from "lucide-react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import {
   BUSINESS_OPPORTUNITY_TYPES,
   type BusinessOpportunity,
@@ -33,8 +21,9 @@ import {
   createBusinessOpportunity,
   listBusinessOpportunities,
 } from "@/services/businessBoard";
+import { createBusinessRelation, listBusinessRelations, type BusinessRelation, type BusinessRelationDirection } from "@/services/businessRelations";
 
-type BusinessFormState = {
+type PublishForm = {
   companyName: string;
   contactName: string;
   contactEmail: string;
@@ -47,14 +36,35 @@ type BusinessFormState = {
   website: string;
 };
 
-type IntroFormState = {
+type IntroForm = {
   firstName: string;
   email: string;
   company: string;
   message: string;
 };
 
-const DEFAULT_BUSINESS_FORM: BusinessFormState = {
+type RelationForm = {
+  direction: BusinessRelationDirection;
+  companyName: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  message: string;
+};
+
+type DealMessage = { id: string; role: "user" | "assistant"; content: string };
+type DealResult = {
+  verdict: "forte_opportunite" | "a_creuser" | "risque_eleve";
+  score: number;
+  provider: "chatgpt" | "heuristic" | null;
+};
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_RAW = "0676435551";
+const PHONE_PRETTY = "06 76 43 55 51";
+const CONTACT_EMAIL = "contact@exportfrancefacile.com";
+
+const DEFAULT_PUBLISH: PublishForm = {
   companyName: "",
   contactName: "",
   contactEmail: "",
@@ -67,10 +77,19 @@ const DEFAULT_BUSINESS_FORM: BusinessFormState = {
   website: "",
 };
 
-const DEFAULT_INTRO_FORM: IntroFormState = {
+const DEFAULT_INTRO: IntroForm = {
   firstName: "",
   email: "",
   company: "",
+  message: "",
+};
+
+const DEFAULT_RELATION: RelationForm = {
+  direction: "outbound",
+  companyName: "",
+  contactName: "",
+  contactEmail: "",
+  contactPhone: "",
   message: "",
 };
 
@@ -83,29 +102,36 @@ const TYPE_LABELS = {
   service: { fr: "Service", en: "Service" },
 } as const;
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_RAW = "0676435551";
-const PHONE_PRETTY = "06 76 43 55 51";
-const CONTACT_EMAIL = "contact@exportfrancefacile.com";
+const RELATION_SOURCE_LABELS = {
+  manual: { fr: "Manuel", en: "Manual" },
+  board_request: { fr: "Board entrant", en: "Board inbound" },
+  board_outreach: { fr: "Board sortant", en: "Board outreach" },
+  intro_request: { fr: "MPL", en: "MPL" },
+} as const;
+
+const RELATION_STATUS_LABELS = {
+  new: { fr: "Nouveau", en: "New" },
+  contacted: { fr: "Contacte", en: "Contacted" },
+  qualified: { fr: "Qualifie", en: "Qualified" },
+  closed: { fr: "Clos", en: "Closed" },
+} as const;
+
+const DEAL_VERDICT_LABELS = {
+  forte_opportunite: { fr: "Forte opportunite", en: "Strong opportunity" },
+  a_creuser: { fr: "A creuser", en: "Worth exploring" },
+  risque_eleve: { fr: "Risque eleve", en: "High risk" },
+} as const;
+
+function uid() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 function formatDate(value: string, locale: string) {
   try {
-    return new Intl.DateTimeFormat(locale, {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    }).format(new Date(value));
+    return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
   } catch {
     return value;
   }
-}
-
-function getSummaryStats(items: BusinessOpportunity[]) {
-  return {
-    total: items.length,
-    buyerCount: items.filter((item) => item.opportunity_type === "buyer").length,
-    partnerCount: items.filter((item) => item.opportunity_type === "partner" || item.opportunity_type === "distributor").length,
-  };
 }
 
 export default function BusinessRelations() {
@@ -115,275 +141,148 @@ export default function BusinessRelations() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [items, setItems] = React.useState<BusinessOpportunity[]>([]);
-  const [source, setSource] = React.useState<BusinessOpportunitySource>("demo");
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-  const [businessSubmitting, setBusinessSubmitting] = React.useState(false);
+  const [board, setBoard] = React.useState<BusinessOpportunity[]>([]);
+  const [boardSource, setBoardSource] = React.useState<BusinessOpportunitySource>("demo");
+  const [boardLoading, setBoardLoading] = React.useState(true);
+  const [relations, setRelations] = React.useState<BusinessRelation[]>([]);
+  const [relationsSource, setRelationsSource] = React.useState<"server" | "demo">("demo");
+  const [relationsLoading, setRelationsLoading] = React.useState(true);
+  const [publishForm, setPublishForm] = React.useState<PublishForm>(DEFAULT_PUBLISH);
+  const [introForm, setIntroForm] = React.useState<IntroForm>(DEFAULT_INTRO);
+  const [relationForm, setRelationForm] = React.useState<RelationForm>(DEFAULT_RELATION);
+  const [publishSubmitting, setPublishSubmitting] = React.useState(false);
   const [introSubmitting, setIntroSubmitting] = React.useState(false);
-  const [businessForm, setBusinessForm] = React.useState<BusinessFormState>(DEFAULT_BUSINESS_FORM);
-  const [introForm, setIntroForm] = React.useState<IntroFormState>(DEFAULT_INTRO_FORM);
+  const [relationSubmitting, setRelationSubmitting] = React.useState(false);
+  const [selectedOpportunityId, setSelectedOpportunityId] = React.useState("");
+  const [dealDraft, setDealDraft] = React.useState("");
+  const [dealSubmitting, setDealSubmitting] = React.useState(false);
+  const [dealResult, setDealResult] = React.useState<DealResult | null>(null);
+  const [dealMessages, setDealMessages] = React.useState<DealMessage[]>([
+    {
+      id: uid(),
+      role: "assistant",
+      content: isEn
+        ? "Select an opportunity or describe a deal. I will tell you if it is worth pursuing and why."
+        : "Selectionnez une opportunite ou decrivez un deal. Je vous dirai si cela vaut le coup et pourquoi.",
+    },
+  ]);
 
-  const copy = React.useMemo(
-    () =>
-      isEn
-        ? {
-            heroTitle: "Business relationships, contact requests and introductions in one place.",
-            heroBody:
-              "Use this space from the control tower to publish a business opportunity, browse active requests and ask MPL for a direct introduction.",
-            statsTotal: "Visible opportunities",
-            statsBuyers: "Buyer requests",
-            statsPartners: "Partners / distributors",
-            boardTitle: "Live opportunities",
-            boardBody: "Fresh requests and offers visible from your workspace.",
-            publishTitle: "Publish a business opportunity",
-            publishBody: "Post a buyer request, partnership search, sourcing need or distribution offer.",
-            introTitle: "Request a business introduction",
-            introBody:
-              "Send MPL a quick brief when you want a contact, a callback or a targeted business introduction.",
-            demoBanner: "Demo mode active until the database migration is applied. New opportunities are stored locally.",
-            quickPublish: "Publish now",
-            quickContact: "Request introduction",
-            quickOpen: "Open public board",
-            formCompany: "Company *",
-            formContact: "Contact *",
-            formEmail: "Email *",
-            formType: "Type *",
-            formTitle: "Title *",
-            formSummary: "Business summary *",
-            formSector: "Sector",
-            formOrigin: "Origin country",
-            formTarget: "Target country",
-            formWebsite: "Website",
-            formPublishIdle: "Publish opportunity",
-            formPublishLoading: "Publishing...",
-            introName: "Your name *",
-            introMessage: "What kind of introduction or contact do you need? *",
-            introIdle: "Send request",
-            introLoading: "Sending...",
-            successBusinessServer: "Your opportunity is now visible on the board.",
-            successBusinessDemo: "Stored in local demo mode until the database migration is applied.",
-            successIntro: "Your contact request has been sent to MPL.",
-            errorLoad: "Unable to load business opportunities.",
-            validation: {
-              company: "Add a company name.",
-              contact: "Add the contact name.",
-              email: "Add a valid email.",
-              title: "Write a title with at least 12 characters.",
-              summary: "Write a summary with at least 40 characters.",
-              introMessage: "Describe the contact or introduction you need.",
-              introName: "Add your name.",
-            },
-            publishedOn: "Published on",
-            target: "Target",
-            origin: "Origin",
-            contact: "Contact",
-            empty: "No visible opportunity yet. Publish the first one from this workspace.",
-            tipsTitle: "Recommended uses",
-            tips: [
-              "Publish offers and requests with a clear business objective.",
-              "Use the contact request form when you need MPL to introduce or qualify a lead.",
-              "Keep one monitored email and one target geography in every request.",
-            ],
-            directTitle: "Direct contact",
-            retry: "Retry",
-          }
-        : {
-            heroTitle: "Mise en relation, demandes business et contact dans un seul espace.",
-            heroBody:
-              "Depuis la tour de controle, publiez une opportunite, consultez les demandes actives et demandez a MPL une mise en relation ciblee.",
-            statsTotal: "Opportunites visibles",
-            statsBuyers: "Recherches d'acheteurs",
-            statsPartners: "Partenaires / distributeurs",
-            boardTitle: "Opportunites live",
-            boardBody: "Les demandes et offres les plus recentes visibles directement depuis votre espace.",
-            publishTitle: "Publier une opportunite business",
-            publishBody: "Diffusez un besoin acheteur, une recherche de partenaire, du sourcing ou une offre de distribution.",
-            introTitle: "Demander une mise en relation",
-            introBody:
-              "Envoyez un brief court a MPL si vous avez besoin d'un contact, d'un rappel ou d'une mise en relation business ciblee.",
-            demoBanner: "Mode demo actif tant que la migration base n'est pas appliquee. Les nouvelles opportunites sont stockees localement.",
-            quickPublish: "Publier maintenant",
-            quickContact: "Demander une mise en relation",
-            quickOpen: "Ouvrir le board public",
-            formCompany: "Entreprise *",
-            formContact: "Contact *",
-            formEmail: "Email *",
-            formType: "Type *",
-            formTitle: "Titre *",
-            formSummary: "Resume business *",
-            formSector: "Secteur",
-            formOrigin: "Pays d'origine",
-            formTarget: "Pays cible",
-            formWebsite: "Site web",
-            formPublishIdle: "Publier l'opportunite",
-            formPublishLoading: "Publication...",
-            introName: "Votre nom *",
-            introMessage: "Quel contact ou quelle mise en relation cherchez-vous ? *",
-            introIdle: "Envoyer la demande",
-            introLoading: "Envoi...",
-            successBusinessServer: "Votre opportunite est maintenant visible sur le board.",
-            successBusinessDemo: "Enregistree en mode demo local tant que la migration base n'est pas appliquee.",
-            successIntro: "Votre demande de contact a bien ete transmise a MPL.",
-            errorLoad: "Impossible de charger les opportunites business.",
-            validation: {
-              company: "Ajoutez le nom de l'entreprise.",
-              contact: "Ajoutez le nom du contact.",
-              email: "Ajoutez un email valide.",
-              title: "Redigez un titre d'au moins 12 caracteres.",
-              summary: "Redigez un resume d'au moins 40 caracteres.",
-              introMessage: "Precisez le contact ou la mise en relation voulue.",
-              introName: "Ajoutez votre nom.",
-            },
-            publishedOn: "Publie le",
-            target: "Cible",
-            origin: "Origine",
-            contact: "Contacter",
-            empty: "Aucune opportunite visible pour le moment. Publiez la premiere depuis cet espace.",
-            tipsTitle: "Usages recommandes",
-            tips: [
-              "Publiez des demandes et offres avec un objectif commercial clair.",
-              "Utilisez la demande de contact quand vous voulez que MPL qualifie ou introduise un lead.",
-              "Gardez un email suivi et une cible geographique dans chaque demande.",
-            ],
-            directTitle: "Contact direct",
-            retry: "Recharger",
-          },
-    [isEn]
-  );
+  const selectedOpportunity = React.useMemo(() => board.find((item) => item.id === selectedOpportunityId) || null, [board, selectedOpportunityId]);
+  const inbound = React.useMemo(() => relations.filter((item) => item.direction === "inbound"), [relations]);
+  const outbound = React.useMemo(() => relations.filter((item) => item.direction === "outbound"), [relations]);
 
-  const loadBoard = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await listBusinessOpportunities(12);
-      setItems(result.items);
-      setSource(result.source);
-    } catch (err: any) {
-      setError(err?.message || copy.errorLoad);
-    } finally {
-      setLoading(false);
-    }
-  }, [copy.errorLoad]);
-
-  React.useEffect(() => {
-    void loadBoard();
-  }, [loadBoard]);
-
-  React.useEffect(() => {
+  const fillFromUser = React.useCallback(() => {
     const email = user?.email || "";
-    const displayName = String(user?.user_metadata?.full_name || user?.user_metadata?.name || "").trim();
-    const companyName = String(user?.user_metadata?.company_name || "").trim();
-
-    setBusinessForm((prev) => ({
-      ...prev,
-      contactEmail: prev.contactEmail || email,
-      contactName: prev.contactName || displayName,
-      companyName: prev.companyName || companyName,
-    }));
-    setIntroForm((prev) => ({
-      ...prev,
-      email: prev.email || email,
-      firstName: prev.firstName || displayName,
-      company: prev.company || companyName,
-    }));
+    const name = String(user?.user_metadata?.full_name || user?.user_metadata?.name || "").trim();
+    const company = String(user?.user_metadata?.company_name || "").trim();
+    setPublishForm((prev) => ({ ...prev, companyName: prev.companyName || company, contactName: prev.contactName || name, contactEmail: prev.contactEmail || email }));
+    setIntroForm((prev) => ({ ...prev, firstName: prev.firstName || name, email: prev.email || email, company: prev.company || company }));
+    setRelationForm((prev) => ({ ...prev, companyName: prev.companyName || company, contactName: prev.contactName || name, contactEmail: prev.contactEmail || email }));
   }, [user?.email, user?.user_metadata]);
 
-  const stats = React.useMemo(() => getSummaryStats(items), [items]);
-
-  const handleBusinessField =
-    <K extends keyof BusinessFormState>(key: K) =>
-    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-      const value = event.target.value;
-      setBusinessForm((prev) => ({ ...prev, [key]: value }));
-    };
-
-  const handleIntroField =
-    <K extends keyof IntroFormState>(key: K) =>
-    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      const value = event.target.value;
-      setIntroForm((prev) => ({ ...prev, [key]: value }));
-    };
-
-  const submitBusiness = async (event: React.FormEvent) => {
-    event.preventDefault();
-
-    if (!businessForm.companyName.trim()) {
-      toast({ title: copy.publishTitle, description: copy.validation.company });
-      return;
-    }
-    if (!businessForm.contactName.trim()) {
-      toast({ title: copy.publishTitle, description: copy.validation.contact });
-      return;
-    }
-    if (!EMAIL_RE.test(businessForm.contactEmail.trim())) {
-      toast({ title: copy.publishTitle, description: copy.validation.email });
-      return;
-    }
-    if (businessForm.title.trim().length < 12) {
-      toast({ title: copy.publishTitle, description: copy.validation.title });
-      return;
-    }
-    if (businessForm.summary.trim().length < 40) {
-      toast({ title: copy.publishTitle, description: copy.validation.summary });
-      return;
-    }
-
+  const loadBoard = React.useCallback(async () => {
+    setBoardLoading(true);
     try {
-      setBusinessSubmitting(true);
-      const result = await createBusinessOpportunity({
-        company_name: businessForm.companyName,
-        contact_name: businessForm.contactName,
-        contact_email: businessForm.contactEmail,
-        title: businessForm.title,
-        summary: businessForm.summary,
-        opportunity_type: businessForm.opportunityType,
-        sector: businessForm.sector,
-        origin_country: businessForm.originCountry,
-        target_country: businessForm.targetCountry,
-        website: businessForm.website,
-      });
-
-      toast({
-        title: copy.publishTitle,
-        description: result.source === "server" ? copy.successBusinessServer : copy.successBusinessDemo,
-      });
-
-      setBusinessForm((prev) => ({
-        ...DEFAULT_BUSINESS_FORM,
-        companyName: prev.companyName,
-        contactName: prev.contactName,
-        contactEmail: prev.contactEmail,
-      }));
-
-      await loadBoard();
-    } catch (err: any) {
-      toast({
-        title: copy.publishTitle,
-        description: err?.message || copy.errorLoad,
-        variant: "destructive",
-      });
+      const result = await listBusinessOpportunities(12);
+      setBoard(result.items);
+      setBoardSource(result.source);
     } finally {
-      setBusinessSubmitting(false);
+      setBoardLoading(false);
+    }
+  }, []);
+
+  const loadRelations = React.useCallback(async () => {
+    setRelationsLoading(true);
+    try {
+      const result = await listBusinessRelations(24);
+      setRelations(result.items);
+      setRelationsSource(result.source);
+    } finally {
+      setRelationsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fillFromUser();
+  }, [fillFromUser]);
+
+  React.useEffect(() => {
+    void Promise.all([loadBoard(), loadRelations()]);
+  }, [loadBoard, loadRelations]);
+
+  const savePublishField =
+    <K extends keyof PublishForm>(key: K) =>
+    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+      setPublishForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  const saveIntroField =
+    <K extends keyof IntroForm>(key: K) =>
+    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setIntroForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  const saveRelationField =
+    <K extends keyof RelationForm>(key: K) =>
+    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+      setRelationForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  const submitPublish = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!publishForm.companyName.trim() || !publishForm.contactName.trim()) return;
+    if (!EMAIL_RE.test(publishForm.contactEmail.trim())) return;
+    if (publishForm.title.trim().length < 12 || publishForm.summary.trim().length < 40) return;
+    try {
+      setPublishSubmitting(true);
+      await createBusinessOpportunity({
+        company_name: publishForm.companyName,
+        contact_name: publishForm.contactName,
+        contact_email: publishForm.contactEmail,
+        title: publishForm.title,
+        summary: publishForm.summary,
+        opportunity_type: publishForm.opportunityType,
+        sector: publishForm.sector,
+        origin_country: publishForm.originCountry,
+        target_country: publishForm.targetCountry,
+        website: publishForm.website,
+      });
+      toast({ title: isEn ? "Opportunity published" : "Opportunite publiee" });
+      setPublishForm((prev) => ({ ...DEFAULT_PUBLISH, companyName: prev.companyName, contactName: prev.contactName, contactEmail: prev.contactEmail }));
+      await loadBoard();
+    } catch {
+      toast({ title: isEn ? "Unable to publish" : "Publication impossible", variant: "destructive" });
+    } finally {
+      setPublishSubmitting(false);
+    }
+  };
+
+  const submitRelation = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!relationForm.companyName.trim() || !relationForm.contactName.trim()) return;
+    if (relationForm.contactEmail.trim() && !EMAIL_RE.test(relationForm.contactEmail.trim())) return;
+    if (relationForm.message.trim().length < 10) return;
+    try {
+      setRelationSubmitting(true);
+      await createBusinessRelation({
+        direction: relationForm.direction,
+        relation_source: "manual",
+        company_name: relationForm.companyName,
+        contact_name: relationForm.contactName,
+        contact_email: relationForm.contactEmail,
+        contact_phone: relationForm.contactPhone,
+        message: relationForm.message,
+      });
+      toast({ title: isEn ? "Contact saved" : "Contact enregistre" });
+      setRelationForm((prev) => ({ ...DEFAULT_RELATION, direction: prev.direction, companyName: prev.companyName, contactName: prev.contactName, contactEmail: prev.contactEmail }));
+      await loadRelations();
+    } catch {
+      toast({ title: isEn ? "Unable to save contact" : "Enregistrement impossible", variant: "destructive" });
+    } finally {
+      setRelationSubmitting(false);
     }
   };
 
   const submitIntro = async (event: React.FormEvent) => {
     event.preventDefault();
-
-    if (!introForm.firstName.trim()) {
-      toast({ title: copy.introTitle, description: copy.validation.introName });
-      return;
-    }
-    if (!EMAIL_RE.test(introForm.email.trim())) {
-      toast({ title: copy.introTitle, description: copy.validation.email });
-      return;
-    }
-    if (introForm.message.trim().length < 20) {
-      toast({ title: copy.introTitle, description: copy.validation.introMessage });
-      return;
-    }
-
+    if (!introForm.firstName.trim() || !EMAIL_RE.test(introForm.email.trim()) || introForm.message.trim().length < 20) return;
     try {
       setIntroSubmitting(true);
       const response = await fetch("/api/contact", {
@@ -402,366 +301,321 @@ export default function BusinessRelations() {
           message: introForm.message.trim(),
         }),
       });
-
-      if (!response.ok) {
-        const detail = await response.text().catch(() => "");
-        throw new Error(detail || "Envoi impossible");
-      }
-
-      toast({
-        title: copy.introTitle,
-        description: copy.successIntro,
-      });
-
-      setIntroForm((prev) => ({
-        ...DEFAULT_INTRO_FORM,
-        firstName: prev.firstName,
-        email: prev.email,
-        company: prev.company,
-      }));
-    } catch (err: any) {
-      toast({
-        title: copy.introTitle,
-        description: err?.message || copy.errorLoad,
-        variant: "destructive",
-      });
+      if (!response.ok) throw new Error("contact_failed");
+      toast({ title: isEn ? "Request sent" : "Demande envoyee" });
+      setIntroForm((prev) => ({ ...DEFAULT_INTRO, firstName: prev.firstName, email: prev.email, company: prev.company }));
+    } catch {
+      toast({ title: isEn ? "Unable to send request" : "Envoi impossible", variant: "destructive" });
     } finally {
       setIntroSubmitting(false);
+    }
+  };
+
+  const logOutreach = async (item: BusinessOpportunity) => {
+    try {
+      await createBusinessRelation({
+        direction: "outbound",
+        relation_source: "board_outreach",
+        company_name: item.company_name,
+        contact_name: item.contact_name,
+        contact_email: item.contact_email,
+        opportunity_id: item.id,
+        opportunity_title: item.title,
+        message: item.summary.slice(0, 300),
+      });
+      toast({ title: isEn ? "Outreach saved" : "Contact sortant enregistre" });
+      await loadRelations();
+    } catch {
+      toast({ title: isEn ? "Unable to save outreach" : "Enregistrement impossible", variant: "destructive" });
+    }
+  };
+
+  const runDealReview = async (preset?: string, item?: BusinessOpportunity | null) => {
+    const target = item || selectedOpportunity;
+    const question = (preset || dealDraft || (isEn ? "Is this a good business opportunity?" : "Est-ce une bonne affaire ?")).trim();
+    const nextUser = { id: uid(), role: "user" as const, content: question };
+    setDealMessages((prev) => [...prev, nextUser]);
+    setDealDraft("");
+    setDealSubmitting(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch("/api/business-deal-chat", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          lang,
+          opportunity: target
+            ? {
+                title: target.title,
+                summary: target.summary,
+                company_name: target.company_name,
+                opportunity_type: target.opportunity_type,
+                sector: target.sector,
+                origin_country: target.origin_country,
+                target_country: target.target_country,
+                website: target.website,
+              }
+            : null,
+          messages: [...dealMessages, nextUser].slice(-8).map((message) => ({ role: message.role, content: message.content })),
+        }),
+      });
+      if (!response.ok) throw new Error("deal_review_failed");
+      const result = (await response.json().catch(() => ({}))) as { answer_markdown?: string; verdict?: DealResult["verdict"]; score?: number; provider?: DealResult["provider"] };
+      setDealResult({ verdict: result.verdict || "a_creuser", score: Number(result.score || 0), provider: result.provider || null });
+      setDealMessages((prev) => [...prev, { id: uid(), role: "assistant", content: String(result.answer_markdown || "") }]);
+    } catch {
+      setDealMessages((prev) => [
+        ...prev,
+        { id: uid(), role: "assistant", content: isEn ? "Unable to review this deal right now." : "Impossible d'analyser ce deal pour le moment." },
+      ]);
+    } finally {
+      setDealSubmitting(false);
     }
   };
 
   return (
     <AppLayout>
       <div className="space-y-6">
-        <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#fff7ed_0%,#ffffff_40%,#eef6ff_100%)] p-6 shadow-sm">
-          <div className="grid gap-6 lg:grid-cols-[1.25fr_0.95fr]">
-            <div className="space-y-4">
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-slate-700">
-                <Handshake className="h-3.5 w-3.5 text-[#0f766e]" />
-                {isEn ? "Business relations" : "Mise en relation business"}
-              </div>
-              <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-tight text-slate-950">{copy.heroTitle}</h1>
-                <p className="max-w-3xl text-sm text-slate-700 sm:text-base">{copy.heroBody}</p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Button asChild className="h-11 rounded-full">
-                  <a href="#publier">
-                    {copy.quickPublish}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </a>
-                </Button>
-                <Button asChild variant="outline" className="h-11 rounded-full bg-white">
-                  <a href="#contact-business">{copy.quickContact}</a>
-                </Button>
-                <Button asChild variant="outline" className="h-11 rounded-full bg-white">
-                  <Link to="/coin-business">
-                    {copy.quickOpen}
-                    <ArrowUpRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-              </div>
+        <section className="rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#fff7ed_0%,#ffffff_42%,#eef6ff_100%)] p-6 shadow-sm">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-slate-700">
+              <Handshake className="h-3.5 w-3.5 text-[#0f766e]" />
+              {isEn ? "Business cockpit" : "Cockpit business"}
             </div>
-
-            <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-              <Card className="border-slate-200 bg-white/90 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardDescription>{copy.statsTotal}</CardDescription>
-                  <CardTitle className="text-3xl text-slate-950">{stats.total}</CardTitle>
-                </CardHeader>
-              </Card>
-              <Card className="border-slate-200 bg-white/90 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardDescription>{copy.statsBuyers}</CardDescription>
-                  <CardTitle className="text-3xl text-slate-950">{stats.buyerCount}</CardTitle>
-                </CardHeader>
-              </Card>
-              <Card className="border-slate-200 bg-white/90 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardDescription>{copy.statsPartners}</CardDescription>
-                  <CardTitle className="text-3xl text-slate-950">{stats.partnerCount}</CardTitle>
-                </CardHeader>
-              </Card>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+              {isEn
+                ? "Inbound contacts, outbound contacts and AI deal review in one private space."
+                : "Contacts entrants, contacts sortants et revue IA des affaires dans un seul espace prive."}
+            </h1>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Button asChild className="rounded-full"><a href="#relations">{isEn ? "Open contacts" : "Voir les contacts"}</a></Button>
+              <Button asChild variant="outline" className="rounded-full bg-white"><a href="#deal-ai">{isEn ? "Analyze a deal" : "Analyser une affaire"}</a></Button>
+              <Button asChild variant="outline" className="rounded-full bg-white"><Link to="/coin-business">{isEn ? "Public board" : "Board public"}</Link></Button>
             </div>
           </div>
-
-          {source === "demo" ? (
-            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              {copy.demoBanner}
-            </div>
-          ) : null}
         </section>
 
         <div className="grid gap-6 xl:grid-cols-[1.3fr_0.92fr]">
-          <div className="space-y-4">
-            <Card className="border-slate-200 bg-white/95 shadow-sm">
+          <div className="space-y-6">
+            <Card id="relations" className="border-slate-200 bg-white/95 shadow-sm">
               <CardHeader>
-                <CardTitle>{copy.boardTitle}</CardTitle>
-                <CardDescription>{copy.boardBody}</CardDescription>
+                <CardTitle>{isEn ? "Business contacts" : "Contacts business"}</CardTitle>
+                <CardDescription>{isEn ? "People who contacted you and people you contacted." : "Les gens qui vous contactent et ceux que vous contactez."}</CardDescription>
               </CardHeader>
+              <CardContent className="space-y-4">
+                {relationsSource === "demo" ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    {isEn ? "Demo mode active until migrations are applied." : "Mode demo actif tant que les migrations ne sont pas appliquees."}
+                  </div>
+                ) : null}
+                <Tabs defaultValue="inbound">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="inbound">{isEn ? "Inbound" : "Entrants"} ({inbound.length})</TabsTrigger>
+                    <TabsTrigger value="outbound">{isEn ? "Outbound" : "Sortants"} ({outbound.length})</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="inbound" className="space-y-3 pt-4">
+                    {relationsLoading ? <div className="text-sm text-slate-500">{isEn ? "Loading..." : "Chargement..."}</div> : null}
+                    {!relationsLoading && !inbound.length ? <div className="text-sm text-slate-500">{isEn ? "No inbound contact yet." : "Aucun contact entrant pour le moment."}</div> : null}
+                    {inbound.map((relation) => (
+                      <Card key={relation.id} className="border-slate-200 bg-slate-50">
+                        <CardContent className="space-y-3 p-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary">{RELATION_SOURCE_LABELS[relation.relation_source][isEn ? "en" : "fr"]}</Badge>
+                            <Badge variant="outline">{RELATION_STATUS_LABELS[relation.relation_status][isEn ? "en" : "fr"]}</Badge>
+                            <span className="text-xs text-slate-500">{formatDate(relation.created_at, locale)}</span>
+                          </div>
+                          <div className="font-semibold text-slate-950">{relation.company_name}</div>
+                          <div className="text-sm text-slate-600">{relation.message}</div>
+                          <div className="flex flex-wrap gap-3 text-sm text-slate-700">
+                            <span>{relation.contact_name}</span>
+                            {relation.contact_email ? <a href={`mailto:${relation.contact_email}`}>{relation.contact_email}</a> : null}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </TabsContent>
+
+                  <TabsContent value="outbound" className="space-y-3 pt-4">
+                    {relationsLoading ? <div className="text-sm text-slate-500">{isEn ? "Loading..." : "Chargement..."}</div> : null}
+                    {!relationsLoading && !outbound.length ? <div className="text-sm text-slate-500">{isEn ? "No outbound contact yet." : "Aucun contact sortant pour le moment."}</div> : null}
+                    {outbound.map((relation) => (
+                      <Card key={relation.id} className="border-slate-200 bg-slate-50">
+                        <CardContent className="space-y-3 p-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary">{RELATION_SOURCE_LABELS[relation.relation_source][isEn ? "en" : "fr"]}</Badge>
+                            <Badge variant="outline">{RELATION_STATUS_LABELS[relation.relation_status][isEn ? "en" : "fr"]}</Badge>
+                            <span className="text-xs text-slate-500">{formatDate(relation.created_at, locale)}</span>
+                          </div>
+                          <div className="font-semibold text-slate-950">{relation.company_name}</div>
+                          <div className="text-sm text-slate-600">{relation.message}</div>
+                          <div className="flex flex-wrap gap-3 text-sm text-slate-700">
+                            <span>{relation.contact_name}</span>
+                            {relation.contact_email ? <a href={`mailto:${relation.contact_email}`}>{relation.contact_email}</a> : null}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
             </Card>
 
-            {error ? (
-              <Card className="border-red-200 bg-red-50 text-red-900">
-                <CardContent className="flex items-center justify-between gap-4 p-6">
-                  <div>{error}</div>
-                  <Button variant="outline" onClick={() => void loadBoard()}>
-                    {copy.retry}
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : null}
-
-            <div className="grid gap-4">
-              {loading
-                ? Array.from({ length: 4 }).map((_, index) => (
-                    <Card key={`business-relation-skeleton-${index}`} className="border-slate-200 bg-white/95 shadow-sm">
-                      <CardContent className="space-y-4 p-6">
-                        <div className="h-4 w-24 rounded-full bg-slate-200" />
-                        <div className="h-7 w-4/5 rounded-full bg-slate-200" />
-                        <div className="h-4 w-full rounded-full bg-slate-100" />
-                        <div className="h-4 w-11/12 rounded-full bg-slate-100" />
-                      </CardContent>
-                    </Card>
-                  ))
-                : items.map((item) => (
-                    <Card key={item.id} className="border-slate-200 bg-white/95 shadow-sm">
-                      <CardContent className="p-6">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                          <div className="space-y-4">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant="secondary" className="bg-slate-100 text-slate-800">
-                                {TYPE_LABELS[item.opportunity_type][isEn ? "en" : "fr"]}
-                              </Badge>
-                              <span className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
-                                {copy.publishedOn} {formatDate(item.created_at, locale)}
-                              </span>
-                            </div>
-
-                            <div className="space-y-2">
-                              <h3 className="text-xl font-semibold text-slate-950">{item.title}</h3>
-                              <p className="text-sm text-slate-600">{item.summary}</p>
-                            </div>
-
-                            <div className="flex flex-wrap gap-2 text-xs font-medium text-slate-600">
-                              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
-                                <Building2 className="h-3.5 w-3.5" />
-                                {item.company_name}
-                              </span>
-                              {item.origin_country ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
-                                  <Globe2 className="h-3.5 w-3.5" />
-                                  {copy.origin} {item.origin_country}
-                                </span>
-                              ) : null}
-                              {item.target_country ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
-                                  <Globe2 className="h-3.5 w-3.5" />
-                                  {copy.target} {item.target_country}
-                                </span>
-                              ) : null}
-                              {item.sector ? <span className="rounded-full bg-slate-100 px-3 py-1">{item.sector}</span> : null}
-                            </div>
+            <Card className="border-slate-200 bg-white/95 shadow-sm">
+              <CardHeader>
+                <CardTitle>{isEn ? "Live opportunities" : "Opportunites live"}</CardTitle>
+                <CardDescription>{isEn ? "Use the board to find and log outreach." : "Utilisez le board pour trouver et journaliser vos contacts."}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {boardSource === "demo" ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    {isEn ? "Public board is in demo mode until migrations are applied." : "Le board public est en mode demo tant que les migrations ne sont pas appliquees."}
+                  </div>
+                ) : null}
+                {boardLoading ? <div className="text-sm text-slate-500">{isEn ? "Loading..." : "Chargement..."}</div> : null}
+                {board.map((item) => (
+                  <Card key={item.id} className="border-slate-200 bg-slate-50">
+                    <CardContent className="p-5">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:justify-between">
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary">{TYPE_LABELS[item.opportunity_type][isEn ? "en" : "fr"]}</Badge>
+                            <span className="text-xs text-slate-500">{formatDate(item.created_at, locale)}</span>
                           </div>
-
-                          <div className="flex min-w-[220px] flex-col gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                            <div className="text-sm font-semibold text-slate-900">{item.contact_name}</div>
-                            <a
-                              href={`mailto:${item.contact_email}`}
-                              className="inline-flex items-center gap-2 text-sm text-slate-700 hover:text-slate-950 hover:underline"
-                            >
-                              <Mail className="h-4 w-4" />
-                              {item.contact_email}
-                            </a>
-                            {item.website ? (
-                              <a
-                                href={item.website}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-2 text-sm text-slate-700 hover:text-slate-950 hover:underline"
-                              >
-                                <Globe2 className="h-4 w-4" />
-                                {item.website.replace(/^https?:\/\//i, "")}
-                              </a>
-                            ) : null}
-                            <Button asChild size="sm" className="mt-2 rounded-full">
-                              <a href={`mailto:${item.contact_email}`}>{copy.contact}</a>
-                            </Button>
+                          <h3 className="text-lg font-semibold text-slate-950">{item.title}</h3>
+                          <p className="text-sm text-slate-600">{item.summary}</p>
+                          <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1"><Building2 className="h-3.5 w-3.5" />{item.company_name}</span>
+                            {item.origin_country ? <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1"><Globe2 className="h-3.5 w-3.5" />{item.origin_country}</span> : null}
+                            {item.target_country ? <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1"><Globe2 className="h-3.5 w-3.5" />{item.target_country}</span> : null}
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-            </div>
-
-            {!loading && !error && items.length === 0 ? (
-              <Card className="border-dashed border-slate-300 bg-white/80 shadow-sm">
-                <CardContent className="px-6 py-12 text-center text-sm text-slate-600">
-                  <Sparkles className="mx-auto mb-3 h-5 w-5 text-slate-500" />
-                  {copy.empty}
-                </CardContent>
-              </Card>
-            ) : null}
+                        <div className="flex min-w-[230px] flex-col gap-2">
+                          <Button size="sm" variant="outline" className="rounded-full" onClick={() => { setSelectedOpportunityId(item.id); void runDealReview(isEn ? "Is this worth pursuing?" : "Est-ce que cela vaut le coup ?", item); }}>
+                            {isEn ? "Analyze" : "Analyser"}
+                          </Button>
+                          {item.user_id !== user?.id ? <Button size="sm" className="rounded-full" onClick={() => void logOutreach(item)}>{isEn ? "I contacted them" : "J'ai contacte ce lead"}</Button> : null}
+                          <Button asChild size="sm" variant="outline" className="rounded-full"><a href={`mailto:${item.contact_email}`}>Email</a></Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </CardContent>
+            </Card>
           </div>
 
           <div className="space-y-4 xl:sticky xl:top-6 xl:self-start">
-            <Card id="publier" className="border-slate-200 bg-white/95 shadow-sm">
+            <Card id="deal-ai" className="border-slate-200 bg-white/95 shadow-sm">
               <CardHeader>
-                <CardTitle>{copy.publishTitle}</CardTitle>
-                <CardDescription>{copy.publishBody}</CardDescription>
+                <CardTitle>{isEn ? "ChatGPT deal analyst" : "Analyste d'affaires ChatGPT"}</CardTitle>
+                <CardDescription>{isEn ? "Ask if a deal is good and how to qualify it." : "Demandez si une affaire est bonne et comment la qualifier."}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <select value={selectedOpportunityId} onChange={(event) => setSelectedOpportunityId(event.target.value)} className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="">{isEn ? "Free prompt" : "Question libre"}</option>
+                  {board.map((item) => <option key={item.id} value={item.id}>{item.company_name} - {item.title}</option>)}
+                </select>
+                {dealResult ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">{DEAL_VERDICT_LABELS[dealResult.verdict][isEn ? "en" : "fr"]}</Badge>
+                      <Badge variant="outline">{dealResult.score}/100</Badge>
+                      {dealResult.provider ? <Badge variant="outline">{dealResult.provider === "chatgpt" ? "ChatGPT" : (isEn ? "Fallback" : "Secours")}</Badge> : null}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="max-h-[240px] space-y-3 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  {dealMessages.map((message) => (
+                    <div key={message.id} className={`flex gap-2 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                      {message.role === "assistant" ? <div className="mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary"><Bot className="h-3 w-3" /></div> : null}
+                      <div className={`max-w-[88%] rounded-2xl border px-3 py-2 text-sm ${message.role === "user" ? "bg-primary text-primary-foreground" : "bg-white"}`}>{message.content}</div>
+                    </div>
+                  ))}
+                  {dealSubmitting ? <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />{isEn ? "Analyzing..." : "Analyse..."}</div> : null}
+                </div>
+                <Textarea value={dealDraft} onChange={(event) => setDealDraft(event.target.value)} className="min-h-[110px]" placeholder={isEn ? "Is this a good deal and why?" : "Est-ce une bonne affaire et pourquoi ?"} />
+                <Button className="h-11 w-full rounded-full" disabled={dealSubmitting} onClick={() => void runDealReview()}><Bot className="mr-2 h-4 w-4" />{isEn ? "Analyze" : "Analyser"}</Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 bg-white/95 shadow-sm">
+              <CardHeader>
+                <CardTitle>{isEn ? "Log a contact" : "Ajouter un contact"}</CardTitle>
+                <CardDescription>{isEn ? "Track inbound or outbound contacts manually." : "Journalisez un contact entrant ou sortant."}</CardDescription>
               </CardHeader>
               <CardContent>
-                <form className="space-y-4" onSubmit={submitBusiness}>
+                <form className="space-y-4" onSubmit={submitRelation}>
+                  <select value={relationForm.direction} onChange={saveRelationField("direction")} className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 text-sm">
+                    <option value="outbound">{isEn ? "Outbound" : "Sortant"}</option>
+                    <option value="inbound">{isEn ? "Inbound" : "Entrant"}</option>
+                  </select>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">{copy.formCompany}</label>
-                      <Input value={businessForm.companyName} onChange={handleBusinessField("companyName")} />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">{copy.formContact}</label>
-                      <Input value={businessForm.contactName} onChange={handleBusinessField("contactName")} />
-                    </div>
+                    <Input value={relationForm.companyName} onChange={saveRelationField("companyName")} placeholder={isEn ? "Company" : "Entreprise"} />
+                    <Input value={relationForm.contactName} onChange={saveRelationField("contactName")} placeholder="Contact" />
                   </div>
-
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">{copy.formEmail}</label>
-                      <Input type="email" value={businessForm.contactEmail} onChange={handleBusinessField("contactEmail")} />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">{copy.formType}</label>
-                      <select
-                        value={businessForm.opportunityType}
-                        onChange={handleBusinessField("opportunityType")}
-                        className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 text-sm"
-                      >
-                        {BUSINESS_OPPORTUNITY_TYPES.map((type) => (
-                          <option key={type} value={type}>
-                            {TYPE_LABELS[type][isEn ? "en" : "fr"]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <Input type="email" value={relationForm.contactEmail} onChange={saveRelationField("contactEmail")} placeholder="email@company.com" />
+                    <Input value={relationForm.contactPhone} onChange={saveRelationField("contactPhone")} placeholder={isEn ? "Phone" : "Telephone"} />
                   </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">{copy.formTitle}</label>
-                    <Input value={businessForm.title} onChange={handleBusinessField("title")} />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">{copy.formSummary}</label>
-                    <Textarea value={businessForm.summary} onChange={handleBusinessField("summary")} className="min-h-[128px]" />
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">{copy.formSector}</label>
-                      <Input value={businessForm.sector} onChange={handleBusinessField("sector")} />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">{copy.formWebsite}</label>
-                      <Input value={businessForm.website} onChange={handleBusinessField("website")} placeholder="https://..." />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">{copy.formOrigin}</label>
-                      <Input value={businessForm.originCountry} onChange={handleBusinessField("originCountry")} placeholder="FR" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">{copy.formTarget}</label>
-                      <Input value={businessForm.targetCountry} onChange={handleBusinessField("targetCountry")} placeholder="AE" />
-                    </div>
-                  </div>
-
-                  <Button type="submit" className="h-11 w-full rounded-full" disabled={businessSubmitting}>
-                    <BriefcaseBusiness className="mr-2 h-4 w-4" />
-                    {businessSubmitting ? copy.formPublishLoading : copy.formPublishIdle}
-                  </Button>
+                  <Textarea value={relationForm.message} onChange={saveRelationField("message")} className="min-h-[96px]" placeholder={isEn ? "Short business note" : "Note business courte"} />
+                  <Button type="submit" className="h-11 w-full rounded-full" disabled={relationSubmitting}><Users className="mr-2 h-4 w-4" />{relationSubmitting ? (isEn ? "Saving..." : "Enregistrement...") : (isEn ? "Save contact" : "Enregistrer le contact")}</Button>
                 </form>
               </CardContent>
             </Card>
 
-            <Card id="contact-business" className="border-slate-200 bg-white/95 shadow-sm">
+            <Card className="border-slate-200 bg-white/95 shadow-sm">
               <CardHeader>
-                <CardTitle>{copy.introTitle}</CardTitle>
-                <CardDescription>{copy.introBody}</CardDescription>
+                <CardTitle>{isEn ? "Publish opportunity" : "Publier une opportunite"}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form className="space-y-4" onSubmit={submitPublish}>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input value={publishForm.companyName} onChange={savePublishField("companyName")} placeholder={isEn ? "Company" : "Entreprise"} />
+                    <Input value={publishForm.contactName} onChange={savePublishField("contactName")} placeholder="Contact" />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input type="email" value={publishForm.contactEmail} onChange={savePublishField("contactEmail")} placeholder="email@company.com" />
+                    <select value={publishForm.opportunityType} onChange={savePublishField("opportunityType")} className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 text-sm">
+                      {BUSINESS_OPPORTUNITY_TYPES.map((type) => <option key={type} value={type}>{TYPE_LABELS[type][isEn ? "en" : "fr"]}</option>)}
+                    </select>
+                  </div>
+                  <Input value={publishForm.title} onChange={savePublishField("title")} placeholder={isEn ? "Opportunity title" : "Titre"} />
+                  <Textarea value={publishForm.summary} onChange={savePublishField("summary")} className="min-h-[110px]" placeholder={isEn ? "Business summary" : "Resume business"} />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input value={publishForm.sector} onChange={savePublishField("sector")} placeholder={isEn ? "Sector" : "Secteur"} />
+                    <Input value={publishForm.website} onChange={savePublishField("website")} placeholder="https://..." />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input value={publishForm.originCountry} onChange={savePublishField("originCountry")} placeholder="FR" />
+                    <Input value={publishForm.targetCountry} onChange={savePublishField("targetCountry")} placeholder="AE" />
+                  </div>
+                  <Button type="submit" className="h-11 w-full rounded-full" disabled={publishSubmitting}><BriefcaseBusiness className="mr-2 h-4 w-4" />{publishSubmitting ? (isEn ? "Publishing..." : "Publication...") : (isEn ? "Publish" : "Publier")}</Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 bg-white/95 shadow-sm">
+              <CardHeader>
+                <CardTitle>{isEn ? "Request MPL introduction" : "Demander une mise en relation MPL"}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <form className="space-y-4" onSubmit={submitIntro}>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">{copy.introName}</label>
-                      <Input value={introForm.firstName} onChange={handleIntroField("firstName")} />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">{copy.formEmail}</label>
-                      <Input type="email" value={introForm.email} onChange={handleIntroField("email")} />
-                    </div>
+                    <Input value={introForm.firstName} onChange={saveIntroField("firstName")} placeholder={isEn ? "Your name" : "Votre nom"} />
+                    <Input type="email" value={introForm.email} onChange={saveIntroField("email")} placeholder="email@company.com" />
                   </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">{copy.formCompany}</label>
-                    <Input value={introForm.company} onChange={handleIntroField("company")} />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-700">{copy.introMessage}</label>
-                    <Textarea value={introForm.message} onChange={handleIntroField("message")} className="min-h-[116px]" />
-                  </div>
-
-                  <Button type="submit" variant="outline" className="h-11 w-full rounded-full" disabled={introSubmitting}>
-                    <Send className="mr-2 h-4 w-4" />
-                    {introSubmitting ? copy.introLoading : copy.introIdle}
-                  </Button>
+                  <Input value={introForm.company} onChange={saveIntroField("company")} placeholder={isEn ? "Company" : "Entreprise"} />
+                  <Textarea value={introForm.message} onChange={saveIntroField("message")} className="min-h-[96px]" placeholder={isEn ? "What contact do you need?" : "Quel contact cherchez-vous ?"} />
+                  <Button type="submit" variant="outline" className="h-11 w-full rounded-full" disabled={introSubmitting}><Send className="mr-2 h-4 w-4" />{introSubmitting ? (isEn ? "Sending..." : "Envoi...") : (isEn ? "Send request" : "Envoyer la demande")}</Button>
                 </form>
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                    <ShieldCheck className="h-4 w-4 text-emerald-700" />
-                    {copy.directTitle}
-                  </div>
-                  <div className="grid gap-2">
-                    <a
-                      href={`tel:${PHONE_RAW}`}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      <PhoneCall className="h-4 w-4" />
-                      {PHONE_PRETTY}
-                    </a>
-                    <a
-                      href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Mise en relation business")}`}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      <Mail className="h-4 w-4" />
-                      {CONTACT_EMAIL}
-                    </a>
-                    <Link
-                      to="/contact?offer=diagnostic"
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      <Users className="h-4 w-4" />
-                      {copy.quickContact}
-                    </Link>
-                  </div>
+                <div className="grid gap-2">
+                  <a href={`tel:${PHONE_RAW}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"><PhoneCall className="h-4 w-4" />{PHONE_PRETTY}</a>
+                  <a href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent("Mise en relation business")}`} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"><Mail className="h-4 w-4" />{CONTACT_EMAIL}</a>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-slate-200 bg-[#0a1d3a] text-white shadow-sm">
-              <CardHeader>
-                <CardTitle>{copy.tipsTitle}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm text-slate-100">
-                {copy.tips.map((tip) => (
-                  <div key={tip} className="flex items-start gap-3">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-cyan-200" />
-                    <span>{tip}</span>
-                  </div>
-                ))}
               </CardContent>
             </Card>
           </div>

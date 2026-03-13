@@ -15,6 +15,7 @@ import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
@@ -43,6 +44,14 @@ type BusinessFormState = {
   website: string;
 };
 
+type BusinessContactRequestState = {
+  firstName: string;
+  email: string;
+  company: string;
+  phone: string;
+  message: string;
+};
+
 const DEFAULT_FORM: BusinessFormState = {
   companyName: "",
   contactName: "",
@@ -54,6 +63,14 @@ const DEFAULT_FORM: BusinessFormState = {
   originCountry: "FR",
   targetCountry: "",
   website: "",
+};
+
+const DEFAULT_CONTACT_FORM: BusinessContactRequestState = {
+  firstName: "",
+  email: "",
+  company: "",
+  phone: "",
+  message: "",
 };
 
 const TYPE_LABELS = {
@@ -101,6 +118,10 @@ export default function BusinessCorner() {
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [form, setForm] = React.useState<BusinessFormState>(DEFAULT_FORM);
+  const [contactModalOpen, setContactModalOpen] = React.useState(false);
+  const [contactSubmitting, setContactSubmitting] = React.useState(false);
+  const [selectedOpportunity, setSelectedOpportunity] = React.useState<BusinessOpportunity | null>(null);
+  const [contactForm, setContactForm] = React.useState<BusinessContactRequestState>(DEFAULT_CONTACT_FORM);
 
   usePageMeta("Le coin business | Export Navigator", "Publiez et consultez des propositions d'affaires export.", {
     brandSuffix: "Export Navigator",
@@ -135,6 +156,17 @@ export default function BusinessCorner() {
         prev.contactName ||
         String(user?.user_metadata?.full_name || user?.user_metadata?.name || "").trim(),
       companyName: prev.companyName || String(user?.user_metadata?.company_name || "").trim(),
+    }));
+  }, [user?.email, user?.user_metadata]);
+
+  React.useEffect(() => {
+    const displayName = String(user?.user_metadata?.full_name || user?.user_metadata?.name || "").trim();
+    const companyName = String(user?.user_metadata?.company_name || "").trim();
+    setContactForm((prev) => ({
+      ...prev,
+      firstName: prev.firstName || displayName,
+      email: prev.email || user?.email || "",
+      company: prev.company || companyName,
     }));
   }, [user?.email, user?.user_metadata]);
 
@@ -196,6 +228,7 @@ export default function BusinessCorner() {
               email: "Add a valid email.",
               title: "Write a title with at least 12 characters.",
               summary: "Write a summary with at least 40 characters.",
+              requestMessage: "Write a short message with at least 12 characters.",
             },
             publishedOn: "Published on",
             target: "Target",
@@ -204,6 +237,16 @@ export default function BusinessCorner() {
             details: "Board overview",
             retry: "Retry",
             openWorkspace: "Open my space",
+            requestTitle: "Ask for a tracked contact",
+            requestBody:
+              "Send a short note through the platform. The opportunity owner will see it inside their private workspace.",
+            requestButton: "Request contact",
+            requestSubmit: "Send request",
+            requestSubmitting: "Sending...",
+            requestSuccess: "Your request has been sent to the opportunity owner.",
+            requestUnavailable: "Tracked contact is only available for live published opportunities.",
+            requestMessage: "Message *",
+            requestPhone: "Phone",
           }
         : {
             heroEyebrow: "Le coin business",
@@ -258,6 +301,7 @@ export default function BusinessCorner() {
               email: "Ajoutez un email valide.",
               title: "Redigez un titre d'au moins 12 caracteres.",
               summary: "Redigez un resume d'au moins 40 caracteres.",
+              requestMessage: "Redigez un message court d'au moins 12 caracteres.",
             },
             publishedOn: "Publie le",
             target: "Cible",
@@ -266,6 +310,16 @@ export default function BusinessCorner() {
             details: "Vue du board",
             retry: "Recharger",
             openWorkspace: "Ouvrir mon espace",
+            requestTitle: "Demander un contact trace",
+            requestBody:
+              "Envoyez un message court via la plateforme. Le proprietaire de l'opportunite le verra dans son espace prive.",
+            requestButton: "Demander le contact",
+            requestSubmit: "Envoyer la demande",
+            requestSubmitting: "Envoi...",
+            requestSuccess: "Votre demande a bien ete transmise au proprietaire de l'opportunite.",
+            requestUnavailable: "Le contact trace est disponible uniquement sur les opportunites publiees en base.",
+            requestMessage: "Message *",
+            requestPhone: "Telephone",
           },
     [isAuthenticated, isEn]
   );
@@ -336,6 +390,78 @@ export default function BusinessCorner() {
       });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleContactField =
+    <K extends keyof BusinessContactRequestState>(key: K) =>
+    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const value = event.target.value;
+      setContactForm((prev) => ({ ...prev, [key]: value }));
+    };
+
+  const openContactDialog = (item: BusinessOpportunity) => {
+    if (!item.user_id) {
+      toast({ title: copy.requestTitle, description: copy.requestUnavailable });
+      return;
+    }
+    setSelectedOpportunity(item);
+    setContactModalOpen(true);
+  };
+
+  const submitContactRequest = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedOpportunity?.id || !selectedOpportunity.user_id) {
+      toast({ title: copy.requestTitle, description: copy.requestUnavailable });
+      return;
+    }
+    if (!contactForm.firstName.trim()) {
+      toast({ title: copy.requestTitle, description: copy.validation.contact });
+      return;
+    }
+    if (!isValidEmail(contactForm.email)) {
+      toast({ title: copy.requestTitle, description: copy.validation.email });
+      return;
+    }
+    if (contactForm.message.trim().length < 12) {
+      toast({ title: copy.requestTitle, description: copy.validation.requestMessage });
+      return;
+    }
+
+    try {
+      setContactSubmitting(true);
+      const response = await fetch("/api/business-contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          opportunityId: selectedOpportunity.id,
+          firstName: contactForm.firstName.trim(),
+          email: contactForm.email.trim(),
+          company: contactForm.company.trim(),
+          phone: contactForm.phone.trim(),
+          message: contactForm.message.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        throw new Error(detail || copy.errorTitle);
+      }
+
+      toast({ title: copy.requestTitle, description: copy.requestSuccess });
+      setContactModalOpen(false);
+      setContactForm((prev) => ({
+        ...prev,
+        phone: "",
+        message: "",
+      }));
+    } catch (err: any) {
+      toast({
+        title: copy.requestTitle,
+        description: err?.message || copy.errorTitle,
+      });
+    } finally {
+      setContactSubmitting(false);
     }
   };
 
@@ -496,9 +622,20 @@ export default function BusinessCorner() {
                                 {item.website.replace(/^https?:\/\//i, "")}
                               </a>
                             ) : null}
-                            <Button asChild size="sm" className="mt-2 rounded-full">
-                              <a href={`mailto:${item.contact_email}`}>{copy.contact}</a>
-                            </Button>
+                            {item.user_id ? (
+                              <div className="mt-2 grid gap-2">
+                                <Button size="sm" className="rounded-full" onClick={() => openContactDialog(item)}>
+                                  {copy.requestButton}
+                                </Button>
+                                <Button asChild size="sm" variant="outline" className="rounded-full">
+                                  <a href={`mailto:${item.contact_email}`}>{copy.contact}</a>
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button asChild size="sm" className="mt-2 rounded-full">
+                                <a href={`mailto:${item.contact_email}`}>{copy.contact}</a>
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </CardContent>
@@ -676,6 +813,55 @@ export default function BusinessCorner() {
           </div>
         </div>
       </section>
+
+      <Dialog open={contactModalOpen} onOpenChange={setContactModalOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>{copy.requestTitle}</DialogTitle>
+            <DialogDescription>
+              {selectedOpportunity?.title ? `${copy.requestBody} ${selectedOpportunity.title}` : copy.requestBody}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form className="space-y-4" onSubmit={submitContactRequest}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">{copy.formContact}</label>
+                <Input value={contactForm.firstName} onChange={handleContactField("firstName")} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">{copy.formEmail}</label>
+                <Input type="email" value={contactForm.email} onChange={handleContactField("email")} />
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">{copy.formCompany}</label>
+                <Input value={contactForm.company} onChange={handleContactField("company")} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">{copy.requestPhone}</label>
+                <Input value={contactForm.phone} onChange={handleContactField("phone")} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">{copy.requestMessage}</label>
+              <Textarea
+                value={contactForm.message}
+                onChange={handleContactField("message")}
+                className="min-h-[124px]"
+                placeholder={selectedOpportunity?.title || copy.requestBody}
+              />
+            </div>
+
+            <Button type="submit" className="h-11 w-full rounded-full" disabled={contactSubmitting}>
+              {contactSubmitting ? copy.requestSubmitting : copy.requestSubmit}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </PublicLayout>
   );
 }
