@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { allowCors, json, supabaseAdmin } from "../../src/server/supabaseAdmin.js";
-import { getDailyLimit, getQuotaSnapshotForRequest } from "../../src/server/hsQuota.js";
+import { allowCors, json, supabaseAdmin } from "../supabaseAdmin.js";
+import { getDailyLimit, getQuotaSnapshotForRequest } from "../hsQuota.js";
 
 export default allowCors(async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") return json(res, 405, { ok: false, error: "Method not allowed" });

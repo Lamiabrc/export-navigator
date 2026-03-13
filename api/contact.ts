@@ -1,5 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import nodemailer from "nodemailer";
+import businessContactHandler from "../src/server/api/businessContact.js";
+import deleteDataHandler from "../src/server/api/deleteData.js";
 
 type IncomingBody = Record<string, unknown>;
 
@@ -532,7 +534,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === "GET") {
-    return res.status(200).json({ ok: true, version: VERSION, modes: ["contact", "lead-callback"] });
+    return res.status(200).json({ ok: true, version: VERSION, modes: ["contact", "lead-callback", "business-contact", "delete-data"] });
   }
 
   if (req.method !== "POST") {
@@ -541,6 +543,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const mode = getQueryMode(req);
+    if (mode === "business-contact") {
+      return await businessContactHandler(req, res);
+    }
+    if (mode === "delete-data") {
+      return await deleteDataHandler(req, res);
+    }
     if (mode === "lead-callback") {
       return await handleLeadCallback(req, res);
     }

@@ -1,0 +1,11 @@
+declare module "nodemailer" {
+  const nodemailer: {
+    createTransport: (...args: any[]) => any;
+  };
+  export default nodemailer;
+}
+
+declare module "pdfjs-dist/legacy/build/pdf.worker.mjs" {
+  const worker: any;
+  export default worker;
+}

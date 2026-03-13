@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-import { allowCors, json, readJson } from "../src/server/http.js";
+import { allowCors, json, readJson } from "../http.js";
 
 type ChatRole = "user" | "assistant";
 
@@ -13,6 +13,7 @@ type BusinessDealContext = {
   title?: string | null;
   summary?: string | null;
   company_name?: string | null;
+  contact_email?: string | null;
   opportunity_type?: string | null;
   sector?: string | null;
   origin_country?: string | null;
@@ -65,6 +66,7 @@ function normalizeOpportunity(value: unknown): BusinessDealContext | null {
     title: cleanText(source.title, 240) || null,
     summary: cleanText(source.summary, 2000) || null,
     company_name: cleanText(source.company_name, 200) || null,
+    contact_email: cleanText(source.contact_email, 254).toLowerCase() || null,
     opportunity_type: cleanText(source.opportunity_type, 80) || null,
     sector: cleanText(source.sector, 120) || null,
     origin_country: cleanText(source.origin_country, 16) || null,

@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { allowCors, json, readJson, supabaseAdmin } from "../src/server/supabaseAdmin.js";
+import businessDealChatHandler from "../src/server/api/businessDealChat.js";
+import chatIngestHandler from "../src/server/api/chatIngest.js";
 import type {
   CheckStatus,
   ControlsResult,
@@ -699,6 +701,55 @@ function queryParam(req: VercelRequest, key: string) {
   const value = req.query?.[key];
   if (Array.isArray(value)) return String(value[0] || "").trim();
   return String(value || "").trim();
+}
+
+function asOptionalText(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text || null;
+}
+
+function asOptionalBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return null;
+  if (["true", "1", "yes", "oui", "pro", "taxable", "assujetti"].includes(normalized)) return true;
+  if (["false", "0", "no", "non", "not_taxable", "non_assujetti"].includes(normalized)) return false;
+  return null;
+}
+
+function buildAskOverrides(payload: Record<string, unknown>) {
+  const context = asObject(payload.context);
+  const explicit = asObject(payload.overrides);
+
+  return {
+    flow: asOptionalText(explicit.flow ?? context.flow ?? context.direction),
+    goods_or_services: asOptionalText(
+      explicit.goods_or_services ??
+        explicit.goodsOrServices ??
+        context.goods_or_services ??
+        context.goodsOrServices
+    ),
+    origin: asOptionalText(explicit.origin ?? explicit.from ?? context.origin ?? context.from),
+    destination: asOptionalText(explicit.destination ?? explicit.to ?? context.destination ?? context.to),
+    hs6: asOptionalText(explicit.hs6 ?? context.hs6 ?? context.hs_code ?? context.product_hs),
+    product: asOptionalText(explicit.product ?? context.product ?? context.product_text ?? context.description),
+    usage: asOptionalText(explicit.usage ?? context.usage ?? context.end_use),
+    incoterm: asOptionalText(explicit.incoterm ?? context.incoterm),
+    payment: asOptionalText(explicit.payment ?? explicit.payment_term ?? context.payment ?? context.payment_term),
+    transport: asOptionalText(explicit.transport ?? explicit.transport_mode ?? context.transport ?? context.transport_mode),
+    currency: asOptionalText(explicit.currency ?? context.currency),
+    value: asOptionalText(explicit.value ?? explicit.amount ?? context.value ?? context.amount),
+    buyer: asOptionalText(explicit.buyer ?? explicit.buyer_name ?? context.buyer ?? context.buyer_name),
+    seller: asOptionalText(explicit.seller ?? explicit.seller_name ?? context.seller ?? context.seller_name),
+    buyer_is_taxable: asOptionalBoolean(
+      explicit.buyer_is_taxable ??
+        explicit.buyerIsTaxable ??
+        context.buyer_is_taxable ??
+        context.buyerIsTaxable
+    ),
+    buyer_vat: asOptionalText(explicit.buyer_vat ?? explicit.buyerVat ?? context.buyer_vat ?? context.buyerVat),
+    contract_type: asOptionalText(explicit.contract_type ?? context.contract_type),
+  };
 }
 
 function detectByPatterns(message: string, patterns: Array<{ code: string; pattern: RegExp }>) {
@@ -1662,7 +1713,7 @@ async function persistExchange(params: {
     .throwOnError();
 }
 
-export async function chatHandler(req: VercelRequest, res: VercelResponse) {
+async function handleChatCore(req: VercelRequest, res: VercelResponse) {
   const method = String(req.method || "").toUpperCase();
   if (method !== "POST" && method !== "GET") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
@@ -1864,6 +1915,56 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
       error: String(err?.message || "chat_failed"),
     });
   }
+}
+
+export async function chatHandler(req: VercelRequest, res: VercelResponse) {
+  const mode = queryParam(req, "mode").toLowerCase();
+  const method = String(req.method || "").toUpperCase();
+
+  if (mode === "business-deal") {
+    return businessDealChatHandler(req, res);
+  }
+
+  if (mode === "ingest") {
+    return chatIngestHandler(req, res);
+  }
+
+  if (mode === "ask") {
+    const body =
+      method === "GET"
+        ? {
+            question: queryParam(req, "question") || queryParam(req, "message") || queryParam(req, "q"),
+            lang: queryParam(req, "lang") || null,
+            session_id: queryParam(req, "session_id") || null,
+            thread_id: queryParam(req, "thread_id") || null,
+          }
+        : await readJson<Record<string, unknown>>(req);
+
+    if (method === "GET" && !String(body?.question ?? body?.message ?? "").trim()) {
+      return json(res, 200, {
+        ok: true,
+        endpoint: "/api/ask",
+        methods: ["POST", "GET"],
+        usage: "POST JSON { question|message, session_id?, thread_id?, lang?, context?, overrides? } or GET ?question=...",
+      });
+    }
+
+    const message = String(body?.question ?? body?.message ?? "").trim();
+    if (!message) {
+      return json(res, 400, { ok: false, error: "question_required" });
+    }
+
+    (req as unknown as { body: unknown }).body = {
+      message,
+      lang: asOptionalText(body?.lang),
+      thread_id: asOptionalText(body?.thread_id ?? body?.session_id ?? asObject(body?.context).session_id),
+      overrides: buildAskOverrides(body),
+    };
+
+    return handleChatCore(req, res);
+  }
+
+  return handleChatCore(req, res);
 }
 
 export default allowCors(chatHandler);

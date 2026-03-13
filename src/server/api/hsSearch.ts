@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { allowCors, json, supabaseAdmin } from "../../src/server/supabaseAdmin.js";
-import { getDailyLimit, getQuotaSnapshotForRequest, insertHsSearchLog } from "../../src/server/hsQuota.js";
+import { allowCors, json, supabaseAdmin } from "../supabaseAdmin.js";
+import { getDailyLimit, getQuotaSnapshotForRequest, insertHsSearchLog } from "../hsQuota.js";
 
 function queryParam(req: VercelRequest, key: string) {
   const value = req.query[key];

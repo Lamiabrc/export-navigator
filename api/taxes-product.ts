@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { allowCors, json, readJson, supabaseAdmin } from "../src/server/supabaseAdmin.js";
+import goNoGoHandler from "../src/server/api/goNoGo.js";
 
 type Payload = {
   product_name?: string;
@@ -326,6 +327,10 @@ export default allowCors(async function handler(req: VercelRequest, res: VercelR
   const mode = String(Array.isArray(query.mode) ? query.mode[0] : query.mode || "").trim().toLowerCase();
 
   try {
+    if (mode === "go-no-go") {
+      return goNoGoHandler(req, res);
+    }
+
     if (mode === "invoice-analyze") {
       const invoicePayload = await readJson<InvoiceAnalyzePayload>(req);
       const text = await extractTextFromPdfBase64(invoicePayload.file_base64 || "");

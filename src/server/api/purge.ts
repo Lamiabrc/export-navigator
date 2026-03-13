@@ -1,5 +1,5 @@
 ﻿import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { json, supabaseAdmin } from "../../src/server/supabaseAdmin.js";
+import { json, supabaseAdmin } from "../supabaseAdmin.js";
 
 const CRON_SECRET = (process.env.CRON_SECRET || process.env.CRON_TOKEN || "").trim();
 

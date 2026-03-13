@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-import { allowCors, json, readJson, supabaseAdmin } from "../src/server/http.js";
+import { allowCors, json, readJson, supabaseAdmin } from "../http.js";
 
 type BusinessContactRequest = {
   opportunityId?: string;

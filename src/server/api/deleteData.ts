@@ -1,5 +1,5 @@
 ﻿import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { allowCors, json, supabaseAdmin } from "../src/server/supabaseAdmin.js";
+import { allowCors, json, supabaseAdmin } from "../supabaseAdmin.js";
 
 function getBearerToken(req: VercelRequest) {
   const header = String(req.headers.authorization || "");
