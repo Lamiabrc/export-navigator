@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
   BUSINESS_OPPORTUNITY_TYPES,
+  archiveBusinessOpportunity,
   type BusinessOpportunity,
   type BusinessOpportunitySource,
   type BusinessOpportunityType,
@@ -153,6 +154,7 @@ export default function BusinessRelations() {
   const [publishSubmitting, setPublishSubmitting] = React.useState(false);
   const [introSubmitting, setIntroSubmitting] = React.useState(false);
   const [relationSubmitting, setRelationSubmitting] = React.useState(false);
+  const [archivingId, setArchivingId] = React.useState<string | null>(null);
   const [selectedOpportunityId, setSelectedOpportunityId] = React.useState("");
   const [dealDraft, setDealDraft] = React.useState("");
   const [dealSubmitting, setDealSubmitting] = React.useState(false);
@@ -170,6 +172,12 @@ export default function BusinessRelations() {
   const selectedOpportunity = React.useMemo(() => board.find((item) => item.id === selectedOpportunityId) || null, [board, selectedOpportunityId]);
   const inbound = React.useMemo(() => relations.filter((item) => item.direction === "inbound"), [relations]);
   const outbound = React.useMemo(() => relations.filter((item) => item.direction === "outbound"), [relations]);
+  const userEmail = String(user?.email || "").trim().toLowerCase();
+
+  const isOwnedOpportunity = React.useCallback(
+    (item: BusinessOpportunity) => item.user_id === user?.id || (!!userEmail && item.contact_email === userEmail),
+    [user?.id, userEmail]
+  );
 
   const fillFromUser = React.useCallback(() => {
     const email = user?.email || "";
@@ -330,6 +338,30 @@ export default function BusinessRelations() {
     }
   };
 
+  const archiveOpportunity = async (item: BusinessOpportunity) => {
+    const confirmed = window.confirm(
+      isEn
+        ? "Remove this opportunity from the live board?"
+        : "Retirer cette opportunite du board live ?"
+    );
+    if (!confirmed) return;
+
+    try {
+      setArchivingId(item.id);
+      await archiveBusinessOpportunity(item.id);
+      if (selectedOpportunityId === item.id) {
+        setSelectedOpportunityId("");
+        setDealResult(null);
+      }
+      toast({ title: isEn ? "Opportunity removed" : "Opportunite retiree" });
+      await loadBoard();
+    } catch {
+      toast({ title: isEn ? "Unable to remove opportunity" : "Retrait impossible", variant: "destructive" });
+    } finally {
+      setArchivingId(null);
+    }
+  };
+
   const runDealReview = async (preset?: string, item?: BusinessOpportunity | null) => {
     const target = item || selectedOpportunity;
     const question = (preset || dealDraft || (isEn ? "Is this a good business opportunity?" : "Est-ce une bonne affaire ?")).trim();
@@ -483,6 +515,7 @@ export default function BusinessRelations() {
                         <div className="space-y-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge variant="secondary">{TYPE_LABELS[item.opportunity_type][isEn ? "en" : "fr"]}</Badge>
+                            {isOwnedOpportunity(item) ? <Badge variant="outline">{isEn ? "Your listing" : "Votre annonce"}</Badge> : null}
                             <span className="text-xs text-slate-500">{formatDate(item.created_at, locale)}</span>
                           </div>
                           <h3 className="text-lg font-semibold text-slate-950">{item.title}</h3>
@@ -497,7 +530,25 @@ export default function BusinessRelations() {
                           <Button size="sm" variant="outline" className="rounded-full" onClick={() => { setSelectedOpportunityId(item.id); void runDealReview(isEn ? "Is this worth pursuing?" : "Est-ce que cela vaut le coup ?", item); }}>
                             {isEn ? "Analyze" : "Analyser"}
                           </Button>
-                          {item.user_id !== user?.id ? <Button size="sm" className="rounded-full" onClick={() => void logOutreach(item)}>{isEn ? "I contacted them" : "J'ai contacte ce lead"}</Button> : null}
+                          {isOwnedOpportunity(item) ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="rounded-full border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+                              disabled={archivingId === item.id}
+                              onClick={() => void archiveOpportunity(item)}
+                            >
+                              {archivingId === item.id
+                                ? isEn
+                                  ? "Removing..."
+                                  : "Retrait..."
+                                : isEn
+                                  ? "Remove from board"
+                                  : "Retirer du board"}
+                            </Button>
+                          ) : (
+                            <Button size="sm" className="rounded-full" onClick={() => void logOutreach(item)}>{isEn ? "I contacted them" : "J'ai contacte ce lead"}</Button>
+                          )}
                           <Button asChild size="sm" variant="outline" className="rounded-full"><a href={`mailto:${item.contact_email}`}>Email</a></Button>
                         </div>
                       </div>

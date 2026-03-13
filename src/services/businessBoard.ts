@@ -164,10 +164,15 @@ function writeLocalBusinessOpportunities(items: BusinessOpportunity[]) {
   }
 }
 
-function createDemoBusinessOpportunity(input: CreateBusinessOpportunityInput) {
+async function getCurrentBusinessUserId() {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user?.id || null;
+}
+
+async function createDemoBusinessOpportunity(input: CreateBusinessOpportunityInput) {
   const item: BusinessOpportunity = {
     id: `demo-${Date.now()}`,
-    user_id: null,
+    user_id: await getCurrentBusinessUserId(),
     company_name: cleanText(input.company_name),
     contact_name: cleanText(input.contact_name),
     contact_email: cleanText(input.contact_email).toLowerCase(),
@@ -186,6 +191,22 @@ function createDemoBusinessOpportunity(input: CreateBusinessOpportunityInput) {
   const existing = readLocalBusinessOpportunities();
   writeLocalBusinessOpportunities([item, ...existing]);
   return item;
+}
+
+function archiveDemoBusinessOpportunity(id: string) {
+  const existing = readLocalBusinessOpportunities();
+  let archived: BusinessOpportunity | null = null;
+
+  const nextItems = existing.map((item) => {
+    if (item.id !== id || item.status === "archived") return item;
+    archived = { ...item, status: "archived", updated_at: nowIso() };
+    return archived;
+  });
+
+  if (!archived) return null;
+
+  writeLocalBusinessOpportunities(nextItems);
+  return archived;
 }
 
 const demoBusinessOpportunities: BusinessOpportunity[] = [
@@ -246,7 +267,7 @@ const demoBusinessOpportunities: BusinessOpportunity[] = [
 ];
 
 function getDemoBusinessFeed(limit: number) {
-  const localItems = readLocalBusinessOpportunities();
+  const localItems = readLocalBusinessOpportunities().filter((item) => item.status === "published");
   return sortByNewest([...localItems, ...demoBusinessOpportunities]).slice(0, limit);
 }
 
@@ -304,7 +325,7 @@ export async function createBusinessOpportunity(input: CreateBusinessOpportunity
   };
 
   if (shouldUseBusinessDemo()) {
-    return { item: createDemoBusinessOpportunity(payload), source: "demo" };
+    return { item: await createDemoBusinessOpportunity(payload), source: "demo" };
   }
 
   const { data, error } = await supabase
@@ -318,7 +339,7 @@ export async function createBusinessOpportunity(input: CreateBusinessOpportunity
   if (error) {
     if (isMissingTableError(error)) {
       markBusinessTableMissing();
-      return { item: createDemoBusinessOpportunity(payload), source: "demo" };
+      return { item: await createDemoBusinessOpportunity(payload), source: "demo" };
     }
     throw error;
   }
@@ -331,4 +352,34 @@ export async function createBusinessOpportunity(input: CreateBusinessOpportunity
   }
 
   return { item, source: "server" };
+}
+
+export async function archiveBusinessOpportunity(id: string): Promise<{
+  item: BusinessOpportunity | null;
+  source: BusinessOpportunitySource;
+}> {
+  if (shouldUseBusinessDemo()) {
+    return { item: archiveDemoBusinessOpportunity(id), source: "demo" };
+  }
+
+  const { data, error } = await supabase
+    .from("business_opportunities")
+    .update({ status: "archived" })
+    .eq("id", id)
+    .select(
+      "id,user_id,company_name,contact_name,contact_email,title,summary,opportunity_type,sector,origin_country,target_country,website,status,created_at,updated_at"
+    )
+    .single();
+
+  if (error) {
+    if (isMissingTableError(error)) {
+      markBusinessTableMissing();
+      return { item: archiveDemoBusinessOpportunity(id), source: "demo" };
+    }
+    throw error;
+  }
+
+  markBusinessTablePresent();
+
+  return { item: mapBusinessOpportunityRow(data), source: "server" };
 }
