@@ -99,16 +99,16 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
       { to: "/methodologie", label: isFr ? "Methodologie" : "Methodology" },
       { to: "/veille", label: isFr ? "Veille" : "Watch" },
       { to: "/prospection", label: isFr ? "Prospection" : "Prospection" },
-      { to: "/coin-business", label: isFr ? "Coin business" : "Business corner" },
-      { to: "/services", label: isFr ? "Offre" : "Offer" },
+      { to: "/coin-business", label: isFr ? "Business France-Maghreb" : "France-Maghreb business" },
+      { to: "/pricing", label: isFr ? "Accompagnement strategique" : "Strategic support" },
       { to: "/about", label: isFr ? "A propos" : "About" },
-      { to: "/pricing#plans", label: isFr ? "Offre gratuite" : "Free offer" },
+      { to: "/contact?offer=accompagnement", label: isFr ? "Demander un accompagnement" : "Request support" },
     ],
     [isFr]
   );
 
-  const registerLabel = isFr ? "Creer un compte gratuit" : "Create free account";
-  const loginLabel = isFr ? "Connexion" : "Sign in";
+  const supportLabel = isFr ? "Demander un accompagnement" : "Request support";
+  const loginLabel = isFr ? "Connexion admin" : "Admin sign in";
   const appLabel = isFr ? "Tour de controle" : "Control Tower";
   const callbackLabel = isFr ? "Etre rappelee" : "Request callback";
 
@@ -224,8 +224,8 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
               </Link>
             ) : (
               <>
-                <Link to={`/register?next=${authNextParam}`} className="inline-flex rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#B0231D]">
-                  {registerLabel}
+                <Link to="/contact?offer=accompagnement" className="inline-flex rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#B0231D]">
+                  {supportLabel}
                 </Link>
                 <Link
                   to={`/login?next=${authNextParam}`}
@@ -239,8 +239,8 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
 
           <div className="flex items-center gap-2 md:hidden">
             {!isAuthenticated ? (
-              <Link to={`/register?next=${authNextParam}`} className="inline-flex rounded-full bg-[#DC2626] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white">
-                {registerLabel}
+              <Link to="/contact?offer=accompagnement" className="inline-flex rounded-full bg-[#DC2626] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white">
+                {isFr ? "Accompagnement" : "Support"}
               </Link>
             ) : null}
             <button
