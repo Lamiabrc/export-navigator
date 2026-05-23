@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BriefcaseBusiness, ChevronDown, ChevronUp, LayoutDashboard, Package, Sparkles, UserPlus, type LucideIcon } from "lucide-react";
+import { BriefcaseBusiness, ChevronDown, ChevronUp, Handshake, LayoutDashboard, Package, Sparkles, type LucideIcon } from "lucide-react";
 import heroExportVideo from "@/assets/hero-export.mp4";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/LanguageContext";
@@ -25,68 +25,67 @@ export function ArrivalGuide({ className }: { className?: string }) {
   const videoTailLoopSeconds = 5;
   const videoLoopEndPadding = 0.08;
   const actionsPanelId = "arrival-guide-actions";
-  const businessPublishLink = `/register?next=${encodeURIComponent("/coin-business#publier")}`;
 
   const actions: ActionItem[] = isFr
     ? [
         {
           key: "offer",
-          title: "Voir l'offre gratuite",
-          subtitle: "Services, outils et entree dans l'ecosysteme",
+          title: "Voir l'offre d'accompagnement",
+          subtitle: "Import-export France-Maghreb, cadrage, couts et documents",
           to: "/pricing#plans",
           icon: Package,
         },
         {
           key: "business",
-          title: "Le coin business",
-          subtitle: "Consulter ou publier des propositions d'affaires",
+          title: "Voir les annonces qualifiees",
+          subtitle: "Acheteurs, fournisseurs, distributeurs et prestataires",
           to: "/coin-business",
           icon: BriefcaseBusiness,
         },
         {
-          key: isAuthenticated ? "app" : "register",
-          title: isAuthenticated ? "Ouvrir mon espace" : "Creer un compte gratuit",
-          subtitle: isAuthenticated ? "Acceder a la tour de controle export" : "Publier et acceder aux outils gratuits",
-          to: isAuthenticated ? "/app/control-tower" : businessPublishLink,
-          icon: isAuthenticated ? LayoutDashboard : UserPlus,
+          key: isAuthenticated ? "app" : "contact",
+          title: isAuthenticated ? "Ouvrir mon espace" : "Demander un accompagnement",
+          subtitle: isAuthenticated ? "Publier et analyser depuis l'acces prive" : "Envoyer un projet import-export a MPL",
+          to: isAuthenticated ? "/app/control-tower" : "/contact",
+          icon: isAuthenticated ? LayoutDashboard : Handshake,
         },
       ]
     : [
         {
           key: "offer",
-          title: "See the free offer",
-          subtitle: "Services, tools and platform entry point",
+          title: "See support offer",
+          subtitle: "France-Maghreb import-export, costs and documents",
           to: "/pricing#plans",
           icon: Package,
         },
         {
           key: "business",
-          title: "Business corner",
-          subtitle: "Browse or publish business opportunities",
+          title: "View curated announcements",
+          subtitle: "Buyers, suppliers, distributors and service partners",
           to: "/coin-business",
           icon: BriefcaseBusiness,
         },
         {
-          key: isAuthenticated ? "app" : "register",
-          title: isAuthenticated ? "Open my workspace" : "Create free account",
-          subtitle: isAuthenticated ? "Access the export control tower" : "Publish and unlock the free tools",
-          to: isAuthenticated ? "/app/control-tower" : businessPublishLink,
-          icon: isAuthenticated ? LayoutDashboard : UserPlus,
+          key: isAuthenticated ? "app" : "contact",
+          title: isAuthenticated ? "Open my workspace" : "Request support",
+          subtitle: isAuthenticated ? "Publish and analyze from private access" : "Send an import-export project to MPL",
+          to: isAuthenticated ? "/app/control-tower" : "/contact",
+          icon: isAuthenticated ? LayoutDashboard : Handshake,
         },
       ];
 
   const bubbleText = isFr
     ? {
-        top: "Question export ?",
-        left: "Incoterms | Douane | HS",
-        right: "Reponse rapide",
-        hi: "Salut !",
+        top: "Projet import-export ?",
+        left: "France | Maroc | Algerie | Tunisie",
+        right: "Cadrage rapide",
+        hi: "MPL",
       }
     : {
-        top: "Export question?",
-        left: "Incoterms | Customs | HS",
-        right: "Fast answer",
-        hi: "Hi!",
+        top: "Import-export project?",
+        left: "France | Morocco | Algeria | Tunisia",
+        right: "Fast framing",
+        hi: "MPL",
       };
 
   useEffect(() => {
@@ -261,15 +260,15 @@ export function ArrivalGuide({ className }: { className?: string }) {
 
           <div className="relative">
             <h2 className="text-lg font-semibold text-white sm:text-2xl">
-              {isFr ? "Bienvenue sur MPL Export Navigator" : "Welcome to MPL Export Navigator"}
+              {isFr ? "Accompagnement import-export France-Maghreb" : "France-Maghreb import-export support"}
             </h2>
             <p className="mt-2 text-sm text-white sm:text-base">
               {isFr
-                ? "Tu veux des informations sur des operations de commerce international liees a la France. Choisis ton point de depart."
-                : "You need guidance on international trade operations connected to France. Choose your starting point."}
+                ? "Trouvez une annonce, cadrez votre operation et avancez avec un accompagnement simple sur marche, couts et documents."
+                : "Find an announcement, frame the operation and move forward with simple support on market, costs and documents."}
             </p>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-white sm:text-base">{isFr ? "Tu veux faire quoi ?" : "What do you want to do?"}</p>
+              <p className="text-sm font-semibold text-white sm:text-base">{isFr ? "Par ou commencer ?" : "Where do you start?"}</p>
               <button
                 type="button"
                 aria-expanded={menuExpanded}
