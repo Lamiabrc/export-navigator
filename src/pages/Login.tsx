@@ -1,12 +1,16 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { AlertCircle, LockKeyhole, ShieldCheck } from "lucide-react";
+
+import { BrandLogo } from "@/components/BrandLogo";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase, SUPABASE_ENV_OK } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
-import { BrandLogo } from "@/components/BrandLogo";
+import { isAdminUser } from "@/lib/authz";
+
+const ADMIN_EMAIL = "sabullelam@gmail.com";
 
 function getErrorMessage(err: unknown): string {
   if (!err) return "Une erreur inconnue est survenue.";
@@ -24,21 +28,18 @@ function getErrorMessage(err: unknown): string {
 function safeNextPath(candidate: unknown, fallback = "/app/control-tower") {
   const v = typeof candidate === "string" ? candidate : "";
   if (!v || !v.startsWith("/")) return fallback;
-  if (v === "/" || v === "/login") return fallback;
+  if (v === "/" || v === "/login" || v === "/register") return fallback;
   return v;
 }
 
 export default function Login() {
-  const { signIn, resendSignUpEmail, isLoading } = useAuth();
+  const { signIn, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(ADMIN_EMAIL);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [needsConfirm, setNeedsConfirm] = useState(false);
-  const [resendPending, setResendPending] = useState(false);
   const [pending, setPending] = useState(false);
   const envMissing = !SUPABASE_ENV_OK;
 
@@ -55,44 +56,37 @@ export default function Login() {
     return "/app/control-tower";
   }, [location.search, location.state]);
 
+  const denied = new URLSearchParams(location.search).get("denied") === "admin";
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    setNotice(null);
 
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail) {
-      setError("Merci de renseigner un email.");
+    if (normalizedEmail !== ADMIN_EMAIL) {
+      setError(`Acces reserve au compte administrateur ${ADMIN_EMAIL}.`);
       return;
     }
     if (!password) {
-      setError("Merci de renseigner un mot de passe.");
+      setError("Merci de renseigner le mot de passe administrateur.");
       return;
     }
 
     try {
       setPending(true);
-      const { error: err, needsEmailConfirmation, userId } = await signIn(normalizedEmail, password);
+      const { error: err, userId } = await signIn(normalizedEmail, password);
       if (err) {
-        setNeedsConfirm(needsEmailConfirmation);
-        const msg = getErrorMessage(err).trim();
-        setError(msg || "Connexion impossible. Verifie tes identifiants.");
+        setError(getErrorMessage(err).trim() || "Connexion administrateur impossible.");
         return;
       }
-      if (!userId) {
-        // fallback: verify session presence
-        try {
-          const { data } = await supabase.auth.getSession();
-          if (data.session?.user?.id) {
-            navigate(nextPath, { replace: true });
-            return;
-          }
-        } catch {
-          // ignore
-        }
-        setError("Connexion impossible. Reessaie.");
+
+      const { data } = await supabase.auth.getSession();
+      if (!userId || !isAdminUser(data.session?.user)) {
+        await supabase.auth.signOut().catch(() => undefined);
+        setError(`Acces refuse. Seul ${ADMIN_EMAIL} peut ouvrir l'espace administrateur.`);
         return;
       }
+
       navigate(nextPath, { replace: true });
     } catch (e2) {
       setError(getErrorMessage(e2));
@@ -101,45 +95,17 @@ export default function Login() {
     }
   };
 
-  const handleResend = async () => {
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail) {
-      setError("Ajoute ton email pour renvoyer le lien.");
-      return;
-    }
-    setResendPending(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const emailRedirectTo =
-        typeof window !== "undefined"
-          ? `${window.location.origin}/login?next=${encodeURIComponent(nextPath)}`
-          : undefined;
-      const { error: err } = await resendSignUpEmail(normalizedEmail, emailRedirectTo);
-      if (err) {
-        setError(getErrorMessage(err));
-        return;
-      }
-      setNeedsConfirm(true);
-      setNotice("Email de verification renvoye. Verifie aussi les spams.");
-    } catch (e2) {
-      setError(getErrorMessage(e2));
-    } finally {
-      setResendPending(false);
-    }
-  };
-
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-slate-950 text-slate-50">
+    <div className="min-h-screen grid bg-slate-950 text-slate-50 lg:grid-cols-2">
       <div className="relative hidden lg:block">
         <img src="/login-hero.svg" alt="Illustration" className="h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-slate-900/70" />
+        <div className="absolute inset-0 bg-gradient-to-br from-black/65 via-black/45 to-slate-900/75" />
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center px-10 space-y-4">
-            <p className="uppercase tracking-[0.3em] text-cyan-200 font-semibold">Export Navigator</p>
-            <h2 className="text-4xl font-bold text-white drop-shadow-lg">Conformite, couts, veille</h2>
-            <p className="text-slate-100/80 max-w-xl mx-auto">
-              Analyse par HS code et pays. Outil universel pour tout exportateur francais.
+          <div className="space-y-4 px-10 text-center">
+            <p className="font-semibold uppercase tracking-[0.3em] text-emerald-200">MPL Export Navigator</p>
+            <h2 className="text-4xl font-bold text-white drop-shadow-lg">Acces administrateur</h2>
+            <p className="mx-auto max-w-xl text-slate-100/80">
+              Publication des annonces, analyse des opportunites et pilotage de l'accompagnement import-export France-Maghreb.
             </p>
           </div>
         </div>
@@ -154,12 +120,17 @@ export default function Login() {
             subtitleClassName="text-sm text-slate-200/80"
           />
 
-          <Card className="bg-slate-900/80 border-slate-800 text-slate-50 shadow-xl shadow-cyan-500/10">
-            <CardHeader>
-              <CardTitle>Se connecter</CardTitle>
-              <CardDescription className="text-slate-300">
-                Connexion par compte utilisateur. Tu peux creer un compte gratuitement.
-              </CardDescription>
+          <Card className="border-slate-800 bg-slate-900/80 text-slate-50 shadow-xl shadow-emerald-500/10">
+            <CardHeader className="space-y-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-100">
+                <LockKeyhole className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle>Connexion administrateur</CardTitle>
+                <CardDescription className="mt-2 text-slate-300">
+                  Acces reserve au compte {ADMIN_EMAIL}.
+                </CardDescription>
+              </div>
             </CardHeader>
 
             <CardContent>
@@ -169,16 +140,23 @@ export default function Login() {
                     Connexion indisponible: variables Supabase manquantes en production.
                   </div>
                 )}
+
+                {denied && (
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-700/60 bg-amber-900/40 px-3 py-2 text-sm text-amber-200">
+                    <ShieldCheck className="mt-0.5 h-4 w-4" />
+                    <span>Cette zone est reservee a l'administrateur MPL.</span>
+                  </div>
+                )}
+
                 <div className="space-y-2">
-                  <label className="text-sm text-slate-200">Email</label>
+                  <label className="text-sm text-slate-200">Email administrateur</label>
                   <Input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="vous@exemple.com"
                     autoComplete="email"
-                    className="bg-slate-950 border-slate-800 text-white"
+                    className="border-slate-800 bg-slate-950 text-white"
                   />
                 </div>
 
@@ -191,67 +169,36 @@ export default function Login() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="********"
                     autoComplete="current-password"
-                    className="bg-slate-950 border-slate-800 text-white"
+                    className="border-slate-800 bg-slate-950 text-white"
                   />
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => navigate("/forgot-password")}
-                    className="text-sm text-cyan-200 hover:underline"
-                  >
-                    Mot de passe oublie
-                  </button>
-
-                  <span className="text-xs text-slate-500">-&gt; {nextPath}</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate("/forgot-password")}
+                  className="text-sm text-emerald-200 hover:underline"
+                >
+                  Mot de passe oublie
+                </button>
 
                 {error && (
-                  <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/30 border border-red-800/70 rounded-xl px-3 py-2">
-                    <AlertCircle className="h-4 w-4 mt-0.5" />
+                  <div className="flex items-start gap-2 rounded-xl border border-red-800/70 bg-red-900/30 px-3 py-2 text-sm text-red-300">
+                    <AlertCircle className="mt-0.5 h-4 w-4" />
                     <span>{error}</span>
                   </div>
                 )}
 
-                {notice && (
-                  <div className="text-sm text-emerald-300 bg-emerald-900/30 border border-emerald-800/70 rounded-xl px-3 py-2">
-                    {notice}
-                  </div>
-                )}
-
-                {needsConfirm && (
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-200 space-y-2">
-                    <div className="font-semibold">Email non confirme</div>
-                    <div>1) Ouvre ta boite mail et clique sur "Confirmer".</div>
-                    <div>2) Puis reconnecte-toi.</div>
-                    <div>3) Si tu ne reçois rien: renvoie l'email.</div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      onClick={handleResend}
-                      disabled={resendPending}
-                    >
-                      {resendPending ? "Renvoi..." : "Renvoyer l'email de verification"}
-                    </Button>
-                  </div>
-                )}
-
-                <Button type="submit" className="w-full h-11 font-semibold" disabled={pending || isLoading || envMissing}>
-                  {pending || isLoading ? "Connexion..." : "Se connecter"}
+                <Button type="submit" className="h-11 w-full font-semibold" disabled={pending || isLoading || envMissing}>
+                  {pending || isLoading ? "Connexion..." : "Ouvrir l'espace admin"}
                 </Button>
               </form>
             </CardContent>
           </Card>
 
           <div className="text-center text-sm text-slate-400">
-            Pas de compte ?{" "}
-            <button
-              className="text-cyan-200 hover:underline"
-              onClick={() => navigate(`/register?next=${encodeURIComponent(nextPath)}`)}
-            >
-              Creer un compte
+            Besoin d'accompagnement import-export ?{" "}
+            <button className="text-emerald-200 hover:underline" onClick={() => navigate("/contact")}>
+              Aller au contact
             </button>
           </div>
         </div>
