@@ -1,12 +1,13 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { isAdminUser } from "@/lib/authz";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -23,6 +24,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (!isAuthenticated) {
     const next = `${location.pathname}${location.search}${location.hash}`;
     return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
+  }
+
+  if (!isAdminUser(user)) {
+    return <Navigate to="/login?denied=admin" replace />;
   }
 
   return <>{children}</>;
