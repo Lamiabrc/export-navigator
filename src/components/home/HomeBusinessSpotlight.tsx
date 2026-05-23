@@ -57,28 +57,24 @@ export function HomeBusinessSpotlight({ isEn, isAuthenticated }: HomeBusinessSpo
     };
   }, []);
 
-  const publishLink = isAuthenticated
-    ? "/coin-business#publier"
-    : `/register?next=${encodeURIComponent("/coin-business#publier")}`;
-
   return (
     <section className="overflow-hidden rounded-[28px] border border-emerald-100 bg-[linear-gradient(135deg,#f0fdf4_0%,#ffffff_48%,#eff6ff_100%)] p-6 shadow-sm sm:p-8">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-3xl space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-800">
             <BriefcaseBusiness className="h-3.5 w-3.5" />
-            {isEn ? "France-Maghreb business" : "Business France-Maghreb"}
+            {isEn ? "France-Maghreb support" : "Accompagnement France-Maghreb"}
           </div>
           <div className="space-y-2">
             <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
               {isEn
-                ? "Find a buyer, supplier, distributor or service partner before starting the deal."
-                : "Trouvez un acheteur, fournisseur, distributeur ou prestataire avant de lancer l'affaire."}
+                ? "A curated board plus practical support to move from idea to import-export action."
+                : "Un board qualifie et un accompagnement concret pour passer de l'idee a l'action import-export."}
             </h2>
             <p className="text-sm text-slate-700 sm:text-base">
               {isEn
-                ? "The board keeps the tool practical: one need, one contact, one next step for trade between France, Morocco, Algeria and Tunisia."
-                : "Le board garde l'outil pratique: un besoin, un contact, une prochaine action pour commercer entre France, Maroc, Algerie et Tunisie."}
+                ? "MPL publishes selected opportunities and helps you check the market, costs, documents and next step between France, Morocco, Algeria and Tunisia."
+                : "MPL publie les opportunites selectionnees et aide a verifier marche, couts, documents et prochaine action entre France, Maroc, Algerie et Tunisie."}
             </p>
           </div>
         </div>
@@ -86,19 +82,19 @@ export function HomeBusinessSpotlight({ isEn, isAuthenticated }: HomeBusinessSpo
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button asChild className="h-11 rounded-full px-5">
             <Link to="/coin-business">
-              {isEn ? "View opportunities" : "Voir les opportunites"}
+              {isEn ? "View announcements" : "Voir les annonces"}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
           <Button asChild variant="outline" className="h-11 rounded-full border-slate-300 bg-white px-5">
-            <Link to={publishLink}>
+            <Link to={isAuthenticated ? "/app/mise-en-relation" : "/contact"}>
               {isAuthenticated
                 ? isEn
-                  ? "Publish my need"
-                  : "Publier mon besoin"
+                  ? "Manage board"
+                  : "Gerer le board"
                 : isEn
-                  ? "Create account to publish"
-                  : "Creer un compte pour publier"}
+                  ? "Request support"
+                  : "Demander un accompagnement"}
             </Link>
           </Button>
         </div>
@@ -107,8 +103,8 @@ export function HomeBusinessSpotlight({ isEn, isAuthenticated }: HomeBusinessSpo
       {source === "demo" ? (
         <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {isEn
-            ? "Demo opportunities are shown until the live business board is connected."
-            : "Des opportunites de demonstration sont affichees tant que le board business live n'est pas connecte."}
+            ? "Demo announcements are shown until the live business board is connected."
+            : "Des annonces de demonstration sont affichees tant que le board business live n'est pas connecte."}
         </div>
       ) : null}
 
@@ -174,8 +170,8 @@ export function HomeBusinessSpotlight({ isEn, isAuthenticated }: HomeBusinessSpo
         <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white/70 px-6 py-10 text-center text-sm text-slate-600">
           <Sparkles className="mx-auto mb-3 h-5 w-5 text-slate-500" />
           {isEn
-            ? "No opportunity yet. Publish the first France-Maghreb business need."
-            : "Aucune opportunite pour le moment. Publiez le premier besoin business France-Maghreb."}
+            ? "No announcement yet. MPL can qualify and publish the first France-Maghreb opportunity."
+            : "Aucune annonce pour le moment. MPL peut qualifier et publier la premiere opportunite France-Maghreb."}
         </div>
       ) : null}
     </section>
