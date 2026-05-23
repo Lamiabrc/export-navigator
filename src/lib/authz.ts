@@ -1,6 +1,6 @@
 import type { User } from "@supabase/supabase-js";
 
-const DEFAULT_ADMIN_EMAILS = ["lamia.brechet@outlook.fr"];
+const DEFAULT_ADMIN_EMAILS = ["sabullelam@gmail.com"];
 
 function parseAdminEmails() {
   const raw = String((import.meta as any)?.env?.VITE_ADMIN_EMAILS || "").trim();
