@@ -6,6 +6,7 @@ import {
   Building2,
   CheckCircle2,
   Globe2,
+  Handshake,
   Mail,
   ShieldCheck,
   Sparkles,
@@ -15,63 +16,10 @@ import { PublicLayout } from "@/components/layout/PublicLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/LanguageContext";
-import { useToast } from "@/hooks/use-toast";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import {
-  BUSINESS_OPPORTUNITY_TYPES,
-  type BusinessOpportunity,
-  type BusinessOpportunitySource,
-  type BusinessOpportunityType,
-  createBusinessOpportunity,
-  listBusinessOpportunities,
-} from "@/services/businessBoard";
-
-type BusinessFormState = {
-  companyName: string;
-  contactName: string;
-  contactEmail: string;
-  title: string;
-  summary: string;
-  opportunityType: BusinessOpportunityType;
-  sector: string;
-  originCountry: string;
-  targetCountry: string;
-  website: string;
-};
-
-type BusinessContactRequestState = {
-  firstName: string;
-  email: string;
-  company: string;
-  phone: string;
-  message: string;
-};
-
-const DEFAULT_FORM: BusinessFormState = {
-  companyName: "",
-  contactName: "",
-  contactEmail: "",
-  title: "",
-  summary: "",
-  opportunityType: "partner",
-  sector: "",
-  originCountry: "FR",
-  targetCountry: "",
-  website: "",
-};
-
-const DEFAULT_CONTACT_FORM: BusinessContactRequestState = {
-  firstName: "",
-  email: "",
-  company: "",
-  phone: "",
-  message: "",
-};
+import { type BusinessOpportunity, type BusinessOpportunitySource, listBusinessOpportunities } from "@/services/businessBoard";
 
 const TYPE_LABELS = {
   buyer: { fr: "Recherche achat", en: "Buyer request" },
@@ -81,10 +29,6 @@ const TYPE_LABELS = {
   investor: { fr: "Investissement", en: "Investment" },
   service: { fr: "Service", en: "Service" },
 } as const;
-
-function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
 
 function formatDate(value: string, locale: string) {
   try {
@@ -109,25 +53,17 @@ function getSummaryStats(items: BusinessOpportunity[]) {
 export default function BusinessCorner() {
   const { lang } = useI18n();
   const isEn = lang === "en";
-  const { toast } = useToast();
-  const { isAuthenticated, user } = useAuth();
-  const publishLink = `/register?next=${encodeURIComponent("/coin-business#publier")}`;
+  const { isAuthenticated } = useAuth();
   const [items, setItems] = React.useState<BusinessOpportunity[]>([]);
   const [source, setSource] = React.useState<BusinessOpportunitySource>("demo");
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [submitting, setSubmitting] = React.useState(false);
-  const [form, setForm] = React.useState<BusinessFormState>(DEFAULT_FORM);
-  const [contactModalOpen, setContactModalOpen] = React.useState(false);
-  const [contactSubmitting, setContactSubmitting] = React.useState(false);
-  const [selectedOpportunity, setSelectedOpportunity] = React.useState<BusinessOpportunity | null>(null);
-  const [contactForm, setContactForm] = React.useState<BusinessContactRequestState>(DEFAULT_CONTACT_FORM);
 
-  usePageMeta("Le coin business | Export Navigator", "Publiez et consultez des propositions d'affaires export.", {
+  usePageMeta("Business France-Maghreb | Export Navigator", "Annonces qualifiees et accompagnement import-export France-Maghreb.", {
     brandSuffix: "Export Navigator",
     canonicalUrl: "https://www.exportfrancefacile.com/coin-business",
     socialImageUrl: "https://www.exportfrancefacile.com/images/og-home.jpg",
-    socialImageAlt: "Le coin business Export Navigator",
+    socialImageAlt: "Business France-Maghreb Export Navigator",
   });
 
   const loadBoard = React.useCallback(async () => {
@@ -138,7 +74,7 @@ export default function BusinessCorner() {
       setItems(result.items);
       setSource(result.source);
     } catch (err: any) {
-      setError(err?.message || (isEn ? "Unable to load opportunities." : "Impossible de charger les opportunites."));
+      setError(err?.message || (isEn ? "Unable to load announcements." : "Impossible de charger les annonces."));
     } finally {
       setLoading(false);
     }
@@ -148,331 +84,86 @@ export default function BusinessCorner() {
     void loadBoard();
   }, [loadBoard]);
 
-  React.useEffect(() => {
-    setForm((prev) => ({
-      ...prev,
-      contactEmail: prev.contactEmail || user?.email || "",
-      contactName:
-        prev.contactName ||
-        String(user?.user_metadata?.full_name || user?.user_metadata?.name || "").trim(),
-      companyName: prev.companyName || String(user?.user_metadata?.company_name || "").trim(),
-    }));
-  }, [user?.email, user?.user_metadata]);
-
-  React.useEffect(() => {
-    const displayName = String(user?.user_metadata?.full_name || user?.user_metadata?.name || "").trim();
-    const companyName = String(user?.user_metadata?.company_name || "").trim();
-    setContactForm((prev) => ({
-      ...prev,
-      firstName: prev.firstName || displayName,
-      email: prev.email || user?.email || "",
-      company: prev.company || companyName,
-    }));
-  }, [user?.email, user?.user_metadata]);
-
   const stats = React.useMemo(() => getSummaryStats(items), [items]);
 
-  const copy = React.useMemo(
-    () =>
-      isEn
-        ? {
-            heroEyebrow: "Business corner",
-            heroTitle: "Turn visits into business leads and let every account publish an opportunity.",
-            heroBody:
-              "This public board showcases buyer requests, partnership offers and distribution signals. Publishing is reserved to free accounts to drive account creation without adding friction to browsing.",
-            primaryCta: "Browse opportunities",
-            secondaryCta: isAuthenticated ? "Publish my opportunity" : "Create free account",
-            statsTotal: "Live opportunities",
-            statsBuyers: "Buyer requests",
-            statsPartners: "Partners / distributors",
-            boardTitle: "Latest opportunities",
-            boardBody: "Updated in reverse chronological order so visitors immediately see fresh business signals.",
-            boardEmpty: "No opportunity published yet. Publish the first one to seed the board.",
-            publishTitle: "Publish your opportunity",
-            publishBody:
-              "Free accounts can publish a business proposition visible on the public board: sourcing, buyer demand, distribution search or partnership.",
-            publishLockedTitle: "Create a free account to publish",
-            publishLockedBody:
-              "Browsing stays public. Publishing is reserved to registered users so the board stays actionable and traceable.",
-            lockedPrimary: "Create free account",
-            lockedSecondary: "Already have an account? Sign in",
-            demoBanner: "Demo mode active until the Supabase migration is applied. New publications are stored locally.",
-            errorTitle: "Unable to load the board",
-            tipsTitle: "What works best",
-            tips: [
-              "State clearly what you want: buy, sell, distribute, partner or source.",
-              "Name one geography and one sector to improve relevance.",
-              "Add a contact email that you actually monitor.",
-            ],
-            trustTitle: "Why this converts better",
-            trustBody:
-              "Visitors can browse freely, while publishing requires a free account. That creates a visible reason to register without blocking discovery.",
-            formCompany: "Company *",
-            formContact: "Contact name *",
-            formEmail: "Contact email *",
-            formType: "Opportunity type *",
-            formTitle: "Title *",
-            formSummary: "Business summary *",
-            formSector: "Sector",
-            formOrigin: "Origin country",
-            formTarget: "Target country",
-            formWebsite: "Website",
-            formSubmit: "Publish opportunity",
-            formSubmitting: "Publishing...",
-            successTitle: "Opportunity published",
-            successBodyServer: "Your opportunity is now visible on the board.",
-            successBodyDemo: "Stored in local demo mode until the database migration is applied.",
-            validation: {
-              company: "Add a company name.",
-              contact: "Add the contact name.",
-              email: "Add a valid email.",
-              title: "Write a title with at least 12 characters.",
-              summary: "Write a summary with at least 40 characters.",
-              requestMessage: "Write a short message with at least 12 characters.",
-            },
-            publishedOn: "Published on",
-            target: "Target",
-            origin: "Origin",
-            contact: "Contact",
-            details: "Board overview",
-            retry: "Retry",
-            openWorkspace: "Open my space",
-            requestTitle: "Ask for a tracked contact",
-            requestBody:
-              "Send a short note through the platform. The opportunity owner will see it inside their private workspace.",
-            requestButton: "Request contact",
-            requestSubmit: "Send request",
-            requestSubmitting: "Sending...",
-            requestSuccess: "Your request has been sent to the opportunity owner.",
-            requestUnavailable: "Tracked contact is only available for live published opportunities.",
-            requestMessage: "Message *",
-            requestPhone: "Phone",
-          }
-        : {
-            heroEyebrow: "Le coin business",
-            heroTitle: "Transformez les visites en pistes business et laissez chaque compte publier une opportunite.",
-            heroBody:
-              "Ce board public affiche des recherches d'acheteurs, des offres de partenariat et des signaux de distribution. La consultation reste libre, la publication est reservee aux comptes gratuits pour stimuler la creation de compte.",
-            primaryCta: "Voir les opportunites",
-            secondaryCta: isAuthenticated ? "Publier ma proposition" : "Creer un compte gratuit",
-            statsTotal: "Opportunites visibles",
-            statsBuyers: "Recherches d'acheteurs",
-            statsPartners: "Partenaires / distributeurs",
-            boardTitle: "Dernieres propositions",
-            boardBody: "Affichage du plus recent au plus ancien pour donner des signaux business immediats aux visiteurs.",
-            boardEmpty: "Aucune opportunite publiee pour le moment. Publiez la premiere pour lancer le board.",
-            publishTitle: "Publier une proposition",
-            publishBody:
-              "Les comptes gratuits peuvent publier une proposition d'affaires visible sur le board public: sourcing, recherche d'acheteurs, distribution ou partenariat.",
-            publishLockedTitle: "Creez un compte gratuit pour publier",
-            publishLockedBody:
-              "La consultation reste publique. La publication est reservee aux utilisateurs inscrits pour garder un board exploitable et tracable.",
-            lockedPrimary: "Creer un compte gratuit",
-            lockedSecondary: "J'ai deja un compte",
-            demoBanner: "Mode demo actif tant que la migration Supabase n'est pas appliquee. Les nouvelles publications sont stockees localement.",
-            errorTitle: "Impossible de charger le board",
-            tipsTitle: "Ce qui fonctionne le mieux",
-            tips: [
-              "Dites clairement ce que vous cherchez: acheter, vendre, distribuer, sourcer ou nouer un partenariat.",
-              "Precisez au moins une zone geographique et un secteur.",
-              "Ajoutez un email suivi en continu pour accelerer les contacts.",
-            ],
-            trustTitle: "Pourquoi ca convertit mieux",
-            trustBody:
-              "Les visiteurs decouvrent librement les opportunites. Pour publier, ils ont une vraie raison de creer un compte gratuit sans etre bloques trop tot.",
-            formCompany: "Entreprise *",
-            formContact: "Nom du contact *",
-            formEmail: "Email du contact *",
-            formType: "Type de proposition *",
-            formTitle: "Titre *",
-            formSummary: "Resume business *",
-            formSector: "Secteur",
-            formOrigin: "Pays d'origine",
-            formTarget: "Pays cible",
-            formWebsite: "Site web",
-            formSubmit: "Publier la proposition",
-            formSubmitting: "Publication...",
-            successTitle: "Proposition publiee",
-            successBodyServer: "Votre proposition est maintenant visible sur le board.",
-            successBodyDemo: "Enregistree en mode demo local tant que la migration base n'est pas appliquee.",
-            validation: {
-              company: "Ajoutez le nom de l'entreprise.",
-              contact: "Ajoutez le nom du contact.",
-              email: "Ajoutez un email valide.",
-              title: "Redigez un titre d'au moins 12 caracteres.",
-              summary: "Redigez un resume d'au moins 40 caracteres.",
-              requestMessage: "Redigez un message court d'au moins 12 caracteres.",
-            },
-            publishedOn: "Publie le",
-            target: "Cible",
-            origin: "Origine",
-            contact: "Contacter",
-            details: "Vue du board",
-            retry: "Recharger",
-            openWorkspace: "Ouvrir mon espace",
-            requestTitle: "Demander un contact trace",
-            requestBody:
-              "Envoyez un message court via la plateforme. Le proprietaire de l'opportunite le verra dans son espace prive.",
-            requestButton: "Demander le contact",
-            requestSubmit: "Envoyer la demande",
-            requestSubmitting: "Envoi...",
-            requestSuccess: "Votre demande a bien ete transmise au proprietaire de l'opportunite.",
-            requestUnavailable: "Le contact trace est disponible uniquement sur les opportunites publiees en base.",
-            requestMessage: "Message *",
-            requestPhone: "Telephone",
-          },
-    [isAuthenticated, isEn]
-  );
-
-  const handleField =
-    <K extends keyof BusinessFormState>(key: K) =>
-    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-      const value = event.target.value;
-      setForm((prev) => ({ ...prev, [key]: value }));
-    };
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-
-    if (!form.companyName.trim()) {
-      toast({ title: copy.errorTitle, description: copy.validation.company });
-      return;
-    }
-    if (!form.contactName.trim()) {
-      toast({ title: copy.errorTitle, description: copy.validation.contact });
-      return;
-    }
-    if (!isValidEmail(form.contactEmail)) {
-      toast({ title: copy.errorTitle, description: copy.validation.email });
-      return;
-    }
-    if (form.title.trim().length < 12) {
-      toast({ title: copy.errorTitle, description: copy.validation.title });
-      return;
-    }
-    if (form.summary.trim().length < 40) {
-      toast({ title: copy.errorTitle, description: copy.validation.summary });
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      const result = await createBusinessOpportunity({
-        company_name: form.companyName,
-        contact_name: form.contactName,
-        contact_email: form.contactEmail,
-        title: form.title,
-        summary: form.summary,
-        opportunity_type: form.opportunityType,
-        sector: form.sector,
-        origin_country: form.originCountry,
-        target_country: form.targetCountry,
-        website: form.website,
-      });
-
-      toast({
-        title: copy.successTitle,
-        description: result.source === "server" ? copy.successBodyServer : copy.successBodyDemo,
-      });
-
-      setForm((prev) => ({
-        ...DEFAULT_FORM,
-        companyName: prev.companyName,
-        contactName: prev.contactName,
-        contactEmail: prev.contactEmail,
-      }));
-
-      await loadBoard();
-    } catch (err: any) {
-      toast({
-        title: copy.errorTitle,
-        description: err?.message || copy.errorTitle,
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleContactField =
-    <K extends keyof BusinessContactRequestState>(key: K) =>
-    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      const value = event.target.value;
-      setContactForm((prev) => ({ ...prev, [key]: value }));
-    };
-
-  const openContactDialog = (item: BusinessOpportunity) => {
-    if (!item.user_id) {
-      toast({ title: copy.requestTitle, description: copy.requestUnavailable });
-      return;
-    }
-    setSelectedOpportunity(item);
-    setContactModalOpen(true);
-  };
-
-  const submitContactRequest = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!selectedOpportunity?.id || !selectedOpportunity.user_id) {
-      toast({ title: copy.requestTitle, description: copy.requestUnavailable });
-      return;
-    }
-    if (!contactForm.firstName.trim()) {
-      toast({ title: copy.requestTitle, description: copy.validation.contact });
-      return;
-    }
-    if (!isValidEmail(contactForm.email)) {
-      toast({ title: copy.requestTitle, description: copy.validation.email });
-      return;
-    }
-    if (contactForm.message.trim().length < 12) {
-      toast({ title: copy.requestTitle, description: copy.validation.requestMessage });
-      return;
-    }
-
-    try {
-      setContactSubmitting(true);
-      const response = await fetch("/api/business-contact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          opportunityId: selectedOpportunity.id,
-          firstName: contactForm.firstName.trim(),
-          email: contactForm.email.trim(),
-          company: contactForm.company.trim(),
-          phone: contactForm.phone.trim(),
-          message: contactForm.message.trim(),
-        }),
-      });
-
-      if (!response.ok) {
-        const detail = await response.text().catch(() => "");
-        throw new Error(detail || copy.errorTitle);
+  const copy = isEn
+    ? {
+        heroEyebrow: "France-Maghreb business",
+        heroTitle: "Curated announcements plus practical import-export support.",
+        heroBody:
+          "MPL publishes selected buyer, supplier, distributor and service opportunities. Visitors can browse and request support; publishing and analysis stay private.",
+        primaryCta: "View announcements",
+        secondaryCta: "Request support",
+        adminCta: "Open private workspace",
+        statsTotal: "Announcements",
+        statsBuyers: "Buyer requests",
+        statsPartners: "Partners / distributors",
+        boardTitle: "Qualified announcements",
+        boardBody: "Selected opportunities for trade between France, Morocco, Algeria and Tunisia.",
+        boardEmpty: "No announcement yet. MPL can qualify and publish the first France-Maghreb opportunity.",
+        demoBanner: "Demo announcements are shown until the live business board is connected.",
+        errorTitle: "Unable to load the board",
+        retry: "Retry",
+        publishedOn: "Published on",
+        target: "Target",
+        origin: "Origin",
+        contact: "Contact",
+        supportTitle: "Support offer",
+        supportBody:
+          "Send your project to frame the market, product, Incoterm, costs, documents and next action before committing.",
+        trustTitle: "Private management",
+        trustBody:
+          "Only the MPL admin access can publish announcements and analyze opportunities. The public page stays simple and conversion-oriented.",
+        tipsTitle: "What MPL can help with",
+        tips: [
+          "Qualify a buyer, supplier, distributor or service need.",
+          "Estimate landed cost, margin, documents and logistics risk.",
+          "Prepare the next contact or negotiation step.",
+        ],
       }
-
-      toast({ title: copy.requestTitle, description: copy.requestSuccess });
-      setContactModalOpen(false);
-      setContactForm((prev) => ({
-        ...prev,
-        phone: "",
-        message: "",
-      }));
-    } catch (err: any) {
-      toast({
-        title: copy.requestTitle,
-        description: err?.message || copy.errorTitle,
-      });
-    } finally {
-      setContactSubmitting(false);
-    }
-  };
+    : {
+        heroEyebrow: "Business France-Maghreb",
+        heroTitle: "Des annonces qualifiees et un accompagnement import-export concret.",
+        heroBody:
+          "MPL publie les opportunites selectionnees: acheteurs, fournisseurs, distributeurs et prestataires. Les visiteurs consultent et demandent un accompagnement; la publication et l'analyse restent privees.",
+        primaryCta: "Voir les annonces",
+        secondaryCta: "Demander un accompagnement",
+        adminCta: "Ouvrir l'espace prive",
+        statsTotal: "Annonces",
+        statsBuyers: "Recherches d'acheteurs",
+        statsPartners: "Partenaires / distributeurs",
+        boardTitle: "Annonces qualifiees",
+        boardBody: "Opportunites selectionnees pour commercer entre France, Maroc, Algerie et Tunisie.",
+        boardEmpty: "Aucune annonce pour le moment. MPL peut qualifier et publier la premiere opportunite France-Maghreb.",
+        demoBanner: "Des annonces de demonstration sont affichees tant que le board business live n'est pas connecte.",
+        errorTitle: "Impossible de charger le board",
+        retry: "Recharger",
+        publishedOn: "Publie le",
+        target: "Cible",
+        origin: "Origine",
+        contact: "Contacter",
+        supportTitle: "Offre d'accompagnement",
+        supportBody:
+          "Envoyez votre projet pour cadrer marche, produit, Incoterm, couts, documents et prochaine action avant de vous engager.",
+        trustTitle: "Gestion privee",
+        trustBody:
+          "Seul l'acces administrateur MPL peut publier des annonces et analyser les opportunites. La page publique reste simple et orientee demande d'accompagnement.",
+        tipsTitle: "Ce que MPL peut cadrer",
+        tips: [
+          "Qualifier un besoin acheteur, fournisseur, distributeur ou prestataire.",
+          "Estimer cout rendu, marge, documents et risques logistiques.",
+          "Preparer la prochaine prise de contact ou negociation.",
+        ],
+      };
 
   return (
     <PublicLayout>
       <section className="space-y-8">
-        <div className="overflow-hidden rounded-[32px] border border-[#d6c8b2] bg-[linear-gradient(140deg,rgba(255,247,237,0.96)_0%,rgba(255,255,255,0.98)_45%,rgba(236,245,255,0.96)_100%)] p-6 shadow-sm sm:p-8 lg:p-10">
+        <div className="overflow-hidden rounded-[32px] border border-emerald-100 bg-[linear-gradient(140deg,rgba(240,253,244,0.96)_0%,rgba(255,255,255,0.98)_48%,rgba(239,246,255,0.96)_100%)] p-6 shadow-sm sm:p-8 lg:p-10">
           <div className="grid gap-8 lg:grid-cols-[1.25fr_0.85fr]">
             <div className="space-y-5">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#e6d7bf] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-slate-700">
-                <BriefcaseBusiness className="h-3.5 w-3.5 text-[#b45309]" />
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-800">
+                <BriefcaseBusiness className="h-3.5 w-3.5" />
                 {copy.heroEyebrow}
               </div>
               <div className="space-y-3">
@@ -489,29 +180,30 @@ export default function BusinessCorner() {
                   </a>
                 </Button>
                 <Button asChild variant="outline" className="h-11 rounded-full border-slate-300 bg-white px-5">
-                  {isAuthenticated ? (
-                    <a href="#publier">{copy.secondaryCta}</a>
-                  ) : (
-                    <Link to={publishLink}>{copy.secondaryCta}</Link>
-                  )}
+                  <Link to="/contact">{copy.secondaryCta}</Link>
                 </Button>
+                {isAuthenticated ? (
+                  <Button asChild variant="secondary" className="h-11 rounded-full px-5">
+                    <Link to="/app/mise-en-relation">{copy.adminCta}</Link>
+                  </Button>
+                ) : null}
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-              <Card className="border-[#e6d7bf] bg-white/90 shadow-sm">
+              <Card className="border-emerald-100 bg-white/90 shadow-sm">
                 <CardHeader className="pb-2">
                   <CardDescription>{copy.statsTotal}</CardDescription>
                   <CardTitle className="text-3xl text-slate-950">{stats.total}</CardTitle>
                 </CardHeader>
               </Card>
-              <Card className="border-[#e6d7bf] bg-white/90 shadow-sm">
+              <Card className="border-emerald-100 bg-white/90 shadow-sm">
                 <CardHeader className="pb-2">
                   <CardDescription>{copy.statsBuyers}</CardDescription>
                   <CardTitle className="text-3xl text-slate-950">{stats.buyerCount}</CardTitle>
                 </CardHeader>
               </Card>
-              <Card className="border-[#e6d7bf] bg-white/90 shadow-sm">
+              <Card className="border-emerald-100 bg-white/90 shadow-sm">
                 <CardHeader className="pb-2">
                   <CardDescription>{copy.statsPartners}</CardDescription>
                   <CardTitle className="text-3xl text-slate-950">{stats.partnerCount}</CardTitle>
@@ -530,7 +222,7 @@ export default function BusinessCorner() {
         <div className="grid gap-6 xl:grid-cols-[1.35fr_0.9fr]">
           <div id="board" className="space-y-4">
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">{copy.details}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.32em] text-slate-500">Board</p>
               <h2 className="text-2xl font-semibold text-slate-950">{copy.boardTitle}</h2>
               <p className="text-sm text-slate-600">{copy.boardBody}</p>
             </div>
@@ -552,23 +244,22 @@ export default function BusinessCorner() {
             <div className="grid gap-4">
               {loading
                 ? Array.from({ length: 4 }).map((_, index) => (
-                    <Card key={`business-card-skeleton-${index}`} className="border-[#d6c8b2] bg-white/95 shadow-sm">
+                    <Card key={`business-card-skeleton-${index}`} className="border-slate-200 bg-white/95 shadow-sm">
                       <CardContent className="space-y-4 p-6">
                         <div className="h-4 w-28 rounded-full bg-slate-200" />
                         <div className="h-7 w-4/5 rounded-full bg-slate-200" />
                         <div className="h-4 w-full rounded-full bg-slate-100" />
                         <div className="h-4 w-11/12 rounded-full bg-slate-100" />
-                        <div className="h-10 rounded-2xl bg-slate-100" />
                       </CardContent>
                     </Card>
                   ))
                 : items.map((item) => (
-                    <Card key={item.id} className="border-[#d6c8b2] bg-white/95 shadow-sm">
+                    <Card key={item.id} className="border-slate-200 bg-white/95 shadow-sm">
                       <CardContent className="p-6">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                           <div className="space-y-4">
                             <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant="secondary" className="bg-slate-100 text-slate-800">
+                              <Badge variant="secondary" className="bg-emerald-50 text-emerald-800">
                                 {TYPE_LABELS[item.opportunity_type][isEn ? "en" : "fr"]}
                               </Badge>
                               <span className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
@@ -622,20 +313,9 @@ export default function BusinessCorner() {
                                 {item.website.replace(/^https?:\/\//i, "")}
                               </a>
                             ) : null}
-                            {item.user_id ? (
-                              <div className="mt-2 grid gap-2">
-                                <Button size="sm" className="rounded-full" onClick={() => openContactDialog(item)}>
-                                  {copy.requestButton}
-                                </Button>
-                                <Button asChild size="sm" variant="outline" className="rounded-full">
-                                  <a href={`mailto:${item.contact_email}`}>{copy.contact}</a>
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button asChild size="sm" className="mt-2 rounded-full">
-                                <a href={`mailto:${item.contact_email}`}>{copy.contact}</a>
-                              </Button>
-                            )}
+                            <Button asChild size="sm" className="mt-2 rounded-full">
+                              <a href={`mailto:${item.contact_email}`}>{copy.contact}</a>
+                            </Button>
                           </div>
                         </div>
                       </CardContent>
@@ -644,7 +324,7 @@ export default function BusinessCorner() {
             </div>
 
             {!loading && !error && items.length === 0 ? (
-              <Card className="border-dashed border-[#d6c8b2] bg-white/80 shadow-sm">
+              <Card className="border-dashed border-slate-300 bg-white/80 shadow-sm">
                 <CardContent className="px-6 py-12 text-center text-sm text-slate-600">
                   <Sparkles className="mx-auto mb-3 h-5 w-5 text-slate-500" />
                   {copy.boardEmpty}
@@ -654,136 +334,27 @@ export default function BusinessCorner() {
           </div>
 
           <div className="space-y-4 xl:sticky xl:top-6 xl:self-start">
-            <Card id="publier" className="border-[#d6c8b2] bg-white/95 shadow-sm">
+            <Card className="border-emerald-100 bg-white/95 shadow-sm">
               <CardHeader>
-                <CardTitle className="text-slate-950">
-                  {isAuthenticated ? copy.publishTitle : copy.publishLockedTitle}
-                </CardTitle>
-                <CardDescription className="text-slate-600">
-                  {isAuthenticated ? copy.publishBody : copy.publishLockedBody}
-                </CardDescription>
+                <CardTitle className="text-slate-950">{copy.supportTitle}</CardTitle>
+                <CardDescription className="text-slate-600">{copy.supportBody}</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                <Button asChild className="h-11 w-full rounded-full">
+                  <Link to="/contact">
+                    <Handshake className="mr-2 h-4 w-4" />
+                    {copy.secondaryCta}
+                  </Link>
+                </Button>
                 {isAuthenticated ? (
-                  <form className="space-y-4" onSubmit={handleSubmit}>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">{copy.formCompany}</label>
-                        <Input
-                          value={form.companyName}
-                          onChange={handleField("companyName")}
-                          placeholder={isEn ? "Company name" : "Nom de l'entreprise"}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">{copy.formContact}</label>
-                        <Input
-                          value={form.contactName}
-                          onChange={handleField("contactName")}
-                          placeholder={isEn ? "Your name" : "Votre nom"}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">{copy.formEmail}</label>
-                        <Input
-                          type="email"
-                          value={form.contactEmail}
-                          onChange={handleField("contactEmail")}
-                          placeholder="vous@entreprise.com"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">{copy.formType}</label>
-                        <select
-                          value={form.opportunityType}
-                          onChange={handleField("opportunityType")}
-                          className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 text-sm"
-                        >
-                          {BUSINESS_OPPORTUNITY_TYPES.map((type) => (
-                            <option key={type} value={type}>
-                              {TYPE_LABELS[type][isEn ? "en" : "fr"]}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">{copy.formTitle}</label>
-                      <Input
-                        value={form.title}
-                        onChange={handleField("title")}
-                        placeholder={
-                          isEn
-                            ? "Example: Looking for distributor in West Africa for packaged food"
-                            : "Exemple: Recherche distributeur Afrique de l'Ouest pour produits agro"
-                        }
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-700">{copy.formSummary}</label>
-                      <Textarea
-                        value={form.summary}
-                        onChange={handleField("summary")}
-                        placeholder={
-                          isEn
-                            ? "Describe what you offer or seek, expected scope, timing and any useful qualification criteria."
-                            : "Expliquez ce que vous proposez ou recherchez, le perimetre, le timing et les criteres utiles."
-                        }
-                        className="min-h-[132px]"
-                      />
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">{copy.formSector}</label>
-                        <Input value={form.sector} onChange={handleField("sector")} placeholder={isEn ? "Sector" : "Secteur"} />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">{copy.formWebsite}</label>
-                        <Input value={form.website} onChange={handleField("website")} placeholder="https://..." />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">{copy.formOrigin}</label>
-                        <Input value={form.originCountry} onChange={handleField("originCountry")} placeholder="FR" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">{copy.formTarget}</label>
-                        <Input value={form.targetCountry} onChange={handleField("targetCountry")} placeholder="AE" />
-                      </div>
-                    </div>
-
-                    <Button type="submit" className="h-11 w-full rounded-full" disabled={submitting}>
-                      {submitting ? copy.formSubmitting : copy.formSubmit}
-                    </Button>
-                  </form>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                      <div className="flex items-start gap-3">
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
-                        <span>{copy.publishBody}</span>
-                      </div>
-                    </div>
-                    <Button asChild className="h-11 w-full rounded-full">
-                      <Link to={publishLink}>{copy.lockedPrimary}</Link>
-                    </Button>
-                    <Button asChild variant="outline" className="h-11 w-full rounded-full">
-                      <Link to={`/login?next=${encodeURIComponent("/coin-business#publier")}`}>{copy.lockedSecondary}</Link>
-                    </Button>
-                  </div>
-                )}
+                  <Button asChild variant="outline" className="h-11 w-full rounded-full">
+                    <Link to="/app/mise-en-relation">{copy.adminCta}</Link>
+                  </Button>
+                ) : null}
               </CardContent>
             </Card>
 
-            <Card className="border-[#d6c8b2] bg-white/95 shadow-sm">
+            <Card className="border-emerald-100 bg-white/95 shadow-sm">
               <CardHeader>
                 <CardTitle className="text-slate-950">{copy.tipsTitle}</CardTitle>
               </CardHeader>
@@ -797,71 +368,21 @@ export default function BusinessCorner() {
               </CardContent>
             </Card>
 
-            <Card className="border-[#d6c8b2] bg-[#0a1d3a] text-white shadow-sm">
+            <Card className="border-emerald-900 bg-[#0a1d3a] text-white shadow-sm">
               <CardHeader>
                 <CardTitle>{copy.trustTitle}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 text-sm text-slate-100">
                 <p>{copy.trustBody}</p>
-                <Button asChild variant="secondary" className="rounded-full bg-white text-slate-950 hover:bg-slate-100">
-                  <Link to={isAuthenticated ? "/app/control-tower" : publishLink}>
-                    {isAuthenticated ? copy.openWorkspace : copy.lockedPrimary}
-                  </Link>
-                </Button>
+                <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/10 p-4">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-200" />
+                  <span>{isEn ? "No public profile creation is required." : "Aucune creation de profil public n'est demandee."}</span>
+                </div>
               </CardContent>
             </Card>
           </div>
         </div>
       </section>
-
-      <Dialog open={contactModalOpen} onOpenChange={setContactModalOpen}>
-        <DialogContent className="sm:max-w-[560px]">
-          <DialogHeader>
-            <DialogTitle>{copy.requestTitle}</DialogTitle>
-            <DialogDescription>
-              {selectedOpportunity?.title ? `${copy.requestBody} ${selectedOpportunity.title}` : copy.requestBody}
-            </DialogDescription>
-          </DialogHeader>
-
-          <form className="space-y-4" onSubmit={submitContactRequest}>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">{copy.formContact}</label>
-                <Input value={contactForm.firstName} onChange={handleContactField("firstName")} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">{copy.formEmail}</label>
-                <Input type="email" value={contactForm.email} onChange={handleContactField("email")} />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">{copy.formCompany}</label>
-                <Input value={contactForm.company} onChange={handleContactField("company")} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">{copy.requestPhone}</label>
-                <Input value={contactForm.phone} onChange={handleContactField("phone")} />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">{copy.requestMessage}</label>
-              <Textarea
-                value={contactForm.message}
-                onChange={handleContactField("message")}
-                className="min-h-[124px]"
-                placeholder={selectedOpportunity?.title || copy.requestBody}
-              />
-            </div>
-
-            <Button type="submit" className="h-11 w-full rounded-full" disabled={contactSubmitting}>
-              {contactSubmitting ? copy.requestSubmitting : copy.requestSubmit}
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
     </PublicLayout>
   );
 }
