@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, FolderPlus, Radar, Sparkles, UserPlus } from "lucide-react";
+import { BriefcaseBusiness, Calculator, FolderPlus, Handshake, MapPinned, Radar, Sparkles, UserPlus } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -17,81 +17,81 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
   const copy = isAuthenticated
     ? isEn
       ? {
-          sectionTitle: "Quick Actions",
-          sectionDesc: "Push the most useful account actions right after the hero.",
+          sectionTitle: "Start trading France-Maghreb",
+          sectionDesc: "Three simple actions to find an opportunity, price it, then follow the operation.",
           cards: [
             {
-              title: "Create Export File",
-              description: "Manage an export operation from A to Z.",
+              title: "Create an import/export file",
+              description: "Track one real deal: product, country, Incoterm, margin and next actions.",
               cta: "New file",
               href: "/app/dossiers/new",
               icon: FolderPlus,
             },
             {
-              title: "Publish Opportunity",
-              description: "Post a buyer request, sourcing need or partnership offer.",
-              cta: "Open business corner",
-              href: "/coin-business#publier",
-              icon: BriefcaseBusiness,
+              title: "Find a buyer or supplier",
+              description: "Use the business corner for France, Morocco, Algeria and Tunisia opportunities.",
+              cta: "Open business board",
+              href: "/app/mise-en-relation",
+              icon: Handshake,
             },
             {
-              title: "Enable Export Monitoring",
-              description: "Track markets, routes and regulations.",
-              cta: "Open monitoring",
-              href: "/app/veille",
-              icon: Radar,
+              title: "Estimate the landed cost",
+              description: "Check transport, duties, taxes and margin before accepting the deal.",
+              cta: "Calculate costs",
+              href: "/app/simulator",
+              icon: Calculator,
             },
           ],
         }
       : {
-          sectionTitle: "Actions rapides",
-          sectionDesc: "Mettez en avant les actions les plus utiles des la sortie du hero.",
+          sectionTitle: "Demarrer un business France-Maghreb",
+          sectionDesc: "Trois actions simples pour trouver une opportunite, la chiffrer puis suivre l'operation.",
           cards: [
             {
-              title: "Creer un dossier export",
-              description: "Piloter une operation export de A a Z.",
+              title: "Creer un dossier import-export",
+              description: "Suivre une affaire concrete: produit, pays, Incoterm, marge et prochaines actions.",
               cta: "Nouveau dossier",
               href: "/app/dossiers/new",
               icon: FolderPlus,
             },
             {
-              title: "Publier une proposition",
-              description: "Diffusez un besoin acheteur, un sourcing ou une offre de partenariat.",
-              cta: "Ouvrir le coin business",
-              href: "/coin-business#publier",
-              icon: BriefcaseBusiness,
+              title: "Trouver acheteur ou fournisseur",
+              description: "Utiliser le coin business pour les opportunites France, Maroc, Algerie et Tunisie.",
+              cta: "Ouvrir le board business",
+              href: "/app/mise-en-relation",
+              icon: Handshake,
             },
             {
-              title: "Activer veille export",
-              description: "Surveiller marches, routes et reglementations.",
-              cta: "Voir la veille",
-              href: "/app/veille",
-              icon: Radar,
+              title: "Estimer le cout rendu",
+              description: "Verifier transport, droits, taxes et marge avant d'accepter l'affaire.",
+              cta: "Calculer les couts",
+              href: "/app/simulator",
+              icon: Calculator,
             },
           ],
         }
     : isEn
       ? {
-          sectionTitle: "Quick Actions",
-          sectionDesc: "Give visitors a clear reason to register instead of bouncing.",
+          sectionTitle: "A simple business tool for France-Maghreb trade",
+          sectionDesc: "Browse opportunities first, then create a free account when you want to publish or manage a deal.",
           cards: [
             {
-              title: "Create Free Account",
-              description: "Publish opportunities, unlock the free tools and centralize your export actions.",
-              cta: "Create account",
+              title: "Explore opportunities",
+              description: "Buyer requests, suppliers, distributors and service partners between France and the Maghreb.",
+              cta: "See the board",
+              href: "/coin-business",
+              icon: MapPinned,
+            },
+            {
+              title: "Publish a business need",
+              description: "Looking to buy, sell, import, export or distribute? Post it from a free account.",
+              cta: "Create free account",
               href: publishLink,
               icon: UserPlus,
             },
             {
-              title: "Explore Business Corner",
-              description: "Browse buyer requests, distributor searches and partnership offers.",
-              cta: "See opportunities",
-              href: "/coin-business",
-              icon: BriefcaseBusiness,
-            },
-            {
-              title: "Try AI Copilot",
-              description: "Start with a free answer before building your export pipeline.",
+              title: "Ask the AI copilot",
+              description: "Get a first answer on customs, Incoterms, documents or market approach.",
               cta: "Open copilot",
               href: "/copilote",
               icon: Sparkles,
@@ -99,26 +99,26 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
           ],
         }
       : {
-          sectionTitle: "Actions rapides",
-          sectionDesc: "Donnez une raison claire de creer un compte au lieu de perdre la visite.",
+          sectionTitle: "Un outil business simple pour commercer France-Maghreb",
+          sectionDesc: "Consultez les opportunites, puis creez un compte gratuit pour publier ou piloter une affaire.",
           cards: [
             {
-              title: "Creer mon compte gratuit",
-              description: "Publier des propositions, debloquer les outils gratuits et centraliser les actions export.",
-              cta: "Creer un compte",
+              title: "Explorer les opportunites",
+              description: "Demandes acheteurs, fournisseurs, distributeurs et partenaires entre France et Maghreb.",
+              cta: "Voir le board",
+              href: "/coin-business",
+              icon: MapPinned,
+            },
+            {
+              title: "Publier un besoin business",
+              description: "Acheter, vendre, importer, exporter ou distribuer: publiez depuis un compte gratuit.",
+              cta: "Creer un compte gratuit",
               href: publishLink,
               icon: UserPlus,
             },
             {
-              title: "Explorer le coin business",
-              description: "Consulter des recherches acheteurs, distributeurs et partenariats.",
-              cta: "Voir les propositions",
-              href: "/coin-business",
-              icon: BriefcaseBusiness,
-            },
-            {
-              title: "Tester le copilote IA",
-              description: "Obtenir une premiere reponse gratuite avant de construire le pipeline export.",
+              title: "Demander au copilote IA",
+              description: "Obtenir une premiere reponse sur douane, Incoterms, documents ou approche marche.",
               cta: "Ouvrir le copilote",
               href: "/copilote",
               icon: Sparkles,
@@ -128,9 +128,15 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
 
   return (
     <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="space-y-1">
-        <h2 className="text-xl font-semibold text-slate-900">{copy.sectionTitle}</h2>
-        <p className="text-sm text-slate-600">{copy.sectionDesc}</p>
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div className="space-y-1">
+          <h2 className="text-xl font-semibold text-slate-900">{copy.sectionTitle}</h2>
+          <p className="text-sm text-slate-600">{copy.sectionDesc}</p>
+        </div>
+        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+          <BriefcaseBusiness className="h-3.5 w-3.5" />
+          France | Maroc | Algerie | Tunisie
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -139,7 +145,7 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
           return (
             <Card key={card.title} className="border-slate-200 bg-white shadow-sm">
               <CardHeader className="space-y-3 pb-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
                   <Icon className="h-5 w-5" />
                 </div>
                 <div className="space-y-1">
