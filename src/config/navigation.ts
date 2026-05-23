@@ -58,13 +58,12 @@ export const publicNav: PublicNavItem[] = [
     to: "/copilote",
     tKey: "header.menu.copilot",
     labels: { fr: "Copilote IA", en: "AI Copilot" },
-    badge: { fr: "Gratuit", en: "Free" },
   },
   {
     id: "services",
     to: "/pricing",
     tKey: "header.menu.services",
-    labels: { fr: "Offre gratuite", en: "Free offer" },
+    labels: { fr: "Accompagnement", en: "Support" },
   },
   {
     id: "business",
