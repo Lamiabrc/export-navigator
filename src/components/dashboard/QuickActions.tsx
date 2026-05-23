@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Calculator, FolderPlus, Handshake, MapPinned, Radar, Sparkles, UserPlus } from "lucide-react";
+import { BriefcaseBusiness, Calculator, FolderPlus, Handshake, MapPinned, Sparkles, UserPlus } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
