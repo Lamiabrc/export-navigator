@@ -48,6 +48,7 @@ export type CreateBusinessOpportunityInput = {
 const BUSINESS_TABLE_MISSING_KEY = "export_navigator.business_opportunities_missing";
 const BUSINESS_TABLE_MISSING_TTL_MS = 15 * 60 * 1000;
 const BUSINESS_LOCAL_STORAGE_KEY = "export_navigator.business_opportunities_local";
+const DEFAULT_BUSINESS_ADMIN_EMAILS = ["lamia.brechet@outlook.fr"];
 
 let businessTableMissingUntil: number = (() => {
   if (typeof window === "undefined") return 0;
@@ -70,6 +71,36 @@ function nowIso() {
 
 function shouldUseBusinessDemo() {
   return DEMO_MODE || businessTableMissingUntil > Date.now();
+}
+
+function parseBusinessAdminEmails() {
+  const raw = String((import.meta as any)?.env?.VITE_ADMIN_EMAILS || "").trim();
+  const configured = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return new Set([...DEFAULT_BUSINESS_ADMIN_EMAILS, ...configured]);
+}
+
+async function assertCanManageBusinessBoard() {
+  const { data } = await supabase.auth.getSession();
+  const user = data.session?.user;
+  const email = String(user?.email || "").toLowerCase();
+  const appRole = String((user?.app_metadata as any)?.role || "").toLowerCase();
+  const userRole = String((user?.user_metadata as any)?.role || "").toLowerCase();
+  const adminEmails = parseBusinessAdminEmails();
+  const isAdmin =
+    adminEmails.has(email) ||
+    appRole === "admin" ||
+    userRole === "admin" ||
+    (user?.app_metadata as any)?.is_admin === true ||
+    (user?.user_metadata as any)?.is_admin === true;
+
+  if (!isAdmin) {
+    throw new Error("La publication d'annonces est reservee a l'administrateur MPL Export Navigator.");
+  }
+
+  return user?.id || null;
 }
 
 function markBusinessTableMissing() {
@@ -164,15 +195,10 @@ function writeLocalBusinessOpportunities(items: BusinessOpportunity[]) {
   }
 }
 
-async function getCurrentBusinessUserId() {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.user?.id || null;
-}
-
-async function createDemoBusinessOpportunity(input: CreateBusinessOpportunityInput) {
+async function createDemoBusinessOpportunity(input: CreateBusinessOpportunityInput, userId: string | null) {
   const item: BusinessOpportunity = {
     id: `demo-${Date.now()}`,
-    user_id: await getCurrentBusinessUserId(),
+    user_id: userId,
     company_name: cleanText(input.company_name),
     contact_name: cleanText(input.contact_name),
     contact_email: cleanText(input.contact_email).toLowerCase(),
@@ -213,17 +239,17 @@ const demoBusinessOpportunities: BusinessOpportunity[] = [
   {
     id: "demo-business-1",
     user_id: null,
-    company_name: "Alizes Distribution",
+    company_name: "Maison Sud France",
     contact_name: "Nadia Martin",
-    contact_email: "nadia@alizes-distribution.example",
-    title: "Recherche fournisseur agroalimentaire premium pour reseau retail Benelux",
+    contact_email: "contact@maison-sud-france.example",
+    title: "Recherche distributeur au Maroc pour epicerie fine francaise",
     summary:
-      "Nous cherchons des marques francaises capables de livrer rapidement des produits epicerie premium avec argumentaire export deja structure.",
-    opportunity_type: "buyer",
+      "Marque francaise d'epicerie premium cherche un distributeur local pour hotels, concept stores et reseaux retail au Maroc.",
+    opportunity_type: "distributor",
     sector: "Agroalimentaire",
     origin_country: "FR",
-    target_country: "BE",
-    website: "https://alizes-distribution.example",
+    target_country: "MA",
+    website: "https://maison-sud-france.example",
     status: "published",
     created_at: "2026-03-10T09:30:00.000Z",
     updated_at: "2026-03-10T09:30:00.000Z",
@@ -234,13 +260,13 @@ const demoBusinessOpportunities: BusinessOpportunity[] = [
     company_name: "Atlas Med Export",
     contact_name: "Karim El Idrissi",
     contact_email: "karim@atlasmed.example",
-    title: "Partenaire de distribution recherche pour equipements medicaux en Afrique du Nord",
+    title: "Importateur francais recherche fabricant textile au Maghreb",
     summary:
-      "Nous disposons d'un pipeline hospitalier actif et cherchons un fabricant ou grossiste pour structurer la distribution regionale avec exclusivite negociee.",
-    opportunity_type: "distributor",
-    sector: "Sante",
-    origin_country: "MA",
-    target_country: "FR",
+      "Acheteur base en France cherche un partenaire Maroc, Algerie ou Tunisie pour collections textile petites series avec controle qualite.",
+    opportunity_type: "buyer",
+    sector: "Textile",
+    origin_country: "FR",
+    target_country: "TN",
     website: "https://atlasmed.example",
     status: "published",
     created_at: "2026-03-09T14:15:00.000Z",
@@ -249,17 +275,17 @@ const demoBusinessOpportunities: BusinessOpportunity[] = [
   {
     id: "demo-business-3",
     user_id: null,
-    company_name: "Ocean Parts",
+    company_name: "Maghreb Services Export",
     contact_name: "Helene Borel",
-    contact_email: "helene@oceanparts.example",
-    title: "Offre de sourcing pour pieces nautiques et accessoires export",
+    contact_email: "helene@maghreb-services.example",
+    title: "Prestataire transit et documentation pour flux France-Algerie",
     summary:
-      "Base fournisseurs verifiee, MOQ flexibles et documentation technique disponible pour integrateurs ou importateurs europeens.",
-    opportunity_type: "seller",
-    sector: "Industrie nautique",
+      "Accompagnement operationnel sur documents, transport, incoterms et verification facture pour PME qui demarrent des flux France-Algerie.",
+    opportunity_type: "service",
+    sector: "Transit et documents",
     origin_country: "FR",
-    target_country: "ES",
-    website: "https://oceanparts.example",
+    target_country: "DZ",
+    website: "https://maghreb-services.example",
     status: "published",
     created_at: "2026-03-08T11:00:00.000Z",
     updated_at: "2026-03-08T11:00:00.000Z",
@@ -310,6 +336,7 @@ export async function createBusinessOpportunity(input: CreateBusinessOpportunity
   item: BusinessOpportunity;
   source: BusinessOpportunitySource;
 }> {
+  const userId = await assertCanManageBusinessBoard();
   const payload = {
     company_name: cleanText(input.company_name),
     contact_name: cleanText(input.contact_name),
@@ -325,7 +352,7 @@ export async function createBusinessOpportunity(input: CreateBusinessOpportunity
   };
 
   if (shouldUseBusinessDemo()) {
-    return { item: await createDemoBusinessOpportunity(payload), source: "demo" };
+    return { item: await createDemoBusinessOpportunity(payload, userId), source: "demo" };
   }
 
   const { data, error } = await supabase
@@ -339,7 +366,7 @@ export async function createBusinessOpportunity(input: CreateBusinessOpportunity
   if (error) {
     if (isMissingTableError(error)) {
       markBusinessTableMissing();
-      return { item: await createDemoBusinessOpportunity(payload), source: "demo" };
+      return { item: await createDemoBusinessOpportunity(payload, userId), source: "demo" };
     }
     throw error;
   }
@@ -358,6 +385,8 @@ export async function archiveBusinessOpportunity(id: string): Promise<{
   item: BusinessOpportunity | null;
   source: BusinessOpportunitySource;
 }> {
+  await assertCanManageBusinessBoard();
+
   if (shouldUseBusinessDemo()) {
     return { item: archiveDemoBusinessOpportunity(id), source: "demo" };
   }
