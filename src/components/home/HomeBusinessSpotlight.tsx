@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, BriefcaseBusiness, Building2, Mail, Sparkles } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, Building2, Globe2, Mail, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,23 +62,23 @@ export function HomeBusinessSpotlight({ isEn, isAuthenticated }: HomeBusinessSpo
     : `/register?next=${encodeURIComponent("/coin-business#publier")}`;
 
   return (
-    <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#fff7ed_0%,#ffffff_45%,#eef6ff_100%)] p-6 shadow-sm sm:p-8">
+    <section className="overflow-hidden rounded-[28px] border border-emerald-100 bg-[linear-gradient(135deg,#f0fdf4_0%,#ffffff_48%,#eff6ff_100%)] p-6 shadow-sm sm:p-8">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-3xl space-y-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-slate-700">
-            <BriefcaseBusiness className="h-3.5 w-3.5 text-[#b45309]" />
-            {isEn ? "Business corner" : "Le coin business"}
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-800">
+            <BriefcaseBusiness className="h-3.5 w-3.5" />
+            {isEn ? "France-Maghreb business" : "Business France-Maghreb"}
           </div>
           <div className="space-y-2">
             <h2 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
               {isEn
-                ? "A public board where buyers, distributors and partners can publish live opportunities."
-                : "Un espace public ou acheteurs, distributeurs et partenaires publient des opportunites concretes."}
+                ? "Find a buyer, supplier, distributor or service partner before starting the deal."
+                : "Trouvez un acheteur, fournisseur, distributeur ou prestataire avant de lancer l'affaire."}
             </h2>
             <p className="text-sm text-slate-700 sm:text-base">
               {isEn
-                ? "Use it to capture visits, show real business signals and convert visitors into free accounts when they want to publish."
-                : "Ce bloc sert a capter du trafic, montrer des signaux business reels et convertir les visiteurs en comptes gratuits au moment de publier."}
+                ? "The board keeps the tool practical: one need, one contact, one next step for trade between France, Morocco, Algeria and Tunisia."
+                : "Le board garde l'outil pratique: un besoin, un contact, une prochaine action pour commercer entre France, Maroc, Algerie et Tunisie."}
             </p>
           </div>
         </div>
@@ -86,7 +86,7 @@ export function HomeBusinessSpotlight({ isEn, isAuthenticated }: HomeBusinessSpo
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button asChild className="h-11 rounded-full px-5">
             <Link to="/coin-business">
-              {isEn ? "Explore the board" : "Explorer le coin business"}
+              {isEn ? "View opportunities" : "Voir les opportunites"}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
@@ -94,8 +94,8 @@ export function HomeBusinessSpotlight({ isEn, isAuthenticated }: HomeBusinessSpo
             <Link to={publishLink}>
               {isAuthenticated
                 ? isEn
-                  ? "Publish my opportunity"
-                  : "Publier ma proposition"
+                  ? "Publish my need"
+                  : "Publier mon besoin"
                 : isEn
                   ? "Create account to publish"
                   : "Creer un compte pour publier"}
@@ -107,8 +107,8 @@ export function HomeBusinessSpotlight({ isEn, isAuthenticated }: HomeBusinessSpo
       {source === "demo" ? (
         <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {isEn
-            ? "Demo feed displayed until the Supabase migration is applied."
-            : "Flux de demonstration affiche tant que la migration Supabase n'est pas appliquee."}
+            ? "Demo opportunities are shown until the live business board is connected."
+            : "Des opportunites de demonstration sont affichees tant que le board business live n'est pas connecte."}
         </div>
       ) : null}
 
@@ -126,7 +126,7 @@ export function HomeBusinessSpotlight({ isEn, isAuthenticated }: HomeBusinessSpo
           : items.map((item) => (
               <article key={item.id} className="rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
-                  <Badge variant="secondary" className="bg-slate-100 text-slate-800">
+                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-800">
                     {TYPE_LABELS[item.opportunity_type][isEn ? "en" : "fr"]}
                   </Badge>
                   <span className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
@@ -141,9 +141,15 @@ export function HomeBusinessSpotlight({ isEn, isAuthenticated }: HomeBusinessSpo
                     <Building2 className="h-3.5 w-3.5" />
                     {item.company_name}
                   </span>
+                  {item.origin_country ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1">
+                      <Globe2 className="h-3.5 w-3.5" />
+                      {isEn ? "From" : "Origine"} {item.origin_country}
+                    </span>
+                  ) : null}
                   {item.target_country ? (
                     <span className="rounded-full bg-slate-100 px-3 py-1">
-                      {isEn ? "Target" : "Cible"} {item.target_country}
+                      {isEn ? "To" : "Cible"} {item.target_country}
                     </span>
                   ) : null}
                 </div>
@@ -168,8 +174,8 @@ export function HomeBusinessSpotlight({ isEn, isAuthenticated }: HomeBusinessSpo
         <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-white/70 px-6 py-10 text-center text-sm text-slate-600">
           <Sparkles className="mx-auto mb-3 h-5 w-5 text-slate-500" />
           {isEn
-            ? "No opportunity displayed yet. Publish the first one to seed the board."
-            : "Aucune opportunite affichee pour le moment. Publiez la premiere pour lancer le board."}
+            ? "No opportunity yet. Publish the first France-Maghreb business need."
+            : "Aucune opportunite pour le moment. Publiez le premier besoin business France-Maghreb."}
         </div>
       ) : null}
     </section>
