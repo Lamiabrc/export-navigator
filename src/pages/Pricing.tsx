@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Check, Sparkles, Users } from "lucide-react";
+import { ArrowRight, Check, Compass, FileCheck2, Handshake, Route, ShieldCheck, TrendingUp } from "lucide-react";
 
 import { PremiumMarketingLayout } from "@/components/marketing/PremiumMarketingLayout";
 import { SectionPremium } from "@/components/marketing/SectionPremium";
@@ -12,277 +12,271 @@ export default function Pricing() {
 
   const heroCopy = isFr
     ? {
-        headline: "Une offre simple : tout est gratuit",
+        headline: "Accompagnement strategique import-export Europe-Maghreb",
         subhead:
-          "Accedez a l'outil complet (simulation, verification, veille) sans abonnement ni paiement.",
+          "Un appui clair pour structurer vos flux, trouver les bons partenaires et securiser vos operations, avec un focus France-Algerie.",
         description:
-          "Si vous avez besoin de plus d'accompagnement humain, utilisez la demande de devis sur la page contact.",
-        toolCta: "Acceder gratuitement a l'outil",
-        quoteCta: "Demander un devis",
+          "MPL vous aide a cadrer le marche, les couts, les documents, les risques douaniers et les prochaines actions avant de vous engager.",
+        primaryCta: "Demander un accompagnement",
+        secondaryCta: "Voir les annonces",
       }
     : {
-        headline: "One simple offer: everything is free",
+        headline: "Strategic import-export support between Europe and the Maghreb",
         subhead:
-          "Access the full tool (simulation, verification, watch) with no subscription and no payment.",
+          "Clear support to structure flows, find the right partners and secure operations, with a strong France-Algeria focus.",
         description:
-          "If you need more hands-on support, use the quote request on the contact page.",
-        toolCta: "Open the free tool",
-        quoteCta: "Request a quote",
+          "MPL helps frame market access, costs, documents, customs risks and next actions before you commit.",
+        primaryCta: "Request support",
+        secondaryCta: "View announcements",
       };
 
-  const roiPoints = isFr
+  const focusAreas = isFr
     ? [
-        { title: "Cout fixe mensuel + charges", side: "hire" },
-        { title: "Montee en competence + turnover", side: "hire" },
-        { title: "Controles facture peu outilles", side: "hire" },
-        { title: "Simulateur + verification facture", side: "tool" },
-        { title: "Veille reglementaire integree", side: "tool" },
-        { title: "Accompagnement sur devis si necessaire", side: "tool" },
+        {
+          title: "France-Algerie en priorite",
+          body: "Analyse de faisabilite, documents, facture, transport, partenaires et points de blocage propres aux flux France-Algerie.",
+          icon: Route,
+        },
+        {
+          title: "Europe-Maghreb",
+          body: "Cadrage des opportunites entre France, Algerie, Maroc, Tunisie et autres pays europeens selon produit, secteur et objectif.",
+          icon: Compass,
+        },
+        {
+          title: "Decision avant engagement",
+          body: "Verification des couts rendus, Incoterms, droits/taxes, marge, delais, documents et risques operationnels.",
+          icon: FileCheck2,
+        },
       ]
     : [
-        { title: "Fixed monthly cost + overhead", side: "hire" },
-        { title: "Ramp-up time + turnover risk", side: "hire" },
-        { title: "Invoice controls often not tooled", side: "hire" },
-        { title: "Simulator + invoice verification", side: "tool" },
-        { title: "Integrated regulatory watch", side: "tool" },
-        { title: "Dedicated support available via quote", side: "tool" },
+        {
+          title: "France-Algeria first",
+          body: "Feasibility, documents, invoice, freight, partners and blocking points specific to France-Algeria flows.",
+          icon: Route,
+        },
+        {
+          title: "Europe-Maghreb",
+          body: "Opportunity framing between France, Algeria, Morocco, Tunisia and other European countries by product, sector and goal.",
+          icon: Compass,
+        },
+        {
+          title: "Decision before commitment",
+          body: "Checks on landed costs, Incoterms, duties/taxes, margin, timing, documents and operational risks.",
+          icon: FileCheck2,
+        },
       ];
 
-  const freeFeatures = isFr
+  const supportSteps = isFr
     ? [
-        "Simulateur complet (Incoterms, transport, frais)",
-        "Verification facture et coherence",
-        "Watch Center, filtres et historique",
-        "Checklists documentaires et rapports PDF",
-        "Acces immediat sans paiement",
+        "Cadrage du besoin: produit, pays, volume, objectif commercial et contraintes.",
+        "Lecture stratégique: opportunite, route possible, risques, partenaires et priorites.",
+        "Chiffrage: prix rendu, transport, droits/taxes, marge et points de vigilance.",
+        "Preparation operationnelle: documents, facture, Incoterm, contact et prochaine action.",
       ]
     : [
-        "Full simulator (Incoterms, transport, fees)",
-        "Invoice and consistency checks",
-        "Watch Center, filters and history",
-        "Document checklists and PDF reports",
-        "Immediate access without payment",
+        "Need framing: product, country, volume, commercial goal and constraints.",
+        "Strategic reading: opportunity, possible route, risks, partners and priorities.",
+        "Costing: landed price, freight, duties/taxes, margin and red flags.",
+        "Operational preparation: documents, invoice, Incoterm, contact and next action.",
       ];
 
-  const supportFeatures = isFr
+  const deliverables = isFr
     ? [
-        "Audit de vos flux import/export",
-        "Priorisation des risques TVA, douane, documents",
-        "Plan d'actions personnalise",
-        "Restitution et suivi selon vos besoins",
+        "Diagnostic court de votre projet import/export",
+        "Liste des points bloquants ou a verifier",
+        "Scenario d'entree marche ou de sourcing",
+        "Plan d'action priorise pour avancer",
+        "Aide a la preparation des documents et contacts",
+        "Suivi des annonces et opportunites qualifiees",
       ]
     : [
-        "Audit of your import/export flows",
-        "Prioritization of VAT, customs and document risks",
-        "Customized action plan",
-        "Follow-up aligned with your needs",
+        "Short diagnostic of your import/export project",
+        "List of blocking points or checks",
+        "Market entry or sourcing scenario",
+        "Prioritized action plan",
+        "Support on documents and contacts",
+        "Follow-up of curated announcements and opportunities",
+      ];
+
+  const audiences = isFr
+    ? [
+        "Entreprises europeennes qui veulent vendre ou sourcer au Maghreb.",
+        "Entreprises algeriennes ou maghrebines qui veulent approcher la France ou l'Europe.",
+        "Porteurs de projet qui ont besoin d'un cadrage avant d'investir du temps ou de l'argent.",
+      ]
+    : [
+        "European companies that want to sell or source in the Maghreb.",
+        "Algerian or Maghreb companies that want to approach France or Europe.",
+        "Project owners who need framing before spending time or money.",
       ];
 
   return (
     <PremiumMarketingLayout>
       <section className="mkt-section-dark mkt-section-hero mkt-radial-glow relative overflow-hidden">
         <div className="mkt-container relative z-10">
-          <div className="mx-auto max-w-3xl text-center">
+          <div className="mx-auto max-w-4xl text-center">
             <p className="mkt-eyebrow" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-              Export Navigator
+              {isFr ? "Strategie import-export" : "Import-export strategy"}
             </p>
             <h1 className="mkt-display mkt-display-xl mt-4 text-white">{heroCopy.headline}</h1>
-            <p className="mt-6 text-lg" style={{ color: "rgba(255, 255, 255, 0.75)" }}>
+            <p className="mt-6 text-lg" style={{ color: "rgba(255, 255, 255, 0.78)" }}>
               {heroCopy.subhead}
             </p>
-            <p className="mt-2 text-sm" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
+            <p className="mx-auto mt-3 max-w-2xl text-sm" style={{ color: "rgba(255, 255, 255, 0.58)" }}>
               {heroCopy.description}
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-              <Link to="/analyse" className="mkt-btn mkt-btn-primary">
-                {heroCopy.toolCta}
+              <Link to="/contact" className="mkt-btn mkt-btn-primary">
+                {heroCopy.primaryCta}
+                <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link to="/contact" className="mkt-btn mkt-btn-light">
-                {heroCopy.quoteCta}
+              <Link to="/coin-business" className="mkt-btn mkt-btn-light">
+                {heroCopy.secondaryCta}
               </Link>
             </div>
 
-            <p className="mt-4 text-xs" style={{ color: "rgba(255, 255, 255, 0.4)" }}>
+            <p className="mt-4 text-xs" style={{ color: "rgba(255, 255, 255, 0.42)" }}>
               {isFr
-                ? "Nous signalons les incoherences et risques. La validation finale reste sous votre responsabilite."
-                : "We flag inconsistencies and risks. Final validation remains your responsibility."}
+                ? "Accompagnement strategique et operationnel. La validation finale reste sous votre responsabilite ou celle de vos conseils specialises."
+                : "Strategic and operational support. Final validation remains your responsibility or your specialist advisors'."}
             </p>
           </div>
         </div>
       </section>
 
       <SectionPremium
-        eyebrow={isFr ? "ROI" : "ROI"}
-        title={isFr ? "Pourquoi ca remplace souvent un recrutement" : "Why this often replaces a hire"}
+        eyebrow={isFr ? "Positionnement" : "Positioning"}
+        title={isFr ? "Un accompagnement pour avancer sans improviser" : "Support to move forward without improvising"}
         description={
           isFr
-            ? "Remplacez un cout fixe par un outil gratuit et un suivi sur devis seulement si necessaire."
-            : "Replace fixed cost with a free tool and quote-based support only when needed."
+            ? "L'objectif n'est pas de vendre un abonnement, mais de vous aider a prendre de meilleures decisions sur vos flux Europe-Maghreb."
+            : "The goal is not to sell a subscription, but to help you make better decisions on Europe-Maghreb flows."
         }
       >
-        <div className="grid gap-6 md:grid-cols-2">
-          <div className="mkt-card p-6">
-            <div className="mb-4 flex items-center gap-3">
-              <Users className="h-5 w-5 text-[hsl(var(--mkt-ink-muted))]" />
-              <h3 className="font-semibold text-[hsl(var(--mkt-ink))]">
-                {isFr ? "Recruter (cout fixe)" : "Hire (fixed cost)"}
-              </h3>
-            </div>
-            <ul className="space-y-3">
-              {roiPoints
-                .filter((point) => point.side === "hire")
-                .map((point) => (
-                  <li key={point.title} className="flex items-start gap-3 text-sm text-[hsl(var(--mkt-ink-muted))]">
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--mkt-ink-muted))]" />
-                    {point.title}
-                  </li>
-                ))}
-            </ul>
-          </div>
-
-          <div className="mkt-card border-[hsl(var(--mkt-primary)/0.3)] p-6">
-            <div className="mb-4 flex items-center gap-3">
-              <Sparkles className="h-5 w-5 text-[hsl(var(--mkt-primary))]" />
-              <h3 className="font-semibold text-[hsl(var(--mkt-ink))]">
-                {isFr ? "Outil gratuit + support optionnel" : "Free tool + optional support"}
-              </h3>
-            </div>
-            <ul className="space-y-3">
-              {roiPoints
-                .filter((point) => point.side === "tool")
-                .map((point) => (
-                  <li key={point.title} className="flex items-start gap-3 text-sm text-[hsl(var(--mkt-ink))]">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mkt-primary))]" />
-                    {point.title}
-                  </li>
-                ))}
-            </ul>
-          </div>
+        <div className="grid gap-6 md:grid-cols-3">
+          {focusAreas.map((item) => {
+            const Icon = item.icon;
+            return (
+              <article key={item.title} className="mkt-card p-6">
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-[hsl(var(--mkt-primary)/0.1)] text-[hsl(var(--mkt-primary))]">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <h3 className="font-semibold text-[hsl(var(--mkt-ink))]">{item.title}</h3>
+                <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">{item.body}</p>
+              </article>
+            );
+          })}
         </div>
       </SectionPremium>
 
       <SectionPremium
-        eyebrow={isFr ? "Offre" : "Offer"}
-        title={isFr ? "Tout l'outil est gratuit" : "The full tool is free"}
+        eyebrow={isFr ? "Methode" : "Method"}
+        title={isFr ? "Une demarche simple en 4 temps" : "A simple 4-step approach"}
         description={
           isFr
-            ? "Une seule offre gratuite pour tous. Pour un accompagnement dedie, faites une demande de devis."
-            : "One free offer for everyone. For dedicated support, request a quote."
+            ? "On part de votre projet reel, puis on clarifie la route, les couts, les documents et l'action suivante."
+            : "We start from your real project, then clarify the route, costs, documents and next action."
         }
         variant="muted"
       >
-        <div id="plans" className="grid scroll-mt-24 gap-6 lg:grid-cols-[1.25fr_0.75fr]">
-          <article className="mkt-card flex flex-col border-[hsl(var(--mkt-primary)/0.4)] p-6 ring-2 ring-[hsl(var(--mkt-primary)/0.1)]">
-            <div className="mb-4 flex items-start justify-between gap-2">
-              <p className="mkt-label">{isFr ? "Acces plateforme" : "Platform access"}</p>
-              <span className="mkt-badge">{isFr ? "100% gratuit" : "100% free"}</span>
+        <div className="grid gap-4 md:grid-cols-4">
+          {supportSteps.map((step, index) => (
+            <div key={step} className="mkt-card p-5">
+              <div className="mb-4 text-xs font-semibold uppercase tracking-[0.24em] text-[hsl(var(--mkt-primary))]">
+                {String(index + 1).padStart(2, "0")}
+              </div>
+              <p className="text-sm text-[hsl(var(--mkt-ink))]">{step}</p>
             </div>
+          ))}
+        </div>
+      </SectionPremium>
 
-            <p className="mkt-display text-3xl font-semibold text-[hsl(var(--mkt-ink))]">
-              {isFr ? "Gratuit" : "Free"}
-            </p>
-            <p className="mt-3 flex-1 text-sm text-[hsl(var(--mkt-ink-muted))]">
-              {isFr
-                ? "Vous utilisez l'outil complet sans abonnement."
-                : "Use the full platform with no subscription."}
-            </p>
-
-            <ul className="mb-6 mt-6 space-y-2">
-              {freeFeatures.map((feature) => (
+      <SectionPremium
+        eyebrow={isFr ? "Ce que vous obtenez" : "What you get"}
+        title={isFr ? "Des livrables utiles pour decider et agir" : "Useful outputs to decide and act"}
+      >
+        <div className="grid gap-6 lg:grid-cols-[1fr_0.8fr]">
+          <article className="mkt-card p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <ShieldCheck className="h-5 w-5 text-[hsl(var(--mkt-primary))]" />
+              <h3 className="font-semibold text-[hsl(var(--mkt-ink))]">
+                {isFr ? "Livrables d'accompagnement" : "Support outputs"}
+              </h3>
+            </div>
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {deliverables.map((feature) => (
                 <li key={feature} className="flex items-start gap-2 text-sm">
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mkt-primary))]" />
                   <span className="text-[hsl(var(--mkt-ink))]">{feature}</span>
                 </li>
               ))}
             </ul>
-
-            <Link to="/analyse" className="mkt-btn mkt-btn-secondary text-xs">
-              {isFr ? "Acceder a l'outil" : "Open the tool"}
-            </Link>
           </article>
 
-          <article className="mkt-card flex flex-col p-6">
-            <p className="mkt-label">{isFr ? "Accompagnement" : "Support"}</p>
-            <h3 className="mt-2 text-xl font-semibold text-[hsl(var(--mkt-ink))]">
-              {isFr ? "Besoin d'un accompagnement dedie ?" : "Need dedicated support?"}
-            </h3>
-            <p className="mt-3 text-sm text-[hsl(var(--mkt-ink-muted))]">
-              {isFr
-                ? "Demandez un devis via la page contact pour un accompagnement adapte."
-                : "Request a quote from the contact page for tailored support."}
-            </p>
-
-            <ul className="mb-6 mt-6 space-y-2">
-              {supportFeatures.map((feature) => (
-                <li key={feature} className="flex items-start gap-2 text-sm">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--mkt-primary))]" />
-                  <span className="text-[hsl(var(--mkt-ink))]">{feature}</span>
+          <article className="mkt-card p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <TrendingUp className="h-5 w-5 text-[hsl(var(--mkt-primary))]" />
+              <h3 className="font-semibold text-[hsl(var(--mkt-ink))]">
+                {isFr ? "Pour qui ?" : "Who is it for?"}
+              </h3>
+            </div>
+            <ul className="space-y-3">
+              {audiences.map((item) => (
+                <li key={item} className="flex items-start gap-3 text-sm text-[hsl(var(--mkt-ink-muted))]">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--mkt-primary))]" />
+                  {item}
                 </li>
               ))}
             </ul>
-
-            <Link to="/contact" className="mkt-btn mkt-btn-primary text-xs">
-              {isFr ? "Demander un devis" : "Request a quote"}
-            </Link>
           </article>
         </div>
       </SectionPremium>
 
       <SectionPremium
-        eyebrow={isFr ? "Important" : "Important"}
-        title={isFr ? "Ce que comprend l'offre gratuite" : "What the free offer includes"}
+        eyebrow={isFr ? "France-Algerie" : "France-Algeria"}
+        title={isFr ? "Un focus special sur les flux France-Algerie" : "A special focus on France-Algeria flows"}
+        description={
+          isFr
+            ? "Parce que ces operations demandent souvent plus de cadrage: documents, interlocuteurs, transport, controle facture, delais et interpretation operationnelle."
+            : "Because these operations often need more framing: documents, contacts, freight, invoice control, timelines and operational interpretation."
+        }
+        variant="muted"
       >
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="mkt-card p-6">
-            <h3 className="font-semibold text-[hsl(var(--mkt-ink))]">
-              {isFr ? "Simulateur complet" : "Full simulator"}
-            </h3>
-            <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">
-              {isFr
-                ? "Cout rendu / landed cost, frais, surcharges, minimums."
-                : "Landed cost, fees, surcharges, minimums."}
-            </p>
+        <div className="mkt-card border-[hsl(var(--mkt-primary)/0.35)] p-6">
+          <div className="grid gap-6 md:grid-cols-3">
+            <div>
+              <p className="mkt-label">{isFr ? "Avant" : "Before"}</p>
+              <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">
+                {isFr ? "Verifier si le projet est realiste et quelle route suivre." : "Check if the project is realistic and which route to follow."}
+              </p>
+            </div>
+            <div>
+              <p className="mkt-label">{isFr ? "Pendant" : "During"}</p>
+              <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">
+                {isFr ? "Structurer les couts, documents, contacts et points de vigilance." : "Structure costs, documents, contacts and red flags."}
+              </p>
+            </div>
+            <div>
+              <p className="mkt-label">{isFr ? "Apres" : "After"}</p>
+              <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">
+                {isFr ? "Suivre les actions, les annonces et les opportunites qualifiees." : "Track actions, announcements and qualified opportunities."}
+              </p>
+            </div>
           </div>
-          <div className="mkt-card p-6">
-            <h3 className="font-semibold text-[hsl(var(--mkt-ink))]">
-              {isFr ? "Verification facture" : "Invoice verification"}
-            </h3>
-            <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">
-              {isFr
-                ? "Incoterm, devise, totaux, frais, coherences, alertes."
-                : "Incoterms, currency, totals, fees, consistency alerts."}
-            </p>
-          </div>
-          <div className="mkt-card p-6">
-            <h3 className="font-semibold text-[hsl(var(--mkt-ink))]">
-              {isFr ? "Suivi operation" : "Ops tracking"}
-            </h3>
-            <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">
-              {isFr ? "Docs, taches, jalons, checklists." : "Docs, tasks, milestones, checklists."}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-8 rounded-2xl border border-[hsl(var(--mkt-blue-100))] bg-[hsl(var(--mkt-surface-muted))] p-6">
-          <p className="text-sm text-[hsl(var(--mkt-ink-muted))]">
-            {isFr
-              ? "Nous signalons des incoherences et risques operationnels. La validation finale reste sous votre responsabilite (ou celle de vos conseils)."
-              : "We flag inconsistencies and operational risks. Final validation remains your responsibility (or your advisors')."}
-          </p>
         </div>
       </SectionPremium>
 
       <CTAStripPremium
-        eyebrow={isFr ? "Besoin de plus d'accompagnement ?" : "Need more support?"}
-        title={isFr ? "Demandez un devis pour un accompagnement dedie" : "Request a quote for dedicated support"}
+        eyebrow={isFr ? "Demarrer" : "Start"}
+        title={isFr ? "Parlez-moi de votre projet Europe-Maghreb" : "Tell me about your Europe-Maghreb project"}
         primaryCta={{
-          label: isFr ? "Demander un devis" : "Get a quote",
+          label: isFr ? "Demander un accompagnement" : "Request support",
           to: "/contact",
         }}
         secondaryCta={{
-          label: isFr ? "Acceder gratuitement a l'outil" : "Open the free tool",
-          to: "/analyse",
+          label: isFr ? "Voir les annonces" : "View announcements",
+          to: "/coin-business",
         }}
         note="contact@exportfrancefacile.com | 06 76 43 55 51"
       />
