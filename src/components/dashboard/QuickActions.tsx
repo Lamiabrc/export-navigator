@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Calculator, FolderPlus, Handshake, MapPinned, Sparkles, UserPlus } from "lucide-react";
+import { BriefcaseBusiness, Calculator, FolderPlus, Handshake, MapPinned, Mail, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,6 @@ type QuickActionsProps = {
 };
 
 export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
-  const publishLink = isAuthenticated
-    ? "/coin-business#publier"
-    : `/register?next=${encodeURIComponent("/coin-business#publier")}`;
-
   const copy = isAuthenticated
     ? isEn
       ? {
@@ -28,14 +24,14 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
               icon: FolderPlus,
             },
             {
-              title: "Find a buyer or supplier",
-              description: "Use the business corner for France, Morocco, Algeria and Tunisia opportunities.",
+              title: "Manage announcements",
+              description: "Publish curated France, Morocco, Algeria and Tunisia opportunities from the private workspace.",
               cta: "Open business board",
               href: "/app/mise-en-relation",
               icon: Handshake,
             },
             {
-              title: "Estimate the landed cost",
+              title: "Analyze costs and margin",
               description: "Check transport, duties, taxes and margin before accepting the deal.",
               cta: "Calculate costs",
               href: "/app/simulator",
@@ -44,8 +40,8 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
           ],
         }
       : {
-          sectionTitle: "Demarrer un business France-Maghreb",
-          sectionDesc: "Trois actions simples pour trouver une opportunite, la chiffrer puis suivre l'operation.",
+          sectionTitle: "Piloter l'accompagnement France-Maghreb",
+          sectionDesc: "Trois actions simples pour publier une annonce, chiffrer une affaire puis suivre l'operation.",
           cards: [
             {
               title: "Creer un dossier import-export",
@@ -55,14 +51,14 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
               icon: FolderPlus,
             },
             {
-              title: "Trouver acheteur ou fournisseur",
-              description: "Utiliser le coin business pour les opportunites France, Maroc, Algerie et Tunisie.",
+              title: "Gerer les annonces",
+              description: "Publier les opportunites qualifiees France, Maroc, Algerie et Tunisie depuis l'espace prive.",
               cta: "Ouvrir le board business",
               href: "/app/mise-en-relation",
               icon: Handshake,
             },
             {
-              title: "Estimer le cout rendu",
+              title: "Analyser couts et marge",
               description: "Verifier transport, droits, taxes et marge avant d'accepter l'affaire.",
               cta: "Calculer les couts",
               href: "/app/simulator",
@@ -72,22 +68,22 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
         }
     : isEn
       ? {
-          sectionTitle: "A simple business tool for France-Maghreb trade",
-          sectionDesc: "Browse opportunities first, then create a free account when you want to publish or manage a deal.",
+          sectionTitle: "Import-export support between France and the Maghreb",
+          sectionDesc: "A clear offer: understand the opportunity, check costs and documents, then get guided toward the next action.",
           cards: [
             {
-              title: "Explore opportunities",
-              description: "Buyer requests, suppliers, distributors and service partners between France and the Maghreb.",
-              cta: "See the board",
+              title: "Browse curated opportunities",
+              description: "Buyer requests, suppliers, distributors and service partners selected for France-Maghreb trade.",
+              cta: "See announcements",
               href: "/coin-business",
               icon: MapPinned,
             },
             {
-              title: "Publish a business need",
-              description: "Looking to buy, sell, import, export or distribute? Post it from a free account.",
-              cta: "Create free account",
-              href: publishLink,
-              icon: UserPlus,
+              title: "Request support",
+              description: "Need to import, export, distribute or source? Send the project and get a guided answer.",
+              cta: "Contact MPL",
+              href: "/contact",
+              icon: Mail,
             },
             {
               title: "Ask the AI copilot",
@@ -99,22 +95,22 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
           ],
         }
       : {
-          sectionTitle: "Un outil business simple pour commercer France-Maghreb",
-          sectionDesc: "Consultez les opportunites, puis creez un compte gratuit pour publier ou piloter une affaire.",
+          sectionTitle: "Accompagnement import-export France-Maghreb",
+          sectionDesc: "Une offre claire: comprendre l'opportunite, verifier couts/documents, puis avancer avec la bonne action.",
           cards: [
             {
-              title: "Explorer les opportunites",
-              description: "Demandes acheteurs, fournisseurs, distributeurs et partenaires entre France et Maghreb.",
-              cta: "Voir le board",
+              title: "Consulter les annonces qualifiees",
+              description: "Demandes acheteurs, fournisseurs, distributeurs et partenaires selectionnes pour France-Maghreb.",
+              cta: "Voir les annonces",
               href: "/coin-business",
               icon: MapPinned,
             },
             {
-              title: "Publier un besoin business",
-              description: "Acheter, vendre, importer, exporter ou distribuer: publiez depuis un compte gratuit.",
-              cta: "Creer un compte gratuit",
-              href: publishLink,
-              icon: UserPlus,
+              title: "Demander un accompagnement",
+              description: "Importer, exporter, distribuer ou sourcer: envoyez le projet pour obtenir un cadrage concret.",
+              cta: "Contacter MPL",
+              href: "/contact",
+              icon: Mail,
             },
             {
               title: "Demander au copilote IA",
