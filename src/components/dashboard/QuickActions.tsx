@@ -13,7 +13,7 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
   const copy = isAuthenticated
     ? isEn
       ? {
-          sectionTitle: "Start trading France-Maghreb",
+          sectionTitle: "Run your export operations",
           sectionDesc: "Three simple actions to find an opportunity, price it, then follow the operation.",
           cards: [
             {
@@ -25,7 +25,7 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
             },
             {
               title: "Manage announcements",
-              description: "Publish curated France, Morocco, Algeria and Tunisia opportunities from the private workspace.",
+              description: "Publish curated opportunities from the private workspace.",
               cta: "Open business board",
               href: "/app/mise-en-relation",
               icon: Handshake,
@@ -40,7 +40,7 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
           ],
         }
       : {
-          sectionTitle: "Piloter l'accompagnement France-Maghreb",
+          sectionTitle: "Piloter vos operations export",
           sectionDesc: "Trois actions simples pour publier une annonce, chiffrer une affaire puis suivre l'operation.",
           cards: [
             {
@@ -52,7 +52,7 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
             },
             {
               title: "Gerer les annonces",
-              description: "Publier les opportunites qualifiees France, Maroc, Algerie et Tunisie depuis l'espace prive.",
+              description: "Publier les opportunites qualifiees depuis l'espace prive.",
               cta: "Ouvrir le board business",
               href: "/app/mise-en-relation",
               icon: Handshake,
@@ -68,21 +68,21 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
         }
     : isEn
       ? {
-          sectionTitle: "Import-export support between France and the Maghreb",
-          sectionDesc: "A clear offer: understand the opportunity, check costs and documents, then get guided toward the next action.",
+          sectionTitle: "AI for your export team, in three steps",
+          sectionDesc: "A clear offer: a quote and scoping, a tailored workshop on your real cases, then follow-up sessions.",
           cards: [
             {
-              title: "Browse curated opportunities",
-              description: "Buyer requests, suppliers, distributors and service partners selected for France-Maghreb trade.",
-              cta: "See announcements",
-              href: "/coin-business",
+              title: "Discover the AI & Export workshop",
+              description: "Half a day or a full day on your own products, markets and documents, with the team already in place.",
+              cta: "See the workshop",
+              href: "/pricing",
               icon: MapPinned,
             },
             {
-              title: "Request support",
-              description: "Need to import, export, distribute or source? Send the project and get a guided answer.",
+              title: "Request a quote",
+              description: "Tell us about your products, your markets and your team: the quote starts from there.",
               cta: "Contact MPL",
-              href: "/contact",
+              href: "/contact?offer=atelier",
               icon: Mail,
             },
             {
@@ -95,21 +95,21 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
           ],
         }
       : {
-          sectionTitle: "Accompagnement import-export France-Maghreb",
-          sectionDesc: "Une offre claire: comprendre l'opportunite, verifier couts/documents, puis avancer avec la bonne action.",
+          sectionTitle: "L'IA pour votre equipe export, en trois temps",
+          sectionDesc: "Une offre claire: un devis et un cadrage, un atelier sur mesure sur vos cas reels, puis des demi-journees de suivi.",
           cards: [
             {
-              title: "Consulter les annonces qualifiees",
-              description: "Demandes acheteurs, fournisseurs, distributeurs et partenaires selectionnes pour France-Maghreb.",
-              cta: "Voir les annonces",
-              href: "/coin-business",
+              title: "Decouvrir l'atelier IA & Export",
+              description: "Une demi-journee ou une journee sur vos produits, vos marches et vos documents, avec l'equipe deja en place.",
+              cta: "Voir l'atelier",
+              href: "/pricing",
               icon: MapPinned,
             },
             {
-              title: "Demander un accompagnement",
-              description: "Importer, exporter, distribuer ou sourcer: envoyez le projet pour obtenir un cadrage concret.",
+              title: "Demander un devis",
+              description: "Presentez vos produits, vos marches et votre equipe: le devis part de la.",
               cta: "Contacter MPL",
-              href: "/contact",
+              href: "/contact?offer=atelier",
               icon: Mail,
             },
             {
@@ -131,7 +131,7 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
         </div>
         <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
           <BriefcaseBusiness className="h-3.5 w-3.5" />
-          France | Maroc | Algerie | Tunisie
+          {isEn ? "AI & Export" : "IA & Export"}
         </div>
       </div>
 

@@ -99,15 +99,14 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
       { to: "/methodologie", label: isFr ? "Methodologie" : "Methodology" },
       { to: "/veille", label: isFr ? "Veille" : "Watch" },
       { to: "/prospection", label: isFr ? "Prospection" : "Prospection" },
-      { to: "/coin-business", label: isFr ? "Business France-Maghreb" : "France-Maghreb business" },
-      { to: "/pricing", label: isFr ? "Accompagnement strategique" : "Strategic support" },
+      { to: "/pricing", label: isFr ? "Atelier IA & Export" : "AI & Export workshop" },
       { to: "/about", label: isFr ? "A propos" : "About" },
-      { to: "/contact?offer=accompagnement", label: isFr ? "Demander un accompagnement" : "Request support" },
+      { to: "/contact?offer=atelier", label: isFr ? "Demander un devis" : "Request a quote" },
     ],
     [isFr]
   );
 
-  const supportLabel = isFr ? "Demander un accompagnement" : "Request support";
+  const supportLabel = isFr ? "Demander un devis" : "Request a quote";
   const loginLabel = isFr ? "Connexion admin" : "Admin sign in";
   const appLabel = isFr ? "Tour de controle" : "Control Tower";
   const callbackLabel = isFr ? "Etre rappelee" : "Request callback";

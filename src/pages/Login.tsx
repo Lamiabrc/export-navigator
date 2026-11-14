@@ -105,7 +105,7 @@ export default function Login() {
             <p className="font-semibold uppercase tracking-[0.3em] text-emerald-200">MPL Export Navigator</p>
             <h2 className="text-4xl font-bold text-white drop-shadow-lg">Acces administrateur</h2>
             <p className="mx-auto max-w-xl text-slate-100/80">
-              Publication des annonces, analyse des opportunites et pilotage de l'accompagnement import-export France-Maghreb.
+              Publication des annonces, analyse des opportunites et pilotage des operations export.
             </p>
           </div>
         </div>

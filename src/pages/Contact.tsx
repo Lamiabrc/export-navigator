@@ -228,7 +228,7 @@ export default function Contact() {
                     id="countries"
                     value={form.countries}
                     onChange={(e) => update("countries", e.target.value)}
-                    placeholder="Ex: UE, Maghreb, Royaume-Uni"
+                    placeholder="Ex: UE, Royaume-Uni, Amerique du Nord"
                   />
                 </div>
 

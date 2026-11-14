@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BriefcaseBusiness, ChevronDown, ChevronUp, Handshake, LayoutDashboard, Package, Sparkles, type LucideIcon } from "lucide-react";
+import { Bot, ChevronDown, ChevronUp, Handshake, LayoutDashboard, Package, Sparkles, type LucideIcon } from "lucide-react";
 import heroExportVideo from "@/assets/hero-export.mp4";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/LanguageContext";
@@ -30,61 +30,61 @@ export function ArrivalGuide({ className }: { className?: string }) {
     ? [
         {
           key: "offer",
-          title: "Voir l'offre d'accompagnement",
-          subtitle: "Import-export France-Maghreb, cadrage, couts et documents",
+          title: "Decouvrir l'atelier IA & Export",
+          subtitle: "Devis et cadrage, atelier sur mesure, suivi",
           to: "/pricing#plans",
           icon: Package,
         },
         {
           key: "business",
-          title: "Voir les annonces qualifiees",
-          subtitle: "Acheteurs, fournisseurs, distributeurs et prestataires",
-          to: "/coin-business",
-          icon: BriefcaseBusiness,
+          title: "Essayer le copilote IA",
+          subtitle: "Une premiere reponse sur douane, Incoterms et documents",
+          to: "/copilote",
+          icon: Bot,
         },
         {
           key: isAuthenticated ? "app" : "contact",
-          title: isAuthenticated ? "Ouvrir mon espace" : "Demander un accompagnement",
-          subtitle: isAuthenticated ? "Publier et analyser depuis l'acces prive" : "Envoyer un projet import-export a MPL",
-          to: isAuthenticated ? "/app/control-tower" : "/contact",
+          title: isAuthenticated ? "Ouvrir mon espace" : "Demander un devis",
+          subtitle: isAuthenticated ? "Publier et analyser depuis l'acces prive" : "Parlez-nous de votre equipe export",
+          to: isAuthenticated ? "/app/control-tower" : "/contact?offer=atelier",
           icon: isAuthenticated ? LayoutDashboard : Handshake,
         },
       ]
     : [
         {
           key: "offer",
-          title: "See support offer",
-          subtitle: "France-Maghreb import-export, costs and documents",
+          title: "Discover the AI & Export workshop",
+          subtitle: "Quote and scoping, tailored workshop, follow-up",
           to: "/pricing#plans",
           icon: Package,
         },
         {
           key: "business",
-          title: "View curated announcements",
-          subtitle: "Buyers, suppliers, distributors and service partners",
-          to: "/coin-business",
-          icon: BriefcaseBusiness,
+          title: "Try the AI copilot",
+          subtitle: "A first answer on customs, Incoterms and documents",
+          to: "/copilote",
+          icon: Bot,
         },
         {
           key: isAuthenticated ? "app" : "contact",
-          title: isAuthenticated ? "Open my workspace" : "Request support",
-          subtitle: isAuthenticated ? "Publish and analyze from private access" : "Send an import-export project to MPL",
-          to: isAuthenticated ? "/app/control-tower" : "/contact",
+          title: isAuthenticated ? "Open my workspace" : "Request a quote",
+          subtitle: isAuthenticated ? "Publish and analyze from private access" : "Tell us about your export team",
+          to: isAuthenticated ? "/app/control-tower" : "/contact?offer=atelier",
           icon: isAuthenticated ? LayoutDashboard : Handshake,
         },
       ];
 
   const bubbleText = isFr
     ? {
-        top: "Projet import-export ?",
-        left: "France | Maroc | Algerie | Tunisie",
-        right: "Cadrage rapide",
+        top: "L'IA dans votre export ?",
+        left: "Marches | Documents | Prospection",
+        right: "Atelier sur mesure",
         hi: "MPL",
       }
     : {
-        top: "Import-export project?",
-        left: "France | Morocco | Algeria | Tunisia",
-        right: "Fast framing",
+        top: "AI in your export work?",
+        left: "Markets | Documents | Prospecting",
+        right: "Tailored workshop",
         hi: "MPL",
       };
 
@@ -260,12 +260,12 @@ export function ArrivalGuide({ className }: { className?: string }) {
 
           <div className="relative">
             <h2 className="text-lg font-semibold text-white sm:text-2xl">
-              {isFr ? "Accompagnement import-export France-Maghreb" : "France-Maghreb import-export support"}
+              {isFr ? "Integrer l'IA a l'export, sans s'y perdre" : "Bring AI into your export work, without getting lost"}
             </h2>
             <p className="mt-2 text-sm text-white sm:text-base">
               {isFr
-                ? "Trouvez une annonce, cadrez votre operation et avancez avec un accompagnement simple sur marche, couts et documents."
-                : "Find an announcement, frame the operation and move forward with simple support on market, costs and documents."}
+                ? "Un atelier sur mesure pour donner du sens aux assistants et aux equipes deja en place, a partir de vos produits, de vos marches et de leur reglementation."
+                : "A tailored workshop that gives purpose to the assistants and teams you already have, starting from your products, your markets and their regulations."}
             </p>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-white sm:text-base">{isFr ? "Par ou commencer ?" : "Where do you start?"}</p>

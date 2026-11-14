@@ -27,7 +27,7 @@ export default function Register() {
                 L'espace de publication et d'analyse est reserve a MPL Export Navigator.
               </h1>
               <p className="max-w-2xl text-base text-slate-200/85">
-                Les visiteurs peuvent consulter les annonces et demander un accompagnement import-export France-Maghreb. La creation d'annonces, le pilotage et l'analyse restent dans l'acces administrateur.
+                Les visiteurs peuvent decouvrir l'atelier IA & Export, essayer le copilote et demander un devis. La creation d'annonces, le pilotage et l'analyse restent dans l'acces administrateur.
               </p>
             </div>
           </div>
@@ -46,7 +46,7 @@ export default function Register() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-200">
-                Accompagnement import-export France-Maghreb : cadrage du besoin, recherche d'opportunites, verification couts/documents, mise en relation et suivi des actions.
+                Atelier IA & Export : devis et cadrage sur vos produits, vos marches et leur reglementation, atelier sur mesure, puis demi-journees de suivi.
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Button asChild className="h-11">
