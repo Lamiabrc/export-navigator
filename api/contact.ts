@@ -517,11 +517,21 @@ async function handleContact(req: VercelRequest, res: VercelResponse) {
     console.error("[api/contact] notification error:", notification);
   }
 
+  // Never acknowledge a lead that was neither stored nor delivered.
+  // A successful HTTP response means at least one durable delivery channel worked.
+  if (!insert.ok && (!notification.ok || notification.skipped)) {
+    return res.status(503).json({
+      ok: false,
+      error: "contact_delivery_unavailable",
+      detail: "Votre demande n'a pas pu etre transmise. Merci de reessayer plus tard.",
+      version: VERSION,
+    });
+  }
+
   return res.status(200).json({
     ok: true,
     stored: insert.ok,
-    emailSent: notification.ok,
-    emailDetail: notification.ok ? undefined : notification.detail,
+    emailSent: notification.ok && !notification.skipped,
     version: VERSION,
   });
 }
