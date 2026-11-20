@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Check, Compass, FileCheck2, Handshake, Route, ShieldCheck, TrendingUp } from "lucide-react";
+import { ArrowRight, Check, Compass, FileCheck2, Route, ShieldCheck, TrendingUp } from "lucide-react";
 
 import { PremiumMarketingLayout } from "@/components/marketing/PremiumMarketingLayout";
 import { SectionPremium } from "@/components/marketing/SectionPremium";
@@ -12,102 +12,102 @@ export default function Pricing() {
 
   const heroCopy = isFr
     ? {
-        headline: "Accompagnement strategique import-export Europe-Maghreb",
+        headline: "Intégrer l'IA à l'export, sans s'y perdre",
         subhead:
-          "Un appui clair pour structurer vos flux, trouver les bons partenaires et securiser vos operations, avec un focus France-Algerie.",
+          "Un atelier sur mesure pour donner du sens aux assistants et aux équipes déjà en place : assistante export, commercial, ADV, transitaire.",
         description:
-          "MPL vous aide a cadrer le marche, les couts, les documents, les risques douaniers et les prochaines actions avant de vous engager.",
-        primaryCta: "Demander un accompagnement",
-        secondaryCta: "Voir les annonces",
+          "MPL Export Conseil part de vos produits, de vos marchés et de la réglementation qui les concerne, puis fait travailler votre équipe sur ses cas réels.",
+        primaryCta: "Demander un devis",
+        secondaryCta: "Essayer le copilote IA",
       }
     : {
-        headline: "Strategic import-export support between Europe and the Maghreb",
+        headline: "Bring AI into your export work, without getting lost",
         subhead:
-          "Clear support to structure flows, find the right partners and secure operations, with a strong France-Algeria focus.",
+          "A tailored workshop that gives purpose to the assistants and teams you already have: export assistant, sales, order desk, forwarder.",
         description:
-          "MPL helps frame market access, costs, documents, customs risks and next actions before you commit.",
-        primaryCta: "Request support",
-        secondaryCta: "View announcements",
+          "MPL Export Conseil starts from your products, your markets and the regulations that apply to them, then has your team work on its real cases.",
+        primaryCta: "Request a quote",
+        secondaryCta: "Try the AI copilot",
       };
 
   const focusAreas = isFr
     ? [
         {
-          title: "France-Algerie en priorite",
-          body: "Analyse de faisabilite, documents, facture, transport, partenaires et points de blocage propres aux flux France-Algerie.",
-          icon: Route,
-        },
-        {
-          title: "Europe-Maghreb",
-          body: "Cadrage des opportunites entre France, Algerie, Maroc, Tunisie et autres pays europeens selon produit, secteur et objectif.",
+          title: "1. Devis et cadrage",
+          body: "Tout commence par un devis : je me renseigne sur vos produits, vos marchés et la réglementation qui les concerne, pour préparer un atelier qui vous ressemble.",
           icon: Compass,
         },
         {
-          title: "Decision avant engagement",
-          body: "Verification des couts rendus, Incoterms, droits/taxes, marge, delais, documents et risques operationnels.",
+          title: "2. Atelier sur mesure",
+          body: "Une demi-journée ou une journée, sur vos dossiers et vos outils. Chaque personne repart avec un usage clair de l'IA pour son poste.",
+          icon: Route,
+        },
+        {
+          title: "3. Ancrage",
+          body: "Des demi-journées de suivi pour corriger, approfondir et faire tenir les nouveaux usages dans la durée.",
           icon: FileCheck2,
         },
       ]
     : [
         {
-          title: "France-Algeria first",
-          body: "Feasibility, documents, invoice, freight, partners and blocking points specific to France-Algeria flows.",
-          icon: Route,
-        },
-        {
-          title: "Europe-Maghreb",
-          body: "Opportunity framing between France, Algeria, Morocco, Tunisia and other European countries by product, sector and goal.",
+          title: "1. Quote and scoping",
+          body: "It all starts with a quote: I study your products, your markets and the regulations that apply to them, to prepare a workshop that fits you.",
           icon: Compass,
         },
         {
-          title: "Decision before commitment",
-          body: "Checks on landed costs, Incoterms, duties/taxes, margin, timing, documents and operational risks.",
+          title: "2. Tailored workshop",
+          body: "Half a day or a full day, on your own files and tools. Each person leaves with a clear use of AI for their role.",
+          icon: Route,
+        },
+        {
+          title: "3. Follow-up",
+          body: "Half-day follow-up sessions to adjust, go deeper and make the new habits last.",
           icon: FileCheck2,
         },
       ];
 
   const supportSteps = isFr
     ? [
-        "Cadrage du besoin: produit, pays, volume, objectif commercial et contraintes.",
-        "Lecture stratégique: opportunite, route possible, risques, partenaires et priorites.",
-        "Chiffrage: prix rendu, transport, droits/taxes, marge et points de vigilance.",
-        "Preparation operationnelle: documents, facture, Incoterm, contact et prochaine action.",
+        "Premier échange et devis : votre équipe, vos produits, vos marchés et vos objectifs.",
+        "Cadrage : réglementation de vos produits, outils déjà utilisés, tâches qui prennent le plus de temps.",
+        "Atelier : étude de marché, prospection, documents et suivi client, sur vos cas réels.",
+        "Suivi : demi-journées pour ancrer les usages et répondre aux questions du terrain.",
       ]
     : [
-        "Need framing: product, country, volume, commercial goal and constraints.",
-        "Strategic reading: opportunity, possible route, risks, partners and priorities.",
-        "Costing: landed price, freight, duties/taxes, margin and red flags.",
-        "Operational preparation: documents, invoice, Incoterm, contact and next action.",
+        "First call and quote: your team, your products, your markets and your goals.",
+        "Scoping: regulations for your products, tools already in use, most time-consuming tasks.",
+        "Workshop: market research, prospecting, documents and customer follow-up, on your real cases.",
+        "Follow-up: half-day sessions to anchor the habits and answer field questions.",
       ];
 
   const deliverables = isFr
     ? [
-        "Diagnostic court de votre projet import/export",
-        "Liste des points bloquants ou a verifier",
-        "Scenario d'entree marche ou de sourcing",
-        "Plan d'action priorise pour avancer",
-        "Aide a la preparation des documents et contacts",
-        "Suivi des annonces et opportunites qualifiees",
+        "Un rôle clair de l'IA pour chaque poste de l'équipe export",
+        "Des exemples de demandes à l'IA adaptés à vos produits et à vos marchés",
+        "La liste de ce qui se vérifie toujours auprès de sources officielles",
+        "Les tâches export où l'IA fait gagner du temps, par ordre de priorité",
+        "Un plan d'action simple pour les semaines qui suivent",
+        "Des demi-journées de suivi, au rythme de votre équipe",
       ]
     : [
-        "Short diagnostic of your import/export project",
-        "List of blocking points or checks",
-        "Market entry or sourcing scenario",
-        "Prioritized action plan",
-        "Support on documents and contacts",
-        "Follow-up of curated announcements and opportunities",
+        "A clear role for AI in each position of the export team",
+        "Example AI requests adapted to your products and markets",
+        "The list of what must always be checked with official sources",
+        "The export tasks where AI saves time, in order of priority",
+        "A simple action plan for the following weeks",
+        "Half-day follow-up sessions, at your team's pace",
       ];
 
   const audiences = isFr
     ? [
-        "Entreprises europeennes qui veulent vendre ou sourcer au Maghreb.",
-        "Entreprises algeriennes ou maghrebines qui veulent approcher la France ou l'Europe.",
-        "Porteurs de projet qui ont besoin d'un cadrage avant d'investir du temps ou de l'argent.",
+        "PME et ETI qui exportent déjà et veulent faire gagner du temps à leur équipe.",
+        "Équipes export, ADV et commerciales qui utilisent déjà des assistants IA, sans cadre commun.",
+        "Dirigeants qui veulent démarrer l'IA à l'export avec un petit budget et sans tout changer.",
       ]
     : [
-        "European companies that want to sell or source in the Maghreb.",
-        "Algerian or Maghreb companies that want to approach France or Europe.",
-        "Project owners who need framing before spending time or money.",
+        "SMEs and mid-caps that already export and want to save their team time.",
+        "Export, order-desk and sales teams already using AI assistants without a shared framework.",
+        "Managers who want to start AI in export on a small budget, without changing everything.",
       ];
 
   return (
@@ -116,7 +116,7 @@ export default function Pricing() {
         <div className="mkt-container relative z-10">
           <div className="mx-auto max-w-4xl text-center">
             <p className="mkt-eyebrow" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
-              {isFr ? "Strategie import-export" : "Import-export strategy"}
+              {isFr ? "Atelier IA & Export" : "AI & Export workshop"}
             </p>
             <h1 className="mkt-display mkt-display-xl mt-4 text-white">{heroCopy.headline}</h1>
             <p className="mt-6 text-lg" style={{ color: "rgba(255, 255, 255, 0.78)" }}>
@@ -127,31 +127,31 @@ export default function Pricing() {
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-              <Link to="/contact" className="mkt-btn mkt-btn-primary">
+              <Link to="/contact?offer=atelier" className="mkt-btn mkt-btn-primary">
                 {heroCopy.primaryCta}
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link to="/coin-business" className="mkt-btn mkt-btn-light">
+              <Link to="/copilote" className="mkt-btn mkt-btn-light">
                 {heroCopy.secondaryCta}
               </Link>
             </div>
 
             <p className="mt-4 text-xs" style={{ color: "rgba(255, 255, 255, 0.42)" }}>
               {isFr
-                ? "Accompagnement strategique et operationnel. La validation finale reste sous votre responsabilite ou celle de vos conseils specialises."
-                : "Strategic and operational support. Final validation remains your responsibility or your specialist advisors'."}
+                ? "L'IA prépare le travail, elle ne remplace ni votre équipe ni un professionnel de la douane. Les points sensibles se vérifient auprès de sources officielles."
+                : "AI prepares the work; it replaces neither your team nor a customs professional. Sensitive points must be checked with official sources."}
             </p>
           </div>
         </div>
       </section>
 
       <SectionPremium
-        eyebrow={isFr ? "Positionnement" : "Positioning"}
-        title={isFr ? "Un accompagnement pour avancer sans improviser" : "Support to move forward without improvising"}
+        eyebrow={isFr ? "L'offre" : "The offer"}
+        title={isFr ? "Trois temps, à partir de votre réalité" : "Three steps, starting from your reality"}
         description={
           isFr
-            ? "L'objectif n'est pas de vendre un abonnement, mais de vous aider a prendre de meilleures decisions sur vos flux Europe-Maghreb."
-            : "The goal is not to sell a subscription, but to help you make better decisions on Europe-Maghreb flows."
+            ? "L'objectif n'est pas d'ajouter un outil de plus, mais de donner à chacun un usage clair de l'IA dans son travail export."
+            : "The goal is not to add one more tool, but to give everyone a clear use of AI in their export work."
         }
       >
         <div className="grid gap-6 md:grid-cols-3">
@@ -175,8 +175,8 @@ export default function Pricing() {
         title={isFr ? "Une demarche simple en 4 temps" : "A simple 4-step approach"}
         description={
           isFr
-            ? "On part de votre projet reel, puis on clarifie la route, les couts, les documents et l'action suivante."
-            : "We start from your real project, then clarify the route, costs, documents and next action."
+            ? "On part de votre équipe et de vos dossiers, pas d'un discours général sur l'IA."
+            : "We start from your team and your files, not from a general talk about AI."
         }
         variant="muted"
       >
@@ -194,14 +194,14 @@ export default function Pricing() {
 
       <SectionPremium
         eyebrow={isFr ? "Ce que vous obtenez" : "What you get"}
-        title={isFr ? "Des livrables utiles pour decider et agir" : "Useful outputs to decide and act"}
+        title={isFr ? "Ce que votre équipe garde après l'atelier" : "What your team keeps after the workshop"}
       >
         <div className="grid gap-6 lg:grid-cols-[1fr_0.8fr]">
           <article className="mkt-card p-6">
             <div className="mb-4 flex items-center gap-3">
               <ShieldCheck className="h-5 w-5 text-[hsl(var(--mkt-primary))]" />
               <h3 className="font-semibold text-[hsl(var(--mkt-ink))]">
-                {isFr ? "Livrables d'accompagnement" : "Support outputs"}
+                {isFr ? "À l'issue de l'atelier" : "After the workshop"}
               </h3>
             </div>
             <ul className="grid gap-3 sm:grid-cols-2">
@@ -234,33 +234,33 @@ export default function Pricing() {
       </SectionPremium>
 
       <SectionPremium
-        eyebrow={isFr ? "France-Algerie" : "France-Algeria"}
-        title={isFr ? "Un focus special sur les flux France-Algerie" : "A special focus on France-Algeria flows"}
+        eyebrow={isFr ? "Usages" : "Use cases"}
+        title={isFr ? "Où l'IA aide vraiment à l'export" : "Where AI really helps in export"}
         description={
           isFr
-            ? "Parce que ces operations demandent souvent plus de cadrage: documents, interlocuteurs, transport, controle facture, delais et interpretation operationnelle."
-            : "Because these operations often need more framing: documents, contacts, freight, invoice control, timelines and operational interpretation."
+            ? "Trois moments du travail export où une petite équipe gagne du temps, à condition de garder la main sur la vérification."
+            : "Three moments of export work where a small team saves time, provided it keeps control of the checks."
         }
         variant="muted"
       >
         <div className="mkt-card border-[hsl(var(--mkt-primary)/0.35)] p-6">
           <div className="grid gap-6 md:grid-cols-3">
             <div>
-              <p className="mkt-label">{isFr ? "Avant" : "Before"}</p>
+              <p className="mkt-label">{isFr ? "Marchés et prospection" : "Markets and prospecting"}</p>
               <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">
-                {isFr ? "Verifier si le projet est realiste et quelle route suivre." : "Check if the project is realistic and which route to follow."}
+                {isFr ? "Comparer des pays cibles, préparer une première liste de distributeurs et un message d'approche adapté." : "Compare target countries, prepare a first list of distributors and a tailored outreach message."}
               </p>
             </div>
             <div>
-              <p className="mkt-label">{isFr ? "Pendant" : "During"}</p>
+              <p className="mkt-label">{isFr ? "Documents et réglementation" : "Documents and regulations"}</p>
               <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">
-                {isFr ? "Structurer les couts, documents, contacts et points de vigilance." : "Structure costs, documents, contacts and red flags."}
+                {isFr ? "Préparer et relire factures, listes de colisage et Incoterms, et suivre la veille réglementaire." : "Prepare and review invoices, packing lists and Incoterms, and keep up with regulatory changes."}
               </p>
             </div>
             <div>
-              <p className="mkt-label">{isFr ? "Apres" : "After"}</p>
+              <p className="mkt-label">{isFr ? "Suivi client" : "Customer follow-up"}</p>
               <p className="mt-2 text-sm text-[hsl(var(--mkt-ink-muted))]">
-                {isFr ? "Suivre les actions, les annonces et les opportunites qualifiees." : "Track actions, announcements and qualified opportunities."}
+                {isFr ? "Répondre en plusieurs langues, adapter les offres et suivre les commandes sans perdre le fil." : "Reply in several languages, adapt offers and track orders without losing the thread."}
               </p>
             </div>
           </div>
@@ -269,14 +269,14 @@ export default function Pricing() {
 
       <CTAStripPremium
         eyebrow={isFr ? "Demarrer" : "Start"}
-        title={isFr ? "Parlez-moi de votre projet Europe-Maghreb" : "Tell me about your Europe-Maghreb project"}
+        title={isFr ? "Parlez-moi de votre équipe export" : "Tell me about your export team"}
         primaryCta={{
-          label: isFr ? "Demander un accompagnement" : "Request support",
-          to: "/contact",
+          label: isFr ? "Demander un devis" : "Request a quote",
+          to: "/contact?offer=atelier",
         }}
         secondaryCta={{
-          label: isFr ? "Voir les annonces" : "View announcements",
-          to: "/coin-business",
+          label: isFr ? "Essayer le copilote IA" : "Try the AI copilot",
+          to: "/copilote",
         }}
         note="contact@exportfrancefacile.com | 06 76 43 55 51"
       />

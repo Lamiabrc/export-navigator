@@ -62,12 +62,7 @@ export const publicNav: PublicNavItem[] = [
   {
     id: "services",
     to: "/pricing",
-    labels: { fr: "Accompagnement", en: "Support" },
-  },
-  {
-    id: "business",
-    to: "/coin-business",
-    labels: { fr: "Business France-Maghreb", en: "France-Maghreb business" },
+    labels: { fr: "Atelier IA & Export", en: "AI & Export workshop" },
     badge: { fr: "Nouveau", en: "New" },
   },
   {
@@ -108,8 +103,8 @@ export const appNav: AppNavSection[] = [
         icon: Activity,
         labels: { fr: "Accueil business", en: "Business home" },
         descriptions: {
-          fr: "Vue simple des flux, marges, alertes et priorites France-Maghreb.",
-          en: "Simple view of flows, margins, alerts and France-Maghreb priorities.",
+          fr: "Vue simple des flux, marges, alertes et priorites export.",
+          en: "Simple view of flows, margins, alerts and export priorities.",
         },
         badge: "Live",
         featured: true,
@@ -127,8 +122,8 @@ export const appNav: AppNavSection[] = [
         icon: Handshake,
         labels: { fr: "Acheteurs & fournisseurs", en: "Buyers & suppliers" },
         descriptions: {
-          fr: "Publier une opportunite, demander un contact et trouver des partenaires France-Maghreb.",
-          en: "Publish an opportunity, request contact and find France-Maghreb partners.",
+          fr: "Publier une opportunite, demander un contact et trouver des partenaires a l'export.",
+          en: "Publish an opportunity, request contact and find export partners.",
         },
         badge: "New",
         featured: true,
@@ -163,8 +158,8 @@ export const appNav: AppNavSection[] = [
         icon: Compass,
         labels: { fr: "Choisir un marche", en: "Choose a market" },
         descriptions: {
-          fr: "Comparer France, Maroc, Algerie, Tunisie et autres pays selon le produit.",
-          en: "Compare France, Morocco, Algeria, Tunisia and other countries by product.",
+          fr: "Comparer les pays cibles selon le produit.",
+          en: "Compare target countries by product.",
         },
       },
       {

@@ -237,7 +237,7 @@ export function CallbackLeadModal({
             <Textarea
               id="callback-message"
               rows={3}
-              placeholder="Ex: exporter produits agro vers Maroc, besoin check TVA/douane"
+              placeholder="Ex: former notre equipe export a l'IA, 5 personnes, produits agro"
               value={form.message}
               onChange={(event) => update("message", event.target.value)}
             />

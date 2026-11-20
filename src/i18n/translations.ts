@@ -3,9 +3,9 @@ export type LanguageCode = "fr" | "en";
 const fr = {
   meta: {
     home: {
-      title: "Export : diagnostic express, veille pays et marges | MPL Export Navigator",
+      title: "Intégrer l'IA à l'export : atelier sur mesure et copilote | MPL Export Conseil",
       description:
-        "Obtenez en quelques minutes un diagnostic export (documents, risques, Incoterms), une première estimation de marge et une veille pays. Inscription gratuite pour accéder aux résultats.",
+        "Atelier IA & Export pour les PME : devis et cadrage sur vos produits, vos marchés et leur réglementation, atelier sur mesure, puis suivi. Copilote IA export pour une première réponse sur douane, Incoterms et documents.",
     },
     tool: {
       title: "Export Navigator · Outil d'évaluation",
@@ -427,9 +427,9 @@ const fr = {
 const en = {
   meta: {
     home: {
-      title: "Export: express diagnosis, country watch and margins | MPL Export Navigator",
+      title: "Bring AI into your export work: tailored workshop and copilot | MPL Export Conseil",
       description:
-        "Get a quick export diagnostic (documents, risks, Incoterms), a first margin estimate and a country watch. Free signup to access results.",
+        "AI & Export workshop for SMEs: quote and scoping on your products, markets and regulations, a tailored workshop, then follow-up. AI export copilot for a first answer on customs, Incoterms and documents.",
     },
     tool: {
       title: "Export Navigator · Estimation tool",
