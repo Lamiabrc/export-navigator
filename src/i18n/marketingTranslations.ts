@@ -2,9 +2,9 @@ export const marketingTranslations = {
   fr: {
     meta: {
       home: {
-        title: "MPL Export Conseil · France ↔ Monde — coûts, conformité, décisions",
+        title: "Intégrer l'IA à l'export · Atelier sur mesure",
         description:
-          "Outil d’aide à la décision pour importer en France ou exporter depuis la France vers le monde entier : coût complet (landed cost), Incoterms, TVA, droits, documents et veille internationale sur sources officielles.",
+          "Atelier IA & Export pour les PME : devis et cadrage sur vos produits, vos marchés et leur réglementation, atelier sur mesure pour votre équipe export, puis suivi.",
       },
     },
 
@@ -154,9 +154,9 @@ export const marketingTranslations = {
   en: {
     meta: {
       home: {
-        title: "MPL Export Conseil · France ↔ World — costing, compliance, decisions",
+        title: "Bring AI into your export work · Tailored workshop",
         description:
-          "Decision support tool to import into France or export from France worldwide: real landed cost, Incoterms, VAT, duties, documents and international monitoring from official sources.",
+          "AI & Export workshop for SMEs: quote and scoping on your products, markets and regulations, a tailored workshop for your export team, then follow-up.",
       },
     },
 

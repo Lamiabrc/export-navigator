@@ -72,7 +72,7 @@ const CORS_HEADERS: Record<string, string> = {
 const TRANSPORT_URL = (process.env.EMAIL_TRANSPORT_URL || "").trim();
 const RESEND_API_KEY = (process.env.RESEND_API_KEY || "").trim();
 const EMAIL_FROM_ADDRESS =
-  (process.env.EMAIL_FROM_ADDRESS || "").trim() || "Export Navigator <contact@exportfrancefacile.com>";
+  (process.env.EMAIL_FROM_ADDRESS || "").trim() || "MPL Export Conseil <contact@exportfrancefacile.com>";
 
 function safeString(v: unknown, max = 2000) {
   const s = String(v ?? "").trim();
@@ -166,6 +166,21 @@ function parseGaClientIdFromCookie(req: VercelRequest) {
   if (!cookie) return "";
   const match = cookie.match(/(?:^|;\s*)_ga=GA\d+\.\d+\.(\d+\.\d+)/i);
   return match?.[1] ? safeString(match[1], 120) : "";
+}
+
+/**
+ * Forms database. SUPABASE_FORMS_URL / SUPABASE_FORMS_KEY point to the dedicated
+ * MPL Export Conseil project, where contact_requests and lead only accept inserts
+ * (row level security). They take precedence over the legacy service-role pair.
+ */
+function getFormsDb() {
+  const formsUrl = (process.env.SUPABASE_FORMS_URL || "").trim();
+  const formsKey = (process.env.SUPABASE_FORMS_KEY || "").trim();
+  if (formsUrl && formsKey) return { SUPABASE_URL: formsUrl, SUPABASE_SERVICE_ROLE_KEY: formsKey };
+  return {
+    SUPABASE_URL: (process.env.SUPABASE_URL || "").trim(),
+    SUPABASE_SERVICE_ROLE_KEY: (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim(),
+  };
 }
 
 let transporter: ReturnType<typeof nodemailer.createTransport> | null = null;
@@ -284,8 +299,7 @@ function buildCallbackNotificationBody(row: CallbackLeadRow, createdAt: string) 
 }
 
 async function supabaseInsertContact(row: ContactRow) {
-  const SUPABASE_URL = (process.env.SUPABASE_URL || "").trim();
-  const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = getFormsDb();
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return {
@@ -330,8 +344,7 @@ async function supabaseInsertContact(row: ContactRow) {
 }
 
 async function supabaseInsertCallbackLead(row: CallbackLeadRow) {
-  const SUPABASE_URL = (process.env.SUPABASE_URL || "").trim();
-  const SUPABASE_SERVICE_ROLE_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = getFormsDb();
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return {
@@ -351,7 +364,7 @@ async function supabaseInsertCallbackLead(row: CallbackLeadRow) {
         apikey: SUPABASE_SERVICE_ROLE_KEY,
         Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
         "Content-Type": "application/json",
-        Prefer: "return=representation",
+        Prefer: "return=minimal",
       },
       body: JSON.stringify(row),
     });
@@ -366,12 +379,10 @@ async function supabaseInsertCallbackLead(row: CallbackLeadRow) {
       };
     }
 
-    const payload = (await response.json().catch(() => [])) as Array<{ id?: string; created_at?: string }>;
-    const first = payload?.[0] || {};
     return {
       ok: true as const,
-      leadId: safeString(first.id, 80) || null,
-      createdAt: safeString(first.created_at, 80) || new Date().toISOString(),
+      leadId: null,
+      createdAt: new Date().toISOString(),
     };
   } catch (error: any) {
     return {

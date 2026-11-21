@@ -30,7 +30,7 @@ export function ArrivalGuide({ className }: { className?: string }) {
     ? [
         {
           key: "offer",
-          title: "Decouvrir l'atelier IA & Export",
+          title: "Découvrir l'atelier IA & Export",
           subtitle: "Devis et cadrage, atelier sur mesure, suivi",
           to: "/pricing#plans",
           icon: Package,
@@ -38,14 +38,14 @@ export function ArrivalGuide({ className }: { className?: string }) {
         {
           key: "business",
           title: "Essayer le copilote IA",
-          subtitle: "Une premiere reponse sur douane, Incoterms et documents",
+          subtitle: "Une première réponse sur douane, Incoterms et documents",
           to: "/copilote",
           icon: Bot,
         },
         {
           key: isAuthenticated ? "app" : "contact",
           title: isAuthenticated ? "Ouvrir mon espace" : "Demander un devis",
-          subtitle: isAuthenticated ? "Publier et analyser depuis l'acces prive" : "Parlez-nous de votre equipe export",
+          subtitle: isAuthenticated ? "Publier et analyser depuis l'accès privé" : "Parlez-nous de votre équipe export",
           to: isAuthenticated ? "/app/control-tower" : "/contact?offer=atelier",
           icon: isAuthenticated ? LayoutDashboard : Handshake,
         },
@@ -77,7 +77,7 @@ export function ArrivalGuide({ className }: { className?: string }) {
   const bubbleText = isFr
     ? {
         top: "L'IA dans votre export ?",
-        left: "Marches | Documents | Prospection",
+        left: "Marchés | Documents | Prospection",
         right: "Atelier sur mesure",
         hi: "MPL",
       }
@@ -195,7 +195,7 @@ export function ArrivalGuide({ className }: { className?: string }) {
       <div className="relative z-10 flex h-full flex-col justify-between px-4 py-4 sm:px-8 sm:py-6">
         <div className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-300/35 bg-[#050b16]/72 px-3 py-1 text-xs font-semibold tracking-wide text-white backdrop-blur">
           <Sparkles className="h-3.5 w-3.5 text-sky-200" />
-          MPL EXPORT NAVIGATOR
+          MPL EXPORT CONSEIL
         </div>
 
         <div className="relative mx-auto flex w-full max-w-6xl flex-1 items-center justify-center">
@@ -260,15 +260,15 @@ export function ArrivalGuide({ className }: { className?: string }) {
 
           <div className="relative">
             <h2 className="text-lg font-semibold text-white sm:text-2xl">
-              {isFr ? "Integrer l'IA a l'export, sans s'y perdre" : "Bring AI into your export work, without getting lost"}
+              {isFr ? "Intégrer l'IA à l'export, sans s'y perdre" : "Bring AI into your export work, without getting lost"}
             </h2>
             <p className="mt-2 text-sm text-white sm:text-base">
               {isFr
-                ? "Un atelier sur mesure pour donner du sens aux assistants et aux equipes deja en place, a partir de vos produits, de vos marches et de leur reglementation."
+                ? "Un atelier sur mesure pour donner du sens aux assistants et aux équipes déjà en place, à partir de vos produits, de vos marchés et de leur réglementation."
                 : "A tailored workshop that gives purpose to the assistants and teams you already have, starting from your products, your markets and their regulations."}
             </p>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-white sm:text-base">{isFr ? "Par ou commencer ?" : "Where do you start?"}</p>
+              <p className="text-sm font-semibold text-white sm:text-base">{isFr ? "Par où commencer ?" : "Where do you start?"}</p>
               <button
                 type="button"
                 aria-expanded={menuExpanded}
@@ -276,7 +276,7 @@ export function ArrivalGuide({ className }: { className?: string }) {
                 onClick={() => setMenuExpanded((prev) => !prev)}
                 className="inline-flex items-center gap-1 rounded-full border border-slate-400/35 bg-[#071124]/78 px-3 py-1 text-xs font-semibold text-white transition hover:border-sky-300/55 hover:bg-[#0b1f3c]/84"
               >
-                {menuExpanded ? (isFr ? "Replier le menu" : "Collapse menu") : (isFr ? "Deplier le menu" : "Expand menu")}
+                {menuExpanded ? (isFr ? "Replier le menu" : "Collapse menu") : (isFr ? "Déplier le menu" : "Expand menu")}
                 {menuExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               </button>
             </div>

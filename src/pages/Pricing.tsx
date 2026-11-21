@@ -171,8 +171,8 @@ export default function Pricing() {
       </SectionPremium>
 
       <SectionPremium
-        eyebrow={isFr ? "Methode" : "Method"}
-        title={isFr ? "Une demarche simple en 4 temps" : "A simple 4-step approach"}
+        eyebrow={isFr ? "Méthode" : "Method"}
+        title={isFr ? "Une démarche simple en 4 temps" : "A simple 4-step approach"}
         description={
           isFr
             ? "On part de votre équipe et de vos dossiers, pas d'un discours général sur l'IA."
@@ -268,7 +268,7 @@ export default function Pricing() {
       </SectionPremium>
 
       <CTAStripPremium
-        eyebrow={isFr ? "Demarrer" : "Start"}
+        eyebrow={isFr ? "Démarrer" : "Start"}
         title={isFr ? "Parlez-moi de votre équipe export" : "Tell me about your export team"}
         primaryCta={{
           label: isFr ? "Demander un devis" : "Request a quote",

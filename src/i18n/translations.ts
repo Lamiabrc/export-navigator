@@ -23,14 +23,14 @@ const fr = {
         "Veille réglementaire et insights import/export (douane, TVA, sanctions, exigences documentaires) pour anticiper les risques.",
     },
     about: {
-      title: "Export Navigator · À propos",
+      title: "À propos · Lamia Bréchet, IA & Export",
       description:
-        "Plateforme d’aide à la décision import/export : coûts, documents, veille et accompagnement optionnel (France ↔ Monde).",
+        "Lamia Bréchet, MPL Export Conseil : terrain export depuis 2018, droit et réglementation, et ateliers pour intégrer l'IA dans le travail des équipes export.",
     },
     contact: {
-      title: "Export Navigator · Contact",
+      title: "Contact · Demander un devis",
       description:
-        "Posez vos questions import/export ou choisissez un accompagnement (visio mensuelle ou pilotage hebdo).",
+        "Décrivez votre équipe export et votre projet : le devis de l'atelier IA & Export part de vos produits, de vos marchés et de leur réglementation.",
     },
   },
 
@@ -447,14 +447,14 @@ const en = {
         "Regulatory alerts and operational insights (customs, VAT, sanctions, document requirements) for cross-border teams.",
     },
     about: {
-      title: "Export Navigator · About",
+      title: "About · Lamia Bréchet, AI & Export",
       description:
-        "Decision-support platform for import/export: costs, documents, watch and optional coaching (France ↔ World).",
+        "Lamia Bréchet, MPL Export Conseil: export field experience since 2018, law and regulation, and workshops to bring AI into export teams' daily work.",
     },
     contact: {
-      title: "Export Navigator · Contact",
+      title: "Contact · Request a quote",
       description:
-        "Share your request and choose a coaching level (monthly video or weekly piloting).",
+        "Tell us about your export team and project: the AI & Export workshop quote starts from your products, markets and regulations.",
     },
   },
 
