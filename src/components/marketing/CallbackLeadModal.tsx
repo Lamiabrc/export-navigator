@@ -95,17 +95,17 @@ export function CallbackLeadModal({
     const countryIso2 = normalizeIso2(form.country_iso2);
 
     if (!phone || phone.length < 6) {
-      toast({ title: "Telephone requis", description: "Ajoutez un numero valide pour etre rappelee." });
+      toast({ title: "Téléphone requis", description: "Ajoutez un numéro valide pour être rappelé(e)." });
       return;
     }
 
     if (!EMAIL_RE.test(email)) {
-      toast({ title: "Email invalide", description: "Verifiez l'email saisi." });
+      toast({ title: "E-mail invalide", description: "Vérifiez l'e-mail saisi." });
       return;
     }
 
     if (!form.consent) {
-      toast({ title: "Consentement requis", description: "Cochez la case pour etre contactee." });
+      toast({ title: "Consentement requis", description: "Cochez la case pour être recontacté(e)." });
       return;
     }
 
@@ -138,7 +138,7 @@ export function CallbackLeadModal({
 
       const data = (await response.json().catch(() => null)) as { ok?: boolean; detail?: string } | null;
       if (!response.ok || !data?.ok) {
-        throw new Error(data?.detail || "Impossible d'enregistrer la demande.");
+        throw new Error("Votre demande n'a pas pu être transmise. Appelez le 06 76 43 55 51 ou écrivez à contact@exportfrancefacile.com.");
       }
 
       if (typeof window !== "undefined" && typeof window.gtag === "function") {
@@ -149,16 +149,16 @@ export function CallbackLeadModal({
       }
 
       toast({
-        title: "Demande enregistree",
-        description: "Merci. Nous vous rappelons sous 24h ouvrees.",
+        title: "Demande enregistrée",
+        description: "Merci. Nous vous rappelons sous 24 h ouvrées.",
       });
 
       setForm(EMPTY_FORM);
       setOpen(false);
     } catch (error: any) {
       toast({
-        title: "Erreur envoi",
-        description: error?.message || "Impossible de finaliser la demande maintenant.",
+        title: "Envoi impossible",
+        description: error?.message || "Votre demande n'a pas pu être transmise. Appelez le 06 76 43 55 51 ou écrivez à contact@exportfrancefacile.com.",
       });
     } finally {
       setLoading(false);
@@ -176,14 +176,14 @@ export function CallbackLeadModal({
         <DialogHeader>
           <DialogTitle>Demander un rappel</DialogTitle>
           <DialogDescription>
-            30 secondes. Laissez vos coordonnees, nous vous rappelons rapidement.
+            30 secondes. Laissez vos coordonnées, nous vous rappelons rapidement.
           </DialogDescription>
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={submit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="callback-phone">Telephone *</Label>
+              <Label htmlFor="callback-phone">Téléphone *</Label>
               <Input
                 id="callback-phone"
                 placeholder="06 00 00 00 00"
@@ -218,7 +218,7 @@ export function CallbackLeadModal({
             </div>
 
             <div className="space-y-2">
-              <Label>Creneau</Label>
+              <Label>Créneau</Label>
               <Select value={form.preferred_time} onValueChange={(value) => update("preferred_time", value as FormState["preferred_time"])}>
                 <SelectTrigger>
                   <SelectValue placeholder="Choisir" />
@@ -237,14 +237,14 @@ export function CallbackLeadModal({
             <Textarea
               id="callback-message"
               rows={3}
-              placeholder="Ex: former notre equipe export a l'IA, 5 personnes, produits agro"
+              placeholder="Ex: former notre équipe export à l'IA, 5 personnes, produits agro"
               value={form.message}
               onChange={(event) => update("message", event.target.value)}
             />
           </div>
 
           <div className="rounded-md border bg-slate-50 p-3 text-sm text-slate-700">
-            Reponse sous 24h ouvrees. WhatsApp possible.
+            Réponse sous 24 h ouvrées. WhatsApp possible.
           </div>
 
           <label className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -253,7 +253,7 @@ export function CallbackLeadModal({
               onCheckedChange={(checked) => update("consent", checked === true)}
               className="mt-0.5"
             />
-            <span>J'accepte d'etre contactee.</span>
+            <span>J'accepte d'être recontacté(e).</span>
           </label>
 
           <DialogFooter>

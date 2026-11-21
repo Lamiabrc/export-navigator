@@ -95,26 +95,26 @@ export function QuickActions({ isEn, isAuthenticated }: QuickActionsProps) {
           ],
         }
       : {
-          sectionTitle: "L'IA pour votre equipe export, en trois temps",
-          sectionDesc: "Une offre claire: un devis et un cadrage, un atelier sur mesure sur vos cas reels, puis des demi-journees de suivi.",
+          sectionTitle: "L'IA pour votre équipe export, en trois temps",
+          sectionDesc: "Une offre claire : un devis et un cadrage, un atelier sur mesure sur vos cas réels, puis des demi-journées de suivi.",
           cards: [
             {
-              title: "Decouvrir l'atelier IA & Export",
-              description: "Une demi-journee ou une journee sur vos produits, vos marches et vos documents, avec l'equipe deja en place.",
+              title: "Découvrir l'atelier IA & Export",
+              description: "Une demi-journée ou une journée sur vos produits, vos marchés et vos documents, avec l'équipe déjà en place.",
               cta: "Voir l'atelier",
               href: "/pricing",
               icon: MapPinned,
             },
             {
               title: "Demander un devis",
-              description: "Presentez vos produits, vos marches et votre equipe: le devis part de la.",
+              description: "Présentez vos produits, vos marchés et votre équipe : le devis part de là.",
               cta: "Contacter MPL",
               href: "/contact?offer=atelier",
               icon: Mail,
             },
             {
               title: "Demander au copilote IA",
-              description: "Obtenir une premiere reponse sur douane, Incoterms, documents ou approche marche.",
+              description: "Obtenir une première réponse sur douane, Incoterms, documents ou approche marché.",
               cta: "Ouvrir le copilote",
               href: "/copilote",
               icon: Sparkles,

@@ -69,7 +69,7 @@ export const publicNav: PublicNavItem[] = [
     id: "about",
     to: "/about",
     tKey: "header.menu.about",
-    labels: { fr: "A propos", en: "About" },
+    labels: { fr: "À propos", en: "About" },
   },
   {
     id: "contact",
@@ -80,8 +80,8 @@ export const publicNav: PublicNavItem[] = [
 ];
 
 const legalFooter: FooterNavItem[] = [
-  { id: "legal-notice", to: "/mentions-legales", labels: { fr: "Mentions legales", en: "Legal notice" }, legal: true },
-  { id: "privacy", to: "/confidentialite", labels: { fr: "Confidentialite", en: "Privacy" }, legal: true },
+  { id: "legal-notice", to: "/mentions-legales", labels: { fr: "Mentions légales", en: "Legal notice" }, legal: true },
+  { id: "privacy", to: "/confidentialite", labels: { fr: "Confidentialité", en: "Privacy" }, legal: true },
   { id: "cookies", to: "/cookies", labels: { fr: "Cookies", en: "Cookies" }, legal: true },
   { id: "cgu", to: "/cgu", labels: { fr: "CGU", en: "Terms of use" }, legal: true },
   { id: "cgv", to: "/cgv", labels: { fr: "CGV", en: "Terms of sale" }, legal: true },

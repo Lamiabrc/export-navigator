@@ -4,8 +4,8 @@ export type BannerContent = {
 };
 
 const DEFAULT_CONTENT: BannerContent = {
-  title: "MPL Export Navigator",
-  question: "Quelle decision export devez-vous securiser ?",
+  title: "MPL Export Conseil",
+  question: "Comment intégrer l'IA à votre export ?",
 };
 
 function cleanPathname(pathname: string) {
@@ -27,7 +27,7 @@ export function getBannerContent(pathname: string): BannerContent {
   const path = cleanPathname(pathname).toLowerCase();
 
   if (path === "/") {
-    return { title: "Accueil", question: "Par ou commencer pour securiser un export ?" };
+    return { title: "Accueil", question: "Par où commencer avec l'IA à l'export ?" };
   }
 
   if (path.startsWith("/tool")) {
@@ -39,7 +39,7 @@ export function getBannerContent(pathname: string): BannerContent {
   }
 
   if (path.startsWith("/veille")) {
-    return { title: "Veille", question: "Quelles nouvelles regles impactent vos expeditions ?" };
+    return { title: "Veille", question: "Quelles nouvelles règles touchent vos expéditions ?" };
   }
 
   if (path.startsWith("/guides")) {
@@ -50,19 +50,19 @@ export function getBannerContent(pathname: string): BannerContent {
   }
 
   if (path.startsWith("/methodologie")) {
-    return { title: "Methodologie", question: "Comment est calculee votre estimation ?" };
+    return { title: "Méthodologie", question: "Comment est calculée votre estimation ?" };
   }
 
   if (path.startsWith("/about")) {
-    return { title: "A propos", question: "Pourquoi MPL Export Conseil ?" };
+    return { title: "À propos", question: "Qui accompagne votre équipe export ?" };
   }
 
   if (path.startsWith("/contact")) {
-    return { title: "Contact", question: "Quel dossier export faut-il securiser ?" };
+    return { title: "Contact", question: "Parlons de votre équipe export" };
   }
 
   if (path.startsWith("/pricing") || path.startsWith("/tarifs")) {
-    return { title: "Offres & tarifs", question: "Quel plan est adapte a votre volume ?" };
+    return { title: "Atelier IA & Export", question: "Comment l'IA peut-elle aider votre équipe ?" };
   }
 
   if (path.startsWith("/analyse")) {
@@ -74,7 +74,7 @@ export function getBannerContent(pathname: string): BannerContent {
   }
 
   if (path.startsWith("/legal") || path.startsWith("/mentions-legales") || path.startsWith("/confidentialite") || path.startsWith("/cookies") || path.startsWith("/cgu") || path.startsWith("/cgv")) {
-    return { title: "Informations legales", question: "Que faut-il verifier avant usage ?" };
+    return { title: "Informations légales", question: "Que faut-il vérifier avant usage ?" };
   }
 
   if (path.startsWith("/app")) {
