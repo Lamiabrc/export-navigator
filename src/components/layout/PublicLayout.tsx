@@ -80,9 +80,6 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
   const isFr = lang === "fr";
   const banner = getBannerContent(location.pathname);
   const siteDisclaimers = (t("disclaimers") as string[]) ?? [];
-  const nextPath = `${location.pathname}${location.search}` || "/";
-  const authNext = nextPath === "/" ? "/app/control-tower" : nextPath;
-  const authNextParam = encodeURIComponent(authNext);
   const isHome = location.pathname === "/";
 
   const [supportReady, setSupportReady] = React.useState(false);
@@ -96,20 +93,19 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
   const resourceLinks = React.useMemo(
     () => [
       { to: "/guides/incoterms", label: isFr ? "Incoterms" : "Incoterms" },
-      { to: "/methodologie", label: isFr ? "Methodologie" : "Methodology" },
+      { to: "/methodologie", label: isFr ? "Méthodologie" : "Methodology" },
       { to: "/veille", label: isFr ? "Veille" : "Watch" },
       { to: "/prospection", label: isFr ? "Prospection" : "Prospection" },
       { to: "/pricing", label: isFr ? "Atelier IA & Export" : "AI & Export workshop" },
-      { to: "/about", label: isFr ? "A propos" : "About" },
+      { to: "/about", label: isFr ? "À propos" : "About" },
       { to: "/contact?offer=atelier", label: isFr ? "Demander un devis" : "Request a quote" },
     ],
     [isFr]
   );
 
   const supportLabel = isFr ? "Demander un devis" : "Request a quote";
-  const loginLabel = isFr ? "Connexion admin" : "Admin sign in";
-  const appLabel = isFr ? "Tour de controle" : "Control Tower";
-  const callbackLabel = isFr ? "Etre rappelee" : "Request callback";
+  const appLabel = isFr ? "Tour de contrôle" : "Control Tower";
+  const callbackLabel = isFr ? "Être rappelé(e)" : "Request callback";
 
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
@@ -164,8 +160,8 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
             titleClassName="text-black"
             subtitleClassName="text-black/80"
             locationClassName="text-black/70"
-            title="MPL Export Navigator"
-            subtitle="par MPL Export Conseil"
+            title="MPL Export Conseil"
+            subtitle="IA & Export · Lamia Bréchet"
             location="Conseil Export"
             className="group rounded-xl bg-white/95 px-3 py-2 shadow-lg shadow-black/20"
           />
@@ -226,12 +222,6 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
                 <Link to="/contact?offer=accompagnement" className="inline-flex rounded-full bg-[#DC2626] px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#B0231D]">
                   {supportLabel}
                 </Link>
-                <Link
-                  to={`/login?next=${authNextParam}`}
-                  className="inline-flex rounded-full border border-slate-500/70 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-900 transition hover:bg-slate-50"
-                >
-                  {loginLabel}
-                </Link>
               </>
             )}
           </div>
@@ -276,11 +266,7 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
                 <Link to="/app/control-tower" className="rounded-full border border-slate-500/60 bg-[#0a1d3a] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white">
                   {appLabel}
                 </Link>
-              ) : (
-                <Link to={`/login?next=${authNextParam}`} className="text-xs font-semibold text-slate-900 underline">
-                  {loginLabel}
-                </Link>
-              )}
+              ) : null}
             </div>
 
             <nav className="grid grid-cols-1 gap-2">
@@ -382,7 +368,7 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
         <footer className="relative z-10 border-t border-slate-700/70 bg-[#040a15]/90">
           <div className="mx-auto grid w-full max-w-[90rem] gap-6 px-4 py-8 sm:px-6 md:px-10 md:py-10 lg:grid-cols-[1fr_0.95fr]">
             <div className="space-y-3">
-              <div className="text-sm font-semibold text-white">MPL Export Navigator</div>
+              <div className="text-sm font-semibold text-white">MPL Export Conseil</div>
               <div className="text-sm text-white">
                 Outil d'aide a la decision export - par MPL Export Conseil (audit, conformite, veille personnalisee).
               </div>

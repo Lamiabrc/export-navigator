@@ -8,7 +8,7 @@ type TricolorBannerProps = {
 };
 
 export function TricolorBanner({
-  title = "MPL Export Navigator",
+  title = "MPL Export Conseil",
   question = "Quelle decision export devez-vous securiser ?",
   compact = true,
   className,

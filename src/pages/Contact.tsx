@@ -12,6 +12,9 @@ const OFFER_OPTIONS = [
   { value: "autre", label: "Autre demande" },
 ] as const;
 
+const CONTACT_EMAIL = "contact@exportfrancefacile.com";
+const CONTACT_PHONE = "06 76 43 55 51";
+
 export default function Contact() {
   usePageMeta("meta.contact.title", "meta.contact.description", { brandSuffix: "MPL Export Conseil" });
   const [searchParams] = useSearchParams();
@@ -26,10 +29,16 @@ export default function Contact() {
   const [busy, setBusy] = React.useState(false);
   const [success, setSuccess] = React.useState(false);
   const [error, setError] = React.useState("");
+  const [deliveryFailed, setDeliveryFailed] = React.useState(false);
+  const offerLabel = OFFER_OPTIONS.find((item) => item.value === offer)?.label || "Demande de contact";
+  const mailtoHref = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Demande : ${offerLabel}`)}&body=${encodeURIComponent(
+    [`Nom : ${name}`, `Email : ${email}`, company ? `Entreprise : ${company}` : "", "", message].filter((line, index) => line || index > 2).join("\n"),
+  )}`;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setDeliveryFailed(false);
     if (!consent || name.trim().length < 2 || message.trim().length < 10 || !email.includes("@")) {
       setError("Renseignez vos coordonnées, décrivez votre projet (10 caractères minimum) et confirmez le consentement.");
       return;
@@ -61,6 +70,7 @@ export default function Contact() {
         window.gtag("event", "generate_lead", { lead_source: "contact-commercial", offer });
       }
     } catch (cause) {
+      setDeliveryFailed(true);
       setError(cause instanceof Error ? cause.message : "Le service est momentanément indisponible.");
     } finally {
       setBusy(false);
@@ -123,7 +133,18 @@ export default function Contact() {
                   <input type="checkbox" required checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-1 accent-emerald-700" />
                   J'accepte d'être recontacté(e) par MPL Export Conseil au sujet de cette demande. *
                 </label>
-                {error ? <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p> : null}
+                {error ? (
+                  <div role="alert" className="space-y-2 rounded-lg bg-red-50 p-3 text-sm text-red-800">
+                    <p>{error}</p>
+                    {deliveryFailed ? (
+                      <p>
+                        Écrivez-nous directement :{" "}
+                        <a className="font-semibold underline" href={mailtoHref}>{CONTACT_EMAIL}</a>{" "}
+                        ou appelez le <a className="font-semibold underline" href={`tel:${CONTACT_PHONE.replace(/\s/g, "")}`}>{CONTACT_PHONE}</a>.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
                 <button type="submit" disabled={busy} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-700 px-6 py-3.5 text-base font-semibold text-white hover:bg-emerald-800 disabled:opacity-60">
                   {busy ? "Transmission..." : "Envoyer ma demande"}<ArrowRight className="h-5 w-5" />
                 </button>

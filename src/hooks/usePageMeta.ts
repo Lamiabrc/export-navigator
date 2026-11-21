@@ -69,10 +69,10 @@ export const usePageMeta = (titleKey: string, descriptionKey: string, options: M
   const {
     countryCode,
     hsCode,
-    brandSuffix = "Export Navigator",
+    brandSuffix = "MPL Export Conseil",
     canonicalUrl,
     socialImageUrl,
-    socialImageAlt = "Apercu Export Navigator",
+    socialImageAlt = "MPL Export Conseil, IA & Export",
   } = options;
 
   const computed = useMemo(() => {
