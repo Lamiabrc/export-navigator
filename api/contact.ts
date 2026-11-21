@@ -221,14 +221,15 @@ async function sendEmail(params: {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        const detail = await res.text().catch(() => "");
-        return { ok: false, detail: detail || "resend_failed" };
-      }
-
-      return { ok: true };
+      if (res.ok) return { ok: true };
+      const detail = await res.text().catch(() => "");
+      // Resend refused (quota, key...): fall back to SMTP when it is configured.
+      if (!getTransport()) return { ok: false, detail: detail || "resend_failed" };
+      console.warn("[api/contact] resend failed, trying SMTP:", detail);
     } catch (error: any) {
-      return { ok: false, detail: safeString(error?.message || error, 500) || "resend_failed" };
+      if (!getTransport()) {
+        return { ok: false, detail: safeString(error?.message || error, 500) || "resend_failed" };
+      }
     }
   }
 
