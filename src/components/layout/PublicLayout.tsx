@@ -41,11 +41,11 @@ function FooterSocial() {
   return (
     <div className="rounded-3xl border border-slate-700/70 bg-[#081225]/78 p-6 shadow-xl shadow-black/25">
       <div className="text-xs font-semibold uppercase tracking-[0.25em] text-white">
-        {isFr ? "Reseaux sociaux" : "Social networks"}
+        {isFr ? "Réseaux sociaux" : "Social networks"}
       </div>
       <div className="mt-2 text-sm text-white">
         {isFr
-          ? "Suivez MPL Export Conseil pour les actualites et contenus export."
+          ? "Suivez MPL Export Conseil : IA et export, chaque semaine."
           : "Follow MPL Export Conseil for export updates and insights."}
       </div>
       <ul className="mt-4 space-y-3">
@@ -78,7 +78,6 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
   const { isAuthenticated } = useAuth();
   const isFr = lang === "fr";
   const banner = getBannerContent(location.pathname);
-  const siteDisclaimers = (t("disclaimers") as string[]) ?? [];
   const isHome = location.pathname === "/";
 
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
@@ -103,6 +102,19 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
   const supportLabel = isFr ? "Demander un devis" : "Request a quote";
   const appLabel = isFr ? "Tour de contrôle" : "Control Tower";
   const callbackLabel = isFr ? "Être rappelé(e)" : "Request callback";
+  // Sur mobile, le bouton flottant n'apparaît qu'une fois que le visiteur a commencé à lire.
+  const [showFloatingCallback, setShowFloatingCallback] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onScroll = () => {
+      if (window.scrollY > 500) {
+        setShowFloatingCallback(true);
+        window.removeEventListener("scroll", onScroll);
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const phoneRaw = "0676435551";
   const phonePretty = "06 76 43 55 51";
@@ -211,8 +223,8 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
 
           <div className="flex items-center gap-2 md:hidden">
             {!isAuthenticated ? (
-              <Link to="/contact?offer=accompagnement" className="inline-flex rounded-full bg-[#DC2626] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white">
-                {isFr ? "Accompagnement" : "Support"}
+              <Link to="/contact?offer=atelier" className="inline-flex rounded-full bg-[#DC2626] px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-white">
+                {isFr ? "Devis" : "Quote"}
               </Link>
             ) : null}
             <button
@@ -336,7 +348,7 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
         </Link>
       ) : null}
 
-      {!isAuthenticated ? (
+      {!isAuthenticated && showFloatingCallback ? (
         <div className="fixed bottom-6 left-4 z-[85] md:hidden">
           <CallbackLeadModal
             triggerLabel={callbackLabel}
@@ -353,7 +365,7 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
             <div className="space-y-3">
               <div className="text-sm font-semibold text-white">MPL Export Conseil</div>
               <div className="text-sm text-white">
-                Outil d'aide a la decision export - par MPL Export Conseil (audit, conformite, veille personnalisee).
+                Ateliers et agents IA sur mesure pour les équipes export des PME. Lamia Bréchet, Rennes.
               </div>
 
               <div className="flex flex-wrap gap-4 text-sm text-white">
@@ -377,11 +389,11 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
                 ))}
               </div>
 
-              <div className="text-xs text-white">(c) {new Date().getFullYear()} MPL Export Conseil - outil d'aide a la decision.</div>
-              <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-white md:mt-2">
-                {siteDisclaimers.map((text, index) => (
-                  <span key={`foot-disclaimer-${index}`} className="leading-snug">{text}</span>
-                ))}
+              <div className="text-xs text-white">© {new Date().getFullYear()} MPL Export Conseil · Lamia Bréchet</div>
+              <div className="mt-2 text-[11px] leading-snug text-white/80">
+                {isFr
+                  ? "Les informations réglementaires (douane, normes, fiscalité) se vérifient toujours auprès des sources officielles."
+                  : "Regulatory information (customs, standards, tax) should always be checked against official sources."}
               </div>
             </div>
 

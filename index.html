@@ -20,8 +20,8 @@
     <link rel="canonical" href="https://www.exportfrancefacile.com/" />
 
     <!-- Favicons -->
-    <link rel="icon" type="image/png" href="/mpl-logo.png" />
-    <link rel="apple-touch-icon" href="/mpl-logo.png" />
+    <link rel="icon" type="image/png" href="/favicon-mpl.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!-- Open Graph -->
     <meta property="og:title" content="MPL Export Conseil" />
@@ -64,11 +64,30 @@
     </script>
 
     <!-- Perf hints (GTM/GA) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" />
+    <link rel="preload" as="image" href="/images/lamia-brechet.webp" type="image/webp" />
     <link rel="preconnect" href="https://www.googletagmanager.com" />
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link rel="preconnect" href="https://www.google-analytics.com" />
     <link rel="dns-prefetch" href="https://www.google-analytics.com" />
 
+    <!-- Consentement RGPD : mesures d'audience et publicité désactivées tant que le visiteur n'a pas accepté -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      (function () {
+        var c = null;
+        try { c = JSON.parse(localStorage.getItem("export-navigator-consent") || "null"); } catch (e) {}
+        gtag("consent", "default", {
+          analytics_storage: c && c.analytics ? "granted" : "denied",
+          ad_storage: c && c.marketing ? "granted" : "denied",
+          ad_user_data: c && c.marketing ? "granted" : "denied",
+          ad_personalization: c && c.marketing ? "granted" : "denied",
+        });
+      })();
+    </script>
     <!-- Google Tag Manager -->
     <script>
       (function (w, d, s, l, i) {

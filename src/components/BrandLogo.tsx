@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import mplLogo from "@/assets/mpl-logo.png";
+import mplLogo from "@/assets/mpl-logo.webp";
 
 type BrandSize = "sm" | "md" | "lg";
 
