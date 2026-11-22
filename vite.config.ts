@@ -23,7 +23,9 @@ export default defineConfig(({ mode }) => {
       outDir: "dist",
       emptyOutDir: true,
       // Production web: avoid chunk loading issues by inlining dynamic imports
-      rollupOptions: isProdWeb
+      // Pages chargées à la demande. Les erreurs de chargement après une mise en ligne
+      // sont rattrapées par lazyWithReload (src/lib/lazyWithReload.ts).
+      rollupOptions: isElectron
         ? {
             output: {
               inlineDynamicImports: true,
@@ -62,8 +64,6 @@ export default defineConfig(({ mode }) => {
                   "@radix-ui/react-toggle-group",
                   "@radix-ui/react-tooltip",
                 ],
-                charts: ["recharts", "d3-geo", "react-d3-tree", "svgmap", "svg-pan-zoom"],
-                pdf: ["pdf-lib", "pdfjs-dist"],
                 supabase: ["@supabase/supabase-js"],
                 forms: ["react-hook-form", "@hookform/resolvers", "zod"],
               },

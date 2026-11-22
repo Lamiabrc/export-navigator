@@ -1,7 +1,7 @@
 import * as React from "react";
+import { Link } from "react-router-dom";
 
 import { useI18n } from "@/contexts/LanguageContext";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 
 type ConsentDetails = {
@@ -23,77 +23,92 @@ function readConsent(): ConsentDetails | null {
   }
 }
 
-function writeConsent(payload: ConsentDetails) {
+function applyConsent(payload: ConsentDetails) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    /* stockage indisponible : on applique quand même pour la session */
+  }
+  const gtag = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
+  gtag?.("consent", "update", {
+    analytics_storage: payload.analytics ? "granted" : "denied",
+    ad_storage: payload.marketing ? "granted" : "denied",
+    ad_user_data: payload.marketing ? "granted" : "denied",
+    ad_personalization: payload.marketing ? "granted" : "denied",
+  });
 }
 
+/**
+ * Bandeau cookies compact : une ligne en bas d'écran, choix égal entre accepter et refuser,
+ * réglage fin seulement sur demande. Rien n'est coché par défaut.
+ */
 export function CookieConsent() {
-  const { t } = useI18n();
-  const [visible, setVisible] = React.useState(true);
-  const [analytics, setAnalytics] = React.useState(true);
+  const { lang } = useI18n();
+  const isFr = lang !== "en";
+  const [visible, setVisible] = React.useState(false);
+  const [details, setDetails] = React.useState(false);
+  const [analytics, setAnalytics] = React.useState(false);
   const [marketing, setMarketing] = React.useState(false);
 
   React.useEffect(() => {
-    const stored = readConsent();
-    if (stored) {
-      setAnalytics(stored.analytics);
-      setMarketing(stored.marketing);
-      setVisible(false);
+    if (!readConsent()) {
+      // Laisse la page s'afficher avant de proposer le choix.
+      const timer = window.setTimeout(() => setVisible(true), 1200);
+      return () => window.clearTimeout(timer);
     }
   }, []);
 
-  const acceptAll = () => {
-    const payload: ConsentDetails = {
-      analytics: true,
-      marketing: true,
-      timestamp: new Date().toISOString(),
-    };
-    writeConsent(payload);
-    setAnalytics(true);
-    setMarketing(true);
-    setVisible(false);
-  };
-
-  const savePreferences = () => {
-    const payload: ConsentDetails = {
-      analytics,
-      marketing,
-      timestamp: new Date().toISOString(),
-    };
-    writeConsent(payload);
+  const decide = (nextAnalytics: boolean, nextMarketing: boolean) => {
+    applyConsent({ analytics: nextAnalytics, marketing: nextMarketing, timestamp: new Date().toISOString() });
     setVisible(false);
   };
 
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-x-4 bottom-4 z-50 rounded-2xl border border-slate-200 bg-white/95 p-6 shadow-xl backdrop-blur-md sm:inset-x-10">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.4em] text-slate-500">{t("gdpr.consentTitle")}</p>
-          <p className="mt-1 text-sm text-slate-700">{t("gdpr.consentBody")}</p>
-        </div>
-        <div className="mt-3 flex flex-col gap-2 sm:mt-0">
-          <Button onClick={acceptAll} className="w-full sm:w-auto">
-            {t("gdpr.actions.accept")}
-          </Button>
-          <Button variant="outline" className="w-full sm:w-auto" onClick={savePreferences}>
-            {t("gdpr.actions.save")}
-          </Button>
+    <div
+      role="dialog"
+      aria-label={isFr ? "Choix des cookies" : "Cookie choices"}
+      className="fixed inset-x-2 bottom-2 z-50 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 text-sm shadow-lg backdrop-blur-md sm:inset-x-auto sm:left-4 sm:max-w-xl"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <p className="flex-1 text-slate-700">
+          {isFr
+            ? "Cookies de mesure d'audience, uniquement avec votre accord."
+            : "Audience-measurement cookies, only with your consent."}{" "}
+          <Link to="/cookies" className="underline">
+            {isFr ? "En savoir plus" : "Learn more"}
+          </Link>
+        </p>
+        <div className="flex shrink-0 gap-2">
+          <button type="button" onClick={() => decide(false, false)} className="rounded-full border border-slate-300 px-4 py-2 font-semibold text-slate-800 hover:bg-slate-50">
+            {isFr ? "Refuser" : "Decline"}
+          </button>
+          <button type="button" onClick={() => decide(true, true)} className="rounded-full bg-slate-900 px-4 py-2 font-semibold text-white hover:bg-slate-800">
+            {isFr ? "Accepter" : "Accept"}
+          </button>
         </div>
       </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-          <span>{t("gdpr.options.analytics")}</span>
-          <Switch checked={analytics} onCheckedChange={(value) => setAnalytics(value)} />
-        </label>
-        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-          <span>{t("gdpr.options.marketing")}</span>
-          <Switch checked={marketing} onCheckedChange={(value) => setMarketing(value)} />
-        </label>
-      </div>
+      {details ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <label className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+            <span>{isFr ? "Statistiques anonymes" : "Anonymous statistics"}</span>
+            <Switch checked={analytics} onCheckedChange={setAnalytics} />
+          </label>
+          <label className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+            <span>{isFr ? "Marketing" : "Marketing"}</span>
+            <Switch checked={marketing} onCheckedChange={setMarketing} />
+          </label>
+          <button type="button" onClick={() => decide(analytics, marketing)} className="rounded-full border border-slate-300 px-4 py-2 font-semibold text-slate-800 sm:col-span-2">
+            {isFr ? "Enregistrer mes choix" : "Save my choices"}
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setDetails(true)} className="mt-2 text-xs text-slate-500 underline">
+          {isFr ? "Personnaliser" : "Customise"}
+        </button>
+      )}
     </div>
   );
 }

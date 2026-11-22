@@ -15,64 +15,64 @@ import { PlanProvider } from "@/auth/PlanContext";
 import { RequirePlan } from "@/components/RequirePlan";
 import { CompanyProfileGuard } from "@/components/CompanyProfileGuard";
 import { CookieConsent } from "@/components/CookieConsent";
-import { LanguageChooser } from "@/components/LanguageChooser";
 import { EnvMissingBanner } from "@/components/EnvMissingBanner";
+import { lazyWithReload } from "@/lib/lazyWithReload";
 
 import Home from "@/pages/Home";
-import AboutPage from "@/pages/About";
-import ShareDecision from "@/pages/ShareDecision";
-import Methodologie from "@/pages/Methodologie";
-import Guide from "@/pages/Guide";
-import Incoterms from "@/pages/Incoterms";
-import IncotermDetail from "@/pages/IncotermDetail";
-import InfoParameter from "@/pages/InfoParameter";
-import WatchCenter from "@/pages/WatchCenter";
-import WatchRegulatory from "@/pages/WatchRegulatory";
-import WatchCommercial from "@/pages/WatchCommercial";
-import InvoiceCheck from "@/pages/InvoiceCheck";
-import Newsletter from "@/pages/Newsletter";
-import HeroVideoPreview from "@/pages/HeroVideoPreview";
-import Login from "@/pages/Login";
-import Register from "@/pages/Register";
-import ForgotPassword from "@/pages/ForgotPassword";
-import SetPassword from "@/pages/SetPassword";
-import ControlTower from "@/pages/ControlTower";
-import ExportSimulator from "@/pages/ExportSimulator";
-import Simulator from "@/pages/Simulator";
-import DealsBoard from "@/pages/DealsBoard";
-import DealDetail from "@/pages/DealDetail";
-import DossierWizard from "@/pages/DossierWizard";
-import DashboardVentes from "@/pages/DashboardVentes";
-import MarketFinder from "@/pages/MarketFinder";
-import LeadTemplates from "@/pages/LeadTemplates";
-import InvoiceDetail from "@/pages/InvoiceDetail";
-import Admin from "@/pages/Admin";
-import Assistant from "@/pages/Assistant";
-import Settings from "@/pages/Settings";
-import NotFound from "@/pages/NotFound";
-import Solutions from "@/pages/Solutions";
-import Resources from "@/pages/Resources";
-import Contact from "@/pages/Contact";
-import AuditInterne from "@/pages/Compliance";
-import InternalResources from "@/pages/InternalResources";
-import ExportToFrance from "@/pages/ExportToFrance";
-import BillingSuccess from "@/pages/BillingSuccess";
-import Account from "@/pages/Account";
-import Pricing from "@/pages/Pricing";
-import HistoryPage from "@/pages/History";
-import ImportCheckInvoice from "@/pages/ImportCheckInvoice";
-import PublicAppGate from "@/pages/PublicAppGate";
-import VipRentability from "@/pages/VipRentability";
-import Legal from "@/pages/Legal";
-import AdminKbDocs from "@/pages/AdminKbDocs";
-import AdminData from "@/pages/AdminData";
-import AdminRealtimeTest from "@/pages/AdminRealtimeTest";
-import TaxesOm from "@/pages/TaxesOm";
-import Prospection from "@/pages/Prospection";
-import BusinessRelations from "@/pages/BusinessRelations";
+const AboutPage = lazyWithReload(() => import("@/pages/About"));
+const ShareDecision = lazyWithReload(() => import("@/pages/ShareDecision"));
+const Methodologie = lazyWithReload(() => import("@/pages/Methodologie"));
+const Guide = lazyWithReload(() => import("@/pages/Guide"));
+const Incoterms = lazyWithReload(() => import("@/pages/Incoterms"));
+const IncotermDetail = lazyWithReload(() => import("@/pages/IncotermDetail"));
+const InfoParameter = lazyWithReload(() => import("@/pages/InfoParameter"));
+const WatchCenter = lazyWithReload(() => import("@/pages/WatchCenter"));
+const WatchRegulatory = lazyWithReload(() => import("@/pages/WatchRegulatory"));
+const WatchCommercial = lazyWithReload(() => import("@/pages/WatchCommercial"));
+const InvoiceCheck = lazyWithReload(() => import("@/pages/InvoiceCheck"));
+const Newsletter = lazyWithReload(() => import("@/pages/Newsletter"));
+const HeroVideoPreview = lazyWithReload(() => import("@/pages/HeroVideoPreview"));
+const Login = lazyWithReload(() => import("@/pages/Login"));
+const Register = lazyWithReload(() => import("@/pages/Register"));
+const ForgotPassword = lazyWithReload(() => import("@/pages/ForgotPassword"));
+const SetPassword = lazyWithReload(() => import("@/pages/SetPassword"));
+const ControlTower = lazyWithReload(() => import("@/pages/ControlTower"));
+const ExportSimulator = lazyWithReload(() => import("@/pages/ExportSimulator"));
+const Simulator = lazyWithReload(() => import("@/pages/Simulator"));
+const DealsBoard = lazyWithReload(() => import("@/pages/DealsBoard"));
+const DealDetail = lazyWithReload(() => import("@/pages/DealDetail"));
+const DossierWizard = lazyWithReload(() => import("@/pages/DossierWizard"));
+const DashboardVentes = lazyWithReload(() => import("@/pages/DashboardVentes"));
+const MarketFinder = lazyWithReload(() => import("@/pages/MarketFinder"));
+const LeadTemplates = lazyWithReload(() => import("@/pages/LeadTemplates"));
+const InvoiceDetail = lazyWithReload(() => import("@/pages/InvoiceDetail"));
+const Admin = lazyWithReload(() => import("@/pages/Admin"));
+const Assistant = lazyWithReload(() => import("@/pages/Assistant"));
+const Settings = lazyWithReload(() => import("@/pages/Settings"));
+const NotFound = lazyWithReload(() => import("@/pages/NotFound"));
+const Solutions = lazyWithReload(() => import("@/pages/Solutions"));
+const Resources = lazyWithReload(() => import("@/pages/Resources"));
+const Contact = lazyWithReload(() => import("@/pages/Contact"));
+const AuditInterne = lazyWithReload(() => import("@/pages/Compliance"));
+const InternalResources = lazyWithReload(() => import("@/pages/InternalResources"));
+const ExportToFrance = lazyWithReload(() => import("@/pages/ExportToFrance"));
+const BillingSuccess = lazyWithReload(() => import("@/pages/BillingSuccess"));
+const Account = lazyWithReload(() => import("@/pages/Account"));
+const Pricing = lazyWithReload(() => import("@/pages/Pricing"));
+const HistoryPage = lazyWithReload(() => import("@/pages/History"));
+const ImportCheckInvoice = lazyWithReload(() => import("@/pages/ImportCheckInvoice"));
+const PublicAppGate = lazyWithReload(() => import("@/pages/PublicAppGate"));
+const VipRentability = lazyWithReload(() => import("@/pages/VipRentability"));
+const Legal = lazyWithReload(() => import("@/pages/Legal"));
+const AdminKbDocs = lazyWithReload(() => import("@/pages/AdminKbDocs"));
+const AdminData = lazyWithReload(() => import("@/pages/AdminData"));
+const AdminRealtimeTest = lazyWithReload(() => import("@/pages/AdminRealtimeTest"));
+const TaxesOm = lazyWithReload(() => import("@/pages/TaxesOm"));
+const Prospection = lazyWithReload(() => import("@/pages/Prospection"));
+const BusinessRelations = lazyWithReload(() => import("@/pages/BusinessRelations"));
 
 const queryClient = new QueryClient();
-const LazyFallback = () => <div className="p-6 text-sm text-muted-foreground">Chargement…</div>;
+const LazyFallback = () => <div className="min-h-screen bg-white" aria-busy="true" />;
 const LegacyDealRedirect = () => {
   const params = useParams();
   const dealId = params.dealId || "";
@@ -90,10 +90,9 @@ export default function App() {
 
             <PlanProvider>
               <LanguageProvider persist="local">
-                <CookieConsent />
                 <BrowserRouter>
+                  <CookieConsent />
                   <EnvMissingBanner />
-                  <LanguageChooser />
                   <CompanyProfileGuard />
                   <GlobalFiltersProvider>
                     <React.Suspense fallback={<LazyFallback />}>
