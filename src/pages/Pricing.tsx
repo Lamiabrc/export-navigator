@@ -18,7 +18,7 @@ export default function Pricing() {
         description:
           "MPL Export Conseil part de vos produits, de vos marchés et de la réglementation qui les concerne, puis fait travailler votre équipe sur ses cas réels.",
         primaryCta: "Demander un devis",
-        secondaryCta: "Essayer le copilote IA",
+        secondaryCta: "Qui vous accompagne",
       }
     : {
         headline: "Bring AI into your export work, without getting lost",
@@ -27,7 +27,7 @@ export default function Pricing() {
         description:
           "MPL Export Conseil starts from your products, your markets and the regulations that apply to them, then has your team work on its real cases.",
         primaryCta: "Request a quote",
-        secondaryCta: "Try the AI copilot",
+        secondaryCta: "Who supports you",
       };
 
   const focusAreas = isFr
@@ -131,7 +131,7 @@ export default function Pricing() {
                 {heroCopy.primaryCta}
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link to="/copilote" className="mkt-btn mkt-btn-light">
+              <Link to="/about" className="mkt-btn mkt-btn-light">
                 {heroCopy.secondaryCta}
               </Link>
             </div>
@@ -275,8 +275,8 @@ export default function Pricing() {
           to: "/contact?offer=atelier",
         }}
         secondaryCta={{
-          label: isFr ? "Essayer le copilote IA" : "Try the AI copilot",
-          to: "/copilote",
+          label: isFr ? "Qui vous accompagne" : "Who supports you",
+          to: "/about",
         }}
         note="contact@exportfrancefacile.com | 06 76 43 55 51"
       />

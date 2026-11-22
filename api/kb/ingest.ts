@@ -134,6 +134,8 @@ function chunkText(text: string, maxWords = 800) {
 type IngestPayload = { document_id?: string };
 
 export default allowCors(async function handler(req: VercelRequest, res: VercelResponse) {
+  // IA désactivée sur le site (nov. 2026) : aucune indexation vers OpenAI.
+  return res.status(410).json({ ok: false, error: "ai_disabled" });
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
   }

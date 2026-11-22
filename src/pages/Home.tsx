@@ -1,6 +1,5 @@
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { ArrivalGuide } from "@/components/home/ArrivalGuide";
-import { VideoBanner } from "@/components/home/VideoBanner";
 import { HomeCtas } from "@/components/home/HomeCtas";
 import { HomeAtelierSpotlight } from "@/components/home/HomeAtelierSpotlight";
 import { QuickActions } from "@/components/dashboard/QuickActions";
@@ -18,7 +17,7 @@ export default function Home() {
     brandSuffix: "MPL Export Conseil",
     canonicalUrl: "https://www.exportfrancefacile.com/",
     socialImageUrl: "https://www.exportfrancefacile.com/images/og-home.jpg",
-    socialImageAlt: "Page d'accueil Export Navigator",
+    socialImageAlt: "MPL Export Conseil, IA & Export",
   });
 
   return (
@@ -32,7 +31,6 @@ export default function Home() {
           <QuickActions isEn={isEn} isAuthenticated={isAuthenticated} />
           <HomeAtelierSpotlight isEn={isEn} />
           {isAuthenticated ? <RecentDossiers isEn={isEn} /> : null}
-          <VideoBanner isEn={isEn} />
           <HomeCtas isEn={isEn} />
         </div>
       </main>

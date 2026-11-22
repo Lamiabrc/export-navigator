@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Headset, Phone, Radar } from "lucide-react";
+import { Headset, Mail, Phone } from "lucide-react";
 
 type Props = {
   isEn: boolean;
@@ -41,17 +41,15 @@ export function HomeCtas({ isEn }: Props) {
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
-            <Radar className="size-5 text-primary" />
-            <h3 className="text-lg font-semibold">{isEn ? "Export control tower" : "Tour de contrôle export"}</h3>
+            <Mail className="size-5 text-primary" />
+            <h3 className="text-lg font-semibold">{isEn ? "Write to us" : "Écrivez-nous"}</h3>
           </div>
-          <Badge className="mb-3 w-fit">Pro</Badge>
+          <Badge variant="outline" className="mb-3 w-fit">{isEn ? "Reply within 24 h" : "Réponse sous 24 h"}</Badge>
           <p className="mb-4 text-sm text-slate-600">
-            {isEn
-              ? "Manage dossiers, tasks and growth plan in one place."
-              : "Pilotez dossiers, tâches et plan de croissance export dans un seul espace."}
+            {isEn ? "Describe your export team and your project." : "Présentez votre équipe export et votre projet."}
           </p>
-          <Button asChild className="w-full">
-            <Link to="/app/control-tower">{isEn ? "Open Pro tool" : "Accéder à l'outil Pro"}</Link>
+          <Button asChild variant="outline" className="w-full">
+            <a href="mailto:contact@exportfrancefacile.com">contact@exportfrancefacile.com</a>
           </Button>
         </div>
       </div>

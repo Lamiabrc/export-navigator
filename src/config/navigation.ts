@@ -54,12 +54,6 @@ export type AppNavSection = {
 
 export const publicNav: PublicNavItem[] = [
   {
-    id: "copilot",
-    to: "/copilote",
-    tKey: "header.menu.copilot",
-    labels: { fr: "Copilote IA", en: "AI Copilot" },
-  },
-  {
     id: "services",
     to: "/pricing",
     labels: { fr: "Atelier IA & Export", en: "AI & Export workshop" },

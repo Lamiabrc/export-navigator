@@ -27,7 +27,7 @@ export default function Register() {
                 L'espace de publication et d'analyse est reserve a MPL Export Navigator.
               </h1>
               <p className="max-w-2xl text-base text-slate-200/85">
-                Les visiteurs peuvent decouvrir l'atelier IA & Export, essayer le copilote et demander un devis. La creation d'annonces, le pilotage et l'analyse restent dans l'acces administrateur.
+                Les visiteurs peuvent découvrir l'atelier IA & Export et demander un devis. Le pilotage et l'analyse restent dans l'accès administrateur.
               </p>
             </div>
           </div>
