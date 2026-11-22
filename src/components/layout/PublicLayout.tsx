@@ -92,6 +92,7 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
       { to: "/methodologie", label: isFr ? "Méthodologie" : "Methodology" },
       { to: "/veille", label: isFr ? "Veille" : "Watch" },
       { to: "/prospection", label: isFr ? "Prospection" : "Prospection" },
+      { to: "/test-export-ia", label: isFr ? "Test IA & export (2 min)" : "AI & export test (2 min)" },
       { to: "/pricing", label: isFr ? "Atelier IA & Export" : "AI & Export workshop" },
       { to: "/about", label: isFr ? "À propos" : "About" },
       { to: "/contact?offer=atelier", label: isFr ? "Demander un devis" : "Request a quote" },
