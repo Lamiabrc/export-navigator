@@ -22,8 +22,8 @@ export default function Contact() {
   const [offer, setOffer] = React.useState(OFFER_OPTIONS.some((item) => item.value === incomingOffer) ? incomingOffer : "autre");
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
-  const [company, setCompany] = React.useState("");
-  const [message, setMessage] = React.useState("");
+  const [company, setCompany] = React.useState((searchParams.get("company") || "").slice(0, 120));
+  const [message, setMessage] = React.useState((searchParams.get("message") || "").slice(0, 4000));
   const [website, setWebsite] = React.useState("");
   const [consent, setConsent] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
