@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bot, ChevronDown, ChevronUp, Handshake, LayoutDashboard, Package, Sparkles, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronUp, Handshake, LayoutDashboard, Package, Sparkles, Users, type LucideIcon } from "lucide-react";
 import heroExportVideo from "@/assets/hero-export.mp4";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/LanguageContext";
@@ -36,11 +36,11 @@ export function ArrivalGuide({ className }: { className?: string }) {
           icon: Package,
         },
         {
-          key: "business",
-          title: "Essayer le copilote IA",
-          subtitle: "Une première réponse sur douane, Incoterms et documents",
-          to: "/copilote",
-          icon: Bot,
+          key: "about",
+          title: "Qui vous accompagne",
+          subtitle: "Lamia Bréchet, terrain export et IA",
+          to: "/about",
+          icon: Users,
         },
         {
           key: isAuthenticated ? "app" : "contact",
@@ -59,11 +59,11 @@ export function ArrivalGuide({ className }: { className?: string }) {
           icon: Package,
         },
         {
-          key: "business",
-          title: "Try the AI copilot",
-          subtitle: "A first answer on customs, Incoterms and documents",
-          to: "/copilote",
-          icon: Bot,
+          key: "about",
+          title: "Who supports you",
+          subtitle: "Lamia Bréchet, export field work and AI",
+          to: "/about",
+          icon: Users,
         },
         {
           key: isAuthenticated ? "app" : "contact",

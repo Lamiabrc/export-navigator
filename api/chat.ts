@@ -1967,5 +1967,17 @@ export async function chatHandler(req: VercelRequest, res: VercelResponse) {
   return handleChatCore(req, res);
 }
 
-export default allowCors(chatHandler);
+/**
+ * Chatbot désactivé (nov. 2026) : les réponses n'étaient pas fiables.
+ * Le code est conservé, mais l'endpoint ne fait plus aucun appel IA.
+ */
+async function chatDisabledHandler(_req: VercelRequest, res: VercelResponse) {
+  return res.status(410).json({
+    ok: false,
+    error: "chat_disabled",
+    detail: "Le copilote IA n'est plus disponible. Contactez-nous : contact@exportfrancefacile.com ou 06 76 43 55 51.",
+  });
+}
+
+export default allowCors(chatDisabledHandler);
 

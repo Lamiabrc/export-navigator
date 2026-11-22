@@ -69,7 +69,6 @@ import AdminData from "@/pages/AdminData";
 import AdminRealtimeTest from "@/pages/AdminRealtimeTest";
 import TaxesOm from "@/pages/TaxesOm";
 import Prospection from "@/pages/Prospection";
-import Copilote from "@/pages/Copilote";
 import BusinessRelations from "@/pages/BusinessRelations";
 
 const queryClient = new QueryClient();
@@ -101,7 +100,7 @@ export default function App() {
                       <Routes>
                         {/* ===================== Marketing / Public ===================== */}
                         <Route path="/" element={<Home />} />
-                        <Route path="/copilote" element={<Copilote />} />
+                        <Route path="/copilote" element={<Navigate to="/pricing" replace />} />
                         <Route path="/control-tower" element={<Navigate to="/app/control-tower" replace />} />
 
                         {/* ✅ Outils publics => accès app uniquement */}

@@ -12,7 +12,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { LanguageCode } from "@/i18n/translations";
 import { footerNav, isPathActive, publicNav } from "@/config/navigation";
 import { getBannerContent } from "@/config/bannerContent";
-import SupportChatWidget from "@/components/support/SupportChatWidget";
 import { CallbackLeadModal } from "@/components/marketing/CallbackLeadModal";
 
 type PublicLayoutProps = {
@@ -82,8 +81,6 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
   const siteDisclaimers = (t("disclaimers") as string[]) ?? [];
   const isHome = location.pathname === "/";
 
-  const [supportReady, setSupportReady] = React.useState(false);
-  const [supportOpen, setSupportOpen] = React.useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [mobileResourcesOpen, setMobileResourcesOpen] = React.useState(false);
 
@@ -125,20 +122,6 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
     [lang]
   );
 
-  React.useEffect(() => {
-    const handler = () => {
-      setSupportReady(true);
-      setSupportOpen(true);
-    };
-    if (typeof window !== "undefined") {
-      window.addEventListener("support-widget:open", handler as EventListener);
-    }
-    return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener("support-widget:open", handler as EventListener);
-      }
-    };
-  }, []);
 
   React.useEffect(() => {
     setMobileMenuOpen(false);
@@ -407,21 +390,6 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
         </footer>
       )}
 
-      {supportReady ? (
-        <SupportChatWidget open={supportOpen} onOpenChange={setSupportOpen} />
-      ) : (
-        <button
-          type="button"
-          onClick={() => {
-            setSupportReady(true);
-            setSupportOpen(true);
-          }}
-          className="fixed bottom-6 right-4 z-[90] inline-flex items-center gap-2 rounded-full bg-[#0B1220] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-[#16233a] md:right-6"
-          aria-label={isFr ? "Ouvrir MPL Export Expert" : "Open MPL Export Expert"}
-        >
-          {isFr ? "MPL Export Expert" : "MPL Export Expert"}
-        </button>
-      )}
     </div>
   );
 }
