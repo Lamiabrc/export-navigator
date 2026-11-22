@@ -19,7 +19,7 @@ const COPY = {
     lead:
       "J'aide les équipes export des PME à intégrer l'IA dans leur quotidien : un agent configuré sur vos produits, vos marchés et vos règles, et une équipe formée pour s'en servir sans se perdre.",
     ctaMain: "Demander mon diagnostic",
-    ctaSecond: "Voir l'atelier",
+    ctaSecond: "Faire le test (2 min)",
     trust: "Terrain export depuis 2018 · CNAM · Licence de droit",
     portraitAlt: "Lamia Bréchet, MPL Export Conseil",
     calcEyebrow: "Le calcul",
@@ -31,6 +31,9 @@ const COPY = {
       { value: "160 h", label: "par an, soit un mois de travail", note: "3 h 30 × 45 semaines travaillées" },
     ],
     calcFoot: "Estimation indicative, à affiner lors du diagnostic avec vos propres chiffres.",
+    calcCtaTitle: "Et chez vous ?",
+    calcCtaBody: "Faites le test en 2 minutes : heures récupérables par votre équipe, tâches à traiter en premier et niveau de maturité IA.",
+    calcCta: "Faire le test",
     agentEyebrow: "Votre agent IA sur mesure",
     agentTitle: "Un agent à vous, pas un outil de plus",
     agentLead:
@@ -99,7 +102,7 @@ const COPY = {
     lead:
       "I help SME export teams bring AI into their daily work: an agent set up on your products, markets and rules, and a team trained to use it without getting lost.",
     ctaMain: "Request my diagnostic",
-    ctaSecond: "See the workshop",
+    ctaSecond: "Take the 2-min test",
     trust: "Export field work since 2018 · CNAM · Law degree",
     portraitAlt: "Lamia Bréchet, MPL Export Conseil",
     calcEyebrow: "The math",
@@ -111,6 +114,9 @@ const COPY = {
       { value: "160 h", label: "per year, one month of work", note: "3.5 h × 45 working weeks" },
     ],
     calcFoot: "Indicative estimate, refined with your own figures during the diagnostic.",
+    calcCtaTitle: "What about your team?",
+    calcCtaBody: "Take the 2-minute test (in French): hours your team could get back, tasks to tackle first and AI maturity level.",
+    calcCta: "Take the test",
     agentEyebrow: "Your tailored AI agent",
     agentTitle: "An agent of your own, not one more tool",
     agentLead: "Every company has its own products, clients and habits. The agent is set up on yours, in a space dedicated to your company.",
@@ -195,7 +201,7 @@ export default function Home() {
                 >
                   {c.ctaMain} <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link to="/pricing" className="inline-flex items-center rounded-full border border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-white/10">
+                <Link to="/test-export-ia" className="inline-flex items-center rounded-full border border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-white/10">
                   {c.ctaSecond}
                 </Link>
               </div>
@@ -232,6 +238,15 @@ export default function Home() {
             ))}
           </div>
           <p className="mt-4 text-xs text-slate-500">{c.calcFoot}</p>
+          <div className="mt-8 flex flex-col gap-4 rounded-2xl border-2 p-6 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: NAVY }}>
+            <div>
+              <p className="text-lg font-bold" style={{ color: NAVY }}>{c.calcCtaTitle}</p>
+              <p className="mt-1 text-sm text-slate-600">{c.calcCtaBody}</p>
+            </div>
+            <Link to="/test-export-ia" style={{ backgroundColor: RED }} className="inline-flex shrink-0 items-center gap-2 self-start rounded-full px-6 py-3 text-sm font-bold text-white hover:brightness-110 sm:self-auto">
+              {c.calcCta} <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
         </section>
 
         {/* L'agent */}

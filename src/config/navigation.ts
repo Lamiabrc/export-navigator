@@ -60,6 +60,12 @@ export const publicNav: PublicNavItem[] = [
     badge: { fr: "Nouveau", en: "New" },
   },
   {
+    id: "test",
+    to: "/test-export-ia",
+    labels: { fr: "Faire le test", en: "Take the test" },
+    badge: { fr: "2 min", en: "2 min" },
+  },
+  {
     id: "about",
     to: "/about",
     tKey: "header.menu.about",
