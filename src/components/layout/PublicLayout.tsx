@@ -93,6 +93,7 @@ export function PublicLayout({ children, hideBanner = false, hideFooter = false 
       { to: "/veille", label: isFr ? "Veille" : "Watch" },
       { to: "/prospection", label: isFr ? "Prospection" : "Prospection" },
       { to: "/test-export-ia", label: isFr ? "Test IA & export (2 min)" : "AI & export test (2 min)" },
+      { to: "/webinaire", label: isFr ? "Webinaire LinkedIn Live" : "LinkedIn Live webinar" },
       { to: "/pricing", label: isFr ? "Atelier IA & Export" : "AI & Export workshop" },
       { to: "/about", label: isFr ? "À propos" : "About" },
       { to: "/contact?offer=atelier", label: isFr ? "Demander un devis" : "Request a quote" },

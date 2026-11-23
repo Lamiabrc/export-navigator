@@ -4,7 +4,40 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
  * Sondage express « IA & export » (page /sondage).
  * POST : enregistre une réponse (table survey_responses, insertion seule pour anon) puis renvoie les statistiques.
  * GET  : renvoie les statistiques agrégées (fonction survey_stats, aucune réponse individuelle exposée).
+ * ?kind=webinar : inscription au webinaire (table webinar_registrations) ; GET renvoie le nombre d'inscrits.
+ *   (même fonction pour ne pas dépasser la limite de 12 fonctions Vercel du plan Hobby)
  */
+
+const WEBINARS = ["export-ia-2026-12", "export-ia-2027-01"];
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,24}$/i;
+const str = (v: unknown, n: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, n) : null);
+
+async function webinar(req: VercelRequest, res: VercelResponse, url: string, key: string) {
+  const h = { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+  const b = req.method === "POST" ? (typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body) || {} : {};
+  const w = String((req.method === "POST" ? b.webinar : req.query.webinar) || WEBINARS[0]);
+  if (!WEBINARS.includes(w)) return res.status(400).json({ ok: false, error: "webinar" });
+  const count = async () => {
+    const r = await fetch(`${url}/rest/v1/rpc/webinar_count`, { method: "POST", headers: h, body: JSON.stringify({ p_webinar: w }) });
+    return r.ok ? Number(await r.json()) : null;
+  };
+  if (req.method === "GET") return res.status(200).json({ ok: true, count: await count() });
+  if (req.method !== "POST") return res.status(405).json({ ok: false });
+  const email = typeof b.email === "string" && EMAIL_RE.test(b.email.trim()) ? b.email.trim().slice(0, 254) : null;
+  if (!email) return res.status(400).json({ ok: false, error: "email" });
+  const row = {
+    webinar: w,
+    email,
+    prenom: str(b.prenom, 80),
+    entreprise: str(b.entreprise, 120),
+    pilote: b.pilote === true,
+    source: str(b.source, 60),
+    campaign: str(b.campaign, 80),
+  };
+  const ins = await fetch(`${url}/rest/v1/webinar_registrations`, { method: "POST", headers: { ...h, Prefer: "return=minimal" }, body: JSON.stringify(row) });
+  if (!ins.ok) return res.status(502).json({ ok: false, error: `insert_${ins.status}` });
+  return res.status(200).json({ ok: true, count: await count() });
+}
 
 const ALLOWED = {
   heures: ["lt2", "2-5", "5-10", "10+"],
@@ -39,6 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!url || !key) return res.status(503).json({ ok: false, error: "db_not_configured" });
 
   try {
+    if (req.query.kind === "webinar") return await webinar(req, res, url, key);
     if (req.method === "GET") return res.status(200).json({ ok: true, stats: await stats(url, key) });
     if (req.method !== "POST") return res.status(405).json({ ok: false });
 
