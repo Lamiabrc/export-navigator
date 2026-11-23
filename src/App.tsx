@@ -54,6 +54,7 @@ const Solutions = lazyWithReload(() => import("@/pages/Solutions"));
 const Resources = lazyWithReload(() => import("@/pages/Resources"));
 const Contact = lazyWithReload(() => import("@/pages/Contact"));
 const TestExportIA = lazyWithReload(() => import("@/pages/TestExportIA"));
+const Sondage = lazyWithReload(() => import("@/pages/Sondage"));
 const AuditInterne = lazyWithReload(() => import("@/pages/Compliance"));
 const InternalResources = lazyWithReload(() => import("@/pages/InternalResources"));
 const ExportToFrance = lazyWithReload(() => import("@/pages/ExportToFrance"));
@@ -146,6 +147,7 @@ export default function App() {
 
                         <Route path="/contact" element={<Contact />} />
                         <Route path="/test-export-ia" element={<TestExportIA />} />
+                        <Route path="/sondage" element={<Sondage />} />
                         <Route path="/test" element={<Navigate to="/test-export-ia" replace />} />
                         <Route path="/billing/success" element={<BillingSuccess />} />
                         <Route path="/export-to-france" element={<ExportToFrance />} />
