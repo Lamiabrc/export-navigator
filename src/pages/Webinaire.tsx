@@ -13,7 +13,7 @@ const RED = "#e2141e";
 const SHOW_COUNT_FROM = 10;
 
 // À renseigner dès que l'événement LinkedIn Live est créé (laisser vide sinon : le bouton est masqué).
-const LINKEDIN_EVENT_URL = "";
+const LINKEDIN_EVENT_URL = "https://www.linkedin.com/events/7530640702569992192/";
 
 const SESSION = {
   id: "export-ia-2026-12",
